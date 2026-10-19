@@ -4,7 +4,7 @@ GitHub Issues and the [Stellar Development project](https://github.com/users/Dan
 
 ## Bootstrap boundary
 
-The local Nx/Angular vertical slice, shared atom, tests, issue/commit policies, documentation governance, and CI workflow are implemented and locally verified. Remote branch protection and CI execution are pending the first push. Hermes orchestration and unattended releases remain out of scope.
+The local Nx/Angular vertical slice, shared atom, tests, issue/commit policies, documentation governance, and CI workflow are implemented. The first GitHub Actions CI run failed on a stale lockfile; the corrected lockfile and subsequent CI run passed. GitHub currently blocks branch rulesets for this private repository unless the account upgrades to Pro or the repository becomes public. Stellar remains private; protected branch enforcement is tracked as blocked in issue #6. Hermes orchestration and unattended releases remain out of scope.
 
 ## Next issue
 

@@ -18,8 +18,8 @@ Angular's supported unit-test builder runs Vitest. App tests share an MSW server
 
 ## Governance
 
-GitHub Issues are the planned canonical work source. The repository contains an issue template, a validator, and a `create-issue` skill. Issue validation moves incomplete or invalid work to triage; only validated ready issues may be dispatched. See the [issue workflow](../guides/issue-workflow.md) for metadata and lifecycle rules.
+GitHub Issues are the canonical work source. The repository contains an issue template, a validator, and an operational `create-issue` skill. A GitHub Actions workflow validates issue changes and returns invalid work to triage. See the [issue workflow](../guides/issue-workflow.md) for metadata and lifecycle rules.
 
-Protected infrastructure includes `.husky/`, `.github/workflows/`, `.agents/skills/`, `AGENTS.md`, lint and Nx policy, generators, policy scripts, and `docs/documentation-policy.md`. Branch protection and CODEOWNERS require a configured GitHub repository and maintainer review; local instructions and hooks alone are not security boundaries.
+Protected infrastructure includes `.husky/`, `.github/workflows/`, `.agents/skills/`, `AGENTS.md`, lint and Nx policy, generators, policy scripts, and `docs/documentation-policy.md`. The private repository's current account cannot enable GitHub rulesets: GitHub returned HTTP 403 and requires Pro or public visibility. Stellar remains private as authorized. CI runs on `develop`, but server-side pull-request and status-check enforcement is not active; local instructions and hooks are not a security boundary. Keep autonomous work disabled until effective protections and independent review are available.
 
 Vercel deployment and the monthly release process are planned. No Vercel account or automated release promotion is configured.

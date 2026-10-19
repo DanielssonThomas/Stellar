@@ -2,6 +2,10 @@
 
 This procedure is maintainer-controlled. No scheduled promotion or automatic release branch rotation is configured. Vercel is not connected yet; production deployment verification becomes applicable after that integration is configured.
 
+## Readiness
+
+This is the intended manual procedure, not an enabled production pipeline. The repository currently has only `develop`; `main` and monthly release branches do not exist. GitHub rejected ruleset access for this private repository and requires Pro or public visibility. Keep the repository private; do not promote a release or enable autonomous work until CI and pull-request requirements can be enforced for the production and release branches.
+
 The release boundary is 00:00 on the first day of each month in `Europe/Mariehamn`. If the operator is late or a check fails, keep the release unpromoted and retry after resolving the cause.
 
 ## Promote the frozen release
