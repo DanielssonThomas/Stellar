@@ -6,7 +6,7 @@ const head = process.env.NX_HEAD ?? 'HEAD';
 const rootPush = !base || /^0+$/.test(base);
 const commits = execFileSync(
   'git',
-  ['rev-list', '--no-merges', ...(rootPush ? [] : [`${base}..${head}`])],
+  ['rev-list', '--no-merges', ...(rootPush ? [head] : [`${base}..${head}`])],
   { encoding: 'utf8' },
 )
   .trim()
