@@ -122,9 +122,21 @@ export function validateIssue(issue) {
       errors.push(`Add a non-empty ${heading} section.`);
   }
   const acceptance = section(issue.body ?? '', 'Acceptance criteria');
-  if (!/^\s*-\s*\[ \]\s+\S.+/m.test(acceptance))
+  const acceptanceItems = acceptance.match(/^\s*-\s*\[[ xX]\]\s+\S.+$/gm) ?? [];
+  if (isDone(issue)) {
+    if (
+      acceptanceItems.length === 0 ||
+      acceptanceItems.some((item) => !/^\s*-\s*\[[xX]\]/.test(item))
+    ) {
+      errors.push('Mark every acceptance criterion complete before closing.');
+    }
+  } else if (!/^\s*-\s*\[ \]\s+\S.+/m.test(acceptance)) {
     errors.push('Add at least one observable unchecked acceptance criterion.');
+  }
   const dependencies = section(issue.body ?? '', 'Dependencies');
+  const dependencyIds = dependencies.match(/#\d+/g) ?? [];
+  if (new Set(dependencyIds).size !== dependencyIds.length)
+    errors.push('List each dependency only once.');
   if (
     !dependencies ||
     (!/^\s*(?:none|n\/a)\s*$/i.test(dependencies) && !/#\d+/.test(dependencies))
@@ -179,10 +191,14 @@ async function validateNativeDependencies(issue) {
   const token = process.env.GITHUB_TOKEN;
   const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
   const errors = [];
+  if (new Set(expected).size !== expected.length)
+    errors.push('List each dependency only once.');
   for (const number of expected) {
     const response = await api(`/issues/${number}`, 'GET', token, apiUrl);
     if (response.status === 404)
       errors.push(`Dependency #${number} does not exist in this repository.`);
+    else if ((await response.json()).pull_request)
+      errors.push(`Dependency #${number} is a pull request, not an issue.`);
   }
   const nativeResponse = await api(
     `/issues/${issue.number}/dependencies/blocked_by`,
@@ -350,6 +366,10 @@ function foundStatus(issue) {
     label.startsWith('status:'),
   );
   return statuses.length === 1 ? statuses[0] : '';
+}
+
+function isDone(issue) {
+  return labelsOf(issue).includes('status:done');
 }
 
 if (

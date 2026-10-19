@@ -76,4 +76,56 @@ describe('issue metadata policy', () => {
     });
     assert.ok(result.errors.includes('An issue cannot depend on itself.'));
   });
+
+  it('rejects repeated dependencies', () => {
+    const result = validateIssue({
+      ...issue([
+        'priority:medium',
+        'target:develop',
+        'type:feature',
+        'owner:codex',
+        'status:ready',
+      ]),
+      body: body.replace('None', '#12, #12'),
+    });
+
+    assert.ok(result.errors.includes('List each dependency only once.'));
+  });
+
+  it('accepts a completed issue when every criterion is checked', () => {
+    const completed = {
+      ...issue([
+        'priority:medium',
+        'target:develop',
+        'type:feature',
+        'owner:codex',
+        'status:done',
+      ]),
+      body: body.replace('- [ ]', '- [x]'),
+    };
+
+    assert.deepEqual(validateIssue(completed), {
+      valid: true,
+      ready: false,
+      errors: [],
+    });
+  });
+
+  it('rejects a completed issue with unchecked criteria', () => {
+    const result = validateIssue(
+      issue([
+        'priority:medium',
+        'target:develop',
+        'type:feature',
+        'owner:codex',
+        'status:done',
+      ]),
+    );
+
+    assert.ok(
+      result.errors.includes(
+        'Mark every acceptance criterion complete before closing.',
+      ),
+    );
+  });
 });
