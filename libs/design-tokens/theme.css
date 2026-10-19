@@ -1,0 +1,36 @@
+@theme {
+  --font-stellar-sans: var(--stellar-font-family);
+  --text-stellar-display: var(--stellar-font-size-display);
+  --text-stellar-body: var(--stellar-font-size-body);
+  --color-stellar-canvas: var(--stellar-color-canvas);
+  --color-stellar-foreground: var(--stellar-color-foreground);
+  --color-stellar-primary: var(--stellar-color-primary);
+  --color-stellar-primary-hover: var(--stellar-color-primary-hover);
+  --color-stellar-skeleton: var(--stellar-color-skeleton);
+  --radius-stellar: var(--stellar-radius-control);
+  --shadow-stellar-card: var(--stellar-shadow-card);
+  --container-stellar-content: var(--stellar-layout-content);
+  --spacing-stellar-1: var(--stellar-space-1);
+  --spacing-stellar-2: var(--stellar-space-2);
+  --spacing-stellar-3: var(--stellar-space-3);
+  --spacing-stellar-4: var(--stellar-space-4);
+}
+
+:root {
+  color-scheme: light;
+  --stellar-font-family: ui-sans-serif, system-ui, sans-serif;
+  --stellar-font-size-display: 1.875rem;
+  --stellar-font-size-body: 1rem;
+  --stellar-color-canvas: #f7f8fc;
+  --stellar-color-foreground: #172033;
+  --stellar-color-primary: #4f46e5;
+  --stellar-color-primary-hover: #4338ca;
+  --stellar-color-skeleton: #cbd2e1;
+  --stellar-space-1: 0.25rem;
+  --stellar-space-2: 0.5rem;
+  --stellar-space-3: 0.75rem;
+  --stellar-space-4: 1rem;
+  --stellar-radius-control: 0.5rem;
+  --stellar-shadow-card: 0 1rem 3rem rgb(23 32 51 / 8%);
+  --stellar-layout-content: 72rem;
+}

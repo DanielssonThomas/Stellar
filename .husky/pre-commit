@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  corepack pnpm exec nx format:check --uncommitted
+  corepack pnpm exec nx affected -t lint test --uncommitted
+else
+  corepack pnpm exec nx format:check
+  corepack pnpm exec nx run-many -t lint test
+fi

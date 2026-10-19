@@ -1,0 +1,82 @@
+{
+  "name": "stellar-web",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "stellar",
+  "sourceRoot": "apps/stellar-web/src",
+  "tags": ["scope:app", "type:app"],
+  "implicitDependencies": ["design-tokens"],
+  "targets": {
+    "build": {
+      "executor": "@angular/build:application",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/stellar-web",
+        "browser": "apps/stellar-web/src/main.ts",
+        "tsConfig": "apps/stellar-web/tsconfig.app.json",
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "apps/stellar-web/public"
+          }
+        ],
+        "styles": ["apps/stellar-web/src/styles.css"]
+      },
+      "configurations": {
+        "production": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "500kb",
+              "maximumError": "1mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "8kb"
+            }
+          ],
+          "outputHashing": "all"
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@angular/build:dev-server",
+      "configurations": {
+        "production": {
+          "buildTarget": "stellar-web:build:production"
+        },
+        "development": {
+          "buildTarget": "stellar-web:build:development"
+        }
+      },
+      "defaultConfiguration": "development"
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@angular/build:unit-test",
+      "options": {
+        "setupFiles": ["apps/stellar-web/src/test-setup.ts"]
+      }
+    },
+    "serve-static": {
+      "continuous": true,
+      "executor": "@nx/web:file-server",
+      "options": {
+        "buildTarget": "stellar-web:build",
+        "port": 4200,
+        "staticFilePath": "dist/apps/stellar-web/browser",
+        "spa": true
+      }
+    }
+  }
+}

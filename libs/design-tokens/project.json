@@ -1,0 +1,7 @@
+{
+  "name": "design-tokens",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/design-tokens",
+  "tags": ["scope:shared", "type:design-tokens", "layer:token"]
+}

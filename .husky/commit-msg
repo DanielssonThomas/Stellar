@@ -1,0 +1,4 @@
+#!/bin/sh
+
+corepack pnpm exec commitlint --edit "$1"
+corepack pnpm exec node tools/policy/validate-commit-message.mjs "$1"

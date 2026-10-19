@@ -1,0 +1,12 @@
+# Governance and enforcement files require review from the authenticated maintainer.
+/.agents/skills/ @DanielssonThomas
+/.github/CODEOWNERS @DanielssonThomas
+/.github/workflows/ @DanielssonThomas
+/.husky/ @DanielssonThomas
+/AGENTS.md @DanielssonThomas
+/commitlint.config.cjs @DanielssonThomas
+/docs/documentation-policy.md @DanielssonThomas
+/eslint.config.mjs @DanielssonThomas
+/nx.json @DanielssonThomas
+/tools/generators/ @DanielssonThomas
+/tools/policy/ @DanielssonThomas
