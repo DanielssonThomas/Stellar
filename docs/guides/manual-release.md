@@ -4,7 +4,7 @@ This procedure is maintainer controlled. There is no scheduled promotion or auto
 
 ## Current readiness
 
-The repository currently has `main` and `develop`; a monthly `release/YYYY.MM` branch is created only when a maintainer authorizes a release. No production deployment, Vercel account, or production smoke check is configured. Only one collaborator is available, so independent review and CODEOWNERS approval are not available. Keep production promotion on hold until a second reviewer and the production deployment path are ready. A passing CI check alone does not make a release production ready.
+The repository currently has `main` and `develop`; a monthly `release/YYYY.MM` branch is created only when a maintainer authorizes a release. No production deployment, Vercel account, or production smoke check is configured. The active ruleset requires PRs and `verify`, but it requires zero approvals; it does not provide independent review. Keep production promotion on hold until the deployment and smoke-check path is configured and a maintainer separately authorizes production promotion. A passing CI check alone does not make a release production ready.
 
 The release boundary is 00:00 on the first day of each month in `Europe/Mariehamn`. If the operator is late, or any required check is failing or pending, leave the release unpromoted. Resume after the cause is resolved; the calendar date never overrides a failed or missing check.
 
@@ -17,8 +17,8 @@ The release boundary is 00:00 on the first day of each month in `Europe/Marieham
 
 ## Promote
 
-1. Before opening the promotion PR, confirm the release is approved for production, the independent review gate is available, and the deployment and smoke-check steps are configured. Until these conditions are met, stop here and keep `main` unchanged.
-2. Open a pull request from `release/YYYY.MM` to `main`. Include the release summary and linked issues. Wait for the required `verify` check and review; merge only after both pass. Never bypass a failed, pending, or missing check.
+1. Before opening the promotion PR, confirm a maintainer separately authorized production promotion and the deployment and smoke-check steps are configured. Until these conditions are met, stop here and keep `main` unchanged.
+2. Open a pull request from `release/YYYY.MM` to `main`. Include the release summary and linked issues. Wait for the required `verify` check and any applicable review; merge only after required checks pass and the separate production authorization is in place. The current ruleset does not require an approving review. Never bypass a failed, pending, or missing check.
 3. After merge, verify the production deployment and run the documented user-facing smoke checks. Record the deployment and check result with the release. If deployment is not configured, do not describe the release as deployed.
 4. Open a second pull request from `main` to `develop` to synchronize the accepted release. Resolve conflicts on a branch and review the resulting diff before merge.
 5. Create `release/YYYY.MM` for the next month from the synchronized `develop` head only after the current release is complete. Confirm the branch exists before directing issues to that target.

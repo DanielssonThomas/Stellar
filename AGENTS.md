@@ -21,4 +21,8 @@
 ## Skills and documentation
 
 - Discover repository workflows under `.agents/skills/`; read the relevant `SKILL.md` before acting.
+- For issue work, follow `implement-issue`; use `update-issue` for progress and status, `handle-blocker` for failure or handoff, and `prepare-pr` before opening a PR. Use `create-issue` only for distinct outcomes after searching for duplicates.
+- For scaffolding, use `create-application`, `create-component`, or `create-service` to invoke the governed Nx generators. Inspect current project tags first.
 - Follow [documentation policy](docs/documentation-policy.md) and use the [documentation index](docs/README.md) to find authoritative material. Update existing documents when appropriate; do not duplicate policies.
+
+During Epic 2, Codex is the temporary bootstrap maintainer authorized to implement and merge its own issue-linked PRs after required checks pass. This does not authorize Hermes workers to merge, access maintainer credentials, or modify protected governance resources. Production deployment and `main` promotion require separate authorization.

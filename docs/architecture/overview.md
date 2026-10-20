@@ -10,7 +10,7 @@ The first UI library is `libs/ui/atoms`. Its components demonstrate conventional
 
 Nx project tags and `@nx/enforce-module-boundaries` in `eslint.config.mjs` govern imports. Applications may import shared libraries. Shared libraries may import other shared libraries. UI layer tags constrain dependencies upward from atoms to molecules, organisms, and templates. Cycles and imports that violate these constraints fail linting.
 
-Project and component generators are planned work; inspect the installed Nx generators and current tags until repository-owned generators are available. Buildable Angular libraries use the Angular unit-test builder with Vitest; non-buildable Angular libraries use Nx's Vitest Analog integration.
+Repository-owned Nx generators scaffold Angular applications and their mirrored Playwright E2E projects, atomic components, and shared Angular services. Their maintained invocation guide is [Generators](../guides/generators.md). Buildable Angular libraries use the Angular unit-test builder with Vitest; non-buildable Angular libraries use Nx's Vitest Analog integration.
 
 ## Verification
 
@@ -20,6 +20,8 @@ Angular's supported unit-test builder runs Vitest. App tests share an MSW server
 
 GitHub Issues are the canonical work source. The repository contains an issue template, a validator, and an operational `create-issue` skill. A GitHub Actions workflow validates issue changes and returns invalid work to triage. See the [issue workflow](../guides/issue-workflow.md) for metadata and lifecycle rules.
 
-Protected infrastructure includes `.husky/`, `.github/workflows/`, `.agents/skills/`, `AGENTS.md`, lint and Nx policy, generators, policy scripts, and `docs/documentation-policy.md`. The public repository has an active GitHub ruleset for `main`, `develop`, and `release/**`: changes require a pull request and the `verify` CI check; deletion and force pushes are blocked. `main` is the default production branch, initialized from the latest green `develop` commit. The ruleset requires no approving review because only one maintainer is currently available. Add an independent maintainer and require their review before enabling autonomous work.
+Protected infrastructure includes `.husky/`, `.github/workflows/`, `.agents/skills/`, `AGENTS.md`, lint and Nx policy, generators, policy scripts, and `docs/documentation-policy.md`; `.github/CODEOWNERS` identifies the protected paths. The public repository has active ruleset 25456574 for `main`, `develop`, and `release/**`: changes require a pull request and the `verify` CI check; deletion and force pushes are blocked. `main` is the default production branch. The ruleset requires zero approving reviews and no CODEOWNERS approval, and has no bypass actors. These settings are verified, but they do not provide a second-person review.
 
-Vercel deployment and the monthly release process are planned. No Vercel account, production environment, deployment, or release branch is configured yet.
+Codex may act as temporary bootstrap maintainer during Epic 2, including merging its own PRs after the required checks pass and the issue scope is met. This bootstrap permission is not granted to Hermes. Hermes remains unauthorized until its separate identity, least-privilege access, protected-resource controls, bounded supervision, and controlled trial are verified. Hermes workers may not merge or modify protected governance resources. Production deployment and promotion of `main` need separate authorization; neither is authorized by the bootstrap permission.
+
+The monthly release process is documented but is manual. No Vercel account, production environment, deployment, or release branch is configured yet. See the [manual release guide](../guides/manual-release.md) for current prerequisites and restrictions.
