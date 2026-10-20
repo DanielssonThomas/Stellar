@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { describe, it } from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
 import {
   evaluateWorkerPullRequest,
   parseIntegrationScope,
@@ -16,11 +25,16 @@ const codeowners = `
 /AGENTS.md @DanielssonThomas
 /commitlint.config.cjs @DanielssonThomas
 /docs/documentation-policy.md @DanielssonThomas
+/docs/guides/agent-supervision.md @DanielssonThomas
+/docs/guides/worker-integration-policy.md @DanielssonThomas
+/docs/guides/worker-security.md @DanielssonThomas
 /eslint.config.mjs @DanielssonThomas
 /nx.json @DanielssonThomas
 /tools/generators/ @DanielssonThomas
 /tools/policy/ @DanielssonThomas
 `;
+
+const modified = (filename) => ({ status: 'modified', filename });
 
 function validInput() {
   return {
@@ -57,7 +71,7 @@ function validInput() {
     authorizedWorkerIds: ['peon'],
     commits: ['[#123] test(atom): cover the component state'],
     checks: [{ name: 'verify', headSha, conclusion: 'success' }],
-    changedFiles: ['libs/ui/atoms/src/lib/example.spec.ts'],
+    changedFiles: [modified('libs/ui/atoms/src/lib/example.spec.ts')],
     codeowners,
     requiredChecks: ['verify'],
     allowedTargets: ['develop'],
@@ -88,8 +102,8 @@ describe('worker integration gate', () => {
     });
   });
 
-  it('parses the repository CODEOWNERS policy from the current checkout', async () => {
-    const contents = await readFile(
+  it('parses the repository CODEOWNERS policy from the current checkout', () => {
+    const contents = readFileSync(
       new URL('../../.github/CODEOWNERS', import.meta.url),
       'utf8',
     );
@@ -216,7 +230,7 @@ describe('worker integration gate', () => {
   it('rejects files outside the exact trusted scope and protected governance paths', () => {
     assert.ok(
       evaluate({
-        changedFiles: ['libs/ui/atoms/src/lib/other.ts'],
+        changedFiles: [modified('libs/ui/atoms/src/lib/other.ts')],
       }).reasons.includes('changed-file-outside-trusted-scope'),
     );
     const protectedInput = validInput();
@@ -227,9 +241,111 @@ describe('worker integration gate', () => {
     assert.ok(
       evaluate({
         issue: protectedInput.issue,
-        changedFiles: ['tools/policy/worker-integration-gate.mjs'],
+        changedFiles: [modified('tools/policy/worker-integration-gate.mjs')],
       }).reasons.includes('protected-path-changed'),
     );
+  });
+
+  it('rejects a protected path renamed into an otherwise allowed path', () => {
+    const input = validInput();
+    input.issue.body = input.issue.body.replace(
+      'libs/ui/atoms/src/lib/example.spec.ts',
+      'libs/ui/atoms/src/lib/renamed.ts',
+    );
+    const result = evaluate({
+      issue: input.issue,
+      changedFiles: [
+        {
+          status: 'renamed',
+          filename: 'libs/ui/atoms/src/lib/renamed.ts',
+          previous_filename: 'tools/policy/worker-integration-gate.mjs',
+        },
+      ],
+    });
+    assert.ok(result.reasons.includes('protected-path-changed'));
+  });
+
+  it('rejects protected content staged through an alternate Git index operation', () => {
+    const directory = mkdtempSync(
+      path.join(os.tmpdir(), 'stellar-worker-protected-index-'),
+    );
+    const runGit = (args, input) =>
+      execFileSync('git', args, {
+        cwd: directory,
+        encoding: 'utf8',
+        ...(input === undefined ? {} : { input }),
+      }).trim();
+
+    try {
+      mkdirSync(path.join(directory, 'tools', 'policy'), { recursive: true });
+      writeFileSync(
+        path.join(directory, 'tools', 'policy', 'evaluator.mjs'),
+        'trusted evaluator\n',
+      );
+      runGit(['init', '-q']);
+      runGit(['config', 'user.name', 'Security Test']);
+      runGit(['config', 'user.email', 'security-test@example.invalid']);
+      runGit(['add', '.']);
+      runGit(['commit', '-qm', 'baseline']);
+
+      const maliciousBlob = runGit(
+        ['hash-object', '-w', '--stdin'],
+        'tampered evaluator content\n',
+      );
+      runGit([
+        'update-index',
+        '--cacheinfo',
+        '100644',
+        maliciousBlob,
+        'tools/policy/evaluator.mjs',
+      ]);
+      const [status, filename] = runGit([
+        'diff',
+        '--cached',
+        '--name-status',
+      ]).split('\t');
+      const result = evaluate({
+        changedFiles: [
+          { status: status === 'M' ? 'modified' : status, filename },
+        ],
+      });
+
+      assert.equal(filename, 'tools/policy/evaluator.mjs');
+      assert.ok(result.reasons.includes('protected-path-changed'));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects rename evidence without the previous filename', () => {
+    const result = evaluate({
+      changedFiles: [
+        { status: 'renamed', filename: 'libs/ui/atoms/src/lib/renamed.ts' },
+      ],
+    });
+    assert.ok(result.reasons.includes('changed-file-list-invalid'));
+  });
+
+  it('rejects case variants of protected paths', () => {
+    assert.ok(
+      evaluate({
+        changedFiles: [modified('TOOLS/POLICY/worker-integration-gate.mjs')],
+      }).reasons.includes('protected-path-changed'),
+    );
+  });
+
+  it('rejects supervisor and worker security policy changes', () => {
+    for (const filename of [
+      'docs/guides/agent-supervision.md',
+      'docs/guides/worker-integration-policy.md',
+      'docs/guides/worker-security.md',
+    ]) {
+      assert.ok(
+        evaluate({ changedFiles: [modified(filename)] }).reasons.includes(
+          'protected-path-changed',
+        ),
+      );
+    }
   });
 
   it('requires a completed dependency status, not just a closed state', () => {
@@ -252,9 +368,14 @@ describe('worker integration gate', () => {
       ),
     );
     assert.ok(
-      evaluate({ changedFiles: ['../AGENTS.md'] }).reasons.includes(
+      evaluate({ changedFiles: [modified('../AGENTS.md')] }).reasons.includes(
         'changed-file-list-invalid',
       ),
+    );
+    assert.ok(
+      evaluate({
+        changedFiles: ['libs/ui/atoms/src/lib/example.spec.ts'],
+      }).reasons.includes('changed-file-list-invalid'),
     );
   });
 
