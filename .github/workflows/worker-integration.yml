@@ -1,0 +1,74 @@
+name: Trusted worker integration
+
+on:
+  push:
+    branches:
+      - issue/34-feature-integrate-eligible-worker-prs-with-trust
+    paths:
+      - .github/workflows/worker-integration.yml
+      - tools/policy/worker-integration-runner.mjs
+      - tools/policy/worker-integration-identities.json
+      - tools/policy/worker-integration-gate.mjs
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Trusted integration operation
+        type: choice
+        required: true
+        options:
+          - verify-credential
+          - create-pr
+          - integrate
+      issue_number:
+        description: Validated Stellar issue number
+        type: string
+        required: true
+      pull_request_number:
+        description: Worker pull request number (integrate only)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trusted-worker-integration-${{ inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && github.actor == 'DanielssonThomas') || (github.event_name == 'push' && github.ref == 'refs/heads/issue/34-feature-integrate-eligible-worker-prs-with-trust' && github.actor == 'DanielssonThomas')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      checks: read
+    steps:
+      - name: Checkout trusted develop policy only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - name: Run trusted GitHub operation
+        env:
+          STELLAR_INTEGRATION_TOKEN: ${{ secrets.STELLAR_INTEGRATION_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          OPERATION: ${{ github.event_name == 'push' && 'verify-credential' || inputs.operation }}
+          ISSUE_NUMBER: ${{ github.event_name == 'push' && '34' || inputs.issue_number }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+        run: |
+          if [[ -z "$STELLAR_INTEGRATION_TOKEN" ]]; then
+            echo "Required integration secret is unavailable." >&2
+            exit 1
+          fi
+          args=(--operation "$OPERATION" --issue "$ISSUE_NUMBER")
+          if [[ "$OPERATION" == "integrate" ]]; then
+            args+=(--pr "$PULL_REQUEST_NUMBER")
+          fi
+          node tools/policy/worker-integration-runner.mjs "${args[@]}"
