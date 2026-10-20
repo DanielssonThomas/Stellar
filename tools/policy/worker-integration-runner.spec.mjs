@@ -74,6 +74,84 @@ describe('trusted worker integration runner', () => {
     );
   });
 
+  it('creates a linked PR from exactly one authorized fork branch and advances the issue after creation', async () => {
+    const issue = {
+      number: 24,
+      state: 'open',
+      title: '[FEATURE] Add a loading status atom',
+      body: `## Objective\nAdd a reusable status atom.\n\n## Expected outcome\nA reusable loading-aware status atom.\n\n## Acceptance criteria\n- [ ] Add the atom and its tests.\n\n## Constraints\nOnly the scoped component files.\n\n## Dependencies\nNone\n\n## Verification expectations\nRun focused tests.`,
+      labels: [
+        'priority:medium',
+        'target:develop',
+        'type:feature',
+        'status:in-progress',
+        'worker:peon',
+      ].map((name) => ({ name })),
+    };
+    const createdPull = {
+      number: 300,
+      body: 'Fixes #24',
+      head: { sha: 'a'.repeat(40) },
+      user: { login: 'integration-bot' },
+    };
+    const calls = [];
+    const request = async (path, options = {}) => {
+      calls.push({ path, method: options.method ?? 'GET', body: options.body });
+      if (path.startsWith('/issues/24/dependencies/blocked_by'))
+        return response(200, []);
+      if (path === '/issues/24' && options.method === 'PATCH') {
+        issue.labels = options.body.labels.map((name) => ({ name }));
+        return response(200, issue);
+      }
+      if (path === '/issues/24') return response(200, issue);
+      if (path.startsWith('/pulls?state=open')) return response(200, []);
+      if (path === '/pulls' && options.method === 'POST')
+        return response(201, createdPull);
+      if (path === '/@root/user')
+        return response(200, { login: 'integration-bot' });
+      if (path === '/issues/24/comments' && options.method === 'POST')
+        return response(201, { id: 301 });
+      throw new Error(`Unexpected mock request ${path}`);
+    };
+    const fetchImpl = async (url) => {
+      assert.match(
+        String(url),
+        /api\.github\.com\/repos\/Stellar-AI-Corp\/Stellar\/branches/,
+      );
+      return response(200, [{ name: 'issue/24-status-label-atom' }]);
+    };
+
+    const result = await runIntegration({
+      operation: 'create-pr',
+      issueNumber: 24,
+      repository: 'DanielssonThomas/Stellar',
+      workerPolicy: [{ id: 'peon', forkFullName: 'Stellar-AI-Corp/Stellar' }],
+      request,
+      fetchImpl,
+    });
+
+    assert.deepEqual(result, { pullRequest: 300, headSha: 'a'.repeat(40) });
+    const prRequest = calls.find(
+      (call) => call.path === '/pulls' && call.method === 'POST',
+    );
+    assert.equal(
+      prRequest.body.head,
+      'Stellar-AI-Corp:issue/24-status-label-atom',
+    );
+    assert.equal(prRequest.body.base, 'develop');
+    assert.match(prRequest.body.body, /Fixes #24/);
+    assert.ok(
+      calls.some(
+        (call) => call.path === '/issues/24' && call.method === 'PATCH',
+      ),
+    );
+    assert.ok(
+      calls.some(
+        (call) => call.path === '/issues/24/comments' && call.method === 'POST',
+      ),
+    );
+  });
+
   it('fails the boundary probe if the integration credential can read repository administration', async () => {
     const writes = [];
     const request = async (path, options = {}) => {

@@ -199,7 +199,10 @@ function integrationBody(issue) {
   ].join('\n');
 }
 
-async function createPullRequest(request, { issueNumber, workerConfig }) {
+async function createPullRequest(
+  request,
+  { issueNumber, workerConfig, fetchImpl },
+) {
   const issue = await issueContext(request, issueNumber);
   validActionableIssue(issue, workerConfig.ids);
   const labels = labelsOf(issue);
@@ -217,7 +220,7 @@ async function createPullRequest(request, { issueNumber, workerConfig }) {
     throw new Error('Issue must be ready or in progress before PR creation.');
 
   const branches = await readAll(async (path, options = {}) => {
-    const response = await fetch(
+    const response = await fetchImpl(
       new URL(
         path.replace(/^\//, ''),
         `https://api.github.com/repos/${worker.forkFullName}/`,
@@ -529,11 +532,12 @@ export async function runIntegration({
   repository,
   apiUrl,
   workerPolicy,
+  fetchImpl = fetch,
   request = jsonApi({ token, repository, apiUrl }),
 }) {
   const workerConfig = normalizeWorkerConfig(workerPolicy);
   if (operation === 'create-pr')
-    return createPullRequest(request, { issueNumber, workerConfig });
+    return createPullRequest(request, { issueNumber, workerConfig, fetchImpl });
   if (operation === 'integrate')
     return integratePullRequest(request, {
       issueNumber,
