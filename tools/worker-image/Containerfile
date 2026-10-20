@@ -1,0 +1,33 @@
+FROM docker.io/library/node:22-bookworm-slim@sha256:efd0ab5780c2d9ab1f0f869571a00d5edb17793bff4cce4a2792e3eb0ffc7562
+
+ARG HERMES_COMMIT=d923a5eb487a17c0a68801bba9ef0f56c81040a8
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl git libatomic1 python3 python3-venv ripgrep \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable \
+    && corepack prepare pnpm@10.28.2 --activate \
+    && groupadd --gid 1001 peon \
+    && useradd --create-home --uid 1001 --gid 1001 --shell /bin/bash peon \
+    && install -d -o peon -g peon /opt/hermes
+
+USER 1001:1001
+ENV HOME=/home/peon \
+    HERMES_HOME=/opt/hermes \
+    PATH=/home/peon/.local/bin:/opt/hermes/hermes-agent/.venv/bin:${PATH}
+
+RUN curl --fail --silent --show-error --location \
+        "https://raw.githubusercontent.com/NousResearch/hermes-agent/${HERMES_COMMIT}/scripts/install.sh" \
+        --output /tmp/hermes-install.sh \
+    && bash /tmp/hermes-install.sh \
+        --commit "${HERMES_COMMIT}" \
+        --dir /opt/hermes/hermes-agent \
+        --hermes-home /opt/hermes \
+        --non-interactive \
+        --skip-browser \
+        --skip-computer-use \
+    && rm /tmp/hermes-install.sh \
+    && hermes --version | grep --fixed-strings 'v0.22.2'
+
+WORKDIR /workspace
+CMD ["hermes", "--help"]

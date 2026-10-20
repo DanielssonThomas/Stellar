@@ -33,6 +33,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--mount=type=bind,src=/home/peon/workspaces/issue-21,dst=/workspace,rw',
     '--workdir=/workspace',
     '--env=HOME=/tmp',
+    '--env=HERMES_HOME=/tmp/.hermes',
     '--env=TMPDIR=/tmp',
     '--secret=source=stellar-worker-github-token,type=env,target=GH_TOKEN',
     image,

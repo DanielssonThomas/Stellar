@@ -94,6 +94,7 @@ export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
     `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
     '--workdir=/workspace',
     '--env=HOME=/tmp',
+    '--env=HERMES_HOME=/tmp/.hermes',
     '--env=TMPDIR=/tmp',
     `--secret=source=${workerSecret},type=env,target=GH_TOKEN`,
     image,
