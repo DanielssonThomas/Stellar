@@ -53,6 +53,41 @@ function wslWorker(...args) {
   ]);
 }
 
+function stopRootlessContainer(name, timeoutMs = 4_000) {
+  return new Promise((resolve) => {
+    const child = spawn(
+      'wsl.exe',
+      [
+        '--distribution',
+        distribution,
+        '--user',
+        workerAccount,
+        '--exec',
+        'podman',
+        'stop',
+        '--time',
+        '2',
+        name,
+      ],
+      { cwd: repositoryRoot, stdio: 'ignore', windowsHide: true },
+    );
+    let settled = false;
+    let timer;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    timer = setTimeout(() => {
+      child.kill();
+      finish(false);
+    }, timeoutMs);
+    child.once('error', () => finish(false));
+    child.once('exit', (code) => finish(code === 0));
+  });
+}
+
 function issueWorkspace(issueNumber) {
   return path.posix.join(workspaceRoot, `issue-${issueNumber}`);
 }
@@ -382,6 +417,81 @@ function validateWorkspace(issueNumber, expectedBranchPrefix) {
   return { workspace, workerUid, workerGid };
 }
 
+export function buildRestrictedVerificationArgs({
+  issueNumber,
+  image,
+  uid,
+  gid,
+  command,
+  protectedPaths,
+  attemptNumber = 1,
+}) {
+  const number = positiveInteger(issueNumber, 'issueNumber');
+  if (typeof image !== 'string' || !imagePattern.test(image))
+    throw new Error(
+      `Verification image must be ${workerImageRepository} pinned by a lowercase sha256 digest.`,
+    );
+  const userId = positiveInteger(uid, 'worker uid');
+  const groupId = positiveInteger(gid, 'worker gid');
+  positiveInteger(attemptNumber, 'attemptNumber');
+  if (
+    !Array.isArray(command) ||
+    command.length === 0 ||
+    command.some(
+      (argument) => typeof argument !== 'string' || argument.includes('\0'),
+    )
+  )
+    throw new Error(
+      'A nonempty verification command argument list is required.',
+    );
+  if (
+    !Array.isArray(protectedPaths) ||
+    protectedPaths.length === 0 ||
+    protectedPaths.some(
+      (entry) =>
+        typeof entry !== 'string' ||
+        !entry ||
+        entry.startsWith('/') ||
+        /[\\,:=]/.test(entry) ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..'),
+    )
+  )
+    throw new Error(
+      'Trusted protected paths are required for verification mounts.',
+    );
+
+  const workspace = issueWorkspace(number);
+  return [
+    'run',
+    '--rm',
+    '--init',
+    '--pull=never',
+    `--name=stellar-peon-verify-${number}-${positiveInteger(attemptNumber, 'attemptNumber')}`,
+    '--userns=keep-id',
+    `--user=${userId}:${groupId}`,
+    '--network=none',
+    '--http-proxy=false',
+    '--read-only',
+    '--cap-drop=all',
+    '--security-opt=no-new-privileges',
+    '--pids-limit=128',
+    '--memory=4g',
+    '--memory-swap=4g',
+    '--cpus=2',
+    '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
+    `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    ...protectedPaths.map(
+      (entry) =>
+        `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
+    ),
+    '--workdir=/workspace',
+    '--env=HOME=/tmp',
+    '--env=TMPDIR=/tmp',
+    image,
+    ...command,
+  ];
+}
+
 export function parseArguments(argv) {
   const separator = argv.indexOf('--');
   if (separator < 0)
@@ -523,6 +633,118 @@ export async function runRestrictedWorker({
   }
 }
 
+const activeVerifications = new Map();
+
+export async function runRestrictedVerification({
+  issueNumber,
+  image,
+  command,
+  attemptNumber = 1,
+}) {
+  const number = positiveInteger(issueNumber, 'issueNumber');
+  const attempt = positiveInteger(attemptNumber, 'attemptNumber');
+  const name = `stellar-peon-verify-${number}-${attempt}`;
+  if (activeVerifications.has(name))
+    throw new Error(
+      'A verification container already uses this issue attempt.',
+    );
+  const { workspace, workerUid, workerGid } = validateWorkspace(
+    number,
+    `issue/${number}-`,
+  );
+  const protectedPaths = loadProtectedPaths();
+  validateProtectedMountSources(workspace, protectedPaths);
+
+  const args = buildRestrictedVerificationArgs({
+    issueNumber: number,
+    image,
+    uid: workerUid,
+    gid: workerGid,
+    command,
+    protectedPaths,
+    attemptNumber: attempt,
+  });
+  wslWorker('podman', 'image', 'exists', image);
+  const child = spawn(
+    'wsl.exe',
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      'podman',
+      ...args,
+    ],
+    { cwd: repositoryRoot, stdio: 'ignore', windowsHide: true },
+  );
+  const done = new Promise((resolve, reject) => {
+    child.once('error', (error) => {
+      activeVerifications.delete(name);
+      reject(error);
+    });
+    child.once('exit', (code, signal) => {
+      activeVerifications.delete(name);
+      resolve({ exitCode: code ?? 1, signal });
+    });
+  });
+  activeVerifications.set(name, { done });
+  return done;
+}
+
+export async function cancelRestrictedVerification({
+  issueNumber,
+  attemptNumber,
+}) {
+  const name = `stellar-peon-verify-${positiveInteger(issueNumber, 'issueNumber')}-${positiveInteger(attemptNumber, 'attemptNumber')}`;
+  const active = activeVerifications.get(name);
+  if (!active) return true;
+  const stopRequested = await stopRootlessContainer(name);
+  const stopped = await Promise.race([
+    active.done.then(
+      () => true,
+      () => false,
+    ),
+    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
+  ]);
+  return stopped === true && stopRequested;
+}
+
+export function inspectRestrictedWorkspace(issueNumber, expectedBranch) {
+  const number = positiveInteger(issueNumber, 'issueNumber');
+  const workspace = issueWorkspace(number);
+  const root = wslWorker(
+    'git',
+    '-C',
+    workspace,
+    'rev-parse',
+    '--show-toplevel',
+  );
+  if (root !== workspace)
+    throw new Error('Restricted worker workspace changed its repository root.');
+  const branch = wslWorker('git', '-C', workspace, 'branch', '--show-current');
+  if (branch !== expectedBranch)
+    throw new Error('Restricted worker workspace branch changed unexpectedly.');
+  const status = wslWorker(
+    'git',
+    '-C',
+    workspace,
+    'status',
+    '--porcelain=v1',
+    '--untracked-files=all',
+  );
+  const diff = wslWorker('git', '-C', workspace, 'diff', '--binary', 'HEAD');
+  const changes = status
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.slice(3))
+    .slice(0, 100);
+  return {
+    fingerprint: `${branch}\n${status}\n${diff}`,
+    changes,
+  };
+}
+
 export function buildHermesTaskCommand(task, limits = defaultLimits) {
   const issueNumber = positiveInteger(task?.issueNumber, 'task issueNumber');
   const runtimeSeconds = Math.ceil(
@@ -559,12 +781,12 @@ export function createPeonWorkerAdapter({
     id: 'peon',
     async run({ task, attemptNumber, limits, budget }) {
       const currentAttempt = positiveInteger(attemptNumber, 'attemptNumber');
-      active = {
+      const current = {
         meterName: `stellar-peon-meter-${task.issueNumber}-${currentAttempt}`,
         workerName: `stellar-peon-worker-${task.issueNumber}-${currentAttempt}`,
         done: null,
       };
-      active.done = runRestrictedWorker({
+      current.done = runRestrictedWorker({
         issueNumber: task.issueNumber,
         image,
         command: commandForTask(task, limits),
@@ -572,18 +794,22 @@ export function createPeonWorkerAdapter({
         initialUsage: budget.snapshot,
         attemptNumber: currentAttempt,
       });
-      const result = await active.done;
-      active = null;
-      return result.exitCode === 0
-        ? { status: 'completed', usage: result.usage }
-        : {
-            status: 'failed',
-            usage: result.usage,
-            failure: {
-              code: 'WorkerExit',
-              message: `Hermes exited with status ${result.exitCode}.`,
-            },
-          };
+      active = current;
+      try {
+        const result = await current.done;
+        return result.exitCode === 0
+          ? { status: 'completed', usage: result.usage }
+          : {
+              status: 'failed',
+              usage: result.usage,
+              failure: {
+                code: 'WorkerExit',
+                message: `Hermes exited with status ${result.exitCode}.`,
+              },
+            };
+      } finally {
+        if (active === current) active = null;
+      }
     },
     async usage() {
       if (!active) return { toolCalls: 0, modelTokens: 0 };
@@ -591,19 +817,16 @@ export function createPeonWorkerAdapter({
     },
     async cancel() {
       if (!active) return true;
-      try {
-        wslWorker('podman', 'stop', '--time', '2', active.workerName);
-      } catch {
-        return false;
-      }
+      const current = active;
+      const stopRequested = await stopRootlessContainer(current.workerName);
       const stopped = await Promise.race([
-        active.done.then(
+        current.done.then(
           () => true,
           () => false,
         ),
         new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
       ]);
-      return stopped === true;
+      return stopped === true && stopRequested;
     },
   };
 }

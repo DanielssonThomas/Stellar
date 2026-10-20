@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildMeteringProxyArgs,
   buildPodmanArgs,
+  buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   parseArguments,
 } from './run-restricted-worker.mjs';
@@ -153,6 +154,60 @@ test('builds a separate hardened metering proxy on the worker, model, and egress
         maxToolCalls: 64,
       }),
     /hard limits/,
+  );
+});
+
+test('runs trusted checks in an isolated container without worker or integration credentials', () => {
+  const args = buildRestrictedVerificationArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    command: ['corepack', 'pnpm', 'exec', 'nx', 'test', 'ui-atoms'],
+    protectedPaths,
+    attemptNumber: 1,
+  });
+
+  assert.ok(args.includes('--network=none'));
+  assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--cap-drop=all'));
+  assert.ok(
+    args.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50/tools/policy,dst=/workspace/tools/policy,ro',
+    ),
+  );
+  assert.ok(
+    args.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50,dst=/workspace,rw',
+    ),
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('GH_TOKEN')),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('STELLAR_INTEGRATION_TOKEN')),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.startsWith('--secret=')),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('peon-meter')),
+    false,
+  );
+  assert.throws(
+    () =>
+      buildRestrictedVerificationArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        command: [],
+        protectedPaths,
+      }),
+    /nonempty verification command/,
   );
 });
 
