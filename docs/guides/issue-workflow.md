@@ -37,3 +37,5 @@ Use GitHub sub-issues for Epic membership. Use native dependencies for blocking 
 ## Implementation path
 
 Start from a validated issue and its exact target branch. Create an issue-specific branch and worktree, make linked conventional commits, run affected checks, and open a PR back to that target. The [create-issue skill](../../.agents/skills/create-issue/SKILL.md) defines the repeatable creation workflow.
+
+Before editing an assigned issue, use the [agent issue worktree guide](agent-worktrees.md) to validate current metadata and dependencies and to claim or safely resume its branch and worktree. The helper rejects a conflicting active session and preserves existing work when a claim is stale or a handoff occurs.
