@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
-import { validatePrepareState } from './prepare-pr.mjs';
+import { describe, it, test } from 'node:test';
+import { parseCommitMessages, validatePrepareState } from './prepare-pr.mjs';
 
 const issue = {
   number: 20,
@@ -32,6 +32,24 @@ const base = {
   commits: ['[#20] feat(pr): validate issue pull request preparation'],
   worktreePath: process.cwd(),
 };
+
+test('parses NUL-delimited Git commit messages with separator whitespace', () => {
+  const output = [
+    `${base.commits[0]}\n\0`,
+    '\n[#20] fix(pr): accept every valid linked commit\n\0',
+    '\n',
+  ].join('');
+
+  assert.deepEqual(parseCommitMessages(output), [
+    base.commits[0],
+    '[#20] fix(pr): accept every valid linked commit',
+  ]);
+  assert.equal(
+    validatePrepareState({ ...base, commits: parseCommitMessages(output) })
+      .valid,
+    true,
+  );
+});
 
 describe('prepare PR preflight', () => {
   it('accepts a clean issue-owned branch with valid linked commits and claim', () => {

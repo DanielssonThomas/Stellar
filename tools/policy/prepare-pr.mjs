@@ -71,6 +71,13 @@ export function validatePrepareState({
   return { valid: errors.length === 0, errors, target };
 }
 
+export function parseCommitMessages(output) {
+  return output
+    .split('\0')
+    .map((message) => message.trim())
+    .filter(Boolean);
+}
+
 async function main(argv) {
   const [rawNumber, ...rest] = argv;
   const workerIndex = rest.indexOf('--worker');
@@ -88,9 +95,7 @@ async function main(argv) {
   execFileSync('git', ['fetch', '--quiet', 'origin', target]);
   const base = `origin/${target}`;
   const range = `${git(['merge-base', base, 'HEAD'])}..HEAD`;
-  const commits = git(['log', '--format=%B%x00', range])
-    .split('\0')
-    .filter(Boolean);
+  const commits = parseCommitMessages(git(['log', '--format=%B%x00', range]));
   const result = validatePrepareState({
     issue,
     worker,
