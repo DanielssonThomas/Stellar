@@ -149,6 +149,7 @@ export function evaluateWorkerPullRequest({
   issue,
   pullRequest,
   worker,
+  integrationActor,
   authorizedWorkerIds,
   commits,
   checks,
@@ -266,13 +267,19 @@ export function evaluateWorkerPullRequest({
     addReason(reasons, 'worker-fork-mismatch');
   }
   const authorLogin = pullRequest?.authorLogin;
+  const expectedActor = integrationActor ?? worker?.pullRequestActor;
   if (
-    !worker?.pullRequestActor ||
+    !expectedActor ||
     typeof authorLogin !== 'string' ||
-    typeof worker.pullRequestActor !== 'string' ||
-    authorLogin.toLowerCase() !== worker.pullRequestActor.toLowerCase()
+    typeof expectedActor !== 'string' ||
+    authorLogin.toLowerCase() !== expectedActor.toLowerCase()
   ) {
-    addReason(reasons, 'worker-identity-mismatch');
+    addReason(
+      reasons,
+      integrationActor
+        ? 'integration-identity-mismatch'
+        : 'worker-identity-mismatch',
+    );
   }
 
   const parsedScope = parseIntegrationScope(issue?.body ?? '');

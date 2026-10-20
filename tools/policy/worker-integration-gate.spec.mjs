@@ -170,6 +170,28 @@ describe('worker integration gate', () => {
     );
   });
 
+  it('accepts the trusted runner as PR author when it creates the cross-fork PR', () => {
+    const input = validInput();
+    assert.equal(
+      evaluateWorkerPullRequest({
+        ...input,
+        integrationActor: 'stellar-integration[bot]',
+        pullRequest: {
+          ...input.pullRequest,
+          authorLogin: 'stellar-integration[bot]',
+        },
+      }).eligible,
+      true,
+    );
+    assert.ok(
+      evaluateWorkerPullRequest({
+        ...input,
+        integrationActor: 'stellar-integration[bot]',
+        pullRequest: { ...input.pullRequest, authorLogin: 'untrusted-user' },
+      }).reasons.includes('integration-identity-mismatch'),
+    );
+  });
+
   it('rejects missing, failed, pending, or stale required check evidence', () => {
     assert.ok(
       evaluate({ checks: [] }).reasons.includes(
