@@ -286,18 +286,35 @@ describe('issue progress metadata', () => {
 
   it('appends evidence and checks fresh labels after a status change', async () => {
     const events = [];
+    const current = issue();
     const latest = issue('status:blocked');
+    let reads = 0;
     await changeStatus({
-      issue: issue(),
+      issue: current,
       worker: 'codex',
       expected: 'status:in-progress',
       next: 'status:blocked',
       comment: blockerReport,
-      updateLabels: async () => events.push('labels'),
+      updateLabels: async (number, labels) => {
+        events.push('labels');
+        assert.equal(number, 42);
+        assert.deepEqual(labels, [
+          'priority:medium',
+          'target:develop',
+          'type:feature',
+          'owner:codex',
+          'status:blocked',
+        ]);
+      },
       postComment: async () => events.push('comment'),
-      refetch: async () => latest,
+      refetch: async () => (++reads < 3 ? current : latest),
     });
     assert.deepEqual(events, ['comment', 'labels']);
+    assert.equal(reads, 3);
+  });
+
+  it('does not write status labels when fresh state or authorization changed', async () => {
+    let writes = 0;
     await assert.rejects(
       changeStatus({
         issue: issue(),
@@ -305,12 +322,74 @@ describe('issue progress metadata', () => {
         expected: 'status:in-progress',
         next: 'status:blocked',
         comment: blockerReport,
-        updateLabels: async () => true,
+        updateLabels: async () => writes++,
         postComment: async () => true,
         refetch: async () => issue('status:triage'),
       }),
-      /changed during the update/,
+      /changed since it was first fetched/,
     );
+    await assert.rejects(
+      changeStatus({
+        issue: issue(),
+        worker: 'maintainer',
+        expected: 'status:in-progress',
+        next: 'status:blocked',
+        comment: blockerReport,
+        updateLabels: async () => writes++,
+        postComment: async () => true,
+        refetch: async () => issue(),
+      }),
+      /status was not changed/,
+    );
+    await assert.rejects(
+      changeStatus({
+        issue: issue('status:review', { state: 'CLOSED' }),
+        worker: 'codex',
+        expected: 'status:review',
+        next: 'status:done',
+        hasMergedPullRequest: true,
+        updateLabels: async () => writes++,
+        postComment: async () => true,
+        refetch: async () => issue('status:review', { state: 'CLOSED' }),
+      }),
+      /status was not changed/,
+    );
+    assert.equal(writes, 0);
+  });
+
+  it('atomically completes a closed integrated issue with its full label set', async () => {
+    const current = issue('status:review', {
+      body: acceptance.replace('- [ ]', '- [x]'),
+      state: 'CLOSED',
+    });
+    const done = {
+      ...current,
+      labels: current.labels.map((label) =>
+        label === 'status:review' ? 'status:done' : label,
+      ),
+    };
+    let writes = 0;
+    const result = await changeStatus({
+      issue: current,
+      worker: 'codex',
+      expected: 'status:review',
+      next: 'status:done',
+      hasMergedPullRequest: true,
+      updateLabels: async (number, labels) => {
+        writes += 1;
+        assert.equal(number, 42);
+        assert.equal(
+          labels.filter((label) => label.startsWith('status:')).length,
+          1,
+        );
+        assert.ok(labels.includes('status:done'));
+        assert.ok(!labels.includes('status:review'));
+      },
+      postComment: async () => true,
+      refetch: async () => (writes ? done : current),
+    });
+    assert.equal(result.labels.includes('status:done'), true);
+    assert.equal(writes, 1);
   });
 
   it('adds progress comments without editing or replacing the issue body', async () => {

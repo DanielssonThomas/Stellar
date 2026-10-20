@@ -20,10 +20,11 @@ const transitions = {
   'status:review': ['status:in-progress', 'status:done'],
 };
 
-function run(args) {
+function run(args, input) {
   const result = spawnSync('gh', args, {
     encoding: 'utf8',
     windowsHide: true,
+    ...(input ? { input } : {}),
   });
   if (result.status !== 0)
     throw new Error(
@@ -248,23 +249,48 @@ export async function changeStatus({
   postComment,
   refetch,
 }) {
-  const check = validateStatusTransition({
-    issue,
-    worker,
-    expected,
-    next,
-    comment,
-    hasPullRequest,
-    hasClaim,
-    hasMergedPullRequest,
-    hasActiveClaim,
-  });
-  if (!check.valid)
-    throw new Error(
-      `Issue #${issue.number} status was not changed: ${check.errors.join(' ')}`,
+  const validate = (current) =>
+    validateStatusTransition({
+      issue: current,
+      worker,
+      expected,
+      next,
+      comment,
+      hasPullRequest,
+      hasClaim,
+      hasMergedPullRequest,
+      hasActiveClaim,
+    });
+  const unchanged = (current) =>
+    current.state === issue.state &&
+    current.body === issue.body &&
+    JSON.stringify(labelsOf(current).sort()) ===
+      JSON.stringify(labelsOf(issue).sort()) &&
+    JSON.stringify(current.dependencies ?? []) ===
+      JSON.stringify(issue.dependencies ?? []);
+  const fail = (errors) =>
+    new Error(
+      `Issue #${issue.number} status was not changed: ${errors.join(' ')}`,
     );
+  const first = await refetch(issue.number);
+  if (!unchanged(first))
+    throw fail([
+      'Issue changed since it was first fetched; re-fetch before retrying.',
+    ]);
+  let check = validate(first);
+  if (!check.valid) throw fail(check.errors);
   if (comment.trim()) await postComment(issue.number, comment.trim());
-  await updateLabels(issue.number, expected, next);
+  const current = await refetch(issue.number);
+  if (!unchanged(current))
+    throw fail([
+      'Issue changed before the status update; the appended evidence remains.',
+    ]);
+  check = validate(current);
+  if (!check.valid) throw fail(check.errors);
+  const nextLabels = labelsOf(current)
+    .filter((label) => !label.startsWith('status:'))
+    .concat(next);
+  await updateLabels(issue.number, nextLabels);
   const latest = await refetch(issue.number);
   const labels = labelsOf(latest);
   const finalValidation = validateFreshIssue(
@@ -275,23 +301,23 @@ export async function changeStatus({
   const statuses = labels.filter((label) => label.startsWith('status:'));
   if (!finalValidation.valid || statuses.length !== 1 || statuses[0] !== next)
     throw new Error(
-      `Issue #${issue.number} changed during the update. The appended evidence remains; re-fetch and reconcile current labels.`,
+      `Issue #${issue.number} changed during the update. The status write was atomic; re-fetch and reconcile current labels.`,
     );
   return latest;
 }
 
-function cliUpdateLabels(issueNumber, oldStatus, newStatus) {
-  run([
-    'issue',
-    'edit',
-    String(issueNumber),
-    '--repo',
-    repository,
-    '--remove-label',
-    oldStatus,
-    '--add-label',
-    newStatus,
-  ]);
+function cliUpdateLabels(issueNumber, labels) {
+  run(
+    [
+      'api',
+      '--method',
+      'PATCH',
+      `repos/${repository}/issues/${issueNumber}`,
+      '--input',
+      '-',
+    ],
+    JSON.stringify({ labels }),
+  );
 }
 
 function cliPostComment(issueNumber, comment) {
