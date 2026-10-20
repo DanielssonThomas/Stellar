@@ -1,0 +1,36 @@
+name: Trusted worker integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Trusted integration operation
+        type: choice
+        required: true
+        options:
+          - verify-credential
+          - create-pr
+          - integrate
+      issue_number:
+        description: Validated Stellar issue number
+        type: string
+        required: true
+      pull_request_number:
+        description: Worker pull request number (integrate only)
+        type: string
+        required: false
+
+# GitHub requires this workflow to exist on the default branch before
+# workflow_dispatch can target the trusted implementation on develop.
+# This main-branch copy is deliberately inert and receives no token.
+permissions: {}
+
+jobs:
+  dispatch-entrypoint:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Direct operations to the trusted develop workflow
+        run: |
+          echo "This default-branch entry point holds no credentials or runner code."
+          echo "Dispatch this workflow with the develop branch selected to run trusted policy."
