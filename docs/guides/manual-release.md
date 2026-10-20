@@ -4,7 +4,9 @@ This procedure is maintainer-controlled. No scheduled promotion or automatic rel
 
 ## Readiness
 
-This is the intended manual procedure, not an enabled production pipeline. The repository currently has only `develop`; `main` and monthly release branches do not exist. GitHub rejected ruleset access for this private repository and requires Pro or public visibility. Keep the repository private; do not promote a release or enable autonomous work until CI and pull-request requirements can be enforced for the production and release branches.
+This is the manual release procedure; there is no automated production pipeline. `main` is the default production branch and `develop` is the integration branch. An active GitHub ruleset protects `main`, `develop`, and `release/**`: pull requests and the passing `verify` CI check are required, and deletion and force pushes are blocked. No monthly release branch exists yet.
+
+The ruleset does not require an approving review because the repository currently has only one maintainer. Add an independent maintainer and require their review before enabling autonomous work. Vercel is not connected, so production deployment verification is not available yet.
 
 The release boundary is 00:00 on the first day of each month in `Europe/Mariehamn`. If the operator is late or a check fails, keep the release unpromoted and retry after resolving the cause.
 
