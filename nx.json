@@ -7,7 +7,9 @@
     "production": [
       "default",
       "!{projectRoot}/.eslintrc.json",
-      "!{projectRoot}/eslint.config.mjs"
+      "!{projectRoot}/eslint.config.mjs",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/tsconfig.spec.json"
     ],
     "sharedGlobals": []
   },
@@ -66,20 +68,30 @@
     "@nx/angular:unit-test": {
       "cache": true,
       "inputs": ["default", "^production"]
+    },
+    "@nx/js:tsc": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    },
+    "@nx/vitest:test": {
+      "cache": true,
+      "inputs": ["default", "^production"]
     }
   },
   "generators": {
     "@nx/angular:application": {
       "e2eTestRunner": "playwright",
       "linter": "eslint",
-      "prefix": "stellar",
       "style": "css",
-      "unitTestRunner": "vitest-angular"
+      "unitTestRunner": "vitest-angular",
+      "prefix": "stellar"
     },
     "@nx/angular:library": {
       "linter": "eslint",
-      "prefix": "stellar",
-      "unitTestRunner": "vitest-analog"
+      "unitTestRunner": "vitest-analog",
+      "strict": false,
+      "prefix": "stellar"
     },
     "@nx/js:library": {
       "unitTestRunner": "vitest"

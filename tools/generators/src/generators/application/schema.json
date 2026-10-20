@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "StellarApplication",
+  "title": "Stellar application generator",
+  "description": "Creates an Angular application and its Playwright E2E project using Stellar defaults.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Lowercase kebab-case project name. The app is created under apps/<name>.",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What name would you like to use?"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}
