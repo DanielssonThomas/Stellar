@@ -523,9 +523,36 @@ export async function runRestrictedWorker({
   }
 }
 
+export function buildHermesTaskCommand(task, limits = defaultLimits) {
+  const issueNumber = positiveInteger(task?.issueNumber, 'task issueNumber');
+  const runtimeSeconds = Math.ceil(
+    positiveInteger(limits.maxRuntimeMsPerWorker, 'maxRuntimeMsPerWorker') /
+      1000,
+  );
+  const prompt = [
+    `You are Peon, a restricted coding worker assigned only to Stellar issue #${issueNumber}.`,
+    `First retrieve the issue using the public GitHub API at https://api.github.com/repos/DanielssonThomas/Stellar/issues/${issueNumber}; inspect its title, body, labels, and current state before editing.`,
+    'Read /workspace/AGENTS.md and /workspace/docs/guides/issue-workflow.md, then read the implement-issue skill and the relevant repository skill named by the issue.',
+    'Confirm the issue owner, target, metadata, dependencies, and acceptance criteria. Stop and report a blocker if they do not authorize this assigned work.',
+    'Work only in /workspace, which is the isolated issue worktree. Follow the issue plan and acceptance criteria, use repository generators and checks, and preserve truthful verification evidence.',
+    `Create issue-linked conventional commits beginning with [#${issueNumber}], without emoji, and push only to the authorized worker fork branch. Do not write to upstream develop, open or merge a PR, or access the host/runtime; the trusted integration workflow handles PR creation.`,
+    'Never print, copy, or include credentials in the issue, commit, or output.',
+  ].join('\n\n');
+  return [
+    'chat',
+    '-Q',
+    '--in',
+    '/workspace',
+    '--run-budget',
+    String(runtimeSeconds),
+    '-q',
+    prompt,
+  ];
+}
+
 export function createPeonWorkerAdapter({
   image,
-  commandForTask = (task) => ['hermes', '--issue', String(task.issueNumber)],
+  commandForTask = buildHermesTaskCommand,
 }) {
   let active = null;
   return {
@@ -540,7 +567,7 @@ export function createPeonWorkerAdapter({
       active.done = runRestrictedWorker({
         issueNumber: task.issueNumber,
         image,
-        command: commandForTask(task),
+        command: commandForTask(task, limits),
         limits,
         initialUsage: budget.snapshot,
         attemptNumber: currentAttempt,

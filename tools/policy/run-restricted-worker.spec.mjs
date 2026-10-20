@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   buildMeteringProxyArgs,
   buildPodmanArgs,
+  buildHermesTaskCommand,
   parseArguments,
 } from './run-restricted-worker.mjs';
 
@@ -254,4 +256,42 @@ test('fails closed when trusted protected paths are missing or unsafe', () => {
     () => buildPodmanArgs({ ...base, protectedPaths: ['/tools/policy'] }),
     /Trusted protected paths/,
   );
+});
+
+test('builds a supported bounded Hermes chat command with issue retrieval guidance', () => {
+  const command = buildHermesTaskCommand(
+    { issueNumber: 48 },
+    { maxRuntimeMsPerWorker: 125_000 },
+  );
+  assert.deepEqual(command.slice(0, 7), [
+    'chat',
+    '-Q',
+    '--in',
+    '/workspace',
+    '--run-budget',
+    '125',
+    '-q',
+  ]);
+  assert.match(
+    command[7],
+    /api\.github\.com\/repos\/DanielssonThomas\/Stellar\/issues\/48/,
+  );
+  assert.match(command[7], /AGENTS\.md/);
+  assert.match(command[7], /implement-issue skill/);
+  assert.match(command[7], /worker fork branch/);
+  assert.doesNotMatch(command[7], /GH_TOKEN|STELLAR_INTEGRATION_TOKEN/);
+  assert.throws(
+    () =>
+      buildHermesTaskCommand({ issueNumber: 48 }, { maxRuntimeMsPerWorker: 0 }),
+    /maxRuntimeMsPerWorker/,
+  );
+});
+
+test('configures the exact pinned Hermes turn-limit key', () => {
+  const config = readFileSync(
+    new URL('./peon-hermes-config.yaml', import.meta.url),
+    'utf8',
+  );
+  assert.match(config, /agent:\s+max_turns:\s+250/);
+  assert.doesNotMatch(config, /max_iterations/);
 });
