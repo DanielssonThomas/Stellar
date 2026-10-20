@@ -20,7 +20,8 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--pull=never',
     '--userns=keep-id',
     '--user=1001:1001',
-    '--network=slirp4netns:allow_host_loopback=false',
+    '--network=stellar-peon-egress',
+    '--network=stellar-peon-model',
     '--http-proxy=false',
     '--read-only',
     '--cap-drop=all',
@@ -53,6 +54,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     args.some((argument) => argument.includes('/mnt/')),
     false,
   );
+  assert.equal(args.includes('--network=stellar-peon-model'), true);
 });
 
 test('rejects image tags without an immutable digest', () => {

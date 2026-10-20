@@ -31,6 +31,37 @@ The local setup uses WSL 2, Ubuntu, and rootless Podman. The Linux `peon` accoun
 
 The rootless user namespace and absent mounts were verified in the local WSL environment. The default supervisor also bounds attempts, runtime, tools, and model tokens; see [agent supervision](agent-supervision.md).
 
+## Private WSL inference service
+
+The local Peon model service runs separately from the worker in rootless Podman. NVIDIA Container Toolkit CDI was generated in Ubuntu WSL from the WSL-provided NVIDIA driver, and a CUDA sample completed on the RTX 4070 SUPER. The service uses the pinned `ghcr.io/ggml-org/llama.cpp` image digest `sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7` and the Qwen3.5-4B Q4_K_M GGUF copied onto WSL's Linux filesystem. The model file is mounted read-only; its SHA-256 is `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`.
+
+The service runs as UID/GID 1001 with all capabilities dropped, `no-new-privileges`, 8 GiB RAM, 6 CPUs, 128 PIDs, one inference slot, a 65,536-token context, 12 GPU layers, batch 128, micro-batch 32, and Q8 KV caches. Its root filesystem remains writable because the WSL CDI hook failed when the service root filesystem was read-only. This does not grant Peon access to the service container: the worker has no Podman socket, container namespace, model mount, or service configuration mount. Keep the service's arguments and model path in the trusted host-side start procedure.
+
+Podman cannot combine rootless `slirp4netns` and a second network. The worker therefore joins a dedicated rootless `stellar-peon-egress` bridge for outbound GitHub access and the separate `stellar-peon-model` network for inference. The model network is `internal=true`, DNS-enabled, and has no host port publication. The model service is attached only to that internal network, and the runner fails closed unless the model network exists and is internal and the egress network exists and is external. A non-member container was unable to resolve or reach `peon-model`; the restricted worker resolved the alias and completed a Qwen response. No Windows firewall, WSL networking, Docker, Hermes gateway, or Windows model server setting was changed. The Windows server remained listening at `127.0.0.1:18434`; no process listened on Windows port 18435.
+
+The trusted host operator can start the model service after creating the internal network and copying the verified model to `/home/peon/.local/share/stellar-peon-model/Qwen3.5-4B-Q4_K_M.gguf` with file mode `0444` and parent directory mode `0555`:
+
+```bash
+podman network create --internal stellar-peon-model
+podman network create stellar-peon-egress
+podman run -d --name stellar-peon-qwen --pull=never \
+  --userns=keep-id --user=1001:1001 \
+  --network=stellar-peon-model:alias=peon-model \
+  --device=nvidia.com/gpu=all --security-opt=label=disable \
+  --cap-drop=all --security-opt=no-new-privileges \
+  --pids-limit=128 --memory=8g --memory-swap=8g --cpus=6 \
+  --tmpfs=/tmp:rw,nosuid,nodev,noexec,size=1g \
+  --mount=type=bind,src=/home/peon/.local/share/stellar-peon-model/Qwen3.5-4B-Q4_K_M.gguf,dst=/models/Qwen3.5-4B-Q4_K_M.gguf,ro \
+  ghcr.io/ggml-org/llama.cpp@sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7 \
+  --model /models/Qwen3.5-4B-Q4_K_M.gguf --alias Qwen3.5-4B-Q4_K_M \
+  --ctx-size 65536 --n-gpu-layers 12 --parallel 1 \
+  --batch-size 128 --ubatch-size 32 --flash-attn on \
+  --cache-type-k q8_0 --cache-type-v q8_0 --jinja \
+  --host 0.0.0.0 --port 18435
+```
+
+Do not add `-p`/`--publish`. Verify from Peon's restricted container with `curl http://peon-model:18435/health` and a small `/v1/chat/completions` request. Stop and remove the service with `podman stop stellar-peon-qwen` and `podman rm stellar-peon-qwen`; remove both networks after the worker container exits with `podman network rm stellar-peon-model stellar-peon-egress`. Remove only the WSL model copy when no longer needed. To roll back CDI, first stop GPU containers, then remove `/etc/cdi/nvidia.yaml`, the `nvidia-container-toolkit.list` source and its keyring, and uninstall `nvidia-container-toolkit-base` if no other WSL workload uses it. These commands do not remove the Windows NVIDIA driver or touch the Windows inference server.
+
 ## Worker image
 
 `tools/worker-image/Containerfile` pins the Node base image by digest and installs Hermes Agent v0.22.2 from source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. The image build runs the upstream installer without browser or computer-use packages and verifies the installed Hermes version. At runtime, the image keeps installed package files read-only and redirects Hermes' install lock and lease state into `/tmp`; the remaining Hermes home also lives in `/tmp`. Build it locally as the unprivileged `peon` account, inspect the resulting image digest, and pass that digest to the restricted launcher. The image is not published by this workflow; registry publication requires a separate decision and credential.
@@ -53,4 +84,4 @@ This boundary contains ordinary model-issued commands and accidental access. A r
 
 ## Current admission state
 
-WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. The fine-grained worker token is stored in Podman's rootless secret store. The pinned Hermes image is built locally and its version command passes in a read-only container. This does not admit Peon to work on Stellar: the model endpoint, workspace launch, and end-to-end supervisor handoff still require verification, and `peon` is not listed in `tools/policy/authorized-workers.json`.
+WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. The pinned Hermes image is built locally and its version command passes in a read-only container. GPU compute, the private model endpoint, and a Qwen response from a container using the restricted launch limits were verified. Negative checks confirmed a read-only worker root filesystem, no Windows system or model-file mounts, and no Podman or Docker socket; a container outside the internal model network could not reach the endpoint. The model service has no published ports. The fine-grained worker token must be rotated before future Peon launches because a diagnostic shell trace accidentally disclosed it in tool output. This does not admit Peon to autonomous work: `peon` is not listed in `tools/policy/authorized-workers.json`, issue #21 has not completed its review, and no Hermes coding run or issue assignment was started.

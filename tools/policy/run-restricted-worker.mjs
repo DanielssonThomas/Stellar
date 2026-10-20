@@ -10,6 +10,8 @@ const distribution = 'Ubuntu';
 const workerAccount = 'peon';
 const workspaceRoot = '/home/peon/workspaces';
 const workerSecret = 'stellar-worker-github-token';
+const modelNetwork = 'stellar-peon-model';
+const egressNetwork = 'stellar-peon-egress';
 const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -81,7 +83,8 @@ export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
     '--pull=never',
     '--userns=keep-id',
     `--user=${userId}:${groupId}`,
-    '--network=slirp4netns:allow_host_loopback=false',
+    `--network=${egressNetwork}`,
+    `--network=${modelNetwork}`,
     '--http-proxy=false',
     '--read-only',
     '--cap-drop=all',
@@ -187,6 +190,18 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
   );
   const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
   if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
+  const modelNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', modelNetwork),
+  );
+  if (modelNetworks.length !== 1 || modelNetworks[0].internal !== true)
+    throw new Error('Peon model network must exist and be internal-only.');
+  const egressNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', egressNetwork),
+  );
+  if (egressNetworks.length !== 1 || egressNetworks[0].internal !== false)
+    throw new Error(
+      'Peon egress network must exist and allow outbound access.',
+    );
   const imagePresent = spawnSync(
     'wsl.exe',
     [
