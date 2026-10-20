@@ -1,6 +1,6 @@
 # Agent supervision
 
-`tools/policy/supervise-worker.mjs` provides a deterministic, model-independent supervisor. It accepts Peon and Mira adapters; it never accepts or invokes a Codex worker. The supervisor is currently verified with simulated adapters. Live worker execution remains gated by [restricted worker security](../architecture/overview.md#governance) and its issue #21.
+`tools/policy/supervise-worker.mjs` provides a deterministic, model-independent supervisor. It accepts Peon and Mira adapters; it never accepts or invokes a Codex worker. Its unit tests use simulated adapters. The trusted live entry point is wired separately and its live issue-to-PR trial remains gated by issue #24 and its implementation prerequisites.
 
 ## Limits and progress
 
@@ -9,6 +9,8 @@ Defaults per worker are two attempts, ten minutes, 64 tool calls, 32,000 reporte
 Adapters must execute tools through `budget.runTool` and model requests through `budget.runModel`. The model adapter supplies its prompt token estimate and must honor the returned `maxOutputTokens`. Actual provider usage is charged when present; when usage is unavailable, the full reserved prompt and output budget is charged. The supervisor receives a trusted `inspectWorktree` callback and compares its fingerprints; model-written progress claims do not count as worktree progress. A trusted `verify` callback must return at least one passing result before the task can complete.
 
 Restricted live adapters must also expose a trusted `usage()` poll sourced from the metering sidecar, never from Hermes' self-reported usage file. The sidecar applies the supervisor-supplied cumulative limits before forwarding model output, counts tool calls in the complete model response before releasing it to Hermes, and returns monotonic counters over its loopback-only control endpoint. The supervisor polls while the worker runs, updates its handoff counters, and cancels the worker on exhausted budgets or any usage-query failure. A live adapter without this channel is inadmissible; simulated adapters remain useful for supervisor unit tests only.
+
+The trusted live entry point is `tools/policy/supervised-peon-run.mjs`. Its `runSupervisedPeonIssue` function re-fetches the issue and claim, checks owner, target, dependencies, branch, session, and immutable image before constructing the live Peon adapter. It wires that adapter into `superviseWorker` with the existing limits and one attempt, and it does not authorize automatic Mira or Codex execution. The caller must supply named verification commands from trusted configuration; the runner executes each check in a rootless container on `--network=none`, with the pinned image, read-only protected mounts, no GitHub secret, no model endpoint, and no integration credential. Do not derive verification commands from issue text or worker output.
 
 ## Handoffs and recovery
 
