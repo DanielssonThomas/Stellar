@@ -284,6 +284,42 @@ describe('issue progress metadata', () => {
     );
   });
 
+  it('promotes a complete triage issue to ready only after dependencies resolve', () => {
+    const readyIssue = issue('status:triage', {
+      body: acceptance.replace('None', '#18'),
+      dependencies: [{ number: 18, state: 'CLOSED', status: 'status:done' }],
+    });
+    assert.equal(
+      validateStatusTransition({
+        issue: readyIssue,
+        worker: 'codex',
+        expected: 'status:triage',
+        next: 'status:ready',
+      }).valid,
+      true,
+    );
+
+    for (const invalid of [
+      { ...readyIssue, body: readyIssue.body.replace('Do the work.', '') },
+      {
+        ...readyIssue,
+        dependencies: [
+          { number: 18, state: 'OPEN', status: 'status:in-progress' },
+        ],
+      },
+    ]) {
+      assert.equal(
+        validateStatusTransition({
+          issue: invalid,
+          worker: 'codex',
+          expected: 'status:triage',
+          next: 'status:ready',
+        }).valid,
+        false,
+      );
+    }
+  });
+
   it('appends evidence and checks fresh labels after a status change', async () => {
     const events = [];
     const current = issue();
