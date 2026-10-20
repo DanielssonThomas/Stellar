@@ -141,15 +141,21 @@ function createWorkerBudget(limits, previous = {}) {
         !Number.isSafeInteger(usage?.modelTokens) ||
         usage.modelTokens < modelTokens
       )
-        throw new Error('Trusted live usage counters must be monotonic safe integers.');
+        throw new Error(
+          'Trusted live usage counters must be monotonic safe integers.',
+        );
       toolCalls = usage.toolCalls;
       modelTokens = usage.modelTokens;
       const exhausted = usage.exceededResource;
       if (exhausted && !['tool-calls', 'model-tokens'].includes(exhausted))
-        throw new Error('Trusted live usage reported an unknown exhausted resource.');
+        throw new Error(
+          'Trusted live usage reported an unknown exhausted resource.',
+        );
       if (exhausted) exceededResource = exhausted;
-      if (toolCalls > limits.maxToolCallsPerWorker) exceededResource = 'tool-calls';
-      if (modelTokens > limits.maxModelTokensPerWorker) exceededResource = 'model-tokens';
+      if (toolCalls > limits.maxToolCallsPerWorker)
+        exceededResource = 'tool-calls';
+      if (modelTokens > limits.maxModelTokensPerWorker)
+        exceededResource = 'model-tokens';
       return { toolCalls, modelTokens, exceededResource };
     },
     async runModel({ promptTokens = 0, maxOutputTokens, invoke }) {
@@ -263,9 +269,16 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
       if (polling) return;
       polling = true;
       try {
-        const usage = await worker.usage({ task: context.task, attemptNumber: context.attemptNumber });
+        const usage = await worker.usage({
+          task: context.task,
+          attemptNumber: context.attemptNumber,
+        });
         const snapshot = context.budget.observeUsage(usage);
-        if (snapshot.exceededResource) resolve({ type: 'budget-exceeded', resource: snapshot.exceededResource });
+        if (snapshot.exceededResource)
+          resolve({
+            type: 'budget-exceeded',
+            resource: snapshot.exceededResource,
+          });
       } catch {
         resolve({ type: 'usage-accounting-failed' });
       } finally {
@@ -288,7 +301,14 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
   clearTimeout(timer);
   clearInterval(usageTimer);
   if (abortListener) externalSignal.removeEventListener('abort', abortListener);
-  if (['timeout', 'interrupted', 'budget-exceeded', 'usage-accounting-failed'].includes(outcome.type)) {
+  if (
+    [
+      'timeout',
+      'interrupted',
+      'budget-exceeded',
+      'usage-accounting-failed',
+    ].includes(outcome.type)
+  ) {
     controller.abort(outcome.type);
     return {
       ...outcome,
@@ -524,12 +544,17 @@ export async function superviseWorker({
       if (outcome.type === 'result' && typeof worker.usage === 'function') {
         try {
           if (!outcome.result?.usage)
-            throw new Error('Live worker returned no final trusted usage snapshot.');
+            throw new Error(
+              'Live worker returned no final trusted usage snapshot.',
+            );
           budget.observeUsage(outcome.result.usage);
         } catch {
           outcome = {
             type: 'usage-accounting-failed',
-            workerStopped: await confirmWorkerStopped(worker, 'usage-accounting-failed'),
+            workerStopped: await confirmWorkerStopped(
+              worker,
+              'usage-accounting-failed',
+            ),
           };
         }
       }
@@ -549,7 +574,12 @@ export async function superviseWorker({
         modelTokens: budget.snapshot.modelTokens,
       };
       if (
-        ['timeout', 'interrupted', 'budget-exceeded', 'usage-accounting-failed'].includes(outcome.type) &&
+        [
+          'timeout',
+          'interrupted',
+          'budget-exceeded',
+          'usage-accounting-failed',
+        ].includes(outcome.type) &&
         !outcome.workerStopped
       ) {
         const failure = failureDetails({
@@ -606,16 +636,24 @@ export async function superviseWorker({
         handoff.currentWorkerId = workerId;
         await save('paused');
         return { status: 'paused', handoff };
-      } else if (outcome.type === 'budget-exceeded' || outcome.type === 'usage-accounting-failed') {
+      } else if (
+        outcome.type === 'budget-exceeded' ||
+        outcome.type === 'usage-accounting-failed'
+      ) {
         failure = failureDetails({
-          code: outcome.type === 'budget-exceeded' ? 'ResourceLimit' : 'UsageAccountingFailure',
-          message: outcome.type === 'budget-exceeded'
-            ? `Trusted live ${outcome.resource} budget was exhausted.`
-            : 'Trusted live usage accounting failed; worker stopped fail-closed.',
+          code:
+            outcome.type === 'budget-exceeded'
+              ? 'ResourceLimit'
+              : 'UsageAccountingFailure',
+          message:
+            outcome.type === 'budget-exceeded'
+              ? `Trusted live ${outcome.resource} budget was exhausted.`
+              : 'Trusted live usage accounting failed; worker stopped fail-closed.',
         });
-        stopReason = outcome.type === 'budget-exceeded'
-          ? `${outcome.resource}-budget-exhausted`
-          : 'usage-accounting-failed';
+        stopReason =
+          outcome.type === 'budget-exceeded'
+            ? `${outcome.resource}-budget-exhausted`
+            : 'usage-accounting-failed';
       } else if (outcome.type === 'error') {
         failure = failureDetails(outcome.error);
       } else {

@@ -155,46 +155,86 @@ export function buildMeteringProxyArgs({
   if (!/^stellar-peon-meter-[1-9][0-9]*-[1-9][0-9]*$/.test(name ?? ''))
     throw new Error('Metering proxy name must identify one issue attempt.');
   if (typeof image !== 'string' || !imagePattern.test(image))
-    throw new Error('Metering proxy image must be pinned by a lowercase sha256 digest.');
+    throw new Error(
+      'Metering proxy image must be pinned by a lowercase sha256 digest.',
+    );
   const maxTokens = positiveInteger(maxModelTokens, 'maxModelTokens');
   const maxTools = positiveInteger(maxToolCalls, 'maxToolCalls');
   const initialTokens = Number(initialModelTokens);
   const initialTools = Number(initialToolCalls);
-  if (maxTokens > 64_000 || maxTools > 128 || !Number.isSafeInteger(initialTokens) || initialTokens < 0 || initialTokens > maxTokens || !Number.isSafeInteger(initialTools) || initialTools < 0 || initialTools > maxTools)
+  if (
+    maxTokens > 64_000 ||
+    maxTools > 128 ||
+    !Number.isSafeInteger(initialTokens) ||
+    initialTokens < 0 ||
+    initialTokens > maxTokens ||
+    !Number.isSafeInteger(initialTools) ||
+    initialTools < 0 ||
+    initialTools > maxTools
+  )
     throw new Error('Metering proxy budgets exceed trusted hard limits.');
   // Podman selects the first attached bridge as the proxy's default route.
   return [
-    'run', '--detach', '--rm', '--init', '--pull=never', `--name=${name}`,
-    '--userns=keep-id', `--user=${uid}:${gid}`,
+    'run',
+    '--detach',
+    '--rm',
+    '--init',
+    '--pull=never',
+    `--name=${name}`,
+    '--userns=keep-id',
+    `--user=${uid}:${gid}`,
     `--network=${egressNetwork}`,
     `--network=${workerNetwork}:alias=peon-meter`,
     `--network=${modelNetwork}`,
-    '--http-proxy=false', '--read-only', '--cap-drop=all',
-    '--security-opt=no-new-privileges', '--pids-limit=64',
-    '--memory=512m', '--memory-swap=512m', '--cpus=1',
+    '--http-proxy=false',
+    '--read-only',
+    '--cap-drop=all',
+    '--security-opt=no-new-privileges',
+    '--pids-limit=64',
+    '--memory=512m',
+    '--memory-swap=512m',
+    '--cpus=1',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=64m',
     `--env=STELLAR_MODEL_UPSTREAM=http://peon-model:18435`,
     `--env=STELLAR_MAX_MODEL_TOKENS=${maxTokens}`,
     `--env=STELLAR_MAX_TOOL_CALLS=${maxTools}`,
     `--env=STELLAR_INITIAL_MODEL_TOKENS=${initialTokens}`,
     `--env=STELLAR_INITIAL_TOOL_CALLS=${initialTools}`,
-    image, 'node', '/opt/stellar-peon-metering-proxy.mjs',
+    image,
+    'node',
+    '/opt/stellar-peon-metering-proxy.mjs',
   ];
 }
 
 function readMeterUsage(containerName) {
-  const source = "fetch('http://127.0.0.1:18437/usage').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))";
-  return JSON.parse(wslWorker('podman', 'exec', containerName, 'node', '-e', source));
+  const source =
+    "fetch('http://127.0.0.1:18437/usage').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))";
+  return JSON.parse(
+    wslWorker('podman', 'exec', containerName, 'node', '-e', source),
+  );
 }
 
 function waitForMeter(containerName) {
-  const source = "fetch('http://127.0.0.1:18436/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
+  const source =
+    "fetch('http://127.0.0.1:18436/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
       wslWorker('podman', 'exec', containerName, 'node', '-e', source);
       return;
     } catch {
-      spawnSync('wsl.exe', ['--distribution', distribution, '--user', workerAccount, '--exec', 'sleep', '0.25'], { cwd: repositoryRoot, windowsHide: true, timeout: 2000 });
+      spawnSync(
+        'wsl.exe',
+        [
+          '--distribution',
+          distribution,
+          '--user',
+          workerAccount,
+          '--exec',
+          'sleep',
+          '0.25',
+        ],
+        { cwd: repositoryRoot, windowsHide: true, timeout: 2000 },
+      );
     }
   }
   throw new Error('Trusted metering proxy did not become healthy.');
@@ -369,7 +409,14 @@ export function parseArguments(argv) {
   };
 }
 
-export async function runRestrictedWorker({ issueNumber, image, command, limits = defaultLimits, initialUsage = {}, attemptNumber = 1 }) {
+export async function runRestrictedWorker({
+  issueNumber,
+  image,
+  command,
+  limits = defaultLimits,
+  initialUsage = {},
+  attemptNumber = 1,
+}) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const expectedBranchPrefix = `issue/${number}-`;
   const { workerUid, workerGid } = validateWorkspace(
@@ -385,7 +432,9 @@ export async function runRestrictedWorker({ issueNumber, image, command, limits 
   );
   if (modelNetworks.length !== 1 || modelNetworks[0].internal !== true)
     throw new Error('Peon model network must exist and be internal-only.');
-  const workerNetworks = JSON.parse(wslWorker('podman', 'network', 'inspect', workerNetwork));
+  const workerNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', workerNetwork),
+  );
   if (workerNetworks.length !== 1 || workerNetworks[0].internal !== true)
     throw new Error('Peon worker network must exist and be internal-only.');
   const egressNetworks = JSON.parse(
@@ -443,23 +492,41 @@ export async function runRestrictedWorker({ issueNumber, image, command, limits 
       attemptNumber: attempt,
     });
     const result = await new Promise((resolve, reject) => {
-      const child = spawn('wsl.exe', ['--distribution', distribution, '--user', workerAccount, '--exec', 'podman', ...workerArgs], {
-        cwd: repositoryRoot,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
+      const child = spawn(
+        'wsl.exe',
+        [
+          '--distribution',
+          distribution,
+          '--user',
+          workerAccount,
+          '--exec',
+          'podman',
+          ...workerArgs,
+        ],
+        {
+          cwd: repositoryRoot,
+          stdio: 'ignore',
+          windowsHide: true,
+        },
+      );
       child.once('error', reject);
       child.once('exit', (code, signal) => resolve({ code, signal }));
     });
     usage = readMeterUsage(meterName);
     return { exitCode: result.code ?? 1, signal: result.signal, usage };
   } finally {
-    try { wslWorker('podman', 'stop', '--time', '2', meterName); }
-    catch { throw new Error('Could not confirm metering proxy shutdown.'); }
+    try {
+      wslWorker('podman', 'stop', '--time', '2', meterName);
+    } catch {
+      throw new Error('Could not confirm metering proxy shutdown.');
+    }
   }
 }
 
-export function createPeonWorkerAdapter({ image, commandForTask = (task) => ['hermes', '--issue', String(task.issueNumber)] }) {
+export function createPeonWorkerAdapter({
+  image,
+  commandForTask = (task) => ['hermes', '--issue', String(task.issueNumber)],
+}) {
   let active = null;
   return {
     id: 'peon',
@@ -482,7 +549,14 @@ export function createPeonWorkerAdapter({ image, commandForTask = (task) => ['he
       active = null;
       return result.exitCode === 0
         ? { status: 'completed', usage: result.usage }
-        : { status: 'failed', usage: result.usage, failure: { code: 'WorkerExit', message: `Hermes exited with status ${result.exitCode}.` } };
+        : {
+            status: 'failed',
+            usage: result.usage,
+            failure: {
+              code: 'WorkerExit',
+              message: `Hermes exited with status ${result.exitCode}.`,
+            },
+          };
     },
     async usage() {
       if (!active) return { toolCalls: 0, modelTokens: 0 };
@@ -492,9 +566,14 @@ export function createPeonWorkerAdapter({ image, commandForTask = (task) => ['he
       if (!active) return true;
       try {
         wslWorker('podman', 'stop', '--time', '2', active.workerName);
-      } catch { return false; }
+      } catch {
+        return false;
+      }
       const stopped = await Promise.race([
-        active.done.then(() => true, () => false),
+        active.done.then(
+          () => true,
+          () => false,
+        ),
         new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
       ]);
       return stopped === true;

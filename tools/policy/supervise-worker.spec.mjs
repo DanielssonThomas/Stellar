@@ -220,8 +220,26 @@ describe('bounded worker supervision', () => {
         limits: { maxToolCallsPerWorker: 1 },
         workers: {
           peon: {
-            ...worker('peon', ({ signal }) => new Promise((resolve) => signal.addEventListener('abort', () => resolve({ status: 'failed' }), { once: true })), () => { cancellations += 1; return true; }),
-            usage: async () => ({ toolCalls: 2, modelTokens: 4, exceededResource: 'tool-calls' }),
+            ...worker(
+              'peon',
+              ({ signal }) =>
+                new Promise((resolve) =>
+                  signal.addEventListener(
+                    'abort',
+                    () => resolve({ status: 'failed' }),
+                    { once: true },
+                  ),
+                ),
+              () => {
+                cancellations += 1;
+                return true;
+              },
+            ),
+            usage: async () => ({
+              toolCalls: 2,
+              modelTokens: 4,
+              exceededResource: 'tool-calls',
+            }),
           },
           mira: worker('mira', async () => ({ status: 'completed' })),
         },
@@ -231,7 +249,9 @@ describe('bounded worker supervision', () => {
 
     assert.equal(result.status, 'complete');
     assert.equal(cancellations, 1);
-    const stopped = result.handoff.attempts.find((attempt) => attempt.workerId === 'peon');
+    const stopped = result.handoff.attempts.find(
+      (attempt) => attempt.workerId === 'peon',
+    );
     assert.equal(stopped.toolCalls, 2);
     assert.equal(stopped.failure.code, 'ResourceLimit');
   });

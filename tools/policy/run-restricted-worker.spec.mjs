@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildMeteringProxyArgs, buildPodmanArgs, parseArguments } from './run-restricted-worker.mjs';
+import {
+  buildMeteringProxyArgs,
+  buildPodmanArgs,
+  parseArguments,
+} from './run-restricted-worker.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
 const protectedPaths = [
@@ -100,17 +104,54 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
 
 test('builds a separate hardened metering proxy on the worker, model, and egress networks', () => {
   const args = buildMeteringProxyArgs({
-    name: 'stellar-peon-meter-24-1', image, uid: 1001, gid: 1001,
-    maxModelTokens: 32_000, maxToolCalls: 64,
+    name: 'stellar-peon-meter-24-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 32_000,
+    maxToolCalls: 64,
   });
-  assert.equal(args.includes('--network=stellar-peon-worker:alias=peon-meter'), true);
+  assert.equal(
+    args.includes('--network=stellar-peon-worker:alias=peon-meter'),
+    true,
+  );
   assert.equal(args.includes('--network=stellar-peon-model'), true);
   assert.equal(args.includes('--network=stellar-peon-egress'), true);
-  assert.ok(args.indexOf('--network=stellar-peon-egress') < args.indexOf('--network=stellar-peon-worker:alias=peon-meter'));
+  assert.ok(
+    args.indexOf('--network=stellar-peon-egress') <
+      args.indexOf('--network=stellar-peon-worker:alias=peon-meter'),
+  );
   assert.equal(args.includes('--privileged'), false);
-  assert.equal(args.includes('--secret=source=stellar-worker-github-token,type=env,target=GH_TOKEN'), false);
-  assert.throws(() => buildMeteringProxyArgs({ name: 'wrong', image, uid: 1001, gid: 1001, maxModelTokens: 32_000, maxToolCalls: 64 }), /identify one issue attempt/);
-  assert.throws(() => buildMeteringProxyArgs({ name: 'stellar-peon-meter-24-1', image, uid: 1001, gid: 1001, maxModelTokens: 64_001, maxToolCalls: 64 }), /hard limits/);
+  assert.equal(
+    args.includes(
+      '--secret=source=stellar-worker-github-token,type=env,target=GH_TOKEN',
+    ),
+    false,
+  );
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'wrong',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 32_000,
+        maxToolCalls: 64,
+      }),
+    /identify one issue attempt/,
+  );
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'stellar-peon-meter-24-1',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 64_001,
+        maxToolCalls: 64,
+      }),
+    /hard limits/,
+  );
 });
 
 test('rejects image tags without an immutable digest', () => {
