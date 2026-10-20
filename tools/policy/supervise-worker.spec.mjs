@@ -277,6 +277,45 @@ describe('bounded worker supervision', () => {
     assert.equal(result.handoff.attempts[0].modelTokens, 7);
   });
 
+  it('stops and escalates when the trusted live usage channel fails', async () => {
+    let cancelled = false;
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              ({ signal }) =>
+                new Promise((resolve) =>
+                  signal.addEventListener(
+                    'abort',
+                    () => resolve({ status: 'failed' }),
+                    { once: true },
+                  ),
+                ),
+              async () => {
+                cancelled = true;
+                return true;
+              },
+            ),
+            usage: async () => {
+              throw new Error('meter unavailable');
+            },
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        authorizeHandoff: authorizeMira,
+      }),
+    );
+
+    assert.equal(result.status, 'complete');
+    assert.equal(cancelled, true);
+    const stopped = result.handoff.attempts.find(
+      (attempt) => attempt.workerId === 'peon',
+    );
+    assert.equal(stopped.failure.code, 'UsageAccountingFailure');
+  });
+
   it('stops a timed out worker and routes within the total runtime ceiling', async () => {
     let cancelled = false;
     let miraCalls = 0;
