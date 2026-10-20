@@ -31,7 +31,7 @@ export const categories = {
 
 const releaseTarget = /^target:release\/\d{4}\.(?:0[1-9]|1[0-2])$/;
 const ownerLabel = /^(?:owner:(?:codex|maintainer)|worker:[a-z0-9][a-z0-9-]*)$/;
-const authorizedWorkers = new Set(
+const configuredAuthorizedWorkers = new Set(
   JSON.parse(
     readFileSync(new URL('./authorized-workers.json', import.meta.url), 'utf8'),
   ),
@@ -57,7 +57,10 @@ function section(body, name) {
   return content.join('\n').trim();
 }
 
-export function validateIssue(issue) {
+export function validateIssue(
+  issue,
+  { authorizedWorkers = configuredAuthorizedWorkers } = {},
+) {
   const labels = labelsOf(issue);
   const errors = [];
   const found = {};
@@ -79,10 +82,14 @@ export function validateIssue(issue) {
     (label) => label.startsWith('owner:') || label.startsWith('worker:'),
   );
   const statuses = found.status;
+  const authorizedWorkerIds =
+    authorizedWorkers instanceof Set
+      ? authorizedWorkers
+      : new Set(authorizedWorkers);
   for (const label of found.owner.filter((owner) =>
     owner.startsWith('worker:'),
   )) {
-    if (!authorizedWorkers.has(label.slice('worker:'.length)))
+    if (!authorizedWorkerIds.has(label.slice('worker:'.length)))
       errors.push(`Worker ${label} is not authorized.`);
   }
   if (
