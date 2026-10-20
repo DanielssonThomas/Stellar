@@ -256,6 +256,34 @@ describe('issue progress metadata', () => {
     );
   });
 
+  it('allows triage recovery to done only after integration requirements pass', () => {
+    const closed = issue('status:triage', {
+      body: acceptance.replace('- [ ]', '- [x]'),
+      state: 'CLOSED',
+    });
+    assert.equal(
+      validateStatusTransition({
+        issue: closed,
+        worker: 'codex',
+        expected: 'status:triage',
+        next: 'status:done',
+        hasMergedPullRequest: true,
+      }).valid,
+      true,
+    );
+    assert.equal(
+      validateStatusTransition({
+        issue: closed,
+        worker: 'codex',
+        expected: 'status:triage',
+        next: 'status:done',
+        hasMergedPullRequest: true,
+        hasActiveClaim: true,
+      }).valid,
+      false,
+    );
+  });
+
   it('appends evidence and checks fresh labels after a status change', async () => {
     const events = [];
     const latest = issue('status:blocked');

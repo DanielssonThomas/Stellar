@@ -13,6 +13,8 @@ import { validateIssue } from './validate-issue.mjs';
 const repository = process.env.GITHUB_REPOSITORY ?? 'DanielssonThomas/Stellar';
 const transitions = {
   'status:ready': [],
+  // Recovery path for an integrated issue whose status update was interrupted.
+  'status:triage': ['status:done'],
   'status:in-progress': ['status:blocked', 'status:review'],
   'status:blocked': ['status:ready'],
   'status:review': ['status:in-progress', 'status:done'],
