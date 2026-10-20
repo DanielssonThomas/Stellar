@@ -9,6 +9,7 @@
 - [Agent issue worktrees](guides/agent-worktrees.md): claim, resume, transfer, and preserve issue-specific worktrees.
 - [Agent supervision](guides/agent-supervision.md): bounded worker attempts, durable handoffs, verification, and escalation requests.
 - [Worker integration policy](guides/worker-integration-policy.md): deterministic offline eligibility checks for restricted worker pull requests.
+- [Restricted worker security](guides/worker-security.md): fork-only identity, local WSL and Podman boundaries, admission, and removal.
 - [Development roadmap](implementation/roadmap.md): bootstrap status and links to GitHub work.
 
 Operational guides will be added with the workflows they describe.
