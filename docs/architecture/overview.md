@@ -18,7 +18,7 @@ Angular's supported unit-test builder runs Vitest. App tests share an MSW server
 
 ## Governance
 
-GitHub Issues are the canonical work source. The repository contains an issue template, a validator, and an operational `create-issue` skill. A GitHub Actions workflow validates issue changes and returns invalid work to triage. See the [issue workflow](../guides/issue-workflow.md) for metadata and lifecycle rules.
+GitHub Issues are the canonical work source. The repository contains an issue template, a validator, and an operational `create-issue` skill. A GitHub Actions workflow validates issue changes and returns invalid work to triage. The local issue worktree manager checks current metadata and native dependencies, then coordinates claims in the shared Git common directory. See the [issue workflow](../guides/issue-workflow.md) for metadata and the [agent worktree guide](../guides/agent-worktrees.md) for its local coordination limits.
 
 Protected infrastructure includes `.husky/`, `.github/workflows/`, `.agents/skills/`, `AGENTS.md`, lint and Nx policy, generators, policy scripts, and `docs/documentation-policy.md`; `.github/CODEOWNERS` identifies the protected paths. The public repository has active ruleset 25456574 for `main`, `develop`, and `release/**`: changes require a pull request and the `verify` CI check; deletion and force pushes are blocked. `main` is the default production branch. The ruleset requires zero approving reviews and no CODEOWNERS approval, and has no bypass actors. These settings are verified, but they do not provide a second-person review.
 
