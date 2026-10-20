@@ -213,6 +213,50 @@ describe('bounded worker supervision', () => {
     assert.equal(result.handoff.lastStopReason, 'tool-calls-budget-exhausted');
   });
 
+  it('stops the worker when trusted live counters report budget exhaustion', async () => {
+    let cancellations = 0;
+    const result = await superviseWorker(
+      base({
+        limits: { maxToolCallsPerWorker: 1 },
+        workers: {
+          peon: {
+            ...worker('peon', ({ signal }) => new Promise((resolve) => signal.addEventListener('abort', () => resolve({ status: 'failed' }), { once: true })), () => { cancellations += 1; return true; }),
+            usage: async () => ({ toolCalls: 2, modelTokens: 4, exceededResource: 'tool-calls' }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        authorizeHandoff: authorizeMira,
+      }),
+    );
+
+    assert.equal(result.status, 'complete');
+    assert.equal(cancellations, 1);
+    const stopped = result.handoff.attempts.find((attempt) => attempt.workerId === 'peon');
+    assert.equal(stopped.toolCalls, 2);
+    assert.equal(stopped.failure.code, 'ResourceLimit');
+  });
+
+  it('records final live counters even when the worker exits before the first poll', async () => {
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker('peon', async () => ({
+              status: 'completed',
+              usage: { toolCalls: 1, modelTokens: 7, exceededResource: null },
+            })),
+            usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'complete');
+    assert.equal(result.handoff.attempts[0].toolCalls, 1);
+    assert.equal(result.handoff.attempts[0].modelTokens, 7);
+  });
+
   it('stops a timed out worker and routes within the total runtime ceiling', async () => {
     let cancelled = false;
     let miraCalls = 0;

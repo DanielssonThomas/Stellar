@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPodmanArgs, parseArguments } from './run-restricted-worker.mjs';
+import { buildMeteringProxyArgs, buildPodmanArgs, parseArguments } from './run-restricted-worker.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
 const protectedPaths = [
@@ -35,10 +35,10 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--rm',
     '--init',
     '--pull=never',
+    '--name=stellar-peon-worker-21-1',
     '--userns=keep-id',
     '--user=1001:1001',
-    '--network=stellar-peon-egress',
-    '--network=stellar-peon-model',
+    '--network=stellar-peon-worker',
     '--http-proxy=false',
     '--read-only',
     '--cap-drop=all',
@@ -48,7 +48,9 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--memory-swap=4g',
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
+    '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21,dst=/workspace,rw',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/tools/policy/peon-hermes-config.yaml,dst=/tmp/.hermes/config.yaml,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.agents/skills,dst=/workspace/.agents/skills,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/CODEOWNERS,dst=/workspace/.github/CODEOWNERS,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/workflows,dst=/workspace/.github/workflows,ro',
@@ -67,6 +69,13 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--env=HOME=/tmp',
     '--env=HERMES_HOME=/tmp/.hermes',
     '--env=TMPDIR=/tmp',
+    '--env=OPENAI_BASE_URL=http://peon-meter:18436/v1',
+    '--env=OPENAI_API_KEY=stellar-local-meter',
+    '--env=HTTPS_PROXY=http://peon-meter:3128',
+    '--env=HTTP_PROXY=http://peon-meter:3128',
+    '--env=https_proxy=http://peon-meter:3128',
+    '--env=http_proxy=http://peon-meter:3128',
+    '--env=NO_PROXY=localhost,127.0.0.1,peon-meter',
     '--secret=source=stellar-worker-github-token,type=env,target=GH_TOKEN',
     image,
     'hermes',
@@ -85,7 +94,23 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     args.some((argument) => argument.includes('/mnt/')),
     false,
   );
+  assert.equal(args.includes('--network=stellar-peon-model'), false);
+  assert.equal(args.includes('--network=stellar-peon-egress'), false);
+});
+
+test('builds a separate hardened metering proxy on the worker, model, and egress networks', () => {
+  const args = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-24-1', image, uid: 1001, gid: 1001,
+    maxModelTokens: 32_000, maxToolCalls: 64,
+  });
+  assert.equal(args.includes('--network=stellar-peon-worker:alias=peon-meter'), true);
   assert.equal(args.includes('--network=stellar-peon-model'), true);
+  assert.equal(args.includes('--network=stellar-peon-egress'), true);
+  assert.ok(args.indexOf('--network=stellar-peon-egress') < args.indexOf('--network=stellar-peon-worker:alias=peon-meter'));
+  assert.equal(args.includes('--privileged'), false);
+  assert.equal(args.includes('--secret=source=stellar-worker-github-token,type=env,target=GH_TOKEN'), false);
+  assert.throws(() => buildMeteringProxyArgs({ name: 'wrong', image, uid: 1001, gid: 1001, maxModelTokens: 32_000, maxToolCalls: 64 }), /identify one issue attempt/);
+  assert.throws(() => buildMeteringProxyArgs({ name: 'stellar-peon-meter-24-1', image, uid: 1001, gid: 1001, maxModelTokens: 64_001, maxToolCalls: 64 }), /hard limits/);
 });
 
 test('rejects image tags without an immutable digest', () => {

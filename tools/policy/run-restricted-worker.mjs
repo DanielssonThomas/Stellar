@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
+import { defaultLimits } from './supervise-worker.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -13,6 +14,7 @@ const workspaceRoot = '/home/peon/workspaces';
 const workerSecret = 'stellar-worker-github-token';
 const modelNetwork = 'stellar-peon-model';
 const egressNetwork = 'stellar-peon-egress';
+const workerNetwork = 'stellar-peon-worker';
 const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -62,6 +64,7 @@ export function buildPodmanArgs({
   gid,
   command,
   protectedPaths,
+  attemptNumber = 1,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
@@ -102,10 +105,10 @@ export function buildPodmanArgs({
     '--rm',
     '--init',
     '--pull=never',
+    `--name=stellar-peon-worker-${number}-${positiveInteger(attemptNumber, 'attemptNumber')}`,
     '--userns=keep-id',
     `--user=${userId}:${groupId}`,
-    `--network=${egressNetwork}`,
-    `--network=${modelNetwork}`,
+    `--network=${workerNetwork}`,
     '--http-proxy=false',
     '--read-only',
     '--cap-drop=all',
@@ -115,7 +118,9 @@ export function buildPodmanArgs({
     '--memory-swap=4g',
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
+    '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    `--mount=type=bind,src=${path.posix.join(workspace, 'tools/policy/peon-hermes-config.yaml')},dst=/tmp/.hermes/config.yaml,ro`,
     ...protectedPaths.map(
       (entry) =>
         `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
@@ -124,10 +129,75 @@ export function buildPodmanArgs({
     '--env=HOME=/tmp',
     '--env=HERMES_HOME=/tmp/.hermes',
     '--env=TMPDIR=/tmp',
+    '--env=OPENAI_BASE_URL=http://peon-meter:18436/v1',
+    '--env=OPENAI_API_KEY=stellar-local-meter',
+    '--env=HTTPS_PROXY=http://peon-meter:3128',
+    '--env=HTTP_PROXY=http://peon-meter:3128',
+    '--env=https_proxy=http://peon-meter:3128',
+    '--env=http_proxy=http://peon-meter:3128',
+    '--env=NO_PROXY=localhost,127.0.0.1,peon-meter',
     `--secret=source=${workerSecret},type=env,target=GH_TOKEN`,
     image,
     ...command,
   ];
+}
+
+export function buildMeteringProxyArgs({
+  name,
+  image,
+  uid,
+  gid,
+  maxModelTokens,
+  maxToolCalls,
+  initialModelTokens = 0,
+  initialToolCalls = 0,
+}) {
+  if (!/^stellar-peon-meter-[1-9][0-9]*-[1-9][0-9]*$/.test(name ?? ''))
+    throw new Error('Metering proxy name must identify one issue attempt.');
+  if (typeof image !== 'string' || !imagePattern.test(image))
+    throw new Error('Metering proxy image must be pinned by a lowercase sha256 digest.');
+  const maxTokens = positiveInteger(maxModelTokens, 'maxModelTokens');
+  const maxTools = positiveInteger(maxToolCalls, 'maxToolCalls');
+  const initialTokens = Number(initialModelTokens);
+  const initialTools = Number(initialToolCalls);
+  if (maxTokens > 64_000 || maxTools > 128 || !Number.isSafeInteger(initialTokens) || initialTokens < 0 || initialTokens > maxTokens || !Number.isSafeInteger(initialTools) || initialTools < 0 || initialTools > maxTools)
+    throw new Error('Metering proxy budgets exceed trusted hard limits.');
+  // Podman selects the first attached bridge as the proxy's default route.
+  return [
+    'run', '--detach', '--rm', '--init', '--pull=never', `--name=${name}`,
+    '--userns=keep-id', `--user=${uid}:${gid}`,
+    `--network=${egressNetwork}`,
+    `--network=${workerNetwork}:alias=peon-meter`,
+    `--network=${modelNetwork}`,
+    '--http-proxy=false', '--read-only', '--cap-drop=all',
+    '--security-opt=no-new-privileges', '--pids-limit=64',
+    '--memory=512m', '--memory-swap=512m', '--cpus=1',
+    '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=64m',
+    `--env=STELLAR_MODEL_UPSTREAM=http://peon-model:18435`,
+    `--env=STELLAR_MAX_MODEL_TOKENS=${maxTokens}`,
+    `--env=STELLAR_MAX_TOOL_CALLS=${maxTools}`,
+    `--env=STELLAR_INITIAL_MODEL_TOKENS=${initialTokens}`,
+    `--env=STELLAR_INITIAL_TOOL_CALLS=${initialTools}`,
+    image, 'node', '/opt/stellar-peon-metering-proxy.mjs',
+  ];
+}
+
+function readMeterUsage(containerName) {
+  const source = "fetch('http://127.0.0.1:18437/usage').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))";
+  return JSON.parse(wslWorker('podman', 'exec', containerName, 'node', '-e', source));
+}
+
+function waitForMeter(containerName) {
+  const source = "fetch('http://127.0.0.1:18436/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      wslWorker('podman', 'exec', containerName, 'node', '-e', source);
+      return;
+    } catch {
+      spawnSync('wsl.exe', ['--distribution', distribution, '--user', workerAccount, '--exec', 'sleep', '0.25'], { cwd: repositoryRoot, windowsHide: true, timeout: 2000 });
+    }
+  }
+  throw new Error('Trusted metering proxy did not become healthy.');
 }
 
 function loadProtectedPaths() {
@@ -299,7 +369,7 @@ export function parseArguments(argv) {
   };
 }
 
-export function runRestrictedWorker({ issueNumber, image, command }) {
+export async function runRestrictedWorker({ issueNumber, image, command, limits = defaultLimits, initialUsage = {}, attemptNumber = 1 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const expectedBranchPrefix = `issue/${number}-`;
   const { workerUid, workerGid } = validateWorkspace(
@@ -315,6 +385,9 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
   );
   if (modelNetworks.length !== 1 || modelNetworks[0].internal !== true)
     throw new Error('Peon model network must exist and be internal-only.');
+  const workerNetworks = JSON.parse(wslWorker('podman', 'network', 'inspect', workerNetwork));
+  if (workerNetworks.length !== 1 || workerNetworks[0].internal !== true)
+    throw new Error('Peon worker network must exist and be internal-only.');
   const egressNetworks = JSON.parse(
     wslWorker('podman', 'network', 'inspect', egressNetwork),
   );
@@ -343,35 +416,96 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
       "Pinned worker image is not present in peon's local Podman store.",
     );
 
-  const podmanArgs = buildPodmanArgs({
-    issueNumber: number,
+  const attempt = positiveInteger(attemptNumber, 'attemptNumber');
+  const meterName = `stellar-peon-meter-${number}-${attempt}`;
+  const workerName = `stellar-peon-worker-${number}-${attempt}`;
+  const meterArgs = buildMeteringProxyArgs({
+    name: meterName,
     image,
     uid: workerUid,
     gid: workerGid,
-    command,
-    protectedPaths,
+    maxModelTokens: limits.maxModelTokensPerWorker,
+    maxToolCalls: limits.maxToolCallsPerWorker,
+    initialModelTokens: initialUsage.modelTokens ?? 0,
+    initialToolCalls: initialUsage.toolCalls ?? 0,
   });
-  const result = spawnSync(
-    'wsl.exe',
-    [
-      '--distribution',
-      distribution,
-      '--user',
-      workerAccount,
-      '--exec',
-      'podman',
-      ...podmanArgs,
-    ],
-    { cwd: repositoryRoot, stdio: 'inherit', windowsHide: true },
-  );
-  if (result.error) throw result.error;
-  return result.status ?? 1;
+  wslWorker('podman', ...meterArgs);
+  let usage;
+  try {
+    waitForMeter(meterName);
+    const workerArgs = buildPodmanArgs({
+      issueNumber: number,
+      image,
+      uid: workerUid,
+      gid: workerGid,
+      command,
+      protectedPaths,
+      attemptNumber: attempt,
+    });
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn('wsl.exe', ['--distribution', distribution, '--user', workerAccount, '--exec', 'podman', ...workerArgs], {
+        cwd: repositoryRoot,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      child.once('error', reject);
+      child.once('exit', (code, signal) => resolve({ code, signal }));
+    });
+    usage = readMeterUsage(meterName);
+    return { exitCode: result.code ?? 1, signal: result.signal, usage };
+  } finally {
+    try { wslWorker('podman', 'stop', '--time', '2', meterName); }
+    catch { throw new Error('Could not confirm metering proxy shutdown.'); }
+  }
+}
+
+export function createPeonWorkerAdapter({ image, commandForTask = (task) => ['hermes', '--issue', String(task.issueNumber)] }) {
+  let active = null;
+  return {
+    id: 'peon',
+    async run({ task, attemptNumber, limits, budget }) {
+      const currentAttempt = positiveInteger(attemptNumber, 'attemptNumber');
+      active = {
+        meterName: `stellar-peon-meter-${task.issueNumber}-${currentAttempt}`,
+        workerName: `stellar-peon-worker-${task.issueNumber}-${currentAttempt}`,
+        done: null,
+      };
+      active.done = runRestrictedWorker({
+        issueNumber: task.issueNumber,
+        image,
+        command: commandForTask(task),
+        limits,
+        initialUsage: budget.snapshot,
+        attemptNumber: currentAttempt,
+      });
+      const result = await active.done;
+      active = null;
+      return result.exitCode === 0
+        ? { status: 'completed', usage: result.usage }
+        : { status: 'failed', usage: result.usage, failure: { code: 'WorkerExit', message: `Hermes exited with status ${result.exitCode}.` } };
+    },
+    async usage() {
+      if (!active) return { toolCalls: 0, modelTokens: 0 };
+      return readMeterUsage(active.meterName);
+    },
+    async cancel() {
+      if (!active) return true;
+      try {
+        wslWorker('podman', 'stop', '--time', '2', active.workerName);
+      } catch { return false; }
+      const stopped = await Promise.race([
+        active.done.then(() => true, () => false),
+        new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
+      ]);
+      return stopped === true;
+    },
+  };
 }
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const exitCode = runRestrictedWorker(options);
-  process.exitCode = exitCode;
+  const result = await runRestrictedWorker(options);
+  process.exitCode = result.exitCode;
 }
 
 if (
