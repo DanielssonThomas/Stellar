@@ -34,7 +34,7 @@ function options(argv) {
   return result;
 }
 
-function loadIssue(number) {
+export function loadIssue(number) {
   const issue = JSON.parse(
     run(
       'gh',
