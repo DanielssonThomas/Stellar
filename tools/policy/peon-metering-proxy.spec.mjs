@@ -116,6 +116,7 @@ test('charges prompt and maximum requested output tokens on upstream failures', 
 });
 
 test('counts streamed tool calls before releasing the completed stream', async (t) => {
+  let modelRequests = 0;
   const events =
     [
       { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1' }] } }] },
@@ -140,6 +141,7 @@ test('counts streamed tool calls before releasing the completed stream', async (
       if (String(url).endsWith('/apply-template'))
         return json({ prompt: 'rendered' });
       if (String(url).endsWith('/tokenize')) return json({ tokens: [1, 2] });
+      modelRequests += 1;
       return new Response(events, {
         headers: { 'content-type': 'text/event-stream' },
       });
@@ -150,6 +152,11 @@ test('counts streamed tool calls before releasing the completed stream', async (
   assert.equal(response.status, 429);
   assert.equal((await response.json()).error, 'Tool call budget exhausted.');
   assert.equal(meter.snapshot().toolCalls, 2);
+
+  const retry = await request(meter.url, { stream: true, max_tokens: 8 });
+  assert.equal(retry.status, 429);
+  assert.equal(modelRequests, 1);
+  assert.equal(meter.snapshot().requests, 2);
 });
 
 test('charges the full output reservation when a generation is cancelled', async (t) => {

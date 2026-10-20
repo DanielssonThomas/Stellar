@@ -177,6 +177,15 @@ export function createPeonMeteringProxy({
         });
       const outcome = await locked(async () => {
         state.requests += 1;
+        if (state.exceededResource) {
+          state.failures += 1;
+          return {
+            status: 429,
+            value: {
+              error: `${state.exceededResource} budget exhausted.`,
+            },
+          };
+        }
         let promptTokens;
         try {
           promptTokens = await tokenize(
