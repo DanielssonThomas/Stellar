@@ -40,9 +40,18 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--issue',
     '21',
   ]);
-  assert.equal(args.some((argument) => argument === '--privileged'), false);
-  assert.equal(args.some((argument) => argument.includes('podman.sock')), false);
-  assert.equal(args.some((argument) => argument.includes('/mnt/')), false);
+  assert.equal(
+    args.some((argument) => argument === '--privileged'),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('podman.sock')),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('/mnt/')),
+    false,
+  );
 });
 
 test('rejects image tags without an immutable digest', () => {
@@ -97,12 +106,30 @@ test('rejects invalid issue identifiers and empty commands', () => {
 
 test('parses one issue and pinned image before the command separator', () => {
   assert.deepEqual(
-    parseArguments(['--issue', '21', '--image', image, '--', 'hermes', '--issue', '21']),
+    parseArguments([
+      '--issue',
+      '21',
+      '--image',
+      image,
+      '--',
+      'hermes',
+      '--issue',
+      '21',
+    ]),
     { issueNumber: 21, image, command: ['hermes', '--issue', '21'] },
   );
   assert.throws(
-    () => parseArguments(['--issue', '21', '--issue', '22', '--image', image, '--', 'hermes']),
+    () =>
+      parseArguments([
+        '--issue',
+        '21',
+        '--issue',
+        '22',
+        '--image',
+        image,
+        '--',
+        'hermes',
+      ]),
     /may only be provided once/,
   );
 });
-

@@ -11,7 +11,8 @@ const workerAccount = 'peon';
 const workspaceRoot = '/home/peon/workspaces';
 const workerSecret = 'stellar-worker-github-token';
 const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
-const imagePattern = /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
+const imagePattern =
+  /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 
 function positiveInteger(value, name) {
   const number = Number(value);
@@ -51,13 +52,7 @@ function issueWorkspace(issueNumber) {
   return path.posix.join(workspaceRoot, `issue-${issueNumber}`);
 }
 
-export function buildPodmanArgs({
-  issueNumber,
-  image,
-  uid,
-  gid,
-  command,
-}) {
+export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
     throw new Error(
@@ -72,7 +67,9 @@ export function buildPodmanArgs({
   if (
     !Array.isArray(command) ||
     command.length === 0 ||
-    command.some((argument) => typeof argument !== 'string' || argument.includes('\0'))
+    command.some(
+      (argument) => typeof argument !== 'string' || argument.includes('\0'),
+    )
   )
     throw new Error('A nonempty command argument list is required.');
 
@@ -119,7 +116,13 @@ function validateWorkspace(issueNumber, expectedBranchPrefix) {
   if (ownerUid !== workerUid)
     throw new Error('Worker workspace must be owned by the peon account.');
 
-  const root = wslWorker('git', '-C', workspace, 'rev-parse', '--show-toplevel');
+  const root = wslWorker(
+    'git',
+    '-C',
+    workspace,
+    'rev-parse',
+    '--show-toplevel',
+  );
   if (root !== workspace)
     throw new Error('Worker workspace must be a standalone Git checkout.');
   const gitDirectory = wslWorker(
@@ -136,15 +139,11 @@ function validateWorkspace(issueNumber, expectedBranchPrefix) {
     relativeGitDirectory.startsWith(`..${path.posix.sep}`) ||
     path.posix.isAbsolute(relativeGitDirectory)
   )
-    throw new Error('Worker Git metadata must stay inside its issue workspace.');
+    throw new Error(
+      'Worker Git metadata must stay inside its issue workspace.',
+    );
 
-  const branch = wslWorker(
-    'git',
-    '-C',
-    workspace,
-    'branch',
-    '--show-current',
-  );
+  const branch = wslWorker('git', '-C', workspace, 'branch', '--show-current');
   if (!branch.startsWith(expectedBranchPrefix))
     throw new Error(`Worker branch must begin with ${expectedBranchPrefix}.`);
 
@@ -154,7 +153,9 @@ function validateWorkspace(issueNumber, expectedBranchPrefix) {
 export function parseArguments(argv) {
   const separator = argv.indexOf('--');
   if (separator < 0)
-    throw new Error('Usage: run-restricted-worker.mjs --issue <number> --image <repo@sha256:digest> -- <command> [args...]');
+    throw new Error(
+      'Usage: run-restricted-worker.mjs --issue <number> --image <repo@sha256:digest> -- <command> [args...]',
+    );
   const options = {};
   for (let index = 0; index < separator; index += 1) {
     const key = argv[index];
@@ -183,12 +184,7 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
     number,
     expectedBranchPrefix,
   );
-  const secret = wslWorker(
-    'podman',
-    'secret',
-    'inspect',
-    workerSecret,
-  );
+  const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
   if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
   const imagePresent = spawnSync(
     'wsl.exe',
@@ -207,7 +203,9 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
   );
   if (imagePresent.error) throw imagePresent.error;
   if (imagePresent.status !== 0)
-    throw new Error("Pinned worker image is not present in peon's local Podman store.");
+    throw new Error(
+      "Pinned worker image is not present in peon's local Podman store.",
+    );
 
   const podmanArgs = buildPodmanArgs({
     issueNumber: number,
@@ -239,10 +237,12 @@ async function main() {
   process.exitCode = exitCode;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
   main().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });
 }
-
