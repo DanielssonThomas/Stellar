@@ -56,7 +56,16 @@ export function validateFreshIssue(issue, worker, allowClosed = false) {
     errors.push('Issue is not open.');
   if (owners.length !== 1 || owners[0] !== ownerLabel(worker))
     errors.push(`Issue owner must be ${ownerLabel(worker)}.`);
-  const validation = validateIssue(issue);
+  const validation = validateIssue(
+    allowClosed
+      ? {
+          ...issue,
+          labels: labels.map((label) =>
+            label.startsWith('status:') ? 'status:done' : label,
+          ),
+        }
+      : issue,
+  );
   if (!validation.valid) errors.push(...validation.errors);
   const expected = dependenciesFromBody(issue.body);
   const native = (issue.dependencies ?? []).map((dependency) =>
