@@ -3,6 +3,22 @@ import test from 'node:test';
 import { buildPodmanArgs, parseArguments } from './run-restricted-worker.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
+const protectedPaths = [
+  '.agents/skills',
+  '.github/CODEOWNERS',
+  '.github/workflows',
+  '.husky',
+  'AGENTS.md',
+  'commitlint.config.cjs',
+  'docs/documentation-policy.md',
+  'docs/guides/agent-supervision.md',
+  'docs/guides/worker-integration-policy.md',
+  'docs/guides/worker-security.md',
+  'eslint.config.mjs',
+  'nx.json',
+  'tools/generators',
+  'tools/policy',
+];
 
 test('builds a rootless, resource-bounded Podman invocation for one issue clone', () => {
   const args = buildPodmanArgs({
@@ -10,6 +26,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     image,
     uid: 1001,
     gid: 1001,
+    protectedPaths,
     command: ['hermes', '--issue', '21'],
   });
 
@@ -32,6 +49,20 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21,dst=/workspace,rw',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/.agents/skills,dst=/workspace/.agents/skills,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/CODEOWNERS,dst=/workspace/.github/CODEOWNERS,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/workflows,dst=/workspace/.github/workflows,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/.husky,dst=/workspace/.husky,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/AGENTS.md,dst=/workspace/AGENTS.md,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/commitlint.config.cjs,dst=/workspace/commitlint.config.cjs,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/docs/documentation-policy.md,dst=/workspace/docs/documentation-policy.md,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/docs/guides/agent-supervision.md,dst=/workspace/docs/guides/agent-supervision.md,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/docs/guides/worker-integration-policy.md,dst=/workspace/docs/guides/worker-integration-policy.md,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/docs/guides/worker-security.md,dst=/workspace/docs/guides/worker-security.md,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/eslint.config.mjs,dst=/workspace/eslint.config.mjs,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/nx.json,dst=/workspace/nx.json,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/tools/generators,dst=/workspace/tools/generators,ro',
+    '--mount=type=bind,src=/home/peon/workspaces/issue-21/tools/policy,dst=/workspace/tools/policy,ro',
     '--workdir=/workspace',
     '--env=HOME=/tmp',
     '--env=HERMES_HOME=/tmp/.hermes',
@@ -65,6 +96,7 @@ test('rejects image tags without an immutable digest', () => {
         image: 'ghcr.io/stellar-ai-corp/hermes-worker:latest',
         uid: 1001,
         gid: 1001,
+        protectedPaths,
         command: ['hermes'],
       }),
     /pinned by a lowercase sha256 digest/,
@@ -76,6 +108,7 @@ test('rejects image tags without an immutable digest', () => {
         image: `docker.io/library/alpine@sha256:${'a'.repeat(64)}`,
         uid: 1001,
         gid: 1001,
+        protectedPaths,
         command: ['hermes'],
       }),
     /ghcr\.io\/stellar-ai-corp\/hermes-worker/,
@@ -90,6 +123,7 @@ test('rejects invalid issue identifiers and empty commands', () => {
         image,
         uid: 1001,
         gid: 1001,
+        protectedPaths,
         command: ['hermes'],
       }),
     /issueNumber must be a positive integer/,
@@ -134,5 +168,24 @@ test('parses one issue and pinned image before the command separator', () => {
         'hermes',
       ]),
     /may only be provided once/,
+  );
+});
+
+test('fails closed when trusted protected paths are missing or unsafe', () => {
+  const base = {
+    issueNumber: 21,
+    image,
+    uid: 1001,
+    gid: 1001,
+    command: ['hermes'],
+  };
+  assert.throws(() => buildPodmanArgs(base), /Trusted protected paths/);
+  assert.throws(
+    () => buildPodmanArgs({ ...base, protectedPaths: ['../tools/policy'] }),
+    /Trusted protected paths/,
+  );
+  assert.throws(
+    () => buildPodmanArgs({ ...base, protectedPaths: ['/tools/policy'] }),
+    /Trusted protected paths/,
   );
 });

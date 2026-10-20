@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -54,7 +55,14 @@ function issueWorkspace(issueNumber) {
   return path.posix.join(workspaceRoot, `issue-${issueNumber}`);
 }
 
-export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
+export function buildPodmanArgs({
+  issueNumber,
+  image,
+  uid,
+  gid,
+  command,
+  protectedPaths,
+}) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
     throw new Error(
@@ -76,6 +84,19 @@ export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
     throw new Error('A nonempty command argument list is required.');
 
   const workspace = issueWorkspace(number);
+  if (
+    !Array.isArray(protectedPaths) ||
+    protectedPaths.length === 0 ||
+    protectedPaths.some(
+      (entry) =>
+        typeof entry !== 'string' ||
+        !entry ||
+        entry.startsWith('/') ||
+        /[\\,:=]/.test(entry) ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..'),
+    )
+  )
+    throw new Error('Trusted protected paths are required for worker mounts.');
   return [
     'run',
     '--rm',
@@ -95,6 +116,10 @@ export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    ...protectedPaths.map(
+      (entry) =>
+        `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
+    ),
     '--workdir=/workspace',
     '--env=HOME=/tmp',
     '--env=HERMES_HOME=/tmp/.hermes',
@@ -103,6 +128,99 @@ export function buildPodmanArgs({ issueNumber, image, uid, gid, command }) {
     image,
     ...command,
   ];
+}
+
+function loadProtectedPaths() {
+  const remote = spawnSync('git', ['remote', 'get-url', 'origin'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const allowedRemotes = [
+    'https://github.com/DanielssonThomas/Stellar.git',
+    'git@github.com:DanielssonThomas/Stellar.git',
+  ];
+  if (remote.status !== 0 || !allowedRemotes.includes(remote.stdout.trim()))
+    throw new Error('Trusted origin must be DanielssonThomas/Stellar.');
+
+  const localDevelop = spawnSync('git', ['rev-parse', 'origin/develop'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const remoteDevelop = spawnSync(
+    'git',
+    ['ls-remote', 'origin', 'refs/heads/develop'],
+    { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true },
+  );
+  const localSha = localDevelop.stdout?.trim() ?? '';
+  const remoteSha = (remoteDevelop.stdout ?? '').trim().split(/\s+/)[0];
+  const localHead = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const policyWorktree = spawnSync(
+    'git',
+    [
+      'status',
+      '--porcelain',
+      '--untracked-files=all',
+      '--',
+      '.github/CODEOWNERS',
+      'tools/policy',
+    ],
+    { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true },
+  );
+  if (
+    localDevelop.status !== 0 ||
+    remoteDevelop.status !== 0 ||
+    !/^[a-f0-9]{40}$/i.test(remoteSha) ||
+    localSha !== remoteSha ||
+    localHead.status !== 0 ||
+    localHead.stdout?.trim() !== remoteSha ||
+    policyWorktree.status !== 0 ||
+    policyWorktree.stdout?.trim()
+  )
+    throw new Error(
+      'Run Peon only from a clean trusted checkout at current origin/develop.',
+    );
+
+  const result = spawnSync(
+    'git',
+    ['show', 'origin/develop:.github/CODEOWNERS'],
+    { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error('Could not load protected paths from origin/develop.');
+  const policy = parseProtectedCodeowners(result.stdout);
+  if (!policy.valid)
+    throw new Error('origin/develop CODEOWNERS policy is invalid.');
+  const protectedPaths = policy.patterns.map(({ path: entry, directory }) =>
+    directory ? entry.replace(/\/+$/, '') : entry,
+  );
+  const protectedWorktree = spawnSync(
+    'git',
+    ['status', '--porcelain', '--untracked-files=all', '--', ...protectedPaths],
+    { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true },
+  );
+  if (protectedWorktree.status !== 0 || protectedWorktree.stdout?.trim())
+    throw new Error(
+      'Trusted protected files must be clean before starting Peon.',
+    );
+  return protectedPaths;
+}
+
+function validateProtectedMountSources(workspace, protectedPaths) {
+  for (const entry of protectedPaths) {
+    const source = path.posix.join(workspace, entry);
+    const canonical = wslWorker('realpath', '-e', source);
+    if (canonical !== source)
+      throw new Error(
+        `Protected path must not resolve through a symlink: ${entry}`,
+      );
+  }
 }
 
 function validateWorkspace(issueNumber, expectedBranchPrefix) {
@@ -188,6 +306,8 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
     number,
     expectedBranchPrefix,
   );
+  const protectedPaths = loadProtectedPaths();
+  validateProtectedMountSources(issueWorkspace(number), protectedPaths);
   const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
   if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
   const modelNetworks = JSON.parse(
@@ -229,6 +349,7 @@ export function runRestrictedWorker({ issueNumber, image, command }) {
     uid: workerUid,
     gid: workerGid,
     command,
+    protectedPaths,
   });
   const result = spawnSync(
     'wsl.exe',

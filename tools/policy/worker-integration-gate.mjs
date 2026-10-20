@@ -97,9 +97,36 @@ export function parseProtectedCodeowners(content) {
 }
 
 function pathIsProtected(path, patterns) {
+  const candidate = path.toLowerCase();
   return patterns.some(({ path: pattern, directory }) =>
-    directory ? path.startsWith(pattern) : path === pattern,
+    directory
+      ? candidate.startsWith(pattern.toLowerCase())
+      : candidate === pattern.toLowerCase(),
   );
+}
+
+function changedPaths(changedFiles) {
+  if (!Array.isArray(changedFiles)) return null;
+  const paths = [];
+  for (const entry of changedFiles) {
+    if (!entry || typeof entry !== 'object') return null;
+    const status = entry.status;
+    const filename = normalizePath(entry.filename);
+    const previous = entry.previous_filename;
+    if (
+      !filename ||
+      !['added', 'modified', 'removed', 'renamed', 'copied'].includes(status)
+    )
+      return null;
+    if ((status === 'renamed' || status === 'copied') && !previous) return null;
+    if (previous !== undefined) {
+      const normalizedPrevious = normalizePath(previous);
+      if (!normalizedPrevious) return null;
+      paths.push(normalizedPrevious);
+    }
+    paths.push(filename);
+  }
+  return paths;
 }
 
 function dependencyNumbers(body) {
@@ -266,9 +293,8 @@ export function evaluateWorkerPullRequest({
     addReason(reasons, 'trusted-low-risk-scope-invalid');
   }
 
-  const normalizedChanged = Array.isArray(changedFiles)
-    ? changedFiles.map(normalizePath)
-    : [];
+  const suppliedChanged = changedPaths(changedFiles);
+  const normalizedChanged = suppliedChanged?.map(normalizePath) ?? [];
   if (
     normalizedChanged.length === 0 ||
     normalizedChanged.some((path) => !path) ||

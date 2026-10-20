@@ -6,6 +6,9 @@
 /AGENTS.md @DanielssonThomas
 /commitlint.config.cjs @DanielssonThomas
 /docs/documentation-policy.md @DanielssonThomas
+/docs/guides/agent-supervision.md @DanielssonThomas
+/docs/guides/worker-integration-policy.md @DanielssonThomas
+/docs/guides/worker-security.md @DanielssonThomas
 /eslint.config.mjs @DanielssonThomas
 /nx.json @DanielssonThomas
 /tools/generators/ @DanielssonThomas
