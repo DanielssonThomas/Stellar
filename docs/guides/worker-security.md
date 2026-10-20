@@ -33,7 +33,7 @@ The rootless user namespace and absent mounts were verified in the local WSL env
 
 ## Worker image
 
-`tools/worker-image/Containerfile` pins the Node base image by digest and installs Hermes Agent v0.22.2 from source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. The image build runs the upstream installer without browser or computer-use packages and verifies the installed Hermes version. Build it locally as the unprivileged `peon` account, inspect the resulting image digest, and pass that digest to the restricted launcher. The image is not published by this workflow; registry publication requires a separate decision and credential.
+`tools/worker-image/Containerfile` pins the Node base image by digest and installs Hermes Agent v0.22.2 from source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. The image build runs the upstream installer without browser or computer-use packages and verifies the installed Hermes version. At runtime, the image keeps installed package files read-only and redirects Hermes' install lock and lease state into `/tmp`; the remaining Hermes home also lives in `/tmp`. Build it locally as the unprivileged `peon` account, inspect the resulting image digest, and pass that digest to the restricted launcher. The image is not published by this workflow; registry publication requires a separate decision and credential.
 
 Run the trusted launcher from the Windows repository checkout with a locally approved image digest and the issue's already prepared isolated checkout:
 
@@ -53,4 +53,4 @@ This boundary contains ordinary model-issued commands and accidental access. A r
 
 ## Current admission state
 
-WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. A constrained smoke container and the trusted launcher path were verified with Alpine and a dummy secret. No fine-grained worker token is stored, no Hermes image or model server is admitted, and `peon` is not listed in `tools/policy/authorized-workers.json` or authorized to work on Stellar.
+WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. The fine-grained worker token is stored in Podman's rootless secret store. The pinned Hermes image is built locally and its version command passes in a read-only container. This does not admit Peon to work on Stellar: the model endpoint, workspace launch, and end-to-end supervisor handoff still require verification, and `peon` is not listed in `tools/policy/authorized-workers.json`.

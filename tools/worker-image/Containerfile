@@ -29,5 +29,33 @@ RUN curl --fail --silent --show-error --location \
     && rm /tmp/hermes-install.sh \
     && hermes --version | grep --fixed-strings 'v0.22.2'
 
+USER 0:0
+RUN set -eu \
+    && install_dir="$(find /opt/hermes/installs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+    && environment_dir="$(find "${install_dir}/environments" -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+    && test -n "${install_dir}" \
+    && test -n "${environment_dir}" \
+    && rm "${install_dir}/.install.lock" \
+    && ln -s /tmp/hermes-install.lock "${install_dir}/.install.lock" \
+    && rm -rf "${environment_dir}/.leases" \
+    && ln -s /tmp/hermes-leases "${environment_dir}/.leases" \
+    && install -d /usr/local/libexec \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'set -eu' \
+        'mkdir -p /tmp/.hermes /tmp/hermes-leases' \
+        'touch /tmp/hermes-install.lock' \
+        'ln -s /opt/hermes/installs /tmp/.hermes/installs' \
+        'ln -s /opt/hermes/tools /tmp/.hermes/tools' \
+        'ln -s /opt/hermes/skills /tmp/.hermes/skills' \
+        'exec "$@"' \
+        > /usr/local/libexec/hermes-worker-entrypoint \
+    && chmod 0755 /usr/local/libexec/hermes-worker-entrypoint
+
+USER 1001:1001
+ENV HOME=/tmp \
+    HERMES_HOME=/tmp/.hermes
+
 WORKDIR /workspace
+ENTRYPOINT ["/usr/local/libexec/hermes-worker-entrypoint"]
 CMD ["hermes", "--help"]
