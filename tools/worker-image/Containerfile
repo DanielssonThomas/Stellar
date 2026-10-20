@@ -48,9 +48,21 @@ RUN set -eu \
         'ln -s /opt/hermes/installs /tmp/.hermes/installs' \
         'ln -s /opt/hermes/tools /tmp/.hermes/tools' \
         'ln -s /opt/hermes/skills /tmp/.hermes/skills' \
+        'export GIT_ASKPASS=/usr/local/libexec/hermes-worker-git-askpass' \
+        'export GIT_TERMINAL_PROMPT=0' \
         'exec "$@"' \
         > /usr/local/libexec/hermes-worker-entrypoint \
-    && chmod 0755 /usr/local/libexec/hermes-worker-entrypoint
+    && chmod 0755 /usr/local/libexec/hermes-worker-entrypoint \
+    && printf '%s\n' \
+        '#!/bin/sh' \
+        'set -eu' \
+        'case "${1-}" in' \
+        '  *Username*) printf "%s\\n" x-access-token ;;' \
+        '  *Password*) printf "%s\\n" "${GH_TOKEN:?GH_TOKEN is required}" ;;' \
+        '  *) exit 1 ;;' \
+        'esac' \
+        > /usr/local/libexec/hermes-worker-git-askpass \
+    && chmod 0755 /usr/local/libexec/hermes-worker-git-askpass
 
 USER 1001:1001
 ENV HOME=/tmp \
