@@ -20,7 +20,7 @@ Targets must name an existing authorized branch. The release target uses a four-
 
 ## Status and ownership
 
-- `triage` is the only state for incomplete or invalid issues. New issues enter triage and may omit other metadata while being refined.
+- `triage` is the only state for incomplete or invalid issues. New issues enter triage and may omit other metadata while being refined. A triage issue may move to `ready` only after the status helper revalidates it as ready and confirms every listed native dependency is closed with `status:done`.
 - `ready` means the required sections, labels, target branch, owner, and dependencies validate. Only ready issues may be assigned for implementation.
 - `in-progress` records work started by the explicit owner. Agents must not claim unrelated issues.
 - Use `blocked` only after bounded diagnosis and recording evidence; then link the actual blocking issue and notify the coordinator.

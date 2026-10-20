@@ -14,7 +14,7 @@ const repository = process.env.GITHUB_REPOSITORY ?? 'DanielssonThomas/Stellar';
 const transitions = {
   'status:ready': [],
   // Recovery path for an integrated issue whose status update was interrupted.
-  'status:triage': ['status:done'],
+  'status:triage': ['status:ready', 'status:done'],
   'status:in-progress': ['status:blocked', 'status:review'],
   'status:blocked': ['status:ready'],
   'status:review': ['status:in-progress', 'status:done'],
@@ -49,7 +49,12 @@ function labelsOf(issue) {
   );
 }
 
-export function validateFreshIssue(issue, worker, allowClosed = false) {
+export function validateFreshIssue(
+  issue,
+  worker,
+  allowClosed = false,
+  statusOverride = null,
+) {
   const errors = [];
   const labels = labelsOf(issue);
   const owners = labels.filter(
@@ -59,16 +64,16 @@ export function validateFreshIssue(issue, worker, allowClosed = false) {
     errors.push('Issue is not open.');
   if (owners.length !== 1 || owners[0] !== ownerLabel(worker))
     errors.push(`Issue owner must be ${ownerLabel(worker)}.`);
-  const validation = validateIssue(
-    allowClosed
-      ? {
-          ...issue,
-          labels: labels.map((label) =>
-            label.startsWith('status:') ? 'status:done' : label,
-          ),
-        }
-      : issue,
-  );
+  const validation = validateIssue({
+    ...issue,
+    labels: labels.map((label) =>
+      label.startsWith('status:')
+        ? allowClosed
+          ? 'status:done'
+          : (statusOverride ?? label)
+        : label,
+    ),
+  });
   if (!validation.valid) errors.push(...validation.errors);
   const expected = dependenciesFromBody(issue.body);
   const native = (issue.dependencies ?? []).map((dependency) =>
@@ -96,7 +101,12 @@ export function validateStatusTransition({
   hasActiveClaim = false,
 }) {
   const errors = [];
-  const validation = validateFreshIssue(issue, worker, next === 'status:done');
+  const validation = validateFreshIssue(
+    issue,
+    worker,
+    next === 'status:done',
+    next === 'status:ready' ? 'status:ready' : null,
+  );
   if (!validation.valid) errors.push(...validation.errors);
   const status = labelsOf(issue).filter((label) => label.startsWith('status:'));
   if (status.length !== 1 || status[0] !== expected)
@@ -157,6 +167,12 @@ export function validateStatusTransition({
       errors.push(
         'Mark every acceptance criterion complete before setting done.',
       );
+  }
+  if (expected === 'status:triage' && next === 'status:ready') {
+    for (const dependency of issue.dependencies ?? []) {
+      if (dependency.state !== 'CLOSED' || dependency.status !== 'status:done')
+        errors.push(`Dependency #${dependency.number} is unresolved.`);
+    }
   }
   if (expected === 'status:blocked' && next === 'status:ready') {
     if (!/^#{1,6}\s+Resolution\s*$/im.test(comment))
