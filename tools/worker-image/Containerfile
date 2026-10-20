@@ -30,6 +30,7 @@ RUN curl --fail --silent --show-error --location \
     && hermes --version | grep --fixed-strings 'v0.22.2'
 
 USER 0:0
+COPY --chown=0:0 tools/policy/peon-metering-proxy.mjs /opt/stellar-peon-metering-proxy.mjs
 RUN set -eu \
     && install_dir="$(find /opt/hermes/installs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
     && environment_dir="$(find "${install_dir}/environments" -mindepth 1 -maxdepth 1 -type d -print -quit)" \
@@ -62,7 +63,8 @@ RUN set -eu \
         '  *) exit 1 ;;' \
         'esac' \
         > /usr/local/libexec/hermes-worker-git-askpass \
-    && chmod 0755 /usr/local/libexec/hermes-worker-git-askpass
+    && chmod 0755 /usr/local/libexec/hermes-worker-git-askpass \
+    && chmod 0444 /opt/stellar-peon-metering-proxy.mjs
 
 USER 1001:1001
 ENV HOME=/tmp \

@@ -1,0 +1,6 @@
+model:
+  default: Qwen3.5-4B-Q4_K_M
+  provider: custom
+  base_url: http://peon-meter:18436/v1
+  context_length: 65536
+  max_iterations: 250
