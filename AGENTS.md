@@ -23,7 +23,7 @@
 - Discover repository workflows under `.agents/skills/`; read the relevant `SKILL.md` before acting.
 - For issue work, follow [`implement-issue`](.agents/skills/implement-issue/SKILL.md); use [`update-issue`](.agents/skills/update-issue/SKILL.md) for progress and status, and [`handle-blocker`](.agents/skills/handle-blocker/SKILL.md) for failure or handoff. Use `prepare-pr` before opening a PR. Use [`create-issue`](.agents/skills/create-issue/SKILL.md) only for distinct outcomes after searching for duplicates.
 - Before opening a pull request, follow [`prepare-pr`](.agents/skills/prepare-pr/SKILL.md) and pass its deterministic preflight.
-- For scaffolding, use `create-application`, `create-component`, or `create-service` to invoke the governed Nx generators. Inspect current project tags first.
+- For scaffolding, follow [`create-application`](.agents/skills/create-application/SKILL.md), [`create-component`](.agents/skills/create-component/SKILL.md), or [`create-service`](.agents/skills/create-service/SKILL.md) to invoke the governed Nx generators. Inspect current project names and tags first.
 - Follow [documentation policy](docs/documentation-policy.md) and use the [documentation index](docs/README.md) to find authoritative material. Update existing documents when appropriate; do not duplicate policies.
 
 During Epic 2, Codex is the temporary bootstrap maintainer authorized to implement and merge its own issue-linked PRs after required checks pass. This does not authorize Hermes workers to merge, access maintainer credentials, or modify protected governance resources. Production deployment and `main` promotion require separate authorization.
