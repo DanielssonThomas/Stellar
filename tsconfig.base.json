@@ -16,7 +16,8 @@
     "target": "es2022",
     "customConditions": ["@stellar/source"],
     "paths": {
-      "@stellar/ui-atoms": ["libs/ui/atoms/src/index.ts"]
+      "@stellar/ui-atoms": ["libs/ui/atoms/src/index.ts"],
+      "@stellar/generators": ["tools/generators/src/index.ts"]
     }
   }
 }

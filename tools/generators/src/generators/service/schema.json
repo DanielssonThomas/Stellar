@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "StellarService",
+  "title": "Stellar service generator",
+  "description": "Creates a shared Angular service library with an injectable service and a singleton test.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Lowercase kebab-case service name. The library is created under libs/services/<name>.",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What name would you like to use?"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}

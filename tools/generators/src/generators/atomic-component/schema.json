@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/schema",
+  "$id": "StellarAtomicComponent",
+  "title": "Stellar atomic component generator",
+  "description": "Creates a standalone component in an atomic UI layer, with a loading skeleton and tests.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Lowercase kebab-case component name without the layer suffix.",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "What name would you like to use?"
+    },
+    "layer": {
+      "type": "string",
+      "description": "Atomic UI layer for the component.",
+      "enum": ["atom", "molecule", "organism", "template"],
+      "x-prompt": {
+        "message": "Which atomic layer should contain this component?",
+        "type": "list",
+        "items": [
+          { "value": "atom", "label": "Atom" },
+          { "value": "molecule", "label": "Molecule" },
+          { "value": "organism", "label": "Organism" },
+          { "value": "template", "label": "Template" }
+        ]
+      }
+    }
+  },
+  "required": ["name", "layer"],
+  "additionalProperties": false
+}

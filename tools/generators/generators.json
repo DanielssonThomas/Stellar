@@ -1,0 +1,19 @@
+{
+  "generators": {
+    "application": {
+      "factory": "./src/generators/application/application",
+      "schema": "./src/generators/application/schema.json",
+      "description": "Generate an Angular application and Playwright project with Stellar defaults"
+    },
+    "atomic-component": {
+      "factory": "./src/generators/atomic-component/atomic-component",
+      "schema": "./src/generators/atomic-component/schema.json",
+      "description": "Generate an atomic UI component using Stellar naming, loading, and test conventions"
+    },
+    "service": {
+      "factory": "./src/generators/service/service",
+      "schema": "./src/generators/service/schema.json",
+      "description": "Generate an Angular service library with shared test scaffolding"
+    }
+  }
+}
