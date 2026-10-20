@@ -1,4 +1,4 @@
-# Restricted worker security
+﻿# Restricted worker security
 
 Peon may run only from a trusted host supervisor and only after the issue is claimed, its isolated workspace is prepared, and a pinned worker image and fork-scoped credential are available. A repository instruction or model prompt is not an execution boundary.
 
@@ -91,4 +91,4 @@ This boundary contains ordinary model-issued commands and accidental access. A r
 
 ## Current admission state
 
-WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. Issue #21 and PR #36 are complete; the fork-only credential and protected-path mounts were verified there. The worker network and credential-free metering proxy are now under implementation in issue #43. Their current probes show direct model DNS and internet egress denied from a worker-only network, successful model inference through the proxy, and protected loopback-only usage counters. The deterministic supervisor now has a live usage polling and fail-closed stop path with focused tests. Peon is still not admitted: the authorization entry in PR #42 is open and unmerged, issue #43 is not complete, and no coding trial has started.
+WSL 2, Ubuntu, rootless Podman, and the password-locked `peon` account are installed. Issue #21/PR #36 and issue #43/PR #44 are complete. The trusted metering proxy and internal worker-only network prevent direct model and internet access; actual Qwen inference, usage accounting, request failure, streaming, cancellation, and network-denial probes passed. The deterministic supervisor polls trusted sidecar counters and stops on exhaustion or accounting failure. The `peon` profile and trusted fork mapping in this PR admit exactly the first bounded trial tracked by issue #24; Peon has no upstream write, integration, administrator, merge, or container-runtime access. Admission does not establish autonomous readiness; the coding trial and its issue-linked PR must pass review before further work is assigned.
