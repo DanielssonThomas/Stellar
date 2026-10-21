@@ -74,6 +74,10 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/tools/policy,dst=/workspace/tools/policy,ro',
     '--workdir=/workspace',
     '--env=HOME=/tmp',
+    '--env=COREPACK_HOME=/opt/corepack',
+    '--env=COREPACK_DEFAULT_TO_LATEST=0',
+    '--env=COREPACK_ENABLE_NETWORK=0',
+    '--env=NX_SKIP_NATIVE_FILE_CACHE=true',
     '--env=HERMES_HOME=/tmp/.hermes',
     '--env=TMPDIR=/tmp',
     '--env=OPENAI_BASE_URL=http://peon-meter:18436/v1',
@@ -170,6 +174,9 @@ test('runs trusted checks in an isolated container without worker or integration
 
   assert.ok(args.includes('--network=none'));
   assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--env=COREPACK_HOME=/opt/corepack'));
+  assert.ok(args.includes('--env=COREPACK_ENABLE_NETWORK=0'));
+  assert.ok(args.includes('--env=NX_SKIP_NATIVE_FILE_CACHE=true'));
   assert.ok(args.includes('--cap-drop=all'));
   assert.ok(
     args.includes(
@@ -209,6 +216,17 @@ test('runs trusted checks in an isolated container without worker or integration
       }),
     /nonempty verification command/,
   );
+});
+
+test('pins the offline package-manager cache outside the writable worker home', () => {
+  const containerfile = readFileSync(
+    new URL('../worker-image/Containerfile', import.meta.url),
+    'utf8',
+  );
+  assert.match(containerfile, /COREPACK_HOME=\/opt\/corepack/);
+  assert.match(containerfile, /COREPACK_DEFAULT_TO_LATEST=0/);
+  assert.match(containerfile, /COREPACK_ENABLE_NETWORK=0/);
+  assert.match(containerfile, /corepack prepare pnpm@10\.28\.2 --activate/);
 });
 
 test('rejects image tags without an immutable digest', () => {
