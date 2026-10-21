@@ -56,6 +56,57 @@ describe('prepare PR preflight', () => {
     assert.equal(validatePrepareState(base).valid, true);
   });
 
+  it('allows only a fully validated triage main-promotion claim with its bootstrap marker', () => {
+    const promotionIssue = {
+      ...issue,
+      labels: [
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'status:triage',
+        'owner:codex',
+      ],
+    };
+    const promotion = {
+      ...base,
+      issue: promotionIssue,
+      branch: 'issue/20-policy-promotion',
+      claim: {
+        ...base.claim,
+        branch: 'issue/20-policy-promotion',
+        target: 'main',
+        mainPromotionBootstrap: true,
+      },
+    };
+    assert.equal(validatePrepareState(promotion).valid, true);
+    const rejected = [
+      {
+        ...promotion,
+        claim: { ...promotion.claim, mainPromotionBootstrap: false },
+      },
+      { ...promotion, worker: 'peon' },
+      {
+        ...promotion,
+        issue: {
+          ...promotionIssue,
+          labels: promotionIssue.labels.map((label) =>
+            label === 'type:blocker' ? 'type:chore' : label,
+          ),
+        },
+      },
+      {
+        ...promotion,
+        issue: {
+          ...promotionIssue,
+          body: promotionIssue.body.replace('- [ ] Verify state.', ''),
+        },
+      },
+      { ...promotion, claim: { ...promotion.claim, branch: 'issue/20-other' } },
+    ];
+    for (const candidate of rejected)
+      assert.equal(validatePrepareState(candidate).valid, false);
+  });
+
   it('rejects wrong owner, target, branch, dirty state, missing claim, and unrelated commits', () => {
     const cases = [
       [

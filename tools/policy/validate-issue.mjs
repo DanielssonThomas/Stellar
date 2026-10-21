@@ -43,6 +43,15 @@ function labelsOf(issue) {
   );
 }
 
+function hasAuthorizedMainPromotion(labels) {
+  return (
+    labels.includes('target:main') &&
+    labels.includes('type:blocker') &&
+    (labels.includes('owner:codex') || labels.includes('owner:maintainer')) &&
+    !labels.some((label) => label.startsWith('worker:'))
+  );
+}
+
 function section(body, name) {
   const lines = body.split(/\r?\n/);
   const start = lines.findIndex((line) =>
@@ -72,6 +81,7 @@ export function validateIssue(
       found[category].some(
         (label) =>
           !allowed.includes(label) &&
+          !(category === 'target' && hasAuthorizedMainPromotion(labels)) &&
           !(category === 'target' && releaseTarget.test(label)),
       )
     ) {
@@ -114,9 +124,12 @@ export function validateIssue(
   if (
     found.target.length === 1 &&
     !categories.target.includes(found.target[0]) &&
+    !hasAuthorizedMainPromotion(labels) &&
     !releaseTarget.test(found.target[0])
   ) {
-    errors.push('Target must be develop or release/YYYY.MM.');
+    errors.push(
+      'Target must be develop, release/YYYY.MM, or main for a Codex/maintainer-owned blocker.',
+    );
   }
 
   for (const heading of [

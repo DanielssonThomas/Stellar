@@ -18,6 +18,31 @@ const fixture = (status = 'status:ready', owner = 'owner:codex') => ({
 });
 
 describe('claim status reconciliation', () => {
+  it('preserves triage for an eligible main-promotion bootstrap claim', async () => {
+    const mainIssue = {
+      ...fixture('status:triage'),
+      labels: [
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'status:triage',
+        'owner:codex',
+      ],
+    };
+    let writes = 0;
+    const current = await reconcileClaimStatus({
+      issueNumber: 42,
+      worker: 'codex',
+      resumed: false,
+      mainPromotionBootstrap: true,
+      fetchIssue: async () => structuredClone(mainIssue),
+      updateLabels: async () => {
+        writes += 1;
+      },
+    });
+    assert.equal(writes, 0);
+    assert.ok(current.labels.includes('status:triage'));
+  });
   it('uses current state after stale reads and preserves unrelated labels', async () => {
     let live = fixture();
     let reads = 0;
