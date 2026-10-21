@@ -46,19 +46,31 @@ export function validateAssignment({
   targetBranch,
   dependencies,
   existingBranches,
+  allowTriageRecovery = false,
 }) {
   const errors = [];
   const labels = (issue.labels ?? []).map((label) =>
     typeof label === 'string' ? label : label.name,
   );
   const owner = ownerLabel(worker);
-  const policy = validateIssue(issue);
+  const policyIssue =
+    allowTriageRecovery && labels.includes('status:triage')
+      ? {
+          ...issue,
+          labels: labels.map((label) =>
+            label === 'status:triage' ? 'status:ready' : label,
+          ),
+        }
+      : issue;
+  const policy = validateIssue(policyIssue);
   if (issue.state && issue.state !== 'OPEN') errors.push('Issue is not open.');
   if (!policy.valid) errors.push(...policy.errors);
   if (
-    !['status:ready', 'status:in-progress'].some((label) =>
-      labels.includes(label),
-    )
+    ![
+      'status:ready',
+      'status:in-progress',
+      ...(allowTriageRecovery ? ['status:triage'] : []),
+    ].some((label) => labels.includes(label))
   )
     errors.push('Issue must be ready or already in progress.');
   if (!labels.includes(owner)) errors.push(`Issue owner must be ${owner}.`);
@@ -227,6 +239,20 @@ export async function claimWorktree({
     )
       .stdout.split(/\r?\n/)
       .filter(Boolean);
+    let record = await readFile(claimFile, 'utf8')
+      .then(JSON.parse)
+      .catch((error) => {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+      });
+    const recoverTriage =
+      (issue.labels ?? []).some(
+        (label) =>
+          (typeof label === 'string' ? label : label.name) === 'status:triage',
+      ) &&
+      record?.state === 'active' &&
+      record.worker === ownerLabel(worker) &&
+      record.sessionId === sessionId;
     const nativeDependencies = issue.dependencies ?? [];
     const validation = validateAssignment({
       issue,
@@ -234,6 +260,7 @@ export async function claimWorktree({
       targetBranch,
       dependencies: nativeDependencies,
       existingBranches,
+      allowTriageRecovery: recoverTriage,
     });
     if (!validation.valid)
       throw new Error(
@@ -251,12 +278,6 @@ export async function claimWorktree({
     if (!isAbsolute(worktreePath))
       throw new Error('Worktree path must be absolute.');
     const now = Date.now();
-    let record = await readFile(claimFile, 'utf8')
-      .then(JSON.parse)
-      .catch((error) => {
-        if (error.code === 'ENOENT') return null;
-        throw error;
-      });
     if (record?.state === 'active' && Date.parse(record.expiresAt) > now) {
       if (record.worker !== ownerLabel(worker))
         throw new Error(
@@ -502,12 +523,24 @@ export async function transferClaim({
     );
     const fromLabel = ownerLabel(worker);
     const toLabel = ownerLabel(toWorker);
+    if (fromLabel === toLabel)
+      throw new Error('A claim handoff must change the assigned owner.');
     if (!labels.includes(fromLabel))
       throw new Error(`Fresh issue metadata no longer assigns ${fromLabel}.`);
+    const statuses = labels.filter((label) => label.startsWith('status:'));
+    if (
+      statuses.length !== 1 ||
+      !['status:triage', 'status:ready', 'status:in-progress'].includes(
+        statuses[0],
+      )
+    )
+      throw new Error(
+        'Issue status changed or is not recoverable; the worktree was preserved.',
+      );
     const reassigned = {
       ...issue,
       labels: labels
-        .filter((label) => ![fromLabel, 'status:in-progress'].includes(label))
+        .filter((label) => ![fromLabel, ...statuses].includes(label))
         .concat([toLabel, 'status:ready']),
     };
     const check = validateIssue(reassigned);
@@ -534,26 +567,31 @@ export async function transferClaim({
     await writeRecord(file, next);
     try {
       if (updateIssue) {
-        await updateIssue({ issueNumber: issue.number, fromLabel, toLabel });
+        await updateIssue({
+          issueNumber: issue.number,
+          fromLabel,
+          toLabel,
+          issue,
+          labels: reassigned.labels,
+        });
       } else {
         const result = spawnSync(
           'gh',
           [
-            'issue',
-            'edit',
-            String(issue.number),
+            'api',
             '--repo',
             repository,
-            '--remove-label',
-            fromLabel,
-            '--remove-label',
-            'status:in-progress',
-            '--add-label',
-            toLabel,
-            '--add-label',
-            'status:ready',
+            '--method',
+            'PATCH',
+            `repos/${repository}/issues/${issue.number}`,
+            '--input',
+            '-',
           ],
-          { encoding: 'utf8', windowsHide: true },
+          {
+            input: JSON.stringify({ labels: reassigned.labels }),
+            encoding: 'utf8',
+            windowsHide: true,
+          },
         );
         if (result.status !== 0)
           throw new Error(

@@ -110,6 +110,19 @@ describe('issue worktree assignment', () => {
     );
   });
 
+  it('permits triage only as recovery for the same active claim owner and session', () => {
+    const triage = fixtureIssue({
+      labels: fixtureIssue().labels.map((label) =>
+        label === 'status:ready' ? 'status:triage' : label,
+      ),
+    });
+    assert.equal(assignment({ issue: triage }).valid, false);
+    assert.equal(
+      assignment({ issue: triage, allowTriageRecovery: true }).valid,
+      true,
+    );
+  });
+
   it('derives a stable issue branch name', () => {
     assert.equal(issueBranch(fixtureIssue()), 'issue/42-repair-a-small-widget');
   });
@@ -172,6 +185,22 @@ describe('durable worktree claims', () => {
       await readFile(join(resumed.worktreePath, 'uncommitted.txt'), 'utf8'),
       'preserve me',
     );
+
+    const interrupted = {
+      ...issue,
+      labels: issue.labels.map((label) =>
+        label === 'status:ready' ? 'status:triage' : label,
+      ),
+    };
+    const recovered = await claimWorktree({
+      repoRoot: checkout,
+      issue: interrupted,
+      worker: 'codex',
+      sessionId: 'session-a',
+      targetBranch: 'develop',
+    });
+    assert.equal(recovered.resumed, true);
+    assert.equal(recovered.worktreePath, first.worktreePath);
     assert.equal(
       git(checkout, 'worktree', 'list', '--porcelain').includes(
         `branch refs/heads/${issueBranch(issue)}`,
