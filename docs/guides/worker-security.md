@@ -73,6 +73,8 @@ Do not add `-p`/`--publish`. Verify Qwen health from the trusted metering proxy 
 
 `tools/worker-image/Containerfile` pins the Node base image by digest and installs Hermes Agent v0.22.2 from source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. The image build runs the upstream installer without browser or computer-use packages and verifies the installed Hermes version. At runtime, the image keeps installed package files read-only and redirects Hermes' install lock and lease state into `/tmp`; the remaining Hermes home also lives in `/tmp`. Build it locally as the unprivileged `peon` account, inspect the resulting image digest, and pass that digest to the restricted launcher. The image is not published by this workflow; registry publication requires a separate decision and credential.
 
+The lockfile-pinned pnpm 10.28.2 bundle is baked into the image-owned `/opt/corepack` cache. The worker and trusted verifier set `COREPACK_HOME=/opt/corepack`, disable Corepack network access and latest-version lookup, and use the same immutable image with read-only root filesystems. They also set `NX_SKIP_NATIVE_FILE_CACHE=true`: Nx otherwise copies its native binding into the `noexec` `/tmp` mount and cannot load it. Keep project dependencies preinstalled in the isolated WSL issue workspace; neither Peon nor verification containers should need package-registry access.
+
 Run the trusted launcher from the Windows repository checkout with a locally approved image digest and the issue's already prepared isolated checkout. The runner starts a credential-free proxy sidecar, waits for its model health check, and then starts Peon on the worker-only internal network:
 
 ```powershell

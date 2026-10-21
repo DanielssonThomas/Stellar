@@ -11,6 +11,9 @@ RUN apt-get update \
     && useradd --create-home --uid 1001 --gid 1001 --shell /bin/bash peon \
     && install -d -o peon -g peon /opt/hermes
 
+RUN COREPACK_HOME=/opt/corepack corepack prepare pnpm@10.28.2 --activate \
+    && chmod -R a+rX /opt/corepack
+
 USER 1001:1001
 ENV HOME=/home/peon \
     HERMES_HOME=/opt/hermes \
@@ -68,7 +71,10 @@ RUN set -eu \
 
 USER 1001:1001
 ENV HOME=/tmp \
-    HERMES_HOME=/tmp/.hermes
+    HERMES_HOME=/tmp/.hermes \
+    COREPACK_HOME=/opt/corepack \
+    COREPACK_DEFAULT_TO_LATEST=0 \
+    COREPACK_ENABLE_NETWORK=0
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/libexec/hermes-worker-entrypoint"]
