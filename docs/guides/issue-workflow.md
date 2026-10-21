@@ -37,3 +37,5 @@ Use GitHub sub-issues for Epic membership. Use native dependencies for blocking 
 ## Implementation path
 
 Start from a validated issue and its exact target branch. Create an issue-specific branch and worktree, make linked conventional commits, run affected checks, and open a PR back to that target. The [create-issue skill](../../.agents/skills/create-issue/SKILL.md) defines the repeatable creation workflow.
+
+The protected `main` target is reserved for fully specified `type:blocker` issues owned by Codex or a maintainer that promote narrowly scoped policy fixes. Worker-owned issues cannot target `main`. The issue-policy workflow serializes runs per issue and validates a fresh GitHub issue read; event snapshots are used only to identify the issue number. Before replacing labels, the validator re-fetches and compares the complete label set, writes all labels in one update, then verifies the result. GitHub does not provide label-set compare-and-swap, so bounded retries and claim-manager reconciliation handle conflicts without treating a stale event as current state.

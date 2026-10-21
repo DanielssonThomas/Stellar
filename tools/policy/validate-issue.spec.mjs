@@ -22,6 +22,57 @@ describe('issue metadata policy', () => {
     assert.deepEqual(result, { valid: true, ready: true, errors: [] });
   });
 
+  it('recognizes the authorized Peon identity without permitting a main-target worker issue', () => {
+    const peon = validateIssue(
+      issue([
+        'priority:medium',
+        'target:develop',
+        'type:feature',
+        'worker:peon',
+        'status:ready',
+      ]),
+    );
+    assert.deepEqual(peon, { valid: true, ready: true, errors: [] });
+
+    const mainWorker = validateIssue(
+      issue([
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'worker:peon',
+        'status:ready',
+      ]),
+    );
+    assert.equal(mainWorker.valid, false);
+    assert.ok(mainWorker.errors.includes('Invalid target label.'));
+  });
+
+  it('reserves the main target for Codex or maintainer-owned blockers', () => {
+    for (const owner of ['owner:codex', 'owner:maintainer']) {
+      const result = validateIssue(
+        issue([
+          'priority:high',
+          'target:main',
+          'type:blocker',
+          owner,
+          'status:ready',
+        ]),
+      );
+      assert.deepEqual(result, { valid: true, ready: true, errors: [] });
+    }
+    const nonBlocker = validateIssue(
+      issue([
+        'priority:high',
+        'target:main',
+        'type:chore',
+        'owner:codex',
+        'status:ready',
+      ]),
+    );
+    assert.equal(nonBlocker.valid, false);
+    assert.ok(nonBlocker.errors.includes('Invalid target label.'));
+  });
+
   it('keeps incomplete issues in triage', () => {
     const result = validateIssue({
       title: 'Needs refinement',
