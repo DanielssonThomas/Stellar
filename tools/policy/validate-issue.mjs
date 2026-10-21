@@ -266,39 +266,82 @@ async function ensureTriageLabel(issue) {
   }
 }
 
-async function enforceTriage(issue) {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token)
-    throw new Error('GITHUB_TOKEN is required to update issue status.');
-  const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
-  const current = labelsOf(issue);
-  await ensureTriageLabel(issue);
-  for (const label of current.filter((value) => value.startsWith('status:'))) {
-    await api(
-      `/issues/${issue.number}/labels/${encodeURIComponent(label)}`,
-      'DELETE',
-      token,
-      apiUrl,
-    );
-  }
-  await api(`/issues/${issue.number}/labels`, 'POST', token, apiUrl, {
-    labels: ['status:triage'],
-  });
+function labelsForTriage(issue) {
+  const labels = labelsOf(issue).filter(
+    (label) =>
+      !label.startsWith('status:') &&
+      !(
+        label === 'priority:critical' &&
+        labelsOf(issue).some((value) => value.startsWith('worker:'))
+      ),
+  );
+  return [...new Set([...labels, 'status:triage'])];
 }
 
-async function removeLabels(issue, labels) {
+function sameLabels(left, right) {
+  return (
+    JSON.stringify(labelsOf(left).sort()) ===
+    JSON.stringify(labelsOf(right).sort())
+  );
+}
+
+export async function processIssueEvent({
+  issueNumber,
+  fetchIssue,
+  updateLabels,
+  validateCurrent,
+  ensureTriage = ensureTriageLabel,
+  maxAttempts = 3,
+}) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const current = await fetchIssue(issueNumber);
+    const result = await validateCurrent(current);
+    if (result.errors.length === 0) {
+      console.log(`Issue #${issueNumber} metadata is valid.`);
+      return { issue: current, changed: false };
+    }
+    console.warn(
+      `Issue #${issueNumber} is not ready: ${result.errors.join(' ')}`,
+    );
+    const desired = labelsForTriage(current);
+    if (
+      foundStatus(current) === 'status:triage' &&
+      sameLabels(current, { labels: desired })
+    )
+      return { issue: current, changed: false };
+    await ensureTriage(current);
+    // Re-fetch immediately before replacing the complete label set. GitHub has
+    // no label-set compare-and-swap, so this guarded read narrows the race and
+    // the claim manager performs its own post-write reconciliation.
+    const guarded = await fetchIssue(issueNumber);
+    if (!sameLabels(current, guarded)) continue;
+    await updateLabels(issueNumber, desired);
+    const latest = await fetchIssue(issueNumber);
+    const verified = await validateCurrent(latest);
+    if (verified.errors.length === 0)
+      return { issue: latest, changed: true, reconciled: true };
+    if (labelsOf(latest).length && foundStatus(latest) === 'status:triage')
+      return { issue: latest, changed: true, reconciled: false };
+  }
+  throw new Error(
+    `Issue #${issueNumber} kept changing during policy reconciliation; no further label writes were attempted.`,
+  );
+}
+
+async function fetchCurrentIssue(issueNumber) {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error('GITHUB_TOKEN is required to read issue state.');
+  const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
+  const response = await api(`/issues/${issueNumber}`, 'GET', token, apiUrl);
+  return response.json();
+}
+
+async function updateCurrentLabels(issueNumber, labels) {
   const token = process.env.GITHUB_TOKEN;
   if (!token)
     throw new Error('GITHUB_TOKEN is required to update issue labels.');
   const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
-  for (const label of labels) {
-    await api(
-      `/issues/${issue.number}/labels/${encodeURIComponent(label)}`,
-      'DELETE',
-      token,
-      apiUrl,
-    );
-  }
+  await api(`/issues/${issueNumber}`, 'PATCH', token, apiUrl, { labels });
 }
 
 function argsFrom(argv) {
@@ -317,37 +360,25 @@ async function main() {
     const event = JSON.parse(
       await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'),
     );
-    const issue = event.issue;
-    if (!issue) throw new Error('The GitHub event does not contain an issue.');
-    const result = validateIssue(issue);
-    result.errors.push(
-      ...(await validateNativeDependencies(issue)),
-      ...(await validateTargetBranch(issue)),
-    );
-    result.ready = result.ready && result.errors.length === 0;
-    if (result.errors.length && !result.ready) {
-      console.warn(
-        `Issue #${issue.number} is not ready: ${result.errors.join(' ')}`,
-      );
-      const labels = labelsOf(issue);
-      if (
-        labels.includes('priority:critical') &&
-        labels.some((label) => label.startsWith('worker:'))
-      ) {
-        await removeLabels(issue, ['priority:critical']);
-      }
-      if (foundStatus(issue) !== 'status:triage') await enforceTriage(issue);
-      return;
-    }
-    if (!labelsOf(issue).some((label) => label.startsWith('status:'))) {
-      await enforceTriage(issue);
-      console.log(
-        `Issue #${issue.number} was placed in triage because it has no status label.`,
-      );
-      return;
-    }
-    if (result.errors.length) throw new Error(result.errors.join('\n'));
-    console.log(`Issue #${issue.number} metadata is valid.`);
+    const issueNumber = event.issue?.number;
+    if (!issueNumber)
+      throw new Error('The GitHub event does not contain an issue number.');
+    await processIssueEvent({
+      issueNumber,
+      fetchIssue: fetchCurrentIssue,
+      updateLabels: updateCurrentLabels,
+      validateCurrent: async (issue) => {
+        const result = validateIssue(issue);
+        result.errors.push(
+          ...(await validateNativeDependencies(issue)),
+          ...(await validateTargetBranch(issue)),
+        );
+        result.ready = result.ready && result.errors.length === 0;
+        if (!labelsOf(issue).some((label) => label.startsWith('status:')))
+          result.errors.push('Issue has no status label.');
+        return result;
+      },
+    });
     return;
   }
 

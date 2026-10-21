@@ -8,14 +8,16 @@ import {
   releaseClaim,
   transferClaim,
 } from './issue-worktree.mjs';
+import { validateIssue } from './validate-issue.mjs';
 
 const repository = process.env.GITHUB_REPOSITORY ?? 'DanielssonThomas/Stellar';
 
-function run(command, args, cwd) {
+function run(command, args, cwd, input) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     windowsHide: true,
+    ...(input ? { input } : {}),
   });
   if (result.status !== 0)
     throw new Error(
@@ -81,6 +83,114 @@ export function loadIssue(number) {
   return issue;
 }
 
+function issueLabels(issue) {
+  return issue.labels.map((label) =>
+    typeof label === 'string' ? label : label.name,
+  );
+}
+
+function updateIssueLabels(number, labels) {
+  run(
+    'gh',
+    [
+      'api',
+      '--method',
+      'PATCH',
+      `repos/${repository}/issues/${number}`,
+      '--input',
+      '-',
+    ],
+    process.cwd(),
+    JSON.stringify({ labels }),
+  );
+}
+
+export async function reconcileClaimStatus({
+  issueNumber,
+  worker,
+  resumed,
+  fetchIssue = loadIssue,
+  updateLabels = updateIssueLabels,
+  maxAttempts = 3,
+}) {
+  const owner = ownerLabel(worker);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const current = await fetchIssue(issueNumber);
+    const labels = issueLabels(current);
+    if (!labels.includes(owner))
+      throw new Error(
+        `Issue #${issueNumber} ownership changed; the worktree was preserved.`,
+      );
+    const statuses = labels.filter((label) => label.startsWith('status:'));
+    if (
+      statuses.length !== 1 ||
+      !['status:ready', 'status:in-progress', 'status:triage'].includes(
+        statuses[0],
+      )
+    )
+      throw new Error(
+        `Issue #${issueNumber} status changed; the worktree was preserved.`,
+      );
+    if (statuses[0] === 'status:triage' && !resumed)
+      throw new Error(
+        `Issue #${issueNumber} is in triage without a recoverable active claim.`,
+      );
+    const policyIssue =
+      statuses[0] === 'status:triage'
+        ? {
+            ...current,
+            labels: labels.map((label) =>
+              label === statuses[0] ? 'status:ready' : label,
+            ),
+          }
+        : current;
+    const policy = validateIssue(policyIssue);
+    if (!policy.valid)
+      throw new Error(
+        `Issue #${issueNumber} metadata is invalid: ${policy.errors.join(' ')}`,
+      );
+    if (statuses[0] === 'status:in-progress') return current;
+    const guarded = await fetchIssue(issueNumber);
+    if (
+      JSON.stringify(issueLabels(current).sort()) !==
+      JSON.stringify(issueLabels(guarded).sort())
+    )
+      continue;
+    const nextLabels = labels
+      .filter((label) => !label.startsWith('status:'))
+      .concat('status:in-progress');
+    await updateLabels(issueNumber, nextLabels);
+    const latest = await fetchIssue(issueNumber);
+    const latestLabels = issueLabels(latest);
+    const latestStatuses = latestLabels.filter((label) =>
+      label.startsWith('status:'),
+    );
+    if (
+      latestLabels.includes(owner) &&
+      latestStatuses.length === 1 &&
+      latestStatuses[0] === 'status:in-progress'
+    )
+      return latest;
+    if (!latestLabels.includes(owner))
+      throw new Error(
+        `Issue #${issueNumber} ownership changed after the status write; inspect the preserved claim.`,
+      );
+    // A concurrent issue-policy reconciliation can still win after the guard.
+    // Retry only when the same owner remains in triage and this is a resumed claim.
+    if (
+      latestStatuses.length !== 1 ||
+      latestStatuses[0] !== 'status:triage' ||
+      !resumed
+    )
+      throw new Error(
+        `Issue #${issueNumber} changed during the status write; inspect the preserved claim.`,
+      );
+  }
+  throw new Error(
+    `Issue #${issueNumber} kept changing; claim status was not reconciled after ${maxAttempts} guarded attempts.`,
+  );
+}
+
 function fetchTarget(repoRoot, target) {
   run(
     'git',
@@ -144,34 +254,11 @@ export async function main(argv = process.argv.slice(2)) {
       sessionId: args['session-id'],
       targetBranch: target,
     });
-    const status = issue.labels.find((label) =>
-      label.name.startsWith('status:'),
-    )?.name;
-    if (status === 'status:ready')
-      run(
-        'gh',
-        [
-          'issue',
-          'edit',
-          String(number),
-          '--repo',
-          repository,
-          '--remove-label',
-          'status:ready',
-          '--add-label',
-          'status:in-progress',
-        ],
-        repoRoot,
-      );
-    const refreshed = loadIssue(number);
-    const refreshedLabels = refreshed.labels.map((label) => label.name);
-    if (
-      !refreshedLabels.includes(ownerLabel(args.worker)) ||
-      !refreshedLabels.includes('status:in-progress')
-    )
-      throw new Error(
-        `Issue #${number} changed during claim. The worktree was preserved; inspect its claim and current issue labels before continuing.`,
-      );
+    await reconcileClaimStatus({
+      issueNumber: number,
+      worker: args.worker,
+      resumed: Boolean(result.resumed),
+    });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result;
   }
@@ -195,6 +282,45 @@ export async function main(argv = process.argv.slice(2)) {
       sessionId: args['session-id'],
       reason: args.reason,
       repository,
+      updateIssue: async ({ issueNumber, fromLabel, toLabel }) => {
+        const fresh = loadIssue(issueNumber);
+        const labels = issueLabels(fresh);
+        const statuses = labels.filter((label) => label.startsWith('status:'));
+        if (
+          !labels.includes(fromLabel) ||
+          statuses.length !== 1 ||
+          !['status:triage', 'status:ready', 'status:in-progress'].includes(
+            statuses[0],
+          )
+        )
+          throw new Error(
+            'Fresh issue owner or status changed before handoff; preserved worktree needs inspection.',
+          );
+        const nextLabels = labels
+          .filter(
+            (label) => label !== fromLabel && !label.startsWith('status:'),
+          )
+          .concat(toLabel, 'status:ready');
+        const candidate = { ...fresh, labels: nextLabels };
+        const validation = validateIssue(candidate);
+        if (!validation.valid || !validation.ready)
+          throw new Error(
+            `Fresh issue is not valid for handoff: ${validation.errors.join(' ')}`,
+          );
+        updateIssueLabels(issueNumber, nextLabels);
+        const verified = loadIssue(issueNumber);
+        const verifiedLabels = issueLabels(verified);
+        if (
+          !verifiedLabels.includes(toLabel) ||
+          !verifiedLabels.includes('status:ready') ||
+          verifiedLabels.some(
+            (label) => label.startsWith('status:') && label !== 'status:ready',
+          )
+        )
+          throw new Error(
+            'Handoff labels did not reconcile; preserved worktree needs inspection.',
+          );
+      },
     });
     const refreshed = loadIssue(number);
     const refreshedLabels = refreshed.labels.map((label) => label.name);
