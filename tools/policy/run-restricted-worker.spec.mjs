@@ -249,11 +249,11 @@ test('repairs Hermes dependencies at build time and verifies immutable runtime a
   assert.match(containerfile, /packages.*venv.*environment/s);
   assert.match(containerfile, /selected\.json/);
   assert.match(containerfile, /\/tmp\/\.hermes\/skills/);
-  assert.doesNotMatch(containerfile, /ln -s \/opt\/hermes\/skills \/tmp\/\.hermes\/skills/);
   assert.doesNotMatch(
     containerfile,
-    /environment_dir=.*find.*\/environments/s,
+    /ln -s \/opt\/hermes\/skills \/tmp\/\.hermes\/skills/,
   );
+  assert.doesNotMatch(containerfile, /environment_dir=.*find.*\/environments/s);
   assert.match(verifier, /activate_dependencies\(PROJECT_ROOT\)/);
   assert.match(verifier, /pm-runtime\.json/);
   assert.match(verifier, /hermes_cli\.main/);
