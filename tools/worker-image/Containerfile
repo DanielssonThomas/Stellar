@@ -30,28 +30,48 @@ RUN curl --fail --silent --show-error --location \
         --skip-browser \
         --skip-computer-use \
     && rm /tmp/hermes-install.sh \
+    && hermes pm repair \
     && hermes --version | grep --fixed-strings 'v0.22.2'
+
+ENV HERMES_RUNTIME_DIR=/opt/hermes/tools
+COPY --chown=0:0 tools/worker-image/verify-hermes-runtime.py /usr/local/libexec/verify-hermes-runtime.py
+USER 1001:1001
+RUN venv_python="$(python3 -c 'import json; from pathlib import Path; p=Path("/opt/hermes/installs"); f=next(p.glob("*/facts.json")); print(json.loads(f.read_text())["packages"]["venv"]["environment"] + "/bin/python")')" \
+    && "${venv_python}" /usr/local/libexec/verify-hermes-runtime.py \
+    && hermes skills list >/dev/null
 
 USER 0:0
 COPY --chown=0:0 tools/policy/peon-metering-proxy.mjs /opt/stellar-peon-metering-proxy.mjs
 RUN set -eu \
     && install_dir="$(find /opt/hermes/installs -mindepth 1 -maxdepth 1 -type d -print -quit)" \
-    && environment_dir="$(find "${install_dir}/environments" -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+    && environment_dir="$(python3 -c 'import json; from pathlib import Path; p=Path("/opt/hermes/installs"); f=next(p.glob("*/facts.json")); print(json.loads(f.read_text())["packages"]["venv"]["environment"])')" \
+    && generation_dir="$(python3 -c 'import json; from pathlib import Path; p=Path("/opt/hermes/installs"); i=next(p.glob("*")); r=i/"pm-runtime"; s=json.loads((r/"selected.json").read_text()); print(r/s["generation"])')" \
     && test -n "${install_dir}" \
     && test -n "${environment_dir}" \
+    && case "${environment_dir}" in "${install_dir}"/environments/*) ;; *) exit 1 ;; esac \
+    && case "${generation_dir}" in "${install_dir}"/pm-runtime/generations/*) ;; *) exit 1 ;; esac \
     && rm "${install_dir}/.install.lock" \
     && ln -s /tmp/hermes-install.lock "${install_dir}/.install.lock" \
+    && rm -f "${install_dir}/pm-runtime/.prepare.lock" \
+    && ln -s /tmp/hermes-prepare.lock "${install_dir}/pm-runtime/.prepare.lock" \
     && rm -rf "${environment_dir}/.leases" \
-    && ln -s /tmp/hermes-leases "${environment_dir}/.leases" \
+    && rm -rf "$(dirname "${environment_dir}")/.leases" \
+    && ln -s /tmp/hermes-leases "$(dirname "${environment_dir}")/.leases" \
+    && rm -rf "${generation_dir}/.leases" \
+    && ln -s /tmp/hermes-leases "${generation_dir}/.leases" \
+    && rm -rf /opt/hermes/skills/.hub \
     && install -d /usr/local/libexec \
     && printf '%s\n' \
         '#!/bin/sh' \
         'set -eu' \
-        'mkdir -p /tmp/.hermes /tmp/hermes-leases' \
-        'touch /tmp/hermes-install.lock' \
+        'mkdir -p /tmp/.hermes /tmp/hermes-leases /tmp/.hermes/skills' \
+        'touch /tmp/hermes-install.lock /tmp/hermes-prepare.lock' \
         'ln -s /opt/hermes/installs /tmp/.hermes/installs' \
         'ln -s /opt/hermes/tools /tmp/.hermes/tools' \
-        'ln -s /opt/hermes/skills /tmp/.hermes/skills' \
+        'for skill in /opt/hermes/skills/* /opt/hermes/skills/.[!.]*; do' \
+        '  [ -e "$skill" ] || continue' \
+        '  ln -s "$skill" "/tmp/.hermes/skills/${skill##*/}"' \
+        'done' \
         'export GIT_ASKPASS=/usr/local/libexec/hermes-worker-git-askpass' \
         'export GIT_TERMINAL_PROMPT=0' \
         'exec "$@"' \
@@ -72,6 +92,7 @@ RUN set -eu \
 USER 1001:1001
 ENV HOME=/tmp \
     HERMES_HOME=/tmp/.hermes \
+    HERMES_RUNTIME_DIR=/opt/hermes/tools \
     COREPACK_HOME=/opt/corepack \
     COREPACK_DEFAULT_TO_LATEST=0 \
     COREPACK_ENABLE_NETWORK=0
