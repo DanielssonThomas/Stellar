@@ -488,6 +488,57 @@ describe('bounded worker supervision', () => {
     );
   });
 
+  it('keeps a failed worker unsafe when container cleanup cannot be confirmed', async () => {
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker(
+            'peon',
+            async () => {
+              throw new Error('worker runner cleanup was inconclusive');
+            },
+            async () => false,
+          ),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        authorizeHandoff: authorizeMira,
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.attempts[0].status, 'cancellation-unconfirmed');
+    assert.match(
+      result.handoff.attempts[0].failure.message,
+      /Worker stop was not confirmed/,
+    );
+  });
+
+  it('keeps verification work unsafe when verification failure cannot be stopped', async () => {
+    const verify = Object.assign(
+      async () => {
+        throw new Error('verification runner failed');
+      },
+      { cancel: async () => false },
+    );
+    const result = await superviseWorker(
+      base({
+        verify,
+        workers: {
+          peon: worker('peon', async () => ({ status: 'completed' })),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(
+      result.handoff.attempts[0].status,
+      'verification-cancellation-unconfirmed',
+    );
+  });
+
   it('bounds verification runtime as part of the worker budget', async () => {
     let verificationCalls = 0;
     const result = await superviseWorker(

@@ -9,6 +9,8 @@ import {
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
+  cancelRestrictedVerification,
+  createPeonWorkerAdapter,
   formatWorkerFailure,
   parseArguments,
   redactWorkerDiagnostics,
@@ -314,6 +316,69 @@ test('uses an offline read-only sha256 command for the embedded proxy', () => {
       ),
     /pinned by a lowercase SHA-256 digest/,
   );
+});
+
+test('memoizes repeated worker cancellation for one exact attempt', async () => {
+  let resolveRun;
+  let resolveCancellation;
+  let cancellationCalls = 0;
+  const adapter = createPeonWorkerAdapter({
+    image,
+    commandForTask: () => ['hermes', 'chat'],
+    runAttempt: () =>
+      new Promise((resolve) => {
+        resolveRun = resolve;
+      }),
+    confirmCancellation: async (input) => {
+      cancellationCalls += 1;
+      assert.equal(input.workerName, 'stellar-peon-worker-50-4');
+      assert.equal(input.meterName, 'stellar-peon-meter-50-4');
+      return new Promise((resolve) => {
+        resolveCancellation = resolve;
+      });
+    },
+  });
+  const run = adapter.run({
+    task: { issueNumber: 50 },
+    attemptNumber: 4,
+    limits: { maxRuntimeMsPerWorker: 600_000 },
+    budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
+  });
+  await Promise.resolve();
+
+  const first = adapter.cancel();
+  const second = adapter.cancel();
+  assert.equal(first, second);
+  assert.equal(cancellationCalls, 1);
+  resolveCancellation({ confirmed: true });
+  assert.equal(await first, true);
+  resolveRun({ exitCode: 0, usage: { modelTokens: 0, toolCalls: 0 } });
+  await run;
+  assert.equal(await adapter.cancel(), true);
+  assert.equal(cancellationCalls, 1);
+});
+
+test('restricted verification cancellation confirms only its exact attempt', async () => {
+  const inspected = [];
+  let stopCalled = false;
+  const confirmed = await cancelRestrictedVerification({
+    issueNumber: 50,
+    attemptNumber: 91,
+    containerOperations: {
+      inspect: async (name) => {
+        inspected.push(name);
+        return 'absent';
+      },
+      stop: async () => {
+        stopCalled = true;
+        return false;
+      },
+    },
+  });
+
+  assert.equal(confirmed, true);
+  assert.deepEqual(inspected, ['stellar-peon-verify-50-91']);
+  assert.equal(stopCalled, false);
 });
 
 test('rejects invalid issue identifiers and empty commands', () => {

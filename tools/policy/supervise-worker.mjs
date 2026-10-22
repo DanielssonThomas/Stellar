@@ -19,7 +19,7 @@ const hardLimits = Object.freeze({
   maxRepeatedFailures: 3,
   maxNoProgressAttempts: 3,
 });
-const cancellationGraceMs = 5_000;
+export const cancellationGraceMs = 5_000;
 
 class BudgetLimitError extends Error {
   constructor(resource) {
@@ -372,6 +372,7 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
       'interrupted',
       'budget-exceeded',
       'usage-accounting-failed',
+      'error',
     ].includes(outcome.type)
   ) {
     controller.abort(outcome.type);
@@ -645,6 +646,7 @@ export async function superviseWorker({
           'interrupted',
           'budget-exceeded',
           'usage-accounting-failed',
+          'error',
         ].includes(outcome.type) &&
         !outcome.workerStopped
       ) {
@@ -769,7 +771,9 @@ export async function superviseWorker({
             state.runtimeMs += Math.min(verifyDuration, verifyRemaining);
             attempt.durationMs += verifyDuration;
             if (
-              ['timeout', 'interrupted'].includes(verificationOutcome.type) &&
+              ['timeout', 'interrupted', 'error'].includes(
+                verificationOutcome.type,
+              ) &&
               !verificationOutcome.workerStopped
             ) {
               failure = failureDetails({
