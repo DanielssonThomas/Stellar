@@ -642,6 +642,113 @@ describe('bounded worker supervision', () => {
     );
   });
 
+  it('preserves the primary token-budget stop when cancellation is unconfirmed', async () => {
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 11,
+              exceededResource: 'model-tokens',
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.safeToResume, false);
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-tokens-budget-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'model-tokens-budget-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+  });
+
+  it('preserves accounting failure separately from unconfirmed cancellation', async () => {
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => {
+              throw Object.assign(new Error('private transport detail'), {
+                diagnostic: {
+                  category: 'usage-endpoint-unavailable',
+                  phase: 'running',
+                },
+              });
+            },
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.lastStopReason, 'usage-accounting-failed');
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'usage-accounting-failed',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /private transport detail/,
+    );
+  });
+
+  it('keeps an unclassified primary stop cause explicitly unknown', async () => {
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker(
+            'peon',
+            async () => {
+              throw new Error('unclassified worker failure');
+            },
+            async () => false,
+          ),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.lastStopReason, 'unknown');
+    assert.equal(result.handoff.attempts[0].primaryStopReason, 'unknown');
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+  });
+
   it('keeps verification work unsafe when verification failure cannot be stopped', async () => {
     const verify = Object.assign(
       async () => {

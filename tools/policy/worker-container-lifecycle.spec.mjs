@@ -209,7 +209,7 @@ test('bounds cancellation when process completion remains pending', async () => 
   const result = await confirmAttemptCleanup({
     workerName,
     meterName,
-    completion: new Promise(() => {}),
+    completion: new Promise(() => undefined),
     isCompletionSettled: () => false,
     operations: mock.operations,
     deadlineAt: startedAt + 40,
@@ -218,6 +218,28 @@ test('bounds cancellation when process completion remains pending', async () => 
   assert.equal(result.confirmed, false);
   assert.ok(Date.now() - startedAt <= 120);
   assert.ok(cancellationConfirmationTimeoutMs < cancellationGraceMs);
+});
+
+test('does not treat removed containers as safe while the launcher can still settle later', async () => {
+  const mock = mockOperations({ states: new Map() });
+  const startedAt = Date.now();
+  const result = await confirmAttemptCleanup({
+    workerName,
+    meterName,
+    completion: new Promise(() => undefined),
+    isCompletionSettled: () => false,
+    operations: mock.operations,
+    deadlineAt: startedAt + 40,
+  });
+
+  assert.deepEqual(result, {
+    confirmed: false,
+    workerState: 'inconclusive',
+    meterState: 'inconclusive',
+  });
+  assert.deepEqual(mock.stopped, [workerName]);
+  assert.deepEqual(mock.inspected, []);
+  assert.ok(Date.now() - startedAt <= 120);
 });
 
 test('uses the same bounded stop confirmation for restricted verification', async () => {
