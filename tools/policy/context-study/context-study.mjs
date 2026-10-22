@@ -10,7 +10,6 @@ export function compactToolResult({
   stdout,
   stderr = '',
   exitCode,
-  artifactId,
   artifactStore,
   scope,
 }) {
@@ -29,16 +28,18 @@ export function compactToolResult({
       runs.push({ index, end, firstLine: index + 1, lastLine: end });
     index = end;
   }
-  if (runs.length && artifactStore) {
+  let artifactId;
+  if (runs.length) {
+    if (!artifactStore || typeof artifactStore.put !== 'function')
+      throw new TypeError(
+        'A trusted artifact store is required for compaction.',
+      );
     if (typeof scope !== 'string')
       throw new TypeError('An attempt scope is required for artifact storage.');
     artifactId = artifactStore.put(scope, stdout);
   }
-  if (
-    runs.length &&
-    (!/^[A-Za-z0-9._/-]+$/.test(artifactId ?? '') || artifactId.includes('..'))
-  )
-    throw new TypeError('A safe artifact identifier is required.');
+  if (runs.length && !/^[a-f0-9]{32}$/.test(artifactId ?? ''))
+    throw new TypeError('A safe opaque artifact identifier is required.');
 
   const output = [];
   const omissions = [];
