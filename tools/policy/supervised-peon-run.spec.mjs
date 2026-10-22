@@ -6,10 +6,11 @@ import test from 'node:test';
 import { readHandoff, superviseWorker } from './supervise-worker.mjs';
 import {
   runSupervisedPeonIssue,
+  trustedPeonWorkerImage,
   validateLivePeonAssignment,
 } from './supervised-peon-run.mjs';
 
-const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
+const image = trustedPeonWorkerImage;
 const sessionId = 'peon-issue-50-controlled-trial';
 const root = await mkdtemp(join(tmpdir(), 'stellar-live-supervisor-'));
 const handoffPath = join(root, 'handoff.json');
@@ -105,6 +106,16 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
         image: 'latest',
       }),
     /pinned worker image/,
+  );
+  assert.throws(
+    () =>
+      validateLivePeonAssignment({
+        issue,
+        claim: claim(),
+        sessionId,
+        image: `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`,
+      }),
+    /trusted worker image digest/,
   );
 });
 

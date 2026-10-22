@@ -79,6 +79,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--env=COREPACK_ENABLE_NETWORK=0',
     '--env=NX_SKIP_NATIVE_FILE_CACHE=true',
     '--env=HERMES_HOME=/tmp/.hermes',
+    '--env=HERMES_RUNTIME_DIR=/opt/hermes/tools',
     '--env=TMPDIR=/tmp',
     '--env=OPENAI_BASE_URL=http://peon-meter:18436/v1',
     '--env=OPENAI_API_KEY=stellar-local-meter',
@@ -176,6 +177,7 @@ test('runs trusted checks in an isolated container without worker or integration
   assert.ok(args.includes('--read-only'));
   assert.ok(args.includes('--env=COREPACK_HOME=/opt/corepack'));
   assert.ok(args.includes('--env=COREPACK_ENABLE_NETWORK=0'));
+  assert.ok(args.includes('--env=HERMES_RUNTIME_DIR=/opt/hermes/tools'));
   assert.ok(args.includes('--env=NX_SKIP_NATIVE_FILE_CACHE=true'));
   assert.ok(args.includes('--cap-drop=all'));
   assert.ok(
@@ -226,7 +228,37 @@ test('pins the offline package-manager cache outside the writable worker home', 
   assert.match(containerfile, /COREPACK_HOME=\/opt\/corepack/);
   assert.match(containerfile, /COREPACK_DEFAULT_TO_LATEST=0/);
   assert.match(containerfile, /COREPACK_ENABLE_NETWORK=0/);
+  assert.match(containerfile, /HERMES_RUNTIME_DIR=\/opt\/hermes\/tools/);
   assert.match(containerfile, /corepack prepare pnpm@10\.28\.2 --activate/);
+});
+
+test('repairs Hermes dependencies at build time and verifies immutable runtime activation', () => {
+  const containerfile = readFileSync(
+    new URL('../worker-image/Containerfile', import.meta.url),
+    'utf8',
+  );
+  const verifier = readFileSync(
+    new URL('../worker-image/verify-hermes-runtime.py', import.meta.url),
+    'utf8',
+  );
+  assert.match(containerfile, /hermes pm repair/);
+  assert.match(containerfile, /verify-hermes-runtime\.py/);
+  assert.match(containerfile, /hermes skills list >\/dev\/null/);
+  assert.match(containerfile, /\.prepare\.lock/);
+  assert.match(containerfile, /\/tmp\/hermes-prepare\.lock/);
+  assert.match(containerfile, /packages.*venv.*environment/s);
+  assert.match(containerfile, /selected\.json/);
+  assert.match(containerfile, /\/tmp\/\.hermes\/skills/);
+  assert.doesNotMatch(
+    containerfile,
+    /ln -s \/opt\/hermes\/skills \/tmp\/\.hermes\/skills/,
+  );
+  assert.doesNotMatch(containerfile, /environment_dir=.*find.*\/environments/s);
+  assert.match(verifier, /activate_dependencies\(PROJECT_ROOT\)/);
+  assert.match(verifier, /pm-runtime\.json/);
+  assert.match(verifier, /hermes_cli\.main/);
+  assert.match(verifier, /environment\.parent \/ ".leases"/);
+  assert.match(verifier, /generation \/ ".leases"/);
 });
 
 test('rejects image tags without an immutable digest', () => {
