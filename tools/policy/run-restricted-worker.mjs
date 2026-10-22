@@ -18,6 +18,66 @@ const workerNetwork = 'stellar-peon-worker';
 const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
+const diagnosticStreamLimitBytes = 8 * 1024;
+
+export function redactWorkerDiagnostics(value) {
+  return (
+    String(value ?? '')
+      .replace(
+        /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/gi,
+        '[REDACTED]',
+      )
+      .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, '$1 [REDACTED]')
+      .replace(
+        /^([ \t]*(?:authorization|proxy-authorization|cookie|set-cookie)\s*[:=])[^\r\n]*/gim,
+        '$1 [REDACTED]',
+      )
+      .replace(
+        /\b((?:GH_TOKEN|GITHUB_TOKEN|OPENAI_API_KEY|STELLAR_INTEGRATION_TOKEN|(?:api[-_ ]?key|token|secret|password))\s*[:=]\s*)[^\r\n]*/gi,
+        '$1[REDACTED]',
+      )
+      .replace(/:\/\/[^/\s:@]+:[^/\s@]+@/g, '://[REDACTED]@')
+      // Opaque values can be credentials even when they lack a known prefix.
+      .replace(/\b[A-Za-z0-9+/=_-]{20,}\b/g, '[REDACTED]')
+      .slice(-diagnosticStreamLimitBytes)
+  );
+}
+
+export function captureBoundedDiagnosticStream(stream) {
+  let output = Buffer.alloc(0);
+  let totalBytes = 0;
+  stream?.on('data', (chunk) => {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    totalBytes += bytes.length;
+    output = Buffer.concat([output, bytes]).subarray(
+      -diagnosticStreamLimitBytes,
+    );
+  });
+  return () => ({
+    text: redactWorkerDiagnostics(output.toString('utf8')),
+    truncated: totalBytes > diagnosticStreamLimitBytes,
+  });
+}
+
+function summarizeWorkerDiagnostics(diagnostics = {}) {
+  const parts = [];
+  for (const stream of ['stderr', 'stdout']) {
+    const result = diagnostics[stream];
+    if (!result?.text) continue;
+    parts.push(`${stream}: ${redactWorkerDiagnostics(result.text)}`);
+    if (result.truncated) parts.push(`${stream} truncated`);
+  }
+  return parts.join(' | ').replace(/\s+/g, ' ').slice(0, 1_400);
+}
+
+export function formatWorkerFailure({ exitCode, diagnostics }) {
+  return [
+    `Hermes exited with status ${exitCode ?? 1}.`,
+    summarizeWorkerDiagnostics(diagnostics),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 function positiveInteger(value, name) {
   const number = Number(value);
@@ -625,15 +685,28 @@ export async function runRestrictedWorker({
         ],
         {
           cwd: repositoryRoot,
-          stdio: 'ignore',
+          stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
         },
       );
+      const stdout = captureBoundedDiagnosticStream(child.stdout);
+      const stderr = captureBoundedDiagnosticStream(child.stderr);
       child.once('error', reject);
-      child.once('exit', (code, signal) => resolve({ code, signal }));
+      child.once('exit', (code, signal) =>
+        resolve({
+          code,
+          signal,
+          diagnostics: { stdout: stdout(), stderr: stderr() },
+        }),
+      );
     });
     usage = readMeterUsage(meterName);
-    return { exitCode: result.code ?? 1, signal: result.signal, usage };
+    return {
+      exitCode: result.code ?? 1,
+      signal: result.signal,
+      usage,
+      diagnostics: result.diagnostics,
+    };
   } finally {
     try {
       wslWorker('podman', 'stop', '--time', '2', meterName);
@@ -771,6 +844,7 @@ export function buildHermesTaskCommand(task, limits = defaultLimits) {
     'Never print, copy, or include credentials in the issue, commit, or output.',
   ].join('\n\n');
   return [
+    'hermes',
     'chat',
     '-Q',
     '--in',
@@ -814,7 +888,7 @@ export function createPeonWorkerAdapter({
               usage: result.usage,
               failure: {
                 code: 'WorkerExit',
-                message: `Hermes exited with status ${result.exitCode}.`,
+                message: formatWorkerFailure(result),
               },
             };
       } finally {
