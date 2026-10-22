@@ -473,6 +473,6 @@ test('configures the exact pinned Hermes turn-limit key', () => {
     new URL('./peon-hermes-config.yaml', import.meta.url),
     'utf8',
   );
-  assert.match(config, /agent:\s+max_turns:\s+250/);
+  assert.match(config, /agent:\s+coding_context:\s+focus\s+max_turns:\s+250/);
   assert.doesNotMatch(config, /max_iterations/);
 });
