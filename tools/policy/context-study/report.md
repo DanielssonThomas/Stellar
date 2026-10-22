@@ -221,3 +221,49 @@ Three requests do not leave meaningful 600-second margin, even at 100–200 outp
 Tool scoping plus safe exact-repeat retrieval substantially reduces synthetic prompt cost, but the combined three-request projection still fails the requested <28,000-token criterion. At a 1,000-token reserve it is near the 32,000 cap, while the conservative runtime projection exceeds 600 seconds. **No-go for attempt 07 under current limits.** A two-request workflow is the only plausible unchanged-budget path in this model, and must be designed around a sharply bounded task and sufficient completion allowance; it remains theoretical, not a readiness finding. Before any production integration, separate authorization and security review are required for model-visible tool changes and a trusted artifact retrieval service. Consider first implementing a non-production two-stage request plan with exact checkpoints; if it cannot preserve enough generation budget for implementation, compare a separately authorized budget/runtime change or another model/architecture. Do not change issue #50/#24, production config, budget, image, or tool permissions based on these projections.
 
 Issue #78 historical verification: focused offline tests passed (6/6), the full policy suite passed (148/148), documentation validation covered 25 Markdown documents, and its then-current formatting/lint checks passed. The first CI run failed at formatting and was rerun after correction. Issue #80 verification results are recorded in its issue comment and final PR; do not interpret the historical checks as validating the follow-up changes.
+
+## Issue #82: opt-in narrow profile and two-request measurements
+
+This follow-up implements an opt-in profile for small, low-priority Peon issues. The existing focus config remains byte-for-byte unchanged and is selected unless the freshly fetched issue has exactly `hermes-profile:narrow-coding`, `worker:peon`, `priority:low`, and `target:develop`. Unknown or multiple profile labels are rejected. The trusted supervisor passes only the validated internal profile enum to the adapter. The launcher maps that enum to one fixed config filename, hashes the trusted Windows file and WSL-visible source, rejects symlink resolution, and mounts the resolved file read-only at Hermes' config path. The source does not come from the issue worktree. No profile selection or config path is accepted from Peon command arguments.
+
+The pinned image's actual Hermes v0.22.2 loader and runtime schema builder were exercised offline with the candidate file mounted read-only. The inspection container used the exact image digest, rootless UID 1001, `--network=none`, `--read-only`, bounded `/tmp` tmpfs mounts, the image entrypoint, and no secrets. It made no network request and called no tool executor. It observed 19 current focus schemas and 10 narrow schemas. Hermes turn validation rejected synthetic `web_search`, `browser_exec`, and `delegate_task` calls; disabled browser and web capabilities were absent from Tool Search results. `process_manage` remained discoverable. This validates model-visible dispatch filtering for the pinned runtime; it does not prove model coding ability.
+
+The trusted local Qwen-compatible service was used only for synthetic `/tokenize` and `/apply-template` requests. The bounded bridge reported zero completion and zero metering-proxy requests. Individual exact schema token counts in the serialized schema representation are:
+
+| Narrow schema                | Tokens |
+| ---------------------------- | -----: |
+| `read_file`                  |    295 |
+| `search_files`               |    487 |
+| `write_file`                 |    233 |
+| `patch`                      |    201 |
+| `terminal`                   |    586 |
+| `skills_list`                |     60 |
+| `skill_view`                 |    195 |
+| `tool_search`                |    231 |
+| `tool_describe`              |    101 |
+| `tool_call`                  |    140 |
+| Aggregate serialized schemas |  2,531 |
+
+Aggregate counts are tokenized from the joined schema representation and need not equal the sum of separately tokenized schema rows. `process_manage` is deferred from the initial ten-schema list and has a 341-token schema when discovered. The current focus aggregate remains 7,817 tokens. Thus the measured aggregate schema reduction is 5,286 tokens. The full first-prompt reduction in this constructed request is 5,681 tokens; these schema and full-prompt deltas are distinct.
+
+Full synthetic requests included a fixed system message calibrated to 4,803 tokens, a synthetic small-component task, effective schemas, a retained first-turn assistant message, and tool-result messages. The broad two-request cases retain five synthetic discovery results. The bounded plan retains two targeted synthetic results and includes explicit inspection/edit/check instructions. Nothing is compacted or omitted. Prompt totals use the actual pinned template and tokenizer; content is synthetic and does not reconstruct a historical request.
+
+| Scenario                    | Request 1 prompt | Request 2 prompt | Prompt total |
+| --------------------------- | ---------------: | ---------------: | -----------: |
+| Existing focus              |           13,615 |           18,495 |       32,110 |
+| Scoped narrow               |            7,934 |           12,814 |       20,748 |
+| Scoped narrow, bounded plan |            7,955 |            9,271 |       17,226 |
+
+At per-request completion reserves of 100 / 200 / 500 / 1,000 / 1,500 tokens, projected cumulative totals are focus `32,310 / 32,510 / 33,110 / 34,110 / 35,110`, narrow `20,948 / 21,148 / 21,748 / 22,748 / 23,748`, and bounded narrow `17,426 / 17,626 / 18,226 / 19,226 / 20,226`. Focus exceeds the 32,000-token cap from prompts alone. Both narrow two-request scenarios remain below the 28,000 planning target, but only for these synthetic histories.
+
+Runtime projections use historical 73.38 prompt tokens/s and 4.92 completion tokens/s. The nominal case adds one 32.52-second residual observed in attempt 06 after token compute. The sensitivity case assumes 20% slower token rates and charges that residual twice (65.04 seconds). The residual is not a measured decomposition of startup/tool time, and neither rate predicts current performance.
+
+| Scenario       |             Reserve per request |                                   Nominal / sensitivity seconds |
+| -------------- | ------------------------------: | --------------------------------------------------------------: |
+| Focus          | 100 / 200 / 500 / 1,000 / 1,500 | 511 / 551 / 673 / 877 / 1,080 · 663 / 714 / 866 / 1,120 / 1,374 |
+| Narrow         | 100 / 200 / 500 / 1,000 / 1,500 |     356 / 397 / 519 / 722 / 925 · 469 / 520 / 673 / 927 / 1,181 |
+| Bounded narrow | 100 / 200 / 500 / 1,000 / 1,500 |     308 / 349 / 470 / 674 / 877 · 409 / 460 / 613 / 867 / 1,121 |
+
+The scope profile materially improves the two-request token projection. At a 500-token completion reserve, however, the bounded plan's sensitivity runtime slightly exceeds 600 seconds; at 1,000 tokens it exceeds 600 seconds in both runtime cases. A 200-token reserve leaves 140 seconds of sensitivity headroom, but it is unknown whether two such short responses can complete a useful coding task. **Recommendation: no-go for an immediate supervised coding trial under the unchanged limits.** The profile can be opt-in for eligible future work, but a specific two-request task plan needs an independently reviewed, useful output allowance with enough runtime margin. No model completion or coding trial was run, so coding quality remains unknown.
+
+This integration does not add the #80 output-compaction prototype. Repository instructions, issue metadata retrieval, skills, worker identity, network allowlists, credentials, filesystem scope, trusted checks, budgets, metering, cancellation, and integration controls are unchanged. The remaining concern is operational feasibility, not an expanded security boundary.

@@ -10,6 +10,7 @@ import {
 } from './run-restricted-worker.mjs';
 import { validateFreshIssue } from './update-issue.mjs';
 import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
+import { resolvePeonHermesProfile } from './peon-hermes-profiles.mjs';
 
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -41,6 +42,7 @@ export function validateLivePeonAssignment({
     throw new Error('The assigned issue must be open.');
   if (issueOwner(issue) !== 'worker:peon')
     throw new Error('The assigned issue must be owned by worker:peon.');
+  const hermesProfile = resolvePeonHermesProfile(issue);
   if (label(issue, 'status:') !== 'status:in-progress')
     throw new Error('The assigned issue must be in progress.');
   if (label(issue, 'target:') !== 'target:develop')
@@ -85,6 +87,7 @@ export function validateLivePeonAssignment({
     targetBranch: 'develop',
     branch: claim.branch,
     worktreePath: claim.worktreePath,
+    hermesProfile,
   };
 }
 
@@ -159,7 +162,10 @@ export async function runSupervisedPeonIssue({
     trustedRepositoryRoot: repositoryRoot,
   });
 
-  const worker = createWorkerAdapter({ image });
+  const worker = createWorkerAdapter({
+    image,
+    hermesProfile: task.hermesProfile,
+  });
   const mira = {
     id: 'mira',
     async run() {

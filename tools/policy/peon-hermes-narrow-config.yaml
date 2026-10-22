@@ -1,0 +1,19 @@
+model:
+  default: Qwen3.5-4B-Q4_K_M
+  provider: custom
+  base_url: http://peon-meter:18436/v1
+  context_length: 65536
+agent:
+  coding_context: focus
+  max_turns: 250
+  disabled_toolsets:
+    - browser
+    - clarify
+    - code_execution
+    - connections
+    - delegation
+    - memory
+    - session_search
+    - todo
+    - vision
+    - web

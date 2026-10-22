@@ -17,9 +17,14 @@ os.environ["HERMES_SINGLE_QUERY_SESSION"] = "1"
 
 
 config_path = Path("/tmp/.hermes/config.yaml")
-if config_path.exists() or config_path.is_symlink():
+active_profile_mount = os.environ.get("PEON_HERMES_ACTIVE_PROFILE") == "1"
+if active_profile_mount:
+    if not config_path.is_file() or config_path.is_symlink():
+        raise SystemExit("The active profile must be mounted as a regular read-only config file.")
+elif config_path.exists() or config_path.is_symlink():
     config_path.unlink()
-config_path.symlink_to("/workspace/peon-hermes-config.yaml")
+if not active_profile_mount:
+    config_path.symlink_to("/workspace/peon-hermes-config.yaml")
 
 from hermes_cli.config import load_config_readonly  # noqa: E402
 from agent.coding_context import resolve_runtime_mode  # noqa: E402
@@ -99,38 +104,71 @@ if agent_line is None or raw_config.count(agent_marker) != 1 or any(
     line and not line[0].isspace() for line in config_lines[agent_line + 1 :]
 ):
     raise SystemExit("Cannot safely derive a temporary profile from this config layout.")
-profile_yaml = raw_config.rstrip() + "\n  disabled_toolsets:\n"
-profile_yaml += "".join(f"    - {toolset}\n" for toolset in profile_disabled_toolsets)
-profile_path = Path("/tmp/peon-hermes-narrow-profile.yaml")
-profile_path.write_text(profile_yaml, encoding="utf-8")
-config_path.unlink()
-config_path.symlink_to(profile_path)
-profile_config = load_config_readonly()
-profile_mode = resolve_runtime_mode(
-    platform="cli",
-    cwd="/opt/hermes/hermes-agent",
-    config=profile_config,
-    model=(profile_config.get("model") or {}).get("default"),
-)
-profile_selection = profile_mode.toolset_selection(profile_config)
-if profile_selection != selection or not profile_mode.is_coding:
-    raise SystemExit("Narrow profile changed coding posture or enabled toolsets.")
-profile_disabled_toolsets = (profile_config.get("agent") or {}).get("disabled_toolsets") or []
-narrow_raw_schemas = cli_one_shot_schemas(
-    model_tools.get_tool_definitions(
-        enabled_toolsets=profile_selection,
-        disabled_toolsets=profile_disabled_toolsets,
-        quiet_mode=True,
-        skip_tool_search_assembly=True,
+direct_profile_source = os.environ.get("PEON_HERMES_PROFILE_SOURCE")
+if active_profile_mount:
+    profile_yaml = None
+elif direct_profile_source:
+    profile_source = Path(direct_profile_source)
+    if profile_source != Path("/workspace/peon-hermes-narrow-config.yaml"):
+        raise SystemExit("Direct profile source must use the fixed mounted path.")
+    profile_yaml = profile_source.read_text(encoding="utf-8")
+else:
+    profile_yaml = raw_config.rstrip() + "\n  disabled_toolsets:\n"
+    profile_yaml += "".join(f"    - {toolset}\n" for toolset in profile_disabled_toolsets)
+if active_profile_mount:
+    profile_config = config
+    profile_mode = mode
+    profile_selection = selection
+    profile_disabled_toolsets = disabled
+else:
+    profile_path = Path("/tmp/peon-hermes-narrow-profile.yaml")
+    profile_path.write_text(profile_yaml, encoding="utf-8")
+    config_path.unlink()
+    config_path.symlink_to(profile_path)
+    profile_config = load_config_readonly()
+    profile_mode = resolve_runtime_mode(
+        platform="cli",
+        cwd="/opt/hermes/hermes-agent",
+        config=profile_config,
+        model=(profile_config.get("model") or {}).get("default"),
     )
-)
-narrow_schemas = cli_one_shot_schemas(
-    model_tools.get_tool_definitions(
-        enabled_toolsets=profile_selection,
-        disabled_toolsets=profile_disabled_toolsets,
-        quiet_mode=True,
+    profile_selection = profile_mode.toolset_selection(profile_config)
+    if profile_selection != selection or not profile_mode.is_coding:
+        raise SystemExit("Narrow profile changed coding posture or enabled toolsets.")
+    profile_disabled_toolsets = (profile_config.get("agent") or {}).get("disabled_toolsets") or []
+expected_disabled_toolsets = {
+    "browser",
+    "clarify",
+    "code_execution",
+    "connections",
+    "delegation",
+    "memory",
+    "session_search",
+    "todo",
+    "vision",
+    "web",
+}
+if (direct_profile_source or active_profile_mount) and set(profile_disabled_toolsets) != expected_disabled_toolsets:
+    raise SystemExit("Mounted narrow profile does not match the reviewed disabled-toolset allowlist.")
+if active_profile_mount:
+    narrow_raw_schemas = raw_schemas
+    narrow_schemas = schemas
+else:
+    narrow_raw_schemas = cli_one_shot_schemas(
+        model_tools.get_tool_definitions(
+            enabled_toolsets=profile_selection,
+            disabled_toolsets=profile_disabled_toolsets,
+            quiet_mode=True,
+            skip_tool_search_assembly=True,
+        )
     )
-)
+    narrow_schemas = cli_one_shot_schemas(
+        model_tools.get_tool_definitions(
+            enabled_toolsets=profile_selection,
+            disabled_toolsets=profile_disabled_toolsets,
+            quiet_mode=True,
+        )
+    )
 
 
 def summarize(definitions: list[dict]) -> dict:
@@ -161,13 +199,13 @@ narrow_raw_names = {
 }
 
 
-def rejected_by_turn_validation(disabled_name: str) -> bool:
-    """Exercise pinned validation with a synthetic model tool call; execute no tool."""
+def synthetic_turn_validation(tool_name: str) -> tuple[object, list[dict]]:
+    """Validate a synthetic tool call in Hermes without dispatching its executor."""
     from agent.turn_tool_validation import validate_tool_calls
 
     call = SimpleNamespace(
         id="synthetic-disabled-call",
-        function=SimpleNamespace(name=disabled_name, arguments="{}"),
+        function=SimpleNamespace(name=tool_name, arguments="{}"),
     )
     assistant = SimpleNamespace(tool_calls=[call], content="")
     messages: list[dict] = []
@@ -210,10 +248,24 @@ def rejected_by_turn_validation(disabled_name: str) -> bool:
         api_call_count=1,
         effective_task_id="synthetic-profile-probe",
     )
+    return verdict, messages
+
+
+def rejected_by_turn_validation(disabled_name: str) -> bool:
+    verdict, messages = synthetic_turn_validation(disabled_name)
     return (
         verdict.action == "continue"
         and not verdict.mixed_invalid_batch
         and any(message.get("role") == "tool" for message in messages)
+    )
+
+
+def accepted_by_turn_validation(enabled_name: str) -> bool:
+    verdict, messages = synthetic_turn_validation(enabled_name)
+    return (
+        verdict.action != "continue"
+        and not verdict.mixed_invalid_batch
+        and not any(message.get("role") == "tool" for message in messages)
     )
 
 
@@ -232,13 +284,41 @@ def discoverable_tools(query: str) -> set[str]:
 
 discovered_process_tools = discoverable_tools("process manage")
 discovered_browser_tools = discoverable_tools("browser vault")
-turn_validation_rejects_disabled_web_search = rejected_by_turn_validation("web_search")
+discovered_web_tools = discoverable_tools("web search")
+forbidden_direct_names = {
+    "browser_exec",
+    "browser_vault",
+    "clarify",
+    "delegate_task",
+    "execute_code",
+    "manage_connections",
+    "memory",
+    "session_search",
+    "todo_list",
+    "vision_analyze",
+    "web_extract",
+    "web_search",
+}
+forbidden_discoverable_names = forbidden_direct_names | {"browser_vault"}
+turn_validation_rejects_disabled = {
+    name: rejected_by_turn_validation(name)
+    for name in ("web_search", "browser_exec", "delegate_task")
+}
+turn_validation_accepts_enabled = {
+    name: accepted_by_turn_validation(name)
+    for name in ("read_file", "search_files", "write_file", "patch", "terminal", "skills_list", "skill_view")
+}
+forbidden_schema_names = forbidden_direct_names & narrow_raw_names
+if forbidden_schema_names:
+    raise SystemExit("Disabled tool schema remained directly reachable.")
 if "process_manage" not in discovered_process_tools:
     raise SystemExit("Required process capability is not discoverable in the narrow profile.")
-if "browser_vault" in discovered_browser_tools:
-    raise SystemExit("Disabled browser_vault unexpectedly remained discoverable.")
-if not turn_validation_rejects_disabled_web_search:
-    raise SystemExit("Pinned turn validation did not reject disabled web_search.")
+if forbidden_discoverable_names & (discovered_browser_tools | discovered_web_tools):
+    raise SystemExit("Disabled capability remained Tool Search-discoverable.")
+if not all(turn_validation_rejects_disabled.values()):
+    raise SystemExit("Pinned turn validation did not reject all disabled tool calls.")
+if not all(turn_validation_accepts_enabled.values()):
+    raise SystemExit("Pinned turn validation rejected a required task tool.")
 
 required_direct = {
     "read_file",
@@ -276,7 +356,10 @@ result = {
         "requiredDirectCapabilitiesAvailable": sorted(required_direct),
         "processManageToolSearchDiscoverable": "process_manage" in discovered_process_tools,
         "browserVaultToolSearchDiscoverable": "browser_vault" in discovered_browser_tools,
-        "disabledWebSearchRejectedByTurnValidation": turn_validation_rejects_disabled_web_search,
+        "disabledToolSearchNames": sorted(forbidden_discoverable_names & (discovered_browser_tools | discovered_web_tools)),
+        "disabledDirectSchemasAbsent": sorted(forbidden_direct_names - narrow_raw_names),
+        "disabledCallsRejectedByTurnValidation": turn_validation_rejects_disabled,
+        "requiredCallsAcceptedByTurnValidation": turn_validation_accepts_enabled,
         "toolExecutorsStarted": False,
         "networkRequests": 0,
     },

@@ -76,6 +76,7 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
     targetBranch: 'develop',
     branch: 'issue/50-avatar-skeleton',
     worktreePath: join(root, 'issue-50'),
+    hermesProfile: 'focus',
   });
   assert.throws(
     () =>
@@ -211,12 +212,13 @@ test('wires one live attempt to the deterministic supervisor and isolated verifi
       sourceSha256: 'a',
       imageSha256: 'a',
     }),
-    createWorkerAdapter: ({ image: selectedImage }) => ({
+    createWorkerAdapter: ({ image: selectedImage, hermesProfile }) => ({
       id: 'peon',
       run: async () => ({ status: 'completed' }),
       usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
       cancel: async () => true,
       selectedImage,
+      hermesProfile,
     }),
     runVerification: async (input) => {
       verification = input;
@@ -248,11 +250,83 @@ test('wires one live attempt to the deterministic supervisor and isolated verifi
   assert.equal(options.limits.maxModelTokensPerWorker, 32_000);
   assert.equal(options.authorizeHandoff, undefined);
   assert.equal(options.workers.peon.selectedImage, image);
+  assert.equal(options.task.hermesProfile, 'focus');
+  assert.equal(options.workers.peon.hermesProfile, 'focus');
   assert.equal(options.workers.mira.id, 'mira');
   assert.equal(verification.image, image);
   assert.deepEqual(verification.command, ['corepack', 'pnpm', 'test']);
   assert.equal(canceled, true);
   assert.equal(result.checks[0].passed, false);
+});
+
+test('opts into the narrow profile only from eligible live issue labels', async () => {
+  let workerProfile;
+  let taskProfile;
+  const result = await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot: root,
+    handoffPath,
+    verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+    loadAssignment: async () => ({
+      ...issue,
+      labels: [...issue.labels, 'hermes-profile:narrow-coding'],
+    }),
+    readClaim: async () => claim(),
+    inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
+    createWorkerAdapter: ({ hermesProfile }) => {
+      workerProfile = hermesProfile;
+      return {
+        id: 'peon',
+        run: async () => ({ status: 'completed' }),
+        usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
+        cancel: async () => true,
+      };
+    },
+    runVerification: async () => ({ exitCode: 0 }),
+    runSupervisor: async (input) => {
+      taskProfile = input.task.hermesProfile;
+      return { status: 'complete' };
+    },
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(workerProfile, 'narrow-coding');
+  assert.equal(taskProfile, 'narrow-coding');
+});
+
+test('rejects ineligible narrow opt-in before worker adapter creation', async () => {
+  let workerCreated = false;
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => ({
+        ...issue,
+        labels: [
+          ...issue.labels.filter((entry) => entry !== 'priority:low'),
+          'priority:high',
+          'hermes-profile:narrow-coding',
+        ],
+      }),
+      readClaim: async () => claim(),
+      inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+    }),
+    /requires a low-priority Peon issue targeting develop/,
+  );
+  assert.equal(workerCreated, false);
 });
 
 test('requires named trusted verification commands and an absolute handoff path', async () => {

@@ -1,4 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import { defaultLimits } from './supervise-worker.mjs';
 import {
@@ -11,6 +13,12 @@ import {
   createRootlessContainerOperations,
   stopAndConfirmContainer,
 } from './worker-container-lifecycle.mjs';
+import {
+  assertMatchingHermesConfigDigest,
+  defaultPeonHermesProfile,
+  peonHermesConfigFilename,
+  validatePeonHermesConfigSource,
+} from './peon-hermes-profiles.mjs';
 
 export { buildWorkerImageInspectionArgs };
 import path from 'node:path';
@@ -197,6 +205,27 @@ function issueWorkspace(issueNumber) {
   return path.posix.join(workspaceRoot, `issue-${issueNumber}`);
 }
 
+function trustedHermesConfigSource(profile) {
+  const filename = peonHermesConfigFilename(profile);
+  const windowsSource = path.join(repositoryRoot, 'tools', 'policy', filename);
+  const trustedDigest = createHash('sha256')
+    .update(readFileSync(windowsSource))
+    .digest('hex');
+  const source = validatePeonHermesConfigSource(
+    profile,
+    wslWorker('wslpath', '-a', '-u', windowsSource),
+  );
+  if (wslWorker('realpath', '-e', source) !== source)
+    throw new Error(
+      'Trusted Hermes config source must not resolve through a symlink.',
+    );
+  const inspectedDigest = wslWorker('sha256sum', '--', source)
+    .trim()
+    .split(/\s+/)[0];
+  assertMatchingHermesConfigDigest(trustedDigest, inspectedDigest);
+  return source;
+}
+
 export function buildPodmanArgs({
   issueNumber,
   image,
@@ -205,6 +234,8 @@ export function buildPodmanArgs({
   command,
   protectedPaths,
   attemptNumber = 1,
+  hermesProfile = defaultPeonHermesProfile,
+  hermesConfigSource,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
@@ -240,6 +271,10 @@ export function buildPodmanArgs({
     )
   )
     throw new Error('Trusted protected paths are required for worker mounts.');
+  const trustedConfigSource = validatePeonHermesConfigSource(
+    hermesProfile,
+    hermesConfigSource,
+  );
   return [
     'run',
     '--rm',
@@ -260,7 +295,7 @@ export function buildPodmanArgs({
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
-    `--mount=type=bind,src=${path.posix.join(workspace, 'tools/policy/peon-hermes-config.yaml')},dst=/tmp/.hermes/config.yaml,ro`,
+    `--mount=type=bind,src=${trustedConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
     ...protectedPaths.map(
       (entry) =>
         `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
@@ -938,8 +973,10 @@ export async function runRestrictedWorker({
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
   lifecycle = {},
   onUsageReady = null,
+  hermesProfile = defaultPeonHermesProfile,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
+  peonHermesConfigFilename(hermesProfile);
   const expectedBranchPrefix = `issue/${number}-`;
   const { workerUid, workerGid } = validateWorkspace(
     number,
@@ -947,6 +984,7 @@ export async function runRestrictedWorker({
   );
   const protectedPaths = loadProtectedPaths();
   validateProtectedMountSources(issueWorkspace(number), protectedPaths);
+  const hermesConfigSource = trustedHermesConfigSource(hermesProfile);
   const imagePresent = spawnSync(
     'wsl.exe',
     [
@@ -1033,6 +1071,8 @@ export async function runRestrictedWorker({
       command,
       protectedPaths,
       attemptNumber: attempt,
+      hermesProfile,
+      hermesConfigSource,
     });
     result = await new Promise((resolve, reject) => {
       const child = spawn(
@@ -1286,6 +1326,7 @@ export function buildHermesTaskCommand(task, limits = defaultLimits) {
 
 export function createPeonWorkerAdapter({
   image,
+  hermesProfile = defaultPeonHermesProfile,
   commandForTask = buildHermesTaskCommand,
   runAttempt = runRestrictedWorker,
   containerOperations = createRootlessContainerOperations(),
@@ -1293,11 +1334,16 @@ export function createPeonWorkerAdapter({
   confirmCancellation = confirmAttemptCleanup,
   readUsage = readMeterUsage,
 }) {
+  peonHermesConfigFilename(hermesProfile);
   let active = null;
   let lastAttempt = null;
   return {
     id: 'peon',
     async run({ task, attemptNumber, limits, budget }) {
+      if ((task.hermesProfile ?? defaultPeonHermesProfile) !== hermesProfile)
+        throw new Error(
+          'Worker adapter profile differs from the validated issue.',
+        );
       const currentAttempt = positiveInteger(attemptNumber, 'attemptNumber');
       const current = {
         meterName: `stellar-peon-meter-${task.issueNumber}-${currentAttempt}`,
@@ -1314,6 +1360,7 @@ export function createPeonWorkerAdapter({
         runAttempt({
           issueNumber: task.issueNumber,
           image,
+          hermesProfile,
           command: commandForTask(task, limits),
           limits,
           initialUsage: budget.snapshot,

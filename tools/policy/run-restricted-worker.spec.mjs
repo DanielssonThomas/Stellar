@@ -16,8 +16,14 @@ import {
   redactWorkerDiagnostics,
   waitForMeter,
 } from './run-restricted-worker.mjs';
+import {
+  defaultPeonHermesProfile,
+  peonHermesConfigFilename,
+} from './peon-hermes-profiles.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
+const trustedFocusConfig =
+  '/mnt/d/ai-repositories/stellar-issue-82/tools/policy/peon-hermes-config.yaml';
 const protectedPaths = [
   '.agents/skills',
   '.github/CODEOWNERS',
@@ -43,6 +49,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     gid: 1001,
     protectedPaths,
     command: ['hermes', '--issue', '21'],
+    hermesConfigSource: trustedFocusConfig,
   });
 
   assert.deepEqual(args, [
@@ -65,7 +72,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21,dst=/workspace,rw',
-    '--mount=type=bind,src=/home/peon/workspaces/issue-21/tools/policy/peon-hermes-config.yaml,dst=/tmp/.hermes/config.yaml,ro',
+    `--mount=type=bind,src=${trustedFocusConfig},dst=/tmp/.hermes/config.yaml,ro`,
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.agents/skills,dst=/workspace/.agents/skills,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/CODEOWNERS,dst=/workspace/.github/CODEOWNERS,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/workflows,dst=/workspace/.github/workflows,ro',
@@ -110,12 +117,57 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     args.some((argument) => argument.includes('podman.sock')),
     false,
   );
+  assert.ok(
+    args.includes(
+      `--mount=type=bind,src=${trustedFocusConfig},dst=/tmp/.hermes/config.yaml,ro`,
+    ),
+  );
   assert.equal(
-    args.some((argument) => argument.includes('/mnt/')),
+    args.some((argument) =>
+      argument.includes('/home/peon/workspaces/issue-21/tools/policy/'),
+    ),
     false,
   );
   assert.equal(args.includes('--network=stellar-peon-model'), false);
   assert.equal(args.includes('--network=stellar-peon-egress'), false);
+});
+
+test('changes only the read-only Hermes config source for an opted-in profile', () => {
+  const argsFor = (hermesProfile, hermesConfigSource) =>
+    buildPodmanArgs({
+      issueNumber: 50,
+      image,
+      uid: 1001,
+      gid: 1001,
+      protectedPaths,
+      command: ['hermes', 'chat'],
+      hermesProfile,
+      hermesConfigSource,
+    });
+  const focus = argsFor('focus', trustedFocusConfig);
+  const narrowConfig = trustedFocusConfig.replace(
+    'peon-hermes-config.yaml',
+    'peon-hermes-narrow-config.yaml',
+  );
+  const narrow = argsFor('narrow-coding', narrowConfig);
+  const withoutConfigMount = (args) =>
+    args.filter(
+      (argument) => !argument.includes('dst=/tmp/.hermes/config.yaml'),
+    );
+
+  assert.deepEqual(withoutConfigMount(narrow), withoutConfigMount(focus));
+  assert.ok(
+    narrow.includes(
+      `--mount=type=bind,src=${narrowConfig},dst=/tmp/.hermes/config.yaml,ro`,
+    ),
+  );
+  assert.ok(narrow.includes('--read-only'));
+  assert.ok(narrow.includes('--network=stellar-peon-worker'));
+  assert.equal(narrow.includes('--privileged'), false);
+  assert.equal(
+    narrow.some((argument) => argument.startsWith('--secret=')),
+    true,
+  );
 });
 
 test('builds a separate hardened metering proxy on the worker, model, and egress networks', () => {
@@ -346,6 +398,7 @@ test('rejects image tags without an immutable digest', () => {
         gid: 1001,
         protectedPaths,
         command: ['hermes'],
+        hermesConfigSource: trustedFocusConfig,
       }),
     /pinned by a lowercase sha256 digest/,
   );
@@ -358,6 +411,7 @@ test('rejects image tags without an immutable digest', () => {
         gid: 1001,
         protectedPaths,
         command: ['hermes'],
+        hermesConfigSource: trustedFocusConfig,
       }),
     /ghcr\.io\/stellar-ai-corp\/hermes-worker/,
   );
@@ -424,6 +478,41 @@ test('memoizes repeated worker cancellation for one exact attempt', async () => 
   await run;
   assert.equal(await adapter.cancel(), true);
   assert.equal(cancellationCalls, 1);
+});
+
+test('passes only the validated profile through the adapter and fails mismatches closed', async () => {
+  let selectedProfile;
+  const adapter = createPeonWorkerAdapter({
+    image,
+    hermesProfile: 'narrow-coding',
+    commandForTask: () => ['hermes', 'chat'],
+    runAttempt: async (input) => {
+      selectedProfile = input.hermesProfile;
+      return { exitCode: 0, usage: { modelTokens: 0, toolCalls: 0 } };
+    },
+  });
+  await assert.rejects(
+    adapter.run({
+      task: { issueNumber: 50 },
+      attemptNumber: 1,
+      limits: { maxRuntimeMsPerWorker: 600_000 },
+      budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
+    }),
+    /profile differs from the validated issue/,
+  );
+  const run = adapter.run({
+    task: { issueNumber: 50, hermesProfile: 'narrow-coding' },
+    attemptNumber: 2,
+    limits: { maxRuntimeMsPerWorker: 600_000 },
+    budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
+  });
+  assert.equal((await run).status, 'completed');
+  assert.equal(selectedProfile, 'narrow-coding');
+  assert.equal(defaultPeonHermesProfile, 'focus');
+  assert.equal(
+    peonHermesConfigFilename('narrow-coding'),
+    'peon-hermes-narrow-config.yaml',
+  );
 });
 
 test('adapter publishes usage readiness only after launcher confirmation', async () => {
@@ -506,6 +595,7 @@ test('rejects invalid issue identifiers and empty commands', () => {
         gid: 1001,
         protectedPaths,
         command: ['hermes'],
+        hermesConfigSource: trustedFocusConfig,
       }),
     /issueNumber must be a positive integer/,
   );
@@ -517,6 +607,8 @@ test('rejects invalid issue identifiers and empty commands', () => {
         uid: 1001,
         gid: 1001,
         command: [],
+        protectedPaths,
+        hermesConfigSource: trustedFocusConfig,
       }),
     /nonempty command argument list/,
   );
@@ -559,6 +651,7 @@ test('fails closed when trusted protected paths are missing or unsafe', () => {
     uid: 1001,
     gid: 1001,
     command: ['hermes'],
+    hermesConfigSource: trustedFocusConfig,
   };
   assert.throws(() => buildPodmanArgs(base), /Trusted protected paths/);
   assert.throws(
@@ -613,6 +706,7 @@ test('passes the complete Hermes executable command through the pinned image ent
     gid: 1001,
     protectedPaths,
     command,
+    hermesConfigSource: trustedFocusConfig,
   });
   const imagePosition = args.indexOf(image);
   const containerfile = readFileSync(
