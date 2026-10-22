@@ -556,6 +556,23 @@ async function confirmWorkerStopped(worker, reason) {
   }
 }
 
+function getPrimaryStopReason(outcome) {
+  switch (outcome.type) {
+    case 'timeout':
+      return 'runtime-budget-exhausted';
+    case 'interrupted':
+      return 'interrupted';
+    case 'budget-exceeded':
+      return ['model-tokens', 'tool-calls'].includes(outcome.resource)
+        ? `${outcome.resource}-budget-exhausted`
+        : 'unknown';
+    case 'usage-accounting-failed':
+      return 'usage-accounting-failed';
+    default:
+      return 'unknown';
+  }
+}
+
 function appendFailure(handoff, workerId, failure) {
   handoff.failures.push({ workerId, at: new Date().toISOString(), ...failure });
 }
@@ -804,6 +821,7 @@ export async function superviseWorker({
         ].includes(outcome.type) &&
         !outcome.workerStopped
       ) {
+        const primaryStopReason = getPrimaryStopReason(outcome);
         const failure = failureDetails({
           code: 'CancellationUnconfirmed',
           message:
@@ -812,11 +830,13 @@ export async function superviseWorker({
             ? { diagnostic: outcome.cancellationDiagnostic }
             : {}),
         });
+        attempt.primaryStopReason = primaryStopReason;
         attempt.status = 'cancellation-unconfirmed';
         attempt.failure = failure;
         handoff.attempts.push(attempt);
         appendFailure(handoff, workerId, failure);
         handoff.currentWorkerId = workerId;
+        handoff.lastStopReason = primaryStopReason;
         handoff.safeToResume = false;
         await save('paused');
         return { status: 'paused', handoff, safeToResume: false };
