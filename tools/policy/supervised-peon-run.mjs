@@ -12,6 +12,8 @@ import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
 
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
+export const trustedPeonWorkerImage =
+  'ghcr.io/stellar-ai-corp/hermes-worker@sha256:faf69a7713ae098bce64c75f3d38d6351c38f9733ea98c5b70bfb17f33381d44';
 
 function label(issue, prefix) {
   return issue.labels
@@ -29,7 +31,7 @@ export function validateLivePeonAssignment({
   issue,
   claim,
   sessionId,
-  image,
+  image = trustedPeonWorkerImage,
   now = Date.now(),
 }) {
   if (!Number.isSafeInteger(issue?.number) || issue.number < 1)
@@ -57,6 +59,8 @@ export function validateLivePeonAssignment({
     throw new Error('All issue dependencies must be closed with status:done.');
   if (!imagePattern.test(image ?? ''))
     throw new Error('Peon requires a pinned worker image digest.');
+  if (image !== trustedPeonWorkerImage)
+    throw new Error('Peon requires the trusted worker image digest.');
   if (!sessionId || typeof sessionId !== 'string')
     throw new Error('The active supervisor session ID is required.');
   if (
@@ -108,7 +112,7 @@ function validateVerificationCommands(commands) {
 export async function runSupervisedPeonIssue({
   issueNumber,
   sessionId,
-  image,
+  image = trustedPeonWorkerImage,
   repositoryRoot,
   handoffPath,
   verificationCommands,
