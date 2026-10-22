@@ -6,6 +6,7 @@ import {
   createPeonWorkerAdapter,
   inspectRestrictedWorkspace,
   runRestrictedVerification,
+  verifyPinnedWorkerImageCompatibility,
 } from './run-restricted-worker.mjs';
 import { validateFreshIssue } from './update-issue.mjs';
 import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
@@ -120,6 +121,7 @@ export async function runSupervisedPeonIssue({
   loadAssignment = loadIssue,
   readClaim = inspectClaim,
   inspectWorktree = inspectRestrictedWorkspace,
+  verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
   createWorkerAdapter = createPeonWorkerAdapter,
   runVerification = runRestrictedVerification,
   cancelVerification = cancelRestrictedVerification,
@@ -151,6 +153,11 @@ export async function runSupervisedPeonIssue({
   const initialWorkspace = await inspectWorktree(number, task.branch);
   if (!initialWorkspace || typeof initialWorkspace.fingerprint !== 'string')
     throw new Error('Trusted restricted workspace inspection failed.');
+
+  await verifyImageCompatibility({
+    image,
+    trustedRepositoryRoot: repositoryRoot,
+  });
 
   const worker = createWorkerAdapter({ image });
   const mira = {

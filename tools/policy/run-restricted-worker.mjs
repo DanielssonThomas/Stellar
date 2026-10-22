@@ -1,6 +1,12 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import { defaultLimits } from './supervise-worker.mjs';
+import {
+  buildWorkerImageInspectionArgs,
+  verifyWorkerImageCompatibility,
+} from './worker-image-compatibility.mjs';
+
+export { buildWorkerImageInspectionArgs };
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -19,6 +25,48 @@ const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 const diagnosticStreamLimitBytes = 8 * 1024;
+
+export function inspectPinnedWorkerImageProxy(image) {
+  const result = spawnSync(
+    'wsl.exe',
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      'podman',
+      ...buildWorkerImageInspectionArgs(image),
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 30_000,
+      maxBuffer: 16 * 1024,
+    },
+  );
+  if (result.error || result.status !== 0)
+    return { status: result.status ?? 1, stdout: '' };
+  return { status: 0, stdout: result.stdout };
+}
+
+export function verifyPinnedWorkerImageCompatibility({
+  image,
+  trustedRepositoryRoot = repositoryRoot,
+  inspectImage = inspectPinnedWorkerImageProxy,
+  readTrustedSource,
+} = {}) {
+  return verifyWorkerImageCompatibility({
+    image,
+    sourcePath: path.join(
+      trustedRepositoryRoot,
+      'tools/policy/peon-metering-proxy.mjs',
+    ),
+    inspectImage,
+    ...(readTrustedSource ? { readTrustedSource } : {}),
+  });
+}
 
 export function redactWorkerDiagnostics(value) {
   return (
@@ -596,6 +644,7 @@ export async function runRestrictedWorker({
   limits = defaultLimits,
   initialUsage = {},
   attemptNumber = 1,
+  verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const expectedBranchPrefix = `issue/${number}-`;
@@ -605,25 +654,6 @@ export async function runRestrictedWorker({
   );
   const protectedPaths = loadProtectedPaths();
   validateProtectedMountSources(issueWorkspace(number), protectedPaths);
-  const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
-  if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
-  const modelNetworks = JSON.parse(
-    wslWorker('podman', 'network', 'inspect', modelNetwork),
-  );
-  if (modelNetworks.length !== 1 || modelNetworks[0].internal !== true)
-    throw new Error('Peon model network must exist and be internal-only.');
-  const workerNetworks = JSON.parse(
-    wslWorker('podman', 'network', 'inspect', workerNetwork),
-  );
-  if (workerNetworks.length !== 1 || workerNetworks[0].internal !== true)
-    throw new Error('Peon worker network must exist and be internal-only.');
-  const egressNetworks = JSON.parse(
-    wslWorker('podman', 'network', 'inspect', egressNetwork),
-  );
-  if (egressNetworks.length !== 1 || egressNetworks[0].internal !== false)
-    throw new Error(
-      'Peon egress network must exist and allow outbound access.',
-    );
   const imagePresent = spawnSync(
     'wsl.exe',
     [
@@ -643,6 +673,27 @@ export async function runRestrictedWorker({
   if (imagePresent.status !== 0)
     throw new Error(
       "Pinned worker image is not present in peon's local Podman store.",
+    );
+  await verifyImageCompatibility({ image });
+
+  const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
+  if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
+  const modelNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', modelNetwork),
+  );
+  if (modelNetworks.length !== 1 || modelNetworks[0].internal !== true)
+    throw new Error('Peon model network must exist and be internal-only.');
+  const workerNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', workerNetwork),
+  );
+  if (workerNetworks.length !== 1 || workerNetworks[0].internal !== true)
+    throw new Error('Peon worker network must exist and be internal-only.');
+  const egressNetworks = JSON.parse(
+    wslWorker('podman', 'network', 'inspect', egressNetwork),
+  );
+  if (egressNetworks.length !== 1 || egressNetworks[0].internal !== false)
+    throw new Error(
+      'Peon egress network must exist and allow outbound access.',
     );
 
   const attempt = positiveInteger(attemptNumber, 'attemptNumber');
