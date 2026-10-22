@@ -11,42 +11,64 @@ export function compactToolResult({
   stderr = '',
   exitCode,
   artifactId,
+  artifactStore,
+  scope,
 }) {
   if (typeof stdout !== 'string' || typeof stderr !== 'string')
     throw new TypeError('Tool output must be text.');
-  if (!/^[A-Za-z0-9._/-]+$/.test(artifactId ?? '') || artifactId.includes('..'))
-    throw new TypeError('A safe artifact identifier is required.');
 
   if (nonCompactKinds.has(kind))
     return { stdout, stderr, exitCode, omissions: [] };
 
   const lines = stdout.split('\n');
-  const output = [];
-  const omissions = [];
+  const runs = [];
   for (let index = 0; index < lines.length; ) {
     let end = index + 1;
     while (end < lines.length && lines[end] === lines[index]) end += 1;
-    const count = end - index;
-    if (count >= 3 && lines[index].trim()) {
-      const firstLine = index + 1;
-      const lastLine = end;
-      output.push(lines[index]);
-      output.push(
-        `[coalesced=${count - 1} exact repeats; retrieve ${artifactId}:${firstLine}-${lastLine}]`,
-      );
-      omissions.push({
-        artifactId,
-        firstLine,
-        lastLine,
-        repeatCount: count,
-      });
-    } else {
-      output.push(...lines.slice(index, end));
-    }
+    if (end - index >= 3 && lines[index].trim())
+      runs.push({ index, end, firstLine: index + 1, lastLine: end });
     index = end;
   }
+  if (runs.length && artifactStore) {
+    if (typeof scope !== 'string')
+      throw new TypeError('An attempt scope is required for artifact storage.');
+    artifactId = artifactStore.put(scope, stdout);
+  }
+  if (
+    runs.length &&
+    (!/^[A-Za-z0-9._/-]+$/.test(artifactId ?? '') || artifactId.includes('..'))
+  )
+    throw new TypeError('A safe artifact identifier is required.');
 
+  const output = [];
+  const omissions = [];
+  let cursor = 0;
+  for (const run of runs) {
+    output.push(...lines.slice(cursor, run.index));
+    output.push(lines[run.index]);
+    output.push(
+      `[coalesced=${run.end - run.index - 1} exact repeats; retrieve ${artifactId}:${run.firstLine}-${run.lastLine}]`,
+    );
+    omissions.push({
+      artifactId,
+      firstLine: run.firstLine,
+      lastLine: run.lastLine,
+      repeatCount: run.end - run.index,
+    });
+    cursor = run.end;
+  }
+  output.push(...lines.slice(cursor));
   return { stdout: output.join('\n'), stderr, exitCode, omissions };
+}
+
+/** Retrieve the precise omitted line range from the task-scoped trusted store. */
+export function retrieveCompactedRange(artifactStore, scope, omission) {
+  if (!artifactStore || typeof artifactStore.retrieve !== 'function')
+    throw new TypeError('A trusted artifact store is required.');
+  return artifactStore.retrieve(scope, omission.artifactId, {
+    firstLine: omission.firstLine,
+    lastLine: omission.lastLine,
+  });
 }
 
 export function retrieveOriginalLines(text, { firstLine, lastLine }) {

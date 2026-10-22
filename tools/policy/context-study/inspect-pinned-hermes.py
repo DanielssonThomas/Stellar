@@ -9,7 +9,11 @@ Run inside the immutable worker image with the production Peon config mounted at
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from types import SimpleNamespace
+
+os.environ["HERMES_SINGLE_QUERY_SESSION"] = "1"
 
 
 config_path = Path("/tmp/.hermes/config.yaml")
@@ -82,9 +86,39 @@ profile_disabled_toolsets = sorted(
         ]
     )
 )
+raw_config = Path("/workspace/peon-hermes-config.yaml").read_text(encoding="utf-8")
+if "disabled_toolsets:" in raw_config:
+    raise SystemExit("The mounted production config already declares disabled_toolsets.")
+agent_marker = "agent:\n"
+config_lines = raw_config.splitlines()
+agent_line = next(
+    (index for index, line in enumerate(config_lines) if line == "agent:"),
+    None,
+)
+if agent_line is None or raw_config.count(agent_marker) != 1 or any(
+    line and not line[0].isspace() for line in config_lines[agent_line + 1 :]
+):
+    raise SystemExit("Cannot safely derive a temporary profile from this config layout.")
+profile_yaml = raw_config.rstrip() + "\n  disabled_toolsets:\n"
+profile_yaml += "".join(f"    - {toolset}\n" for toolset in profile_disabled_toolsets)
+profile_path = Path("/tmp/peon-hermes-narrow-profile.yaml")
+profile_path.write_text(profile_yaml, encoding="utf-8")
+config_path.unlink()
+config_path.symlink_to(profile_path)
+profile_config = load_config_readonly()
+profile_mode = resolve_runtime_mode(
+    platform="cli",
+    cwd="/opt/hermes/hermes-agent",
+    config=profile_config,
+    model=(profile_config.get("model") or {}).get("default"),
+)
+profile_selection = profile_mode.toolset_selection(profile_config)
+if profile_selection != selection or not profile_mode.is_coding:
+    raise SystemExit("Narrow profile changed coding posture or enabled toolsets.")
+profile_disabled_toolsets = (profile_config.get("agent") or {}).get("disabled_toolsets") or []
 narrow_raw_schemas = cli_one_shot_schemas(
     model_tools.get_tool_definitions(
-        enabled_toolsets=selection,
+        enabled_toolsets=profile_selection,
         disabled_toolsets=profile_disabled_toolsets,
         quiet_mode=True,
         skip_tool_search_assembly=True,
@@ -92,7 +126,7 @@ narrow_raw_schemas = cli_one_shot_schemas(
 )
 narrow_schemas = cli_one_shot_schemas(
     model_tools.get_tool_definitions(
-        enabled_toolsets=selection,
+        enabled_toolsets=profile_selection,
         disabled_toolsets=profile_disabled_toolsets,
         quiet_mode=True,
     )
@@ -126,6 +160,98 @@ narrow_raw_names = {
     schema["function"]["name"] for schema in narrow_raw_schemas
 }
 
+
+def rejected_by_turn_validation(disabled_name: str) -> bool:
+    """Exercise pinned validation with a synthetic model tool call; execute no tool."""
+    from agent.turn_tool_validation import validate_tool_calls
+
+    call = SimpleNamespace(
+        id="synthetic-disabled-call",
+        function=SimpleNamespace(name=disabled_name, arguments="{}"),
+    )
+    assistant = SimpleNamespace(tool_calls=[call], content="")
+    messages: list[dict] = []
+    agent = SimpleNamespace(
+        valid_tool_names=narrow_names_actual,
+        _invalid_tool_retries=0,
+        _invalid_json_retries=0,
+        _uniquify_tool_call_ids=lambda calls, taken: None,
+        _repair_tool_call=lambda name: None,
+        _buffer_vprint=lambda *args, **kwargs: None,
+        _vprint=lambda *args, **kwargs: None,
+        _build_assistant_message=lambda message, finish: {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments,
+                    },
+                }
+                for tool_call in message.tool_calls
+            ],
+        },
+        _flush_status_buffer=lambda: None,
+        _persist_session=lambda *args, **kwargs: None,
+        log_prefix="offline-profile-probe",
+        session_id="offline-profile-probe",
+        provider=None,
+        model=None,
+        tools=narrow_schemas,
+    )
+    verdict = validate_tool_calls(
+        agent,
+        assistant,
+        "tool_calls",
+        messages=messages,
+        conversation_history=[],
+        api_call_count=1,
+        effective_task_id="synthetic-profile-probe",
+    )
+    return (
+        verdict.action == "continue"
+        and not verdict.mixed_invalid_batch
+        and any(message.get("role") == "tool" for message in messages)
+    )
+
+
+def discoverable_tools(query: str) -> set[str]:
+    result, underlying = model_tools._dispatch_bridge_tool(
+        "tool_search",
+        {"queries": [query], "limit": 20},
+        profile_selection,
+        profile_disabled_toolsets,
+    )
+    if underlying is not None or not isinstance(result, str):
+        raise SystemExit("Pinned Tool Search did not return a bounded catalog result.")
+    payload = json.loads(result)
+    return set(payload.get("tools", {}))
+
+
+discovered_process_tools = discoverable_tools("process manage")
+discovered_browser_tools = discoverable_tools("browser vault")
+turn_validation_rejects_disabled_web_search = rejected_by_turn_validation("web_search")
+if "process_manage" not in discovered_process_tools:
+    raise SystemExit("Required process capability is not discoverable in the narrow profile.")
+if "browser_vault" in discovered_browser_tools:
+    raise SystemExit("Disabled browser_vault unexpectedly remained discoverable.")
+if not turn_validation_rejects_disabled_web_search:
+    raise SystemExit("Pinned turn validation did not reject disabled web_search.")
+
+required_direct = {
+    "read_file",
+    "search_files",
+    "write_file",
+    "patch",
+    "terminal",
+    "skills_list",
+    "skill_view",
+}
+if not required_direct.issubset(narrow_names_actual):
+    raise SystemExit("The narrow profile removed a required direct capability.")
+
 result = {
     "pinnedConfig": {
         "posture": mode.kind,
@@ -144,6 +270,16 @@ result = {
     "narrowProfileDeferredNames": sorted(narrow_raw_names - narrow_names_actual),
     "narrowProfileUnavailableNames": [],
     "narrowProfileOmittedNames": sorted(raw_names - narrow_raw_names),
+    "narrowProfileRuntime": {
+        "loadedThroughConfigLoader": True,
+        "sameCodingPostureAndToolsetSelection": True,
+        "requiredDirectCapabilitiesAvailable": sorted(required_direct),
+        "processManageToolSearchDiscoverable": "process_manage" in discovered_process_tools,
+        "browserVaultToolSearchDiscoverable": "browser_vault" in discovered_browser_tools,
+        "disabledWebSearchRejectedByTurnValidation": turn_validation_rejects_disabled_web_search,
+        "toolExecutorsStarted": False,
+        "networkRequests": 0,
+    },
 }
 
 source_dir = Path("/opt/hermes/hermes-agent")

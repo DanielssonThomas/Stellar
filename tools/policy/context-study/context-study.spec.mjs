@@ -4,8 +4,10 @@ import {
   compactToolResult,
   filterToolSchemas,
   projectRequests,
+  retrieveCompactedRange,
   retrieveOriginalLines,
 } from './context-study.mjs';
+import { TrustedArtifactStore } from './trusted-artifact-store.mjs';
 import { syntheticToolResults } from './synthetic-fixtures.mjs';
 
 test('coalesces only exact repeated stdout and keeps an explicit retrieval range', () => {
@@ -29,6 +31,40 @@ test('coalesces only exact repeated stdout and keeps an explicit retrieval range
       () => 'libs/ui/atoms/src/lib/skeleton-atom',
     ).join('\n'),
   );
+});
+
+test('compacts with an opaque attempt-scoped artifact and retrieves exact omitted bytes', () => {
+  const store = new TrustedArtifactStore();
+  const stdout = 'header\nrepeat\nrepeat\nrepeat\ntail\n';
+  const result = compactToolResult({
+    kind: 'command',
+    stdout,
+    stderr: 'warning\n',
+    exitCode: 7,
+    artifactStore: store,
+    scope: 'issue-50:session-a',
+  });
+  const omission = result.omissions[0];
+  assert.match(omission.artifactId, /^[a-f0-9]{32}$/);
+  assert.equal(result.exitCode, 7);
+  assert.equal(result.stderr, 'warning\n');
+  assert.match(result.stdout, /coalesced=2 exact repeats/);
+  assert.doesNotMatch(result.stdout, /issue-50|session-a|\\\\|\/tmp/);
+  const retrieved = retrieveCompactedRange(
+    store,
+    'issue-50:session-a',
+    omission,
+  );
+  assert.deepEqual(retrieved, {
+    content: 'repeat\nrepeat\nrepeat\n',
+    firstLine: 2,
+    lastLine: 4,
+  });
+  assert.throws(
+    () => retrieveCompactedRange(store, 'issue-51:other', omission),
+    (error) => error.category === 'not-found',
+  );
+  store.close();
 });
 
 test('keeps unique search and command lines, status, stderr, and exit code', () => {
