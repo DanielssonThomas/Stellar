@@ -277,6 +277,105 @@ describe('bounded worker supervision', () => {
     assert.equal(result.handoff.attempts[0].modelTokens, 7);
   });
 
+  it('preserves validated numeric-only per-request metering records in the handoff', async () => {
+    const requestRecord = {
+      request: 2,
+      decision: 'denied-budget',
+      promptTokens: 16_993,
+      remainingTokens: 16_993,
+      completionTokens: null,
+      chargedOutputTokens: 0,
+      emittedToolCalls: 0,
+      messageContentTokensByRole: { system: 100, user: 15 },
+      toolSchemaContentTokens: 250,
+      toolOutputMessages: 0,
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker('peon', async () => ({
+              status: 'failed',
+              usage: {
+                toolCalls: 5,
+                modelTokens: 15_007,
+                exceededResource: 'model-tokens',
+                requestRecords: [requestRecord],
+              },
+            })),
+            usage: async () => ({
+              toolCalls: 5,
+              modelTokens: 15_007,
+              exceededResource: 'model-tokens',
+              requestRecords: [requestRecord],
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.deepEqual(result.handoff.attempts[0].requestRecords, [
+      requestRecord,
+    ]);
+  });
+
+  it('fails closed when a live request record contains prompt content', async () => {
+    let cancelled = false;
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              ({ signal }) =>
+                new Promise((resolve) =>
+                  signal.addEventListener(
+                    'abort',
+                    () => resolve({ status: 'failed' }),
+                    {
+                      once: true,
+                    },
+                  ),
+                ),
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 0,
+              requestRecords: [
+                {
+                  request: 1,
+                  decision: 'denied-budget',
+                  promptTokens: 2,
+                  remainingTokens: 2,
+                  completionTokens: null,
+                  chargedOutputTokens: 0,
+                  emittedToolCalls: 0,
+                  prompt: 'must never be persisted',
+                },
+              ],
+            }),
+            cancel: async () => {
+              cancelled = true;
+              return true;
+            },
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(cancelled, true);
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'UsageAccountingFailure',
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /must never be persisted/,
+    );
+  });
+
   it('stops and escalates when the trusted live usage channel fails', async () => {
     let cancelled = false;
     const result = await superviseWorker(

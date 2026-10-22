@@ -6,6 +6,8 @@ const json = (response, status, value) => {
   response.end(JSON.stringify(value));
 };
 
+const MAX_REQUEST_RECORDS = 32;
+
 async function readJson(request, maxBytes = 5_000_000) {
   const chunks = [];
   let size = 0;
@@ -115,11 +117,12 @@ export function createPeonMeteringProxy({
     requests: 0,
     failures: 0,
     cancellations: 0,
+    requestRecords: [],
   };
   let tail = Promise.resolve();
   const locked = (operation) => {
     const current = tail.then(operation, operation);
-    tail = current.catch(() => {});
+    tail = current.catch(() => undefined);
     return current;
   };
   const tokenize = async (content, signal) => {
@@ -142,6 +145,58 @@ export function createPeonMeteringProxy({
     if (!Array.isArray(result.tokens))
       throw new Error('Trusted model tokenizer returned invalid usage.');
     return result.tokens.length;
+  };
+  const tokenizeRawText = async (content, signal) => {
+    if (!content) return 0;
+    const tokenized = await fetchImpl(`${upstream}/tokenize`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, add_special: false }),
+      signal,
+    });
+    if (!tokenized.ok) throw new Error('Trusted model tokenizer failed.');
+    const result = await tokenized.json();
+    if (!Array.isArray(result.tokens))
+      throw new Error('Trusted model tokenizer returned invalid usage.');
+    return result.tokens.length;
+  };
+  const measurePromptParts = async (body, signal) => {
+    const roleText = new Map();
+    let toolOutputMessages = 0;
+    for (const message of body.messages) {
+      const role = [
+        'system',
+        'developer',
+        'user',
+        'assistant',
+        'tool',
+      ].includes(message?.role)
+        ? message.role
+        : 'other';
+      if (role === 'tool') toolOutputMessages += 1;
+      const parts = roleText.get(role) ?? [];
+      if (typeof message?.content === 'string') parts.push(message.content);
+      else if (Array.isArray(message?.content))
+        for (const part of message.content)
+          if (typeof part?.text === 'string') parts.push(part.text);
+      const calls = message?.tool_calls ?? message?.function_call;
+      if (calls !== undefined) parts.push(JSON.stringify(calls));
+      roleText.set(role, parts);
+    }
+    const messageContentTokensByRole = {};
+    for (const [role, parts] of roleText)
+      messageContentTokensByRole[role] = await tokenizeRawText(
+        parts.join('\n'),
+        signal,
+      );
+    const toolSchemaContentTokens = Array.isArray(body.tools)
+      ? await tokenizeRawText(JSON.stringify(body.tools), signal)
+      : 0;
+    return {
+      messageContentTokensByRole,
+      toolSchemaContentTokens,
+      toolOutputMessages,
+    };
   };
   const server = createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/health') {
@@ -177,8 +232,24 @@ export function createPeonMeteringProxy({
         });
       const outcome = await locked(async () => {
         state.requests += 1;
+        const record = {
+          request: state.requests,
+          decision: 'pending',
+          promptTokens: null,
+          remainingTokens: maxModelTokens - state.modelTokens,
+          completionTokens: null,
+          chargedOutputTokens: 0,
+          emittedToolCalls: 0,
+          messageContentTokensByRole: {},
+          toolSchemaContentTokens: 0,
+          toolOutputMessages: 0,
+        };
+        state.requestRecords.push(record);
+        if (state.requestRecords.length > MAX_REQUEST_RECORDS)
+          state.requestRecords.shift();
         if (state.exceededResource) {
           state.failures += 1;
+          record.decision = 'denied-exhausted';
           return {
             status: 429,
             value: {
@@ -198,6 +269,18 @@ export function createPeonMeteringProxy({
           );
         } catch (error) {
           state.failures += 1;
+          record.decision = 'tokenization-failed';
+          throw error;
+        }
+        record.promptTokens = promptTokens;
+        try {
+          const parts = await measurePromptParts(body, abort.signal);
+          record.messageContentTokensByRole = parts.messageContentTokensByRole;
+          record.toolSchemaContentTokens = parts.toolSchemaContentTokens;
+          record.toolOutputMessages = parts.toolOutputMessages;
+        } catch (error) {
+          state.failures += 1;
+          record.decision = 'tokenization-failed';
           throw error;
         }
         const remaining = maxModelTokens - state.modelTokens;
@@ -208,11 +291,14 @@ export function createPeonMeteringProxy({
           promptTokens >= remaining
         ) {
           state.exceededResource = 'model-tokens';
+          record.decision = 'denied-budget';
           throw Object.assign(new Error('Model token budget exhausted.'), {
             status: 429,
           });
         }
         const outputLimit = Math.min(asked, remaining - promptTokens);
+        record.remainingTokens = remaining;
+        record.decision = 'forwarded';
         state.modelTokens += promptTokens;
         body.max_tokens = outputLimit;
         delete body.max_completion_tokens;
@@ -235,6 +321,8 @@ export function createPeonMeteringProxy({
           const bytes = Buffer.from(await upstreamResponse.arrayBuffer());
           if (!upstreamResponse.ok) {
             state.modelTokens += generatedReservation;
+            record.decision = 'upstream-failed';
+            record.chargedOutputTokens = generatedReservation;
             state.failures += 1;
             return {
               status: upstreamResponse.status,
@@ -249,6 +337,12 @@ export function createPeonMeteringProxy({
           const actualGenerated = Number.isSafeInteger(usage.completionTokens)
             ? usage.completionTokens
             : generatedReservation;
+          record.promptTokens = actualPrompt;
+          record.completionTokens = Number.isSafeInteger(usage.completionTokens)
+            ? usage.completionTokens
+            : null;
+          record.chargedOutputTokens = actualGenerated;
+          record.emittedToolCalls = usage.calls;
           state.modelTokens += actualGenerated;
           generatedReservation = 0;
           state.modelTokens += actualPrompt - promptTokens;
@@ -276,10 +370,14 @@ export function createPeonMeteringProxy({
           state.failures += 1;
           if (cancelled || error.name === 'AbortError') {
             state.cancellations += 1;
+            record.decision = 'cancelled';
             state.modelTokens += generatedReservation;
           } else {
+            if (record.decision === 'forwarded')
+              record.decision = 'upstream-failed';
             state.modelTokens += generatedReservation;
           }
+          record.chargedOutputTokens = generatedReservation;
           throw error;
         }
       });

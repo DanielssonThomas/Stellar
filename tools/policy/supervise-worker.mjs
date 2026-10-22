@@ -109,6 +109,7 @@ export async function readHandoff(path) {
 function createWorkerBudget(limits, previous = {}) {
   let toolCalls = previous.toolCalls ?? 0;
   let modelTokens = previous.modelTokens ?? 0;
+  let requestRecords = [];
   let exceededResource = null;
   let reservedTokens = 0;
 
@@ -121,7 +122,7 @@ function createWorkerBudget(limits, previous = {}) {
 
   return {
     get snapshot() {
-      return { toolCalls, modelTokens, exceededResource };
+      return { toolCalls, modelTokens, exceededResource, requestRecords };
     },
     async runTool(name, operation) {
       if (
@@ -144,6 +145,70 @@ function createWorkerBudget(limits, previous = {}) {
         throw new Error(
           'Trusted live usage counters must be monotonic safe integers.',
         );
+      if (usage.requestRecords !== undefined) {
+        if (
+          !Array.isArray(usage.requestRecords) ||
+          usage.requestRecords.length > 32 ||
+          usage.requestRecords.some(
+            (record) =>
+              !Number.isSafeInteger(record?.request) ||
+              record.request < 1 ||
+              ![
+                'pending',
+                'denied-exhausted',
+                'denied-budget',
+                'tokenization-failed',
+                'forwarded',
+                'upstream-failed',
+                'cancelled',
+              ].includes(record?.decision) ||
+              (record.promptTokens !== null &&
+                !Number.isSafeInteger(record.promptTokens)) ||
+              !Number.isSafeInteger(record.remainingTokens) ||
+              (record.completionTokens !== null &&
+                !Number.isSafeInteger(record.completionTokens)) ||
+              !Number.isSafeInteger(record.chargedOutputTokens) ||
+              !Number.isSafeInteger(record.emittedToolCalls) ||
+              !Number.isSafeInteger(record.toolSchemaContentTokens) ||
+              !Number.isSafeInteger(record.toolOutputMessages) ||
+              !record.messageContentTokensByRole ||
+              typeof record.messageContentTokensByRole !== 'object' ||
+              Object.values(record.messageContentTokensByRole).some(
+                (tokens) => !Number.isSafeInteger(tokens),
+              ) ||
+              Object.keys(record.messageContentTokensByRole).some(
+                (role) =>
+                  ![
+                    'system',
+                    'developer',
+                    'user',
+                    'assistant',
+                    'tool',
+                    'other',
+                  ].includes(role),
+              ) ||
+              Object.keys(record).some(
+                (key) =>
+                  ![
+                    'request',
+                    'decision',
+                    'promptTokens',
+                    'remainingTokens',
+                    'completionTokens',
+                    'chargedOutputTokens',
+                    'emittedToolCalls',
+                    'messageContentTokensByRole',
+                    'toolSchemaContentTokens',
+                    'toolOutputMessages',
+                  ].includes(key),
+              ),
+          )
+        )
+          throw new Error(
+            'Trusted live request records must contain bounded numeric-only metadata.',
+          );
+        requestRecords = usage.requestRecords.map((record) => ({ ...record }));
+      }
       toolCalls = usage.toolCalls;
       modelTokens = usage.modelTokens;
       const exhausted = usage.exceededResource;
@@ -156,7 +221,7 @@ function createWorkerBudget(limits, previous = {}) {
         exceededResource = 'tool-calls';
       if (modelTokens > limits.maxModelTokensPerWorker)
         exceededResource = 'model-tokens';
-      return { toolCalls, modelTokens, exceededResource };
+      return { toolCalls, modelTokens, exceededResource, requestRecords };
     },
     async runModel({ promptTokens = 0, maxOutputTokens, invoke }) {
       if (
@@ -572,6 +637,7 @@ export async function superviseWorker({
         changedFiles: before.changes,
         toolCalls: budget.snapshot.toolCalls,
         modelTokens: budget.snapshot.modelTokens,
+        requestRecords: budget.snapshot.requestRecords,
       };
       if (
         [
