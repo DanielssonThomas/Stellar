@@ -14,7 +14,7 @@ The trusted live entry point is `tools/policy/supervised-peon-run.mjs`. Its `run
 
 ## Handoffs and recovery
 
-Pass an absolute `handoffPath` to persist the issue number, owner, authorized target, branch, worktree, attempts, file changes, attempted solutions, verification results, and failure evidence after every attempt. `readHandoff` loads that record for a resume. A resume must keep the same issue, target branch, issue branch, and worktree path. Interruption pauses the task and retains the current worker for recovery.
+Pass an absolute `handoffPath` to persist the issue number, owner, authorized target, branch, worktree, attempts, file changes, attempted solutions, verification results, and failure evidence after every attempt. Worker stdout and stderr are captured only as bounded in-memory tails; sensitive values are redacted before sanitized excerpts enter the trusted local handoff. Raw process streams are never printed or published. `readHandoff` loads that record for a resume. A resume must keep the same issue, target branch, issue branch, and worktree path. Interruption pauses the task and retains the current worker for recovery.
 
 Worker adapters must implement `cancel(reason)` and return `true` only after the worker process has stopped. If timeout or interruption cannot confirm termination, the supervisor marks the handoff unsafe to resume and will not transfer the worktree. Verification callbacks need the same `cancel` contract when they can outlive their deadline. Only a trusted host that independently confirms termination may resume such a handoff with `confirmPreviousWorkerStopped: true`.
 

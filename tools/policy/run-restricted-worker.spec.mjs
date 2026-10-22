@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
   buildMeteringProxyArgs,
   buildPodmanArgs,
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
+  captureBoundedDiagnosticStream,
+  formatWorkerFailure,
   parseArguments,
+  redactWorkerDiagnostics,
 } from './run-restricted-worker.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
@@ -368,7 +372,8 @@ test('builds a supported bounded Hermes chat command with issue retrieval guidan
     { issueNumber: 48 },
     { maxRuntimeMsPerWorker: 125_000 },
   );
-  assert.deepEqual(command.slice(0, 7), [
+  assert.deepEqual(command.slice(0, 8), [
+    'hermes',
     'chat',
     '-Q',
     '--in',
@@ -378,18 +383,89 @@ test('builds a supported bounded Hermes chat command with issue retrieval guidan
     '-q',
   ]);
   assert.match(
-    command[7],
+    command[8],
     /api\.github\.com\/repos\/DanielssonThomas\/Stellar\/issues\/48/,
   );
-  assert.match(command[7], /AGENTS\.md/);
-  assert.match(command[7], /implement-issue skill/);
-  assert.match(command[7], /worker fork branch/);
-  assert.doesNotMatch(command[7], /GH_TOKEN|STELLAR_INTEGRATION_TOKEN/);
+  assert.match(command[8], /AGENTS\.md/);
+  assert.match(command[8], /implement-issue skill/);
+  assert.match(command[8], /worker fork branch/);
+  assert.doesNotMatch(command[8], /GH_TOKEN|STELLAR_INTEGRATION_TOKEN/);
   assert.throws(
     () =>
       buildHermesTaskCommand({ issueNumber: 48 }, { maxRuntimeMsPerWorker: 0 }),
     /maxRuntimeMsPerWorker/,
   );
+});
+
+test('passes the complete Hermes executable command through the pinned image entrypoint', () => {
+  const command = buildHermesTaskCommand(
+    { issueNumber: 50 },
+    { maxRuntimeMsPerWorker: 600_000 },
+  );
+  const args = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    protectedPaths,
+    command,
+  });
+  const imagePosition = args.indexOf(image);
+  const containerfile = readFileSync(
+    new URL('../worker-image/Containerfile', import.meta.url),
+    'utf8',
+  );
+
+  assert.ok(imagePosition >= 0);
+  assert.deepEqual(args.slice(imagePosition + 1), command);
+  assert.deepEqual(args.slice(imagePosition + 1, imagePosition + 5), [
+    'hermes',
+    'chat',
+    '-Q',
+    '--in',
+  ]);
+  assert.match(
+    containerfile,
+    /ENTRYPOINT \["\/usr\/local\/libexec\/hermes-worker-entrypoint"\]/,
+  );
+  assert.match(containerfile, /'exec "\$@"'/);
+});
+
+test('captures bounded diagnostics and redacts credentials, headers, and secret assignments', () => {
+  const stream = new PassThrough();
+  const read = captureBoundedDiagnosticStream(stream);
+  stream.write('startup diagnostic '.repeat(700));
+  stream.end();
+  const bounded = read();
+
+  assert.equal(bounded.truncated, true);
+  assert.ok(Buffer.byteLength(bounded.text) <= 8 * 1024);
+
+  const redacted = redactWorkerDiagnostics(
+    [
+      'GH_TOKEN=ghp_123456789012345678901234567890123456',
+      'Authorization: Bearer private-auth-value',
+      'OPENAI_API_KEY=private-api-value',
+      'unexpected opaque value 12345678901234567890',
+    ].join('\n'),
+  );
+  assert.doesNotMatch(redacted, /ghp_1234567890|private-auth-value/);
+  assert.doesNotMatch(redacted, /private-api-value|12345678901234567890/);
+  assert.match(redacted, /\[REDACTED\]/);
+
+  const failure = formatWorkerFailure({
+    exitCode: 127,
+    diagnostics: {
+      stderr: { text: 'exec: chat: not found', truncated: false },
+      stdout: {
+        text: 'Authorization: Bearer private-auth-value',
+        truncated: false,
+      },
+    },
+  });
+  assert.match(failure, /status 127/);
+  assert.match(failure, /exec: chat: not found/);
+  assert.doesNotMatch(failure, /private-auth-value/);
 });
 
 test('configures the exact pinned Hermes turn-limit key', () => {
