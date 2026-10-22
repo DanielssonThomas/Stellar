@@ -167,6 +167,20 @@ function wslWorker(...args) {
   ]);
 }
 
+function wslWorkerBounded(timeout, ...args) {
+  return runWsl(
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      ...args,
+    ],
+    { timeout },
+  );
+}
+
 async function stopRootlessContainer(name, options) {
   return stopAndConfirmContainer(name, options);
 }
@@ -337,39 +351,333 @@ export function buildMeteringProxyArgs({
   ];
 }
 
-function readMeterUsage(containerName) {
+function meterLifecycleError(category, phase, message, elapsedMs = 0) {
+  const error = new Error(message);
+  error.code = 'UsageAccountingFailure';
+  error.diagnostic = {
+    category,
+    phase,
+    elapsedMs: Number.isSafeInteger(elapsedMs)
+      ? Math.min(Math.max(0, elapsedMs), 900_000)
+      : null,
+  };
+  return error;
+}
+
+function readMeterUsage(
+  containerName,
+  { phase = 'running', startedAt = Date.now() } = {},
+) {
+  const source = `
+(async () => {
+  const response = await fetch('http://127.0.0.1:18437/usage', {
+    signal: AbortSignal.timeout(1500),
+  });
+  if (!response.ok) {
+    process.stdout.write(JSON.stringify({ transportError: 'http-failure' }));
+    return;
+  }
+  let value;
+  try {
+    value = await response.json();
+  } catch {
+    process.stdout.write(JSON.stringify({ transportError: 'malformed-response' }));
+    return;
+  }
+  const safeNumber = (candidate) =>
+    Number.isSafeInteger(candidate) && candidate >= 0 ? candidate : false;
+  const roles = ['system', 'developer', 'user', 'assistant', 'tool', 'other'];
+  const decisions = [
+    'pending',
+    'denied-exhausted',
+    'denied-budget',
+    'tokenization-failed',
+    'forwarded',
+    'upstream-failed',
+    'cancelled',
+  ];
+  const records = Array.isArray(value.requestRecords)
+    ? value.requestRecords.length <= 32
+      ? value.requestRecords.map((record) => ({
+          request: safeNumber(record?.request),
+          decision: decisions.includes(record?.decision)
+            ? record.decision
+            : 'unknown',
+          promptTokens:
+            record?.promptTokens === null
+              ? null
+              : safeNumber(record?.promptTokens),
+          remainingTokens: safeNumber(record?.remainingTokens),
+          completionTokens:
+            record?.completionTokens === null
+              ? null
+              : safeNumber(record?.completionTokens),
+          chargedOutputTokens: safeNumber(record?.chargedOutputTokens),
+          emittedToolCalls: safeNumber(record?.emittedToolCalls),
+          messageContentTokensByRole: Object.fromEntries(
+            roles
+              .filter((role) =>
+                Object.hasOwn(record?.messageContentTokensByRole ?? {}, role),
+              )
+              .map((role) => [
+                role,
+                safeNumber(record.messageContentTokensByRole[role]),
+              ]),
+          ),
+          toolSchemaContentTokens: safeNumber(record?.toolSchemaContentTokens),
+          toolOutputMessages: safeNumber(record?.toolOutputMessages),
+        }))
+      : null
+    : value.requestRecords;
+  const usage = {
+    toolCalls: safeNumber(value.toolCalls),
+    modelTokens: safeNumber(value.modelTokens),
+    exceededResource: value.exceededResource,
+    requestRecords: records,
+  };
+  process.stdout.write(JSON.stringify({ usage }));
+})().catch(() =>
+  process.stdout.write(
+    JSON.stringify({ transportError: 'usage-endpoint-unavailable' }),
+  ),
+);
+`.trim();
+  let response;
+  try {
+    response = JSON.parse(
+      wslWorkerBounded(
+        3000,
+        'podman',
+        'exec',
+        containerName,
+        'node',
+        '-e',
+        source,
+      ),
+    );
+  } catch {
+    let category = 'podman-execution-failure';
+    const probe = spawnSync(
+      'wsl.exe',
+      [
+        '--distribution',
+        distribution,
+        '--user',
+        workerAccount,
+        '--exec',
+        'podman',
+        'container',
+        'exists',
+        containerName,
+      ],
+      { cwd: repositoryRoot, windowsHide: true, timeout: 1500 },
+    );
+    if (probe.status === 1)
+      category =
+        phase === 'startup' ? 'sidecar-not-started' : 'sidecar-terminated';
+    throw meterLifecycleError(
+      category,
+      phase,
+      'Trusted metering container could not be queried.',
+      Date.now() - startedAt,
+    );
+  }
+  if (response?.transportError) {
+    const category = [
+      'http-failure',
+      'malformed-response',
+      'usage-endpoint-unavailable',
+    ].includes(response.transportError)
+      ? response.transportError
+      : 'unknown';
+    throw meterLifecycleError(
+      category,
+      phase,
+      'Trusted usage endpoint did not return a valid response.',
+      Date.now() - startedAt,
+    );
+  }
+  const usage = response?.usage;
+  const requestDecisions = [
+    'pending',
+    'denied-exhausted',
+    'denied-budget',
+    'tokenization-failed',
+    'forwarded',
+    'upstream-failed',
+    'cancelled',
+  ];
+  const tokenRoles = [
+    'system',
+    'developer',
+    'user',
+    'assistant',
+    'tool',
+    'other',
+  ];
+  const validRequestRecord = (record) =>
+    Number.isSafeInteger(record?.request) &&
+    record.request >= 1 &&
+    requestDecisions.includes(record.decision) &&
+    (record.promptTokens === null ||
+      (Number.isSafeInteger(record.promptTokens) &&
+        record.promptTokens >= 0)) &&
+    Number.isSafeInteger(record.remainingTokens) &&
+    record.remainingTokens >= 0 &&
+    (record.completionTokens === null ||
+      (Number.isSafeInteger(record.completionTokens) &&
+        record.completionTokens >= 0)) &&
+    Number.isSafeInteger(record.chargedOutputTokens) &&
+    record.chargedOutputTokens >= 0 &&
+    Number.isSafeInteger(record.emittedToolCalls) &&
+    record.emittedToolCalls >= 0 &&
+    Number.isSafeInteger(record.toolSchemaContentTokens) &&
+    record.toolSchemaContentTokens >= 0 &&
+    Number.isSafeInteger(record.toolOutputMessages) &&
+    record.toolOutputMessages >= 0 &&
+    record.messageContentTokensByRole &&
+    typeof record.messageContentTokensByRole === 'object' &&
+    Object.keys(record.messageContentTokensByRole).every(
+      (role) =>
+        tokenRoles.includes(role) &&
+        Number.isSafeInteger(record.messageContentTokensByRole[role]) &&
+        record.messageContentTokensByRole[role] >= 0,
+    ) &&
+    Object.keys(record).every((key) =>
+      [
+        'request',
+        'decision',
+        'promptTokens',
+        'remainingTokens',
+        'completionTokens',
+        'chargedOutputTokens',
+        'emittedToolCalls',
+        'messageContentTokensByRole',
+        'toolSchemaContentTokens',
+        'toolOutputMessages',
+      ].includes(key),
+    );
+  if (
+    !usage ||
+    !Number.isSafeInteger(usage.toolCalls) ||
+    usage.toolCalls < 0 ||
+    !Number.isSafeInteger(usage.modelTokens) ||
+    usage.modelTokens < 0 ||
+    !Array.isArray(usage.requestRecords) ||
+    usage.requestRecords.length > 32 ||
+    usage.requestRecords.some((record) => !validRequestRecord(record)) ||
+    (usage.exceededResource !== null &&
+      !['tool-calls', 'model-tokens'].includes(usage.exceededResource))
+  )
+    throw meterLifecycleError(
+      'invalid-usage',
+      phase,
+      'Trusted usage endpoint returned an invalid numeric snapshot.',
+      Date.now() - startedAt,
+    );
+  return usage;
+}
+
+function readMeterHealth(containerName) {
   const source =
-    "fetch('http://127.0.0.1:18437/usage').then(r=>r.json()).then(x=>process.stdout.write(JSON.stringify(x)))";
-  return JSON.parse(
-    wslWorker('podman', 'exec', containerName, 'node', '-e', source),
+    "fetch('http://127.0.0.1:18436/health',{signal:AbortSignal.timeout(1000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
+  try {
+    wslWorkerBounded(
+      1500,
+      'podman',
+      'exec',
+      containerName,
+      'node',
+      '-e',
+      source,
+    );
+  } catch {
+    const probe = spawnSync(
+      'wsl.exe',
+      [
+        '--distribution',
+        distribution,
+        '--user',
+        workerAccount,
+        '--exec',
+        'podman',
+        'container',
+        'exists',
+        containerName,
+      ],
+      { cwd: repositoryRoot, windowsHide: true, timeout: 1500 },
+    );
+    const category =
+      probe.status === 1
+        ? 'sidecar-not-started'
+        : probe.status === 0
+          ? 'usage-endpoint-unavailable'
+          : 'podman-execution-failure';
+    throw meterLifecycleError(
+      category,
+      'startup',
+      'Trusted metering health endpoint is not available.',
+    );
+  }
+}
+
+function sleepForMeterRetry() {
+  spawnSync(
+    'wsl.exe',
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      'sleep',
+      '0.25',
+    ],
+    { cwd: repositoryRoot, windowsHide: true, timeout: 1000 },
   );
 }
 
-function waitForMeter(containerName) {
-  const source =
-    "fetch('http://127.0.0.1:18436/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+function waitForMeter(
+  containerName,
+  {
+    readHealth = readMeterHealth,
+    readUsage = readMeterUsage,
+    sleep = sleepForMeterRetry,
+    now = Date.now,
+    timeoutMs = 10_000,
+  } = {},
+) {
+  const startedAt = now();
+  const deadlineAt = startedAt + timeoutMs;
+  let lastCategory = 'readiness-timeout';
+  while (now() < deadlineAt) {
     try {
-      wslWorker('podman', 'exec', containerName, 'node', '-e', source);
-      return;
-    } catch {
-      spawnSync(
-        'wsl.exe',
+      readHealth(containerName);
+      return readUsage(containerName, { phase: 'startup', startedAt });
+    } catch (error) {
+      if (
         [
-          '--distribution',
-          distribution,
-          '--user',
-          workerAccount,
-          '--exec',
-          'sleep',
-          '0.25',
-        ],
-        { cwd: repositoryRoot, windowsHide: true, timeout: 2000 },
-      );
+          'sidecar-not-started',
+          'podman-execution-failure',
+          'usage-endpoint-unavailable',
+          'http-failure',
+          'malformed-response',
+          'invalid-usage',
+        ].includes(error?.diagnostic?.category)
+      )
+        lastCategory = error.diagnostic.category;
+      sleep();
     }
   }
-  throw new Error('Trusted metering proxy did not become healthy.');
+  throw meterLifecycleError(
+    lastCategory,
+    'startup',
+    'Trusted metering proxy did not become healthy before the startup deadline.',
+    Math.min(Math.max(0, now() - startedAt), 900_000),
+  );
 }
+
+export { waitForMeter };
 
 function loadProtectedPaths() {
   const remote = spawnSync('git', ['remote', 'get-url', 'origin'], {
@@ -629,6 +937,7 @@ export async function runRestrictedWorker({
   attemptNumber = 1,
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
   lifecycle = {},
+  onUsageReady = null,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const expectedBranchPrefix = `issue/${number}-`;
@@ -709,8 +1018,13 @@ export async function runRestrictedWorker({
   let meterCleanup = { confirmed: false, state: 'inconclusive' };
   try {
     wslWorker('podman', ...meterArgs);
-    waitForMeter(meterName);
+    usage = waitForMeter(meterName);
     assertAttemptNotCancelled(lifecycle);
+    if (onUsageReady !== null) {
+      if (typeof onUsageReady !== 'function')
+        throw new Error('Usage readiness callback must be callable.');
+      onUsageReady();
+    }
     const workerArgs = buildPodmanArgs({
       issueNumber: number,
       image,
@@ -759,9 +1073,17 @@ export async function runRestrictedWorker({
     });
   }
   if (!workerCleanup.confirmed)
-    throw new Error('Could not confirm worker container termination.');
+    throw meterLifecycleError(
+      'cleanup-inconclusive',
+      'cleanup',
+      'Could not confirm worker container termination.',
+    );
   if (!meterCleanup.confirmed)
-    throw new Error('Could not confirm metering proxy shutdown.');
+    throw meterLifecycleError(
+      'cleanup-inconclusive',
+      'cleanup',
+      'Could not confirm metering proxy shutdown.',
+    );
   return {
     exitCode: result.code ?? 1,
     signal: result.signal,
@@ -969,6 +1291,7 @@ export function createPeonWorkerAdapter({
   containerOperations = createRootlessContainerOperations(),
   now = Date.now,
   confirmCancellation = confirmAttemptCleanup,
+  readUsage = readMeterUsage,
 }) {
   let active = null;
   let lastAttempt = null;
@@ -984,6 +1307,9 @@ export function createPeonWorkerAdapter({
         cancelPromise: null,
         done: null,
       };
+      current.usageReady = new Promise((resolve) => {
+        current.resolveUsageReady = resolve;
+      });
       current.done = Promise.resolve().then(() =>
         runAttempt({
           issueNumber: task.issueNumber,
@@ -993,6 +1319,7 @@ export function createPeonWorkerAdapter({
           initialUsage: budget.snapshot,
           attemptNumber: currentAttempt,
           lifecycle: current.lifecycle,
+          onUsageReady: () => current.resolveUsageReady(),
         }),
       );
       current.done.then(
@@ -1022,8 +1349,34 @@ export function createPeonWorkerAdapter({
       }
     },
     async usage() {
-      if (!active) return { toolCalls: 0, modelTokens: 0 };
-      return readMeterUsage(active.meterName);
+      const current = active ?? lastAttempt;
+      if (!current)
+        throw meterLifecycleError(
+          'sidecar-not-started',
+          'startup',
+          'No attempt-specific usage source is available.',
+        );
+      if (!active) {
+        const result = await current.done;
+        if (!result?.usage)
+          throw meterLifecycleError(
+            'invalid-usage',
+            'running',
+            'Completed attempt returned no final usage snapshot.',
+          );
+        return result.usage;
+      }
+      return readUsage(current.meterName);
+    },
+    async waitForUsageReady() {
+      const current = active;
+      if (!current)
+        throw meterLifecycleError(
+          'sidecar-not-started',
+          'startup',
+          'No active attempt is available for trusted usage readiness.',
+        );
+      return current.usageReady;
     },
     cancel() {
       const current = active ?? lastAttempt;

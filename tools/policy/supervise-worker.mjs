@@ -20,6 +20,7 @@ const hardLimits = Object.freeze({
   maxNoProgressAttempts: 3,
 });
 export const cancellationGraceMs = 5_000;
+export const usageReadinessTimeoutMs = 10_000;
 
 class BudgetLimitError extends Error {
   constructor(resource) {
@@ -276,11 +277,37 @@ function failureDetails(error) {
   )
     .trim()
     .replace(/\s+/g, ' ');
-  return {
+  const details = {
     code,
     message: message.slice(0, 2_000),
     fingerprint: stableFingerprint(`${code}:${message}`),
   };
+  if (error?.diagnostic) {
+    const { category, phase, elapsedMs } = error.diagnostic;
+    const categories = [
+      'sidecar-not-started',
+      'readiness-timeout',
+      'podman-execution-failure',
+      'usage-endpoint-unavailable',
+      'http-failure',
+      'malformed-response',
+      'invalid-usage',
+      'sidecar-terminated',
+      'cleanup-inconclusive',
+      'unknown',
+    ];
+    details.diagnostic = {
+      category: categories.includes(category) ? category : 'unknown',
+      phase: ['startup', 'running', 'cancellation', 'cleanup'].includes(phase)
+        ? phase
+        : 'unknown',
+      elapsedMs:
+        Number.isSafeInteger(elapsedMs) && elapsedMs >= 0
+          ? Math.min(elapsedMs, 900_000)
+          : null,
+    };
+  }
+  return details;
 }
 
 function redactEvidence(value) {
@@ -325,6 +352,100 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ type: 'timeout' }), timeoutMs);
   });
+  const interruption = externalSignal
+    ? new Promise((resolve) => {
+        abortListener = () => resolve({ type: 'interrupted' });
+        externalSignal.addEventListener('abort', abortListener, { once: true });
+        if (externalSignal.aborted) abortListener();
+      })
+    : null;
+  if (typeof worker.waitForUsageReady === 'function') {
+    const readinessStartedAt = Date.now();
+    let readyTimer;
+    const readiness = Promise.race([
+      Promise.resolve()
+        .then(() =>
+          worker.waitForUsageReady({
+            task: context.task,
+            attemptNumber: context.attemptNumber,
+          }),
+        )
+        .then(
+          () => ({ type: 'ready' }),
+          (error) => ({ type: 'usage-readiness-failed', error }),
+        ),
+      new Promise((resolve) => {
+        readyTimer = setTimeout(
+          () => resolve({ type: 'usage-readiness-timeout' }),
+          Math.min(usageReadinessTimeoutMs, timeoutMs),
+        );
+      }),
+    ]);
+    const startupRaces = [completion, timeout, readiness];
+    if (interruption) startupRaces.push(interruption);
+    const startup = await Promise.race(startupRaces);
+    clearTimeout(readyTimer);
+    if (startup.type === 'ready') {
+      // Usage polling starts only after the trusted adapter has proven the
+      // exact attempt's metering endpoint is readable.
+    } else {
+      clearTimeout(timer);
+      if (abortListener)
+        externalSignal.removeEventListener('abort', abortListener);
+      const outcome =
+        startup.type === 'usage-readiness-timeout'
+          ? {
+              type: 'usage-accounting-failed',
+              error: {
+                code: 'UsageReadinessTimeout',
+                message:
+                  'Trusted usage endpoint was not ready before the deadline.',
+                diagnostic: {
+                  category: 'readiness-timeout',
+                  phase: 'startup',
+                  elapsedMs: Date.now() - readinessStartedAt,
+                },
+              },
+            }
+          : startup.type === 'usage-readiness-failed'
+            ? {
+                type: 'usage-accounting-failed',
+                error: {
+                  code: 'UsageReadinessFailed',
+                  message: 'Trusted usage endpoint failed during startup.',
+                  diagnostic: {
+                    ...(startup.error?.diagnostic ?? {}),
+                    phase: 'startup',
+                    elapsedMs: Date.now() - readinessStartedAt,
+                  },
+                },
+              }
+            : startup;
+      if (
+        ['timeout', 'interrupted', 'usage-accounting-failed', 'error'].includes(
+          outcome.type,
+        )
+      ) {
+        controller.abort(outcome.type);
+        const cancellationStartedAt = Date.now();
+        const workerStopped = await confirmWorkerStopped(worker, outcome.type);
+        return {
+          ...outcome,
+          workerStopped,
+          ...(!workerStopped
+            ? {
+                cancellationDiagnostic: {
+                  category: 'cleanup-inconclusive',
+                  phase: 'cancellation',
+                  elapsedMs: Date.now() - cancellationStartedAt,
+                },
+              }
+            : {}),
+        };
+      }
+      return outcome;
+    }
+  }
   const races = [completion, timeout];
   let usageTimer;
   let polling = false;
@@ -333,11 +454,29 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
     usageTimer = setInterval(async () => {
       if (polling) return;
       polling = true;
+      let usage;
       try {
-        const usage = await worker.usage({
+        usage = await worker.usage({
           task: context.task,
           attemptNumber: context.attemptNumber,
         });
+      } catch (error) {
+        resolve({
+          type: 'usage-accounting-failed',
+          error: {
+            code: 'UsageAccountingFailure',
+            message: 'Trusted live usage polling failed.',
+            diagnostic: {
+              ...(error?.diagnostic ?? {
+                category: 'unknown',
+                phase: 'running',
+              }),
+            },
+          },
+        });
+        return;
+      }
+      try {
         const snapshot = context.budget.observeUsage(usage);
         if (snapshot.exceededResource)
           resolve({
@@ -345,7 +484,17 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
             resource: snapshot.exceededResource,
           });
       } catch {
-        resolve({ type: 'usage-accounting-failed' });
+        resolve({
+          type: 'usage-accounting-failed',
+          error: {
+            code: 'InvalidUsageSnapshot',
+            message: 'Trusted live usage snapshot failed validation.',
+            diagnostic: {
+              category: 'invalid-usage',
+              phase: 'running',
+            },
+          },
+        });
       } finally {
         polling = false;
       }
@@ -354,13 +503,7 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
   });
   if (typeof worker.usage === 'function') races.push(resourceLimit);
   if (externalSignal) {
-    races.push(
-      new Promise((resolve) => {
-        abortListener = () => resolve({ type: 'interrupted' });
-        externalSignal.addEventListener('abort', abortListener, { once: true });
-        if (externalSignal.aborted) abortListener();
-      }),
-    );
+    races.push(interruption);
   }
   const outcome = await Promise.race(races);
   clearTimeout(timer);
@@ -376,9 +519,20 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
     ].includes(outcome.type)
   ) {
     controller.abort(outcome.type);
+    const cancellationStartedAt = Date.now();
+    const workerStopped = await confirmWorkerStopped(worker, outcome.type);
     return {
       ...outcome,
-      workerStopped: await confirmWorkerStopped(worker, outcome.type),
+      workerStopped,
+      ...(!workerStopped
+        ? {
+            cancellationDiagnostic: {
+              category: 'cleanup-inconclusive',
+              phase: 'cancellation',
+              elapsedMs: Date.now() - cancellationStartedAt,
+            },
+          }
+        : {}),
     };
   }
   return outcome;
@@ -654,6 +808,9 @@ export async function superviseWorker({
           code: 'CancellationUnconfirmed',
           message:
             'Worker stop was not confirmed; do not resume or hand off this worktree until the process is stopped.',
+          ...(outcome.cancellationDiagnostic
+            ? { diagnostic: outcome.cancellationDiagnostic }
+            : {}),
         });
         attempt.status = 'cancellation-unconfirmed';
         attempt.failure = failure;
@@ -712,11 +869,14 @@ export async function superviseWorker({
           code:
             outcome.type === 'budget-exceeded'
               ? 'ResourceLimit'
-              : 'UsageAccountingFailure',
+              : (outcome.error?.code ?? 'UsageAccountingFailure'),
           message:
             outcome.type === 'budget-exceeded'
               ? `Trusted live ${outcome.resource} budget was exhausted.`
               : 'Trusted live usage accounting failed; worker stopped fail-closed.',
+          ...(outcome.error?.diagnostic
+            ? { diagnostic: outcome.error.diagnostic }
+            : {}),
         });
         stopReason =
           outcome.type === 'budget-exceeded'
