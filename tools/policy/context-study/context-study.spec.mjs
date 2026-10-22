@@ -14,15 +14,20 @@ test('coalesces only exact repeated stdout and keeps an explicit retrieval range
   assert.equal(compacted.exitCode, directory.exitCode);
   assert.equal(compacted.stderr, '');
   assert.match(compacted.stdout, /coalesced=29 exact repeats/);
-  assert.deepEqual(compacted.omissions, [{
-    artifactId: directory.artifactId,
-    firstLine: 2,
-    lastLine: 31,
-    repeatCount: 30,
-  }]);
+  assert.deepEqual(compacted.omissions, [
+    {
+      artifactId: directory.artifactId,
+      firstLine: 2,
+      lastLine: 31,
+      repeatCount: 30,
+    },
+  ]);
   assert.equal(
     retrieveOriginalLines(directory.stdout, compacted.omissions[0]),
-    Array.from({ length: 30 }, () => 'libs/ui/atoms/src/lib/skeleton-atom').join('\n'),
+    Array.from(
+      { length: 30 },
+      () => 'libs/ui/atoms/src/lib/skeleton-atom',
+    ).join('\n'),
   );
 });
 
@@ -35,9 +40,18 @@ test('keeps unique search and command lines, status, stderr, and exit code', () 
       assert.ok(compacted.stdout.includes(unique));
     }
   }
-  assert.match(compactToolResult(syntheticToolResults[1]).stdout, /coalesced=39 exact repeats/);
-  assert.match(compactToolResult(syntheticToolResults[2]).stdout, /coalesced=199 exact repeats/);
-  assert.match(compactToolResult(syntheticToolResults[3]).stdout, /coalesced=59 exact repeats/);
+  assert.match(
+    compactToolResult(syntheticToolResults[1]).stdout,
+    /coalesced=39 exact repeats/,
+  );
+  assert.match(
+    compactToolResult(syntheticToolResults[2]).stdout,
+    /coalesced=199 exact repeats/,
+  );
+  assert.match(
+    compactToolResult(syntheticToolResults[3]).stdout,
+    /coalesced=59 exact repeats/,
+  );
 });
 
 test('leaves source excerpts and test/build failures unchanged', () => {
@@ -57,10 +71,15 @@ test('filters model-visible schemas to a unique synthetic allowlist', () => {
     function: { name },
   }));
   assert.deepEqual(
-    filterToolSchemas(schemas, ['terminal', 'patch']).map((item) => item.function.name),
+    filterToolSchemas(schemas, ['terminal', 'patch']).map(
+      (item) => item.function.name,
+    ),
     ['terminal', 'patch'],
   );
-  assert.throws(() => filterToolSchemas([schemas[0], schemas[0]], ['terminal']), /unique/);
+  assert.throws(
+    () => filterToolSchemas([schemas[0], schemas[0]], ['terminal']),
+    /unique/,
+  );
 });
 
 test('projects growing prompts and completion reserves cumulatively', () => {
@@ -72,9 +91,27 @@ test('projects growing prompts and completion reserves cumulatively', () => {
     completionReserve: 1_000,
   });
   assert.deepEqual(requests, [
-    { request: 1, promptTokens: 13_215, promptGrowth: 0, completionTokens: 1_000, cumulativeTokens: 14_215 },
-    { request: 2, promptTokens: 17_428, promptGrowth: 4_213, completionTokens: 1_000, cumulativeTokens: 32_643 },
-    { request: 3, promptTokens: 21_641, promptGrowth: 4_213, completionTokens: 1_000, cumulativeTokens: 55_284 },
+    {
+      request: 1,
+      promptTokens: 13_215,
+      promptGrowth: 0,
+      completionTokens: 1_000,
+      cumulativeTokens: 14_215,
+    },
+    {
+      request: 2,
+      promptTokens: 17_428,
+      promptGrowth: 4_213,
+      completionTokens: 1_000,
+      cumulativeTokens: 32_643,
+    },
+    {
+      request: 3,
+      promptTokens: 21_641,
+      promptGrowth: 4_213,
+      completionTokens: 1_000,
+      cumulativeTokens: 55_284,
+    },
   ]);
 });
 
@@ -85,6 +122,9 @@ test('projects checkpoint savings separately from schema and output savings', ()
     transferFactor: 1,
     completionReserve: 1_500,
   });
-  assert.deepEqual(requests.map((request) => request.promptTokens), [13_815, 13_428, 13_041]);
+  assert.deepEqual(
+    requests.map((request) => request.promptTokens),
+    [13_815, 13_428, 13_041],
+  );
   assert.equal(requests[2].cumulativeTokens, 44_784);
 });

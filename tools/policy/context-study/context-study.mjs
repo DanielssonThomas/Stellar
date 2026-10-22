@@ -50,9 +50,17 @@ export function compactToolResult({
 }
 
 export function retrieveOriginalLines(text, { firstLine, lastLine }) {
-  if (!Number.isInteger(firstLine) || !Number.isInteger(lastLine) || firstLine < 1 || lastLine < firstLine)
+  if (
+    !Number.isInteger(firstLine) ||
+    !Number.isInteger(lastLine) ||
+    firstLine < 1 ||
+    lastLine < firstLine
+  )
     throw new TypeError('Invalid original line range.');
-  return text.split('\n').slice(firstLine - 1, lastLine).join('\n');
+  return text
+    .split('\n')
+    .slice(firstLine - 1, lastLine)
+    .join('\n');
 }
 
 /** Return only schemas allowed by a synthetic task-scoped profile. */
@@ -61,7 +69,8 @@ export function filterToolSchemas(schemas, allowedNames) {
   const seen = new Set();
   return schemas.filter((schema) => {
     const name = schema?.function?.name;
-    if (!name || seen.has(name)) throw new TypeError('Tool schema names must be present and unique.');
+    if (!name || seen.has(name))
+      throw new TypeError('Tool schema names must be present and unique.');
     seen.add(name);
     return allowed.has(name);
   });
@@ -81,7 +90,11 @@ export function projectRequests({
 }) {
   if (!Array.isArray(baselinePrompts) || baselinePrompts.length === 0)
     throw new TypeError('At least one baseline prompt is required.');
-  if (!Number.isFinite(transferFactor) || transferFactor < 0 || transferFactor > 1)
+  if (
+    !Number.isFinite(transferFactor) ||
+    transferFactor < 0 ||
+    transferFactor > 1
+  )
     throw new TypeError('transferFactor must be between zero and one.');
   let cumulative = 0;
   let previousPrompt = 0;

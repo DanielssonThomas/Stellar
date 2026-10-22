@@ -31,7 +31,8 @@ for (const [name, options] of Object.entries({
 })) {
   scenarios[name] = {};
   for (const transferFactor of [0.5, 1]) {
-    const transferKey = transferFactor === 0.5 ? 'halfTransfer' : 'fullTransfer';
+    const transferKey =
+      transferFactor === 0.5 ? 'halfTransfer' : 'fullTransfer';
     scenarios[name][transferKey] = {};
     for (const completionReserve of [1_000, 1_500]) {
       const requests = projectRequests({
@@ -40,7 +41,10 @@ for (const [name, options] of Object.entries({
         transferFactor,
         completionReserve,
       });
-      const promptTotal = requests.reduce((sum, request) => sum + request.promptTokens, 0);
+      const promptTotal = requests.reduce(
+        (sum, request) => sum + request.promptTokens,
+        0,
+      );
       const total = requests.at(-1).cumulativeTokens;
       scenarios[name][transferKey][completionReserve] = {
         requests,
@@ -50,8 +54,12 @@ for (const [name, options] of Object.entries({
         remainingUnder28kTarget: 28_000 - total,
         extraPromptReductionFor32k: Math.max(0, total - 32_000),
         extraPromptReductionFor28k: Math.max(0, total - 28_000),
-        averageCompletionHeadroomUnder32k: Math.floor((32_000 - promptTotal) / 3),
-        averageCompletionHeadroomUnder28k: Math.floor((28_000 - promptTotal) / 3),
+        averageCompletionHeadroomUnder32k: Math.floor(
+          (32_000 - promptTotal) / 3,
+        ),
+        averageCompletionHeadroomUnder28k: Math.floor(
+          (28_000 - promptTotal) / 3,
+        ),
       };
     }
   }
@@ -79,7 +87,10 @@ for (const [name, transferFactor] of [
     transferFactor,
     completionReserve: 0,
   });
-  const promptTotal = requests.reduce((sum, request) => sum + request.promptTokens, 0);
+  const promptTotal = requests.reduce(
+    (sum, request) => sum + request.promptTokens,
+    0,
+  );
   runtime[name] = {
     promptTotal,
     prefillSeconds: promptTotal / prefillTokensPerSecond,
@@ -104,12 +115,15 @@ for (const [name, transferFactor] of [
 const result = {
   measuredHistoricalAnchors: observedPrompts,
   projectedThirdPrompt: projectedPrompts[2],
-  projectedTurnGrowth: [projectedPrompts[1] - projectedPrompts[0], projectedPrompts[2] - projectedPrompts[1]],
+  projectedTurnGrowth: [
+    projectedPrompts[1] - projectedPrompts[0],
+    projectedPrompts[2] - projectedPrompts[1],
+  ],
   syntheticSavings: { schemaSavings, resultSavings, checkpointSavings },
   transferFactors: {
     half: 0.5,
     full: 1,
-    note: 'The half-transfer case is a planning haircut, not a measured confidence interval.'
+    note: 'The half-transfer case is a planning haircut, not a measured confidence interval.',
   },
   completionReserveScenarios: scenarios,
   runtime: {

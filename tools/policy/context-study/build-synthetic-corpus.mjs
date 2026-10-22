@@ -81,7 +81,10 @@ for (const [scenario, tools] of [
     body(baselineMessages, tools),
     body(
       scenario === 'checkpointedFocus'
-        ? [...baselineMessages, { role: 'assistant', content: checkpointSummary }]
+        ? [
+            ...baselineMessages,
+            { role: 'assistant', content: checkpointSummary },
+          ]
         : [
             ...baselineMessages,
             ...(scenario === 'narrowProfileCompacted'
@@ -115,7 +118,10 @@ for (const [scenario, tools] of [
 const tokenizeOnly = [];
 for (const [group, tools] of [
   ['currentVisible', currentTools],
-  ['currentReachableWithoutToolSearch', schemaOutput.schemas.currentReachableWithoutToolSearch],
+  [
+    'currentReachableWithoutToolSearch',
+    schemaOutput.schemas.currentReachableWithoutToolSearch,
+  ],
   [
     'narrowProfileReachableWithoutToolSearch',
     schemaOutput.schemas.narrowProfileReachableWithoutToolSearch,

@@ -5,7 +5,10 @@ export const syntheticToolResults = [
     exitCode: 0,
     stdout: [
       'libs/ui/atoms/src/lib',
-      ...Array.from({ length: 30 }, () => 'libs/ui/atoms/src/lib/skeleton-atom'),
+      ...Array.from(
+        { length: 30 },
+        () => 'libs/ui/atoms/src/lib/skeleton-atom',
+      ),
       'button-atom',
       'libs/ui/atoms/src/index.ts',
     ].join('\n'),
@@ -37,7 +40,10 @@ export const syntheticToolResults = [
     artifactId: 'synthetic/warnings-01',
     exitCode: 0,
     stdout: [
-      ...Array.from({ length: 60 }, () => 'Warning: optional cache was skipped'),
+      ...Array.from(
+        { length: 60 },
+        () => 'Warning: optional cache was skipped',
+      ),
       'Build completed',
     ].join('\n'),
   },
@@ -48,7 +54,8 @@ export const syntheticToolResults = [
     stdout: [
       ...Array.from(
         { length: 80 },
-        (_, index) => `source excerpt line ${index + 1}: shape-related exact source must remain available`,
+        (_, index) =>
+          `source excerpt line ${index + 1}: shape-related exact source must remain available`,
       ),
     ].join('\n'),
   },

@@ -5,7 +5,9 @@ const [corpusPath] = process.argv.slice(2);
 if (!corpusPath)
   throw new Error('Usage: tokenize-corpus-via-local-qwen <corpus-json>');
 if (process.platform !== 'win32')
-  throw new Error('This bounded bridge is intended for the trusted Windows host.');
+  throw new Error(
+    'This bounded bridge is intended for the trusted Windows host.',
+  );
 
 const corpus = await readFile(corpusPath, 'utf8');
 const python = String.raw`
@@ -98,7 +100,8 @@ const result = spawnSync(
   },
 );
 
-if (result.error) throw new Error('Local tokenizer bridge failed or timed out.');
+if (result.error)
+  throw new Error('Local tokenizer bridge failed or timed out.');
 if (result.status !== 0)
   throw new Error(result.stdout.trim() || 'Local tokenizer bridge failed.');
 process.stdout.write(result.stdout);
