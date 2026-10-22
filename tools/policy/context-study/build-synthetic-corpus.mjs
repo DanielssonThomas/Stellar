@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { compactToolResult } from './context-study.mjs';
+import { compactToolResult, retrieveCompactedRange } from './context-study.mjs';
 import { syntheticToolResults } from './synthetic-fixtures.mjs';
+import { TrustedArtifactStore } from './trusted-artifact-store.mjs';
 
 const [schemaPath, corpusPath] = process.argv.slice(2);
 if (!schemaPath || !corpusPath)
@@ -9,14 +10,39 @@ if (!schemaPath || !corpusPath)
 const schemaOutput = JSON.parse(await readFile(schemaPath, 'utf8'));
 const currentTools = schemaOutput.schemas.currentVisible;
 const narrowTools = schemaOutput.schemas.narrowProfile;
+let nextArtifactId = 0;
+const artifactStore = new TrustedArtifactStore({
+  createId: () => (++nextArtifactId).toString(16).padStart(32, '0'),
+});
 const compactedResults = syntheticToolResults.map((result) =>
-  compactToolResult(result),
+  compactToolResult({
+    ...result,
+    artifactStore,
+    scope: 'synthetic-attempt-80',
+  }),
 );
+const artifactRetrievalTool = {
+  type: 'function',
+  function: {
+    name: 'retrieve_output_artifact',
+    description:
+      'Retrieve an exact line range from this attempt’s retained tool output. Scope is bound by the trusted caller; paths, filesystem access, and other attempts are not addressable.',
+    parameters: {
+      type: 'object',
+      properties: {
+        artifact_id: { type: 'string', pattern: '^[a-f0-9]{32}$' },
+        first_line: { type: 'integer', minimum: 1 },
+        last_line: { type: 'integer', minimum: 1 },
+      },
+      required: ['artifact_id', 'first_line', 'last_line'],
+      additionalProperties: false,
+    },
+  },
+};
 const baselineMessages = [
   {
     role: 'system',
-    content:
-      'Synthetic fixed instructions: obey repository guidance, preserve security boundaries, and use trusted verification.',
+    content: '__SYNTHETIC_FIXED_SYSTEM__',
   },
   {
     role: 'user',
@@ -35,7 +61,12 @@ function toolBatch(results, offset) {
       arguments: JSON.stringify({ query: `synthetic-${offset + index + 1}` }),
     },
   }));
-  const assistant = { role: 'assistant', content: null, tool_calls: calls };
+  const assistant = {
+    role: 'assistant',
+    content:
+      'Synthetic completion: I inspected the relevant component convention and will follow the bounded task plan.',
+    tool_calls: calls,
+  };
   const outputs = results.map((result, index) => ({
     role: 'tool',
     tool_call_id: calls[index].id,
@@ -43,6 +74,42 @@ function toolBatch(results, offset) {
     content: `${result.stdout}${result.stderr ? `\n${result.stderr}` : ''}\nexit=${result.exitCode}`,
   }));
   return [assistant, ...outputs];
+}
+
+function retrievalBatch(omission) {
+  const callId = 'synthetic-retrieval-call-01';
+  const retrieved = retrieveCompactedRange(
+    artifactStore,
+    'synthetic-attempt-80',
+    omission,
+  );
+  return [
+    {
+      role: 'assistant',
+      content:
+        'Synthetic completion: retrieve the exact omitted repeated span for review.',
+      tool_calls: [
+        {
+          id: callId,
+          type: 'function',
+          function: {
+            name: 'retrieve_output_artifact',
+            arguments: JSON.stringify({
+              artifact_id: omission.artifactId,
+              first_line: omission.firstLine,
+              last_line: omission.lastLine,
+            }),
+          },
+        },
+      ],
+    },
+    {
+      role: 'tool',
+      tool_call_id: callId,
+      name: 'retrieve_output_artifact',
+      content: retrieved.content,
+    },
+  ];
 }
 
 const firstResults = syntheticToolResults.slice(0, 5);
@@ -54,11 +121,16 @@ const firstBatch = toolBatch(firstResults, 0);
 const secondBatch = toolBatch(secondResults, firstResults.length);
 const compactFirstBatch = toolBatch(compactFirst, 0);
 const compactSecondBatch = toolBatch(compactSecond, firstResults.length);
+const retrievalResult = retrievalBatch(compactFirst[0].omissions[0]);
 
-const checkpointSummary = [
-  'Checkpoint (synthetic): directory listing had 1 unique path and 5 matching atom entries; search found avatar and loading references; command exit=0; repeated optional-cache warning count=4; exact source excerpt follows.',
-  syntheticToolResults[4].stdout,
-].join('\n');
+const boundedTwoRequestMessages = baselineMessages.map((message) =>
+  message.role === 'user'
+    ? {
+        ...message,
+        content: `${message.content}\nSynthetic plan: inspect one atom and one test, edit only those files, verify.`,
+      }
+    : message,
+);
 
 function body(messages, tools) {
   return {
@@ -70,49 +142,72 @@ function body(messages, tools) {
   };
 }
 
-const requests = {};
-for (const [scenario, tools] of [
-  ['currentFocus', currentTools],
-  ['narrowProfile', narrowTools],
-  ['narrowProfileCompacted', narrowTools],
-  ['checkpointedFocus', currentTools],
-]) {
-  requests[scenario] = [
-    body(baselineMessages, tools),
+const requests = {
+  currentFocus: [
+    body(baselineMessages, currentTools),
+    body([...baselineMessages, ...firstBatch], currentTools),
+    body([...baselineMessages, ...firstBatch, ...secondBatch], currentTools),
+  ],
+  narrowProfile: [
+    body(baselineMessages, narrowTools),
+    body([...baselineMessages, ...firstBatch], narrowTools),
+    body([...baselineMessages, ...firstBatch, ...secondBatch], narrowTools),
+  ],
+  narrowProfilePlusRetrievableCompaction: [
+    body(baselineMessages, [...narrowTools, artifactRetrievalTool]),
     body(
-      scenario === 'checkpointedFocus'
-        ? [
-            ...baselineMessages,
-            { role: 'assistant', content: checkpointSummary },
-          ]
-        : [
-            ...baselineMessages,
-            ...(scenario === 'narrowProfileCompacted'
-              ? compactFirstBatch
-              : firstBatch),
-          ],
-      tools,
+      [...baselineMessages, ...compactFirstBatch],
+      [...narrowTools, artifactRetrievalTool],
     ),
     body(
-      scenario === 'checkpointedFocus'
-        ? [
-            ...baselineMessages,
-            { role: 'assistant', content: checkpointSummary },
-            ...secondBatch,
-          ]
-        : [
-            ...baselineMessages,
-            ...(scenario === 'narrowProfileCompacted'
-              ? compactFirstBatch
-              : firstBatch),
-            ...(scenario === 'narrowProfileCompacted'
-              ? compactSecondBatch
-              : secondBatch),
-          ],
-      tools,
+      [
+        ...baselineMessages,
+        ...compactFirstBatch,
+        ...retrievalResult,
+        ...compactSecondBatch,
+      ],
+      [...narrowTools, artifactRetrievalTool],
     ),
-  ];
-}
+  ],
+  boundedTwoRequestPlan: [
+    body(boundedTwoRequestMessages, [...narrowTools, artifactRetrievalTool]),
+    body(
+      [
+        ...boundedTwoRequestMessages,
+        ...compactFirstBatch.slice(0, 6),
+        ...retrievalResult,
+        {
+          role: 'assistant',
+          content:
+            'Synthetic completion: apply the focused edit and report changed paths.',
+        },
+        ...compactSecondBatch,
+      ],
+      [...narrowTools, artifactRetrievalTool],
+    ),
+  ],
+  threeRequestGrowingHistory: [
+    body(baselineMessages, [...narrowTools, artifactRetrievalTool]),
+    body(
+      [...baselineMessages, ...compactFirstBatch],
+      [...narrowTools, artifactRetrievalTool],
+    ),
+    body(
+      [
+        ...baselineMessages,
+        ...compactFirstBatch,
+        ...retrievalResult,
+        {
+          role: 'assistant',
+          content:
+            'Synthetic completion: edit is ready; run targeted verification.',
+        },
+        ...compactSecondBatch,
+      ],
+      [...narrowTools, artifactRetrievalTool],
+    ),
+  ],
+};
 
 // Tokenizer-only corpus. No historical prompt, worker output, or tool arguments.
 const tokenizeOnly = [];
@@ -127,6 +222,10 @@ for (const [group, tools] of [
     schemaOutput.schemas.narrowProfileReachableWithoutToolSearch,
   ],
   ['narrowProfile', narrowTools],
+  [
+    'narrowProfilePlusRetrievableCompaction',
+    [...narrowTools, artifactRetrievalTool],
+  ],
 ]) {
   for (const tool of tools) {
     tokenizeOnly.push({
@@ -165,6 +264,12 @@ for (const [index, result] of syntheticToolResults.entries()) {
 
 await writeFile(
   corpusPath,
-  `${JSON.stringify({ requests, tokenizeOnly })}\n`,
+  `${JSON.stringify({
+    syntheticFixedSystemTokens: 4_803,
+    requests,
+    tokenizeOnly,
+  })}\n`,
   'utf8',
 );
+artifactStore.cleanupScope('synthetic-attempt-80');
+artifactStore.close();

@@ -45,6 +45,13 @@ def count_raw(content, add_special=False):
     return len(tokens)
 
 def measure_prompt(body):
+    body = dict(body)
+    body["messages"] = [
+        dict(message) for message in body.get("messages", [])
+    ]
+    for message in body["messages"]:
+        if message.get("role") == "system" and message.get("content") == "__SYNTHETIC_FIXED_SYSTEM__":
+            message["content"] = SYNTHETIC_FIXED_SYSTEM
     formatted = post("/apply-template", body)
     prompt = formatted.get("prompt")
     if not isinstance(prompt, str):
@@ -53,7 +60,44 @@ def measure_prompt(body):
 
 try:
     corpus = json.load(sys.stdin)
-    result = {"tokenizeOnly": [], "promptScenarios": {}}
+    target_system_tokens = corpus.get("syntheticFixedSystemTokens")
+    if not isinstance(target_system_tokens, int) or target_system_tokens < 1:
+        raise RuntimeError("invalid_fixed_system_target")
+
+    seed = (
+        "Synthetic fixed worker guidance: obey repository instructions; keep work inside the assigned issue checkout; "
+        "protect governance files; use only scoped worker credentials; run trusted verification; report exact outcomes. "
+    )
+    candidate = seed * max(10, target_system_tokens // 20 + 20)
+    low, high = 0, len(candidate)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if count_raw(candidate[:middle]) <= target_system_tokens:
+            low = middle
+        else:
+            high = middle - 1
+    SYNTHETIC_FIXED_SYSTEM = candidate[:low]
+    current_system_tokens = count_raw(SYNTHETIC_FIXED_SYSTEM)
+    suffixes = [" x", " a", " the", " and", " to", " of", " .", " 1", "\n", " policy"]
+    while current_system_tokens < target_system_tokens:
+        best = None
+        for suffix in suffixes:
+            proposed = count_raw(SYNTHETIC_FIXED_SYSTEM + suffix)
+            if current_system_tokens < proposed <= target_system_tokens:
+                if best is None or proposed > best[0]:
+                    best = (proposed, suffix)
+        if best is None:
+            raise RuntimeError("fixed_system_token_calibration_unavailable")
+        current_system_tokens, suffix = best
+        SYNTHETIC_FIXED_SYSTEM += suffix
+    if current_system_tokens != target_system_tokens:
+        raise RuntimeError("fixed_system_token_calibration_mismatch")
+
+    result = {
+        "tokenizeOnly": [],
+        "promptScenarios": {},
+        "syntheticFixedSystemTokens": current_system_tokens,
+    }
     for entry in corpus["tokenizeOnly"]:
         result["tokenizeOnly"].append({
             "kind": entry["kind"],

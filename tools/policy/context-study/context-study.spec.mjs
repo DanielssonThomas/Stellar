@@ -4,36 +4,98 @@ import {
   compactToolResult,
   filterToolSchemas,
   projectRequests,
-  retrieveOriginalLines,
+  retrieveCompactedRange,
 } from './context-study.mjs';
+import { TrustedArtifactStore } from './trusted-artifact-store.mjs';
 import { syntheticToolResults } from './synthetic-fixtures.mjs';
+
+function compactFixture(result) {
+  const store = new TrustedArtifactStore();
+  const compacted = compactToolResult({
+    ...result,
+    artifactStore: store,
+    scope: 'synthetic-fixture',
+  });
+  store.close();
+  return compacted;
+}
 
 test('coalesces only exact repeated stdout and keeps an explicit retrieval range', () => {
   const directory = syntheticToolResults[0];
-  const compacted = compactToolResult(directory);
+  const store = new TrustedArtifactStore({
+    createId: () => '0123456789abcdef0123456789abcdef',
+  });
+  const compacted = compactToolResult({
+    ...directory,
+    artifactStore: store,
+    scope: 'synthetic-fixture',
+  });
   assert.equal(compacted.exitCode, directory.exitCode);
   assert.equal(compacted.stderr, '');
   assert.match(compacted.stdout, /coalesced=29 exact repeats/);
   assert.deepEqual(compacted.omissions, [
     {
-      artifactId: directory.artifactId,
+      artifactId: '0123456789abcdef0123456789abcdef',
       firstLine: 2,
       lastLine: 31,
       repeatCount: 30,
     },
   ]);
   assert.equal(
-    retrieveOriginalLines(directory.stdout, compacted.omissions[0]),
+    retrieveCompactedRange(store, 'synthetic-fixture', compacted.omissions[0])
+      .content,
     Array.from(
       { length: 30 },
       () => 'libs/ui/atoms/src/lib/skeleton-atom',
-    ).join('\n'),
+    ).join('\n') + '\n',
   );
+  store.close();
+});
+
+test('refuses to coalesce repeated output without successful artifact retention', () => {
+  assert.throws(
+    () => compactToolResult({ kind: 'search', stdout: 'same\nsame\nsame' }),
+    /trusted artifact store is required/,
+  );
+});
+
+test('compacts with an opaque attempt-scoped artifact and retrieves exact omitted bytes', () => {
+  const store = new TrustedArtifactStore();
+  const stdout = 'header\nrepeat\nrepeat\nrepeat\ntail\n';
+  const result = compactToolResult({
+    kind: 'command',
+    stdout,
+    stderr: 'warning\n',
+    exitCode: 7,
+    artifactStore: store,
+    scope: 'issue-50:session-a',
+  });
+  const omission = result.omissions[0];
+  assert.match(omission.artifactId, /^[a-f0-9]{32}$/);
+  assert.equal(result.exitCode, 7);
+  assert.equal(result.stderr, 'warning\n');
+  assert.match(result.stdout, /coalesced=2 exact repeats/);
+  assert.doesNotMatch(result.stdout, /issue-50|session-a|\\\\|\/tmp/);
+  const retrieved = retrieveCompactedRange(
+    store,
+    'issue-50:session-a',
+    omission,
+  );
+  assert.deepEqual(retrieved, {
+    content: 'repeat\nrepeat\nrepeat\n',
+    firstLine: 2,
+    lastLine: 4,
+  });
+  assert.throws(
+    () => retrieveCompactedRange(store, 'issue-51:other', omission),
+    (error) => error.category === 'not-found',
+  );
+  store.close();
 });
 
 test('keeps unique search and command lines, status, stderr, and exit code', () => {
   for (const result of syntheticToolResults.slice(1, 4)) {
-    const compacted = compactToolResult(result);
+    const compacted = compactFixture(result);
     assert.equal(compacted.exitCode, result.exitCode);
     assert.equal(compacted.stderr, result.stderr ?? '');
     for (const unique of result.stdout.split('\n').filter(Boolean)) {
@@ -41,15 +103,15 @@ test('keeps unique search and command lines, status, stderr, and exit code', () 
     }
   }
   assert.match(
-    compactToolResult(syntheticToolResults[1]).stdout,
+    compactFixture(syntheticToolResults[1]).stdout,
     /coalesced=39 exact repeats/,
   );
   assert.match(
-    compactToolResult(syntheticToolResults[2]).stdout,
+    compactFixture(syntheticToolResults[2]).stdout,
     /coalesced=199 exact repeats/,
   );
   assert.match(
-    compactToolResult(syntheticToolResults[3]).stdout,
+    compactFixture(syntheticToolResults[3]).stdout,
     /coalesced=59 exact repeats/,
   );
 });
