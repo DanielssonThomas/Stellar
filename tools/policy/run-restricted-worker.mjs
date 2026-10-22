@@ -5,6 +5,12 @@ import {
   buildWorkerImageInspectionArgs,
   verifyWorkerImageCompatibility,
 } from './worker-image-compatibility.mjs';
+import {
+  cancellationConfirmationTimeoutMs,
+  confirmAttemptCleanup,
+  createRootlessContainerOperations,
+  stopAndConfirmContainer,
+} from './worker-container-lifecycle.mjs';
 
 export { buildWorkerImageInspectionArgs };
 import path from 'node:path';
@@ -161,39 +167,16 @@ function wslWorker(...args) {
   ]);
 }
 
-function stopRootlessContainer(name, timeoutMs = 4_000) {
-  return new Promise((resolve) => {
-    const child = spawn(
-      'wsl.exe',
-      [
-        '--distribution',
-        distribution,
-        '--user',
-        workerAccount,
-        '--exec',
-        'podman',
-        'stop',
-        '--time',
-        '2',
-        name,
-      ],
-      { cwd: repositoryRoot, stdio: 'ignore', windowsHide: true },
-    );
-    let settled = false;
-    let timer;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    timer = setTimeout(() => {
-      child.kill();
-      finish(false);
-    }, timeoutMs);
-    child.once('error', () => finish(false));
-    child.once('exit', (code) => finish(code === 0));
-  });
+async function stopRootlessContainer(name, options) {
+  return stopAndConfirmContainer(name, options);
+}
+
+function assertAttemptNotCancelled(lifecycle) {
+  if (
+    lifecycle.cancellationDeadlineAt !== null &&
+    lifecycle.cancellationDeadlineAt !== undefined
+  )
+    throw new Error('Worker attempt cancellation was requested before launch.');
 }
 
 function issueWorkspace(issueNumber) {
@@ -645,6 +628,7 @@ export async function runRestrictedWorker({
   initialUsage = {},
   attemptNumber = 1,
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
+  lifecycle = {},
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const expectedBranchPrefix = `issue/${number}-`;
@@ -675,6 +659,7 @@ export async function runRestrictedWorker({
       "Pinned worker image is not present in peon's local Podman store.",
     );
   await verifyImageCompatibility({ image });
+  assertAttemptNotCancelled(lifecycle);
 
   const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
   if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
@@ -709,10 +694,23 @@ export async function runRestrictedWorker({
     initialModelTokens: initialUsage.modelTokens ?? 0,
     initialToolCalls: initialUsage.toolCalls ?? 0,
   });
-  wslWorker('podman', ...meterArgs);
+  assertAttemptNotCancelled(lifecycle);
+  let localCleanupDeadlineAt;
+  const cleanupDeadlineAt = () => {
+    localCleanupDeadlineAt ??= Date.now() + cancellationConfirmationTimeoutMs;
+    return Math.min(
+      localCleanupDeadlineAt,
+      lifecycle.cancellationDeadlineAt ?? Number.POSITIVE_INFINITY,
+    );
+  };
+  let result;
   let usage;
+  let workerCleanup = { confirmed: false, state: 'inconclusive' };
+  let meterCleanup = { confirmed: false, state: 'inconclusive' };
   try {
+    wslWorker('podman', ...meterArgs);
     waitForMeter(meterName);
+    assertAttemptNotCancelled(lifecycle);
     const workerArgs = buildPodmanArgs({
       issueNumber: number,
       image,
@@ -722,7 +720,7 @@ export async function runRestrictedWorker({
       protectedPaths,
       attemptNumber: attempt,
     });
-    const result = await new Promise((resolve, reject) => {
+    result = await new Promise((resolve, reject) => {
       const child = spawn(
         'wsl.exe',
         [
@@ -751,20 +749,29 @@ export async function runRestrictedWorker({
         }),
       );
     });
+    workerCleanup = await stopRootlessContainer(workerName, {
+      deadlineAt: cleanupDeadlineAt,
+    });
     usage = readMeterUsage(meterName);
-    return {
-      exitCode: result.code ?? 1,
-      signal: result.signal,
-      usage,
-      diagnostics: result.diagnostics,
-    };
   } finally {
-    try {
-      wslWorker('podman', 'stop', '--time', '2', meterName);
-    } catch {
-      throw new Error('Could not confirm metering proxy shutdown.');
-    }
+    meterCleanup = await stopRootlessContainer(meterName, {
+      deadlineAt: cleanupDeadlineAt,
+    });
   }
+  if (!workerCleanup.confirmed)
+    throw new Error('Could not confirm worker container termination.');
+  if (!meterCleanup.confirmed)
+    throw new Error('Could not confirm metering proxy shutdown.');
+  return {
+    exitCode: result.code ?? 1,
+    signal: result.signal,
+    usage,
+    diagnostics: result.diagnostics,
+    cleanup: {
+      workerState: workerCleanup.state,
+      meterState: meterCleanup.state,
+    },
+  };
 }
 
 const activeVerifications = new Map();
@@ -774,6 +781,8 @@ export async function runRestrictedVerification({
   image,
   command,
   attemptNumber = 1,
+  containerOperations = createRootlessContainerOperations(),
+  spawnProcess = spawn,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   const attempt = positiveInteger(attemptNumber, 'attemptNumber');
@@ -799,7 +808,16 @@ export async function runRestrictedVerification({
     attemptNumber: attempt,
   });
   wslWorker('podman', 'image', 'exists', image);
-  const child = spawn(
+  const lifecycle = { cancellationDeadlineAt: null };
+  let localCleanupDeadlineAt;
+  const cleanupDeadlineAt = () => {
+    localCleanupDeadlineAt ??= Date.now() + cancellationConfirmationTimeoutMs;
+    return Math.min(
+      localCleanupDeadlineAt,
+      lifecycle.cancellationDeadlineAt ?? Number.POSITIVE_INFINITY,
+    );
+  };
+  const child = spawnProcess(
     'wsl.exe',
     [
       '--distribution',
@@ -812,36 +830,73 @@ export async function runRestrictedVerification({
     ],
     { cwd: repositoryRoot, stdio: 'ignore', windowsHide: true },
   );
-  const done = new Promise((resolve, reject) => {
-    child.once('error', (error) => {
-      activeVerifications.delete(name);
-      reject(error);
-    });
-    child.once('exit', (code, signal) => {
-      activeVerifications.delete(name);
-      resolve({ exitCode: code ?? 1, signal });
-    });
+  const processCompletion = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code, signal) =>
+      resolve({ exitCode: code ?? 1, signal }),
+    );
   });
-  activeVerifications.set(name, { done });
+  const finishVerification = async (result, processError) => {
+    const cleanup = await stopRootlessContainer(name, {
+      operations: containerOperations,
+      deadlineAt: cleanupDeadlineAt,
+    });
+    if (!cleanup.confirmed)
+      throw new Error('Could not confirm restricted verification termination.');
+    if (processError) throw processError;
+    return { ...result, cleanup };
+  };
+  const done = processCompletion.then(
+    (result) => finishVerification(result),
+    (error) => finishVerification(null, error),
+  );
+  const active = {
+    done,
+    settled: false,
+    lifecycle,
+    operations: containerOperations,
+  };
+  activeVerifications.set(name, active);
+  done.then(
+    () => {
+      active.settled = true;
+      if (activeVerifications.get(name) === active)
+        activeVerifications.delete(name);
+    },
+    () => {
+      active.settled = true;
+      if (activeVerifications.get(name) === active)
+        activeVerifications.delete(name);
+    },
+  );
   return done;
 }
 
 export async function cancelRestrictedVerification({
   issueNumber,
   attemptNumber,
+  containerOperations = createRootlessContainerOperations(),
+  now = Date.now,
+  sleep,
 }) {
   const name = `stellar-peon-verify-${positiveInteger(issueNumber, 'issueNumber')}-${positiveInteger(attemptNumber, 'attemptNumber')}`;
   const active = activeVerifications.get(name);
-  if (!active) return true;
-  const stopRequested = await stopRootlessContainer(name);
-  const stopped = await Promise.race([
-    active.done.then(
-      () => true,
-      () => false,
-    ),
-    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
-  ]);
-  return stopped === true && stopRequested;
+  const deadlineAt = now() + cancellationConfirmationTimeoutMs;
+  if (active)
+    active.lifecycle.cancellationDeadlineAt = Math.min(
+      active.lifecycle.cancellationDeadlineAt ?? deadlineAt,
+      deadlineAt,
+    );
+  const result = await confirmAttemptCleanup({
+    workerName: name,
+    completion: active?.done ?? Promise.resolve(),
+    isCompletionSettled: () => active?.settled ?? true,
+    operations: active?.operations ?? containerOperations,
+    deadlineAt,
+    now,
+    ...(sleep ? { sleep } : {}),
+  });
+  return result.confirmed;
 }
 
 export function inspectRestrictedWorkspace(issueNumber, expectedBranch) {
@@ -910,8 +965,13 @@ export function buildHermesTaskCommand(task, limits = defaultLimits) {
 export function createPeonWorkerAdapter({
   image,
   commandForTask = buildHermesTaskCommand,
+  runAttempt = runRestrictedWorker,
+  containerOperations = createRootlessContainerOperations(),
+  now = Date.now,
+  confirmCancellation = confirmAttemptCleanup,
 }) {
   let active = null;
+  let lastAttempt = null;
   return {
     id: 'peon',
     async run({ task, attemptNumber, limits, budget }) {
@@ -919,17 +979,32 @@ export function createPeonWorkerAdapter({
       const current = {
         meterName: `stellar-peon-meter-${task.issueNumber}-${currentAttempt}`,
         workerName: `stellar-peon-worker-${task.issueNumber}-${currentAttempt}`,
+        lifecycle: { cancellationDeadlineAt: null },
+        settled: false,
+        cancelPromise: null,
         done: null,
       };
-      current.done = runRestrictedWorker({
-        issueNumber: task.issueNumber,
-        image,
-        command: commandForTask(task, limits),
-        limits,
-        initialUsage: budget.snapshot,
-        attemptNumber: currentAttempt,
-      });
+      current.done = Promise.resolve().then(() =>
+        runAttempt({
+          issueNumber: task.issueNumber,
+          image,
+          command: commandForTask(task, limits),
+          limits,
+          initialUsage: budget.snapshot,
+          attemptNumber: currentAttempt,
+          lifecycle: current.lifecycle,
+        }),
+      );
+      current.done.then(
+        () => {
+          current.settled = true;
+        },
+        () => {
+          current.settled = true;
+        },
+      );
       active = current;
+      lastAttempt = current;
       try {
         const result = await current.done;
         return result.exitCode === 0
@@ -950,18 +1025,26 @@ export function createPeonWorkerAdapter({
       if (!active) return { toolCalls: 0, modelTokens: 0 };
       return readMeterUsage(active.meterName);
     },
-    async cancel() {
-      if (!active) return true;
-      const current = active;
-      const stopRequested = await stopRootlessContainer(current.workerName);
-      const stopped = await Promise.race([
-        current.done.then(
-          () => true,
-          () => false,
-        ),
-        new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
-      ]);
-      return stopped === true && stopRequested;
+    cancel() {
+      const current = active ?? lastAttempt;
+      if (!current) return true;
+      if (!current.cancelPromise) {
+        const deadlineAt = now() + cancellationConfirmationTimeoutMs;
+        current.lifecycle.cancellationDeadlineAt = Math.min(
+          current.lifecycle.cancellationDeadlineAt ?? deadlineAt,
+          deadlineAt,
+        );
+        current.cancelPromise = confirmCancellation({
+          workerName: current.workerName,
+          meterName: current.meterName,
+          completion: current.done,
+          isCompletionSettled: () => current.settled,
+          operations: containerOperations,
+          deadlineAt,
+          now,
+        }).then((result) => result === true || result?.confirmed === true);
+      }
+      return current.cancelPromise;
     },
   };
 }
