@@ -14,6 +14,7 @@ import {
   formatWorkerFailure,
   parseArguments,
   redactWorkerDiagnostics,
+  waitForMeter,
 } from './run-restricted-worker.mjs';
 
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
@@ -166,6 +167,73 @@ test('builds a separate hardened metering proxy on the worker, model, and egress
         maxToolCalls: 64,
       }),
     /hard limits/,
+  );
+});
+
+test('waits for a successful usage read from the exact sidecar after health', () => {
+  const events = [];
+  let time = 0;
+  let usageAttempts = 0;
+  const usage = {
+    toolCalls: 0,
+    modelTokens: 0,
+    exceededResource: null,
+    requestRecords: [],
+  };
+  const result = waitForMeter('stellar-peon-meter-50-5', {
+    now: () => time,
+    timeoutMs: 1_000,
+    sleep: () => {
+      time += 250;
+    },
+    readHealth: (name) => {
+      events.push(`health:${name}`);
+      if (events.length < 3) throw new Error('sidecar still starting');
+    },
+    readUsage: (name, options) => {
+      events.push(`usage:${name}:${options.phase}`);
+      usageAttempts += 1;
+      if (usageAttempts === 1) throw new Error('usage endpoint not ready');
+      return usage;
+    },
+  });
+
+  assert.equal(result, usage);
+  assert.deepEqual(events, [
+    'health:stellar-peon-meter-50-5',
+    'health:stellar-peon-meter-50-5',
+    'health:stellar-peon-meter-50-5',
+    'usage:stellar-peon-meter-50-5:startup',
+    'health:stellar-peon-meter-50-5',
+    'usage:stellar-peon-meter-50-5:startup',
+  ]);
+});
+
+test('bounds meter readiness and reports a sanitized startup timeout', () => {
+  let time = 0;
+  assert.throws(
+    () =>
+      waitForMeter('stellar-peon-meter-50-5', {
+        now: () => time,
+        timeoutMs: 500,
+        sleep: () => {
+          time += 250;
+        },
+        readHealth: () => {
+          throw new Error('raw output that must not persist');
+        },
+        readUsage: () => assert.fail('usage must follow healthy sidecar'),
+      }),
+    (error) => {
+      assert.equal(error.code, 'UsageAccountingFailure');
+      assert.deepEqual(error.diagnostic, {
+        category: 'readiness-timeout',
+        phase: 'startup',
+        elapsedMs: 500,
+      });
+      assert.doesNotMatch(error.message, /raw output/);
+      return true;
+    },
   );
 });
 
@@ -356,6 +424,53 @@ test('memoizes repeated worker cancellation for one exact attempt', async () => 
   await run;
   assert.equal(await adapter.cancel(), true);
   assert.equal(cancellationCalls, 1);
+});
+
+test('adapter publishes usage readiness only after launcher confirmation', async () => {
+  let sidecarAvailable = false;
+  let inferenceStarted = false;
+  const adapter = createPeonWorkerAdapter({
+    image,
+    commandForTask: () => ['hermes', 'chat'],
+    runAttempt: async ({ onUsageReady }) => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      sidecarAvailable = true;
+      onUsageReady();
+      inferenceStarted = true;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return {
+        exitCode: 1,
+        usage: { modelTokens: 0, toolCalls: 0, requestRecords: [] },
+      };
+    },
+    readUsage: async (name) => {
+      assert.equal(name, 'stellar-peon-meter-50-5');
+      assert.equal(sidecarAvailable, true);
+      assert.equal(inferenceStarted, true);
+      return { modelTokens: 0, toolCalls: 0, requestRecords: [] };
+    },
+    confirmCancellation: async () => true,
+  });
+  const run = adapter.run({
+    task: { issueNumber: 50 },
+    attemptNumber: 5,
+    limits: { maxRuntimeMsPerWorker: 600_000 },
+    budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
+  });
+
+  await adapter.waitForUsageReady();
+  const snapshot = await adapter.usage();
+  assert.deepEqual(snapshot, {
+    modelTokens: 0,
+    toolCalls: 0,
+    requestRecords: [],
+  });
+  assert.equal((await run).status, 'failed');
+  assert.deepEqual(await adapter.usage(), {
+    modelTokens: 0,
+    toolCalls: 0,
+    requestRecords: [],
+  });
 });
 
 test('restricted verification cancellation confirms only its exact attempt', async () => {

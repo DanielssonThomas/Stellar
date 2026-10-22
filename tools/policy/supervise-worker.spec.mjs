@@ -368,7 +368,11 @@ describe('bounded worker supervision', () => {
     assert.equal(cancelled, true);
     assert.equal(
       result.handoff.attempts[0].failure.code,
-      'UsageAccountingFailure',
+      'InvalidUsageSnapshot',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.diagnostic.category,
+      'invalid-usage',
     );
     assert.doesNotMatch(
       JSON.stringify(result.handoff),
@@ -398,7 +402,13 @@ describe('bounded worker supervision', () => {
               },
             ),
             usage: async () => {
-              throw new Error('meter unavailable');
+              const error = new Error('raw response with sensitive content');
+              error.diagnostic = {
+                category: 'sidecar-terminated',
+                phase: 'running',
+                elapsedMs: 71,
+              };
+              throw error;
             },
           },
           mira: worker('mira', async () => ({ status: 'completed' })),
@@ -413,6 +423,124 @@ describe('bounded worker supervision', () => {
       (attempt) => attempt.workerId === 'peon',
     );
     assert.equal(stopped.failure.code, 'UsageAccountingFailure');
+    assert.deepEqual(stopped.failure.diagnostic, {
+      category: 'sidecar-terminated',
+      phase: 'running',
+      elapsedMs: 71,
+    });
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /raw response with sensitive content/,
+    );
+  });
+
+  it('waits for the exact trusted usage source before polling delayed startup', async () => {
+    let sidecarReady = false;
+    let inferencePermitted = false;
+    let prematurePolls = 0;
+    let successfulPolls = 0;
+    let resolveReadiness;
+    const usageReady = new Promise((resolve) => {
+      resolveReadiness = resolve;
+    });
+    const delayedWorker = {
+      ...worker('peon', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        sidecarReady = true;
+        resolveReadiness();
+        inferencePermitted = true;
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        return {
+          status: 'failed',
+          failure: { code: 'NoInference', message: 'startup-only test' },
+          usage: { toolCalls: 0, modelTokens: 0 },
+        };
+      }),
+      waitForUsageReady: () => usageReady,
+      usage: async () => {
+        if (!sidecarReady || !inferencePermitted) {
+          prematurePolls += 1;
+          const error = new Error('simulated sidecar not ready');
+          error.diagnostic = {
+            category: 'sidecar-not-started',
+            phase: 'startup',
+            elapsedMs: 1,
+          };
+          throw error;
+        }
+        successfulPolls += 1;
+        return { toolCalls: 0, modelTokens: 0 };
+      },
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: delayedWorker,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        limits: { maxRuntimeMsPerWorker: 2_000, maxAttemptsPerWorker: 1 },
+      }),
+    );
+
+    assert.equal(prematurePolls, 0);
+    assert.ok(successfulPolls > 0);
+    assert.equal(result.handoff.attempts[0].failure.code, 'NoInference');
+  });
+
+  it('records only sanitized startup accounting category and timing', async () => {
+    let cancelled = false;
+    const delayedWorker = {
+      ...worker(
+        'peon',
+        ({ signal }) =>
+          new Promise((resolve) =>
+            signal.addEventListener(
+              'abort',
+              () => resolve({ status: 'failed' }),
+              { once: true },
+            ),
+          ),
+        async () => {
+          cancelled = true;
+          return true;
+        },
+      ),
+      waitForUsageReady: async () => {
+        const error = new Error('untrusted raw response must not persist');
+        error.diagnostic = {
+          category: 'usage-endpoint-unavailable',
+          phase: 'startup',
+          elapsedMs: 37,
+          response: 'do not persist',
+        };
+        throw error;
+      },
+      usage: async () =>
+        assert.fail('usage must not be polled before readiness'),
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: delayedWorker,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        limits: { maxAttemptsPerWorker: 1 },
+      }),
+    );
+
+    const attempt = result.handoff.attempts[0];
+    assert.equal(cancelled, true);
+    assert.equal(attempt.failure.code, 'UsageReadinessFailed');
+    assert.equal(
+      attempt.failure.diagnostic.category,
+      'usage-endpoint-unavailable',
+    );
+    assert.equal(attempt.failure.diagnostic.phase, 'startup');
+    assert.ok(Number.isSafeInteger(attempt.failure.diagnostic.elapsedMs));
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /untrusted raw response|do not persist/,
+    );
   });
 
   it('stops a timed out worker and routes within the total runtime ceiling', async () => {
