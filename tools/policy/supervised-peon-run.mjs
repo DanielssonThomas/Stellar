@@ -14,7 +14,7 @@ import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 export const trustedPeonWorkerImage =
-  'ghcr.io/stellar-ai-corp/hermes-worker@sha256:faf69a7713ae098bce64c75f3d38d6351c38f9733ea98c5b70bfb17f33381d44';
+  'ghcr.io/stellar-ai-corp/hermes-worker@sha256:e847e440fb57416aba8336781114a4f9b29d8c9275131cf5a84e019ee870ef31';
 
 function label(issue, prefix) {
   return issue.labels

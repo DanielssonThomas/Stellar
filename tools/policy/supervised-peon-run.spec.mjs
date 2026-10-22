@@ -15,6 +15,13 @@ const sessionId = 'peon-issue-50-controlled-trial';
 const root = await mkdtemp(join(tmpdir(), 'stellar-live-supervisor-'));
 const handoffPath = join(root, 'handoff.json');
 
+test('pins the independently verified compatible worker image digest', () => {
+  assert.equal(
+    trustedPeonWorkerImage,
+    'ghcr.io/stellar-ai-corp/hermes-worker@sha256:e847e440fb57416aba8336781114a4f9b29d8c9275131cf5a84e019ee870ef31',
+  );
+});
+
 const issue = {
   number: 50,
   state: 'OPEN',
