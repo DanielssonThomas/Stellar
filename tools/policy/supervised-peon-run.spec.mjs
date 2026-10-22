@@ -141,6 +141,48 @@ test('does not create the live worker until the current assignment is valid', as
   assert.equal(workerCreated, false);
 });
 
+test('rejects incompatible images before worker creation and supervision', async () => {
+  let workerCreated = false;
+  let supervisorStarted = false;
+  let verificationStarted = false;
+  let inspectedImage;
+
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => issue,
+      readClaim: async () => claim(),
+      inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+      verifyImageCompatibility: async (input) => {
+        inspectedImage = input.image;
+        throw new Error(
+          'Pinned worker image is incompatible: metering proxy hashes differ.',
+        );
+      },
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+      runSupervisor: async () => {
+        supervisorStarted = true;
+      },
+      runVerification: async () => {
+        verificationStarted = true;
+      },
+    }),
+    /Pinned worker image is incompatible/,
+  );
+
+  assert.equal(inspectedImage, image);
+  assert.equal(workerCreated, false);
+  assert.equal(supervisorStarted, false);
+  assert.equal(verificationStarted, false);
+});
+
 test('wires one live attempt to the deterministic supervisor and isolated verifier', async () => {
   let options;
   let verification;
@@ -158,6 +200,10 @@ test('wires one live attempt to the deterministic supervisor and isolated verifi
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
     createWorkerAdapter: ({ image: selectedImage }) => ({
       id: 'peon',
       run: async () => ({ status: 'completed' }),
@@ -237,6 +283,10 @@ test('stops a live adapter at the metered tool budget and persists a handoff', a
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
     createWorkerAdapter: () => ({
       id: 'peon',
       run: ({ signal }) =>
@@ -281,6 +331,10 @@ test('stops and preserves a handoff when the live usage channel fails', async ()
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
     createWorkerAdapter: () => ({
       id: 'peon',
       run: ({ signal }) =>

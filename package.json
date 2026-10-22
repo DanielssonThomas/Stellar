@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "husky",
     "policy:validate-issue": "node tools/policy/validate-issue.mjs",
-    "policy:test": "node --test tools/policy/validate-issue.spec.mjs tools/policy/validate-issue-event.spec.mjs tools/policy/validate-commit-message.spec.mjs tools/policy/issue-worktree.spec.mjs tools/policy/manage-issue-worktree.spec.mjs tools/policy/update-issue.spec.mjs tools/policy/prepare-pr.spec.mjs tools/policy/supervise-worker.spec.mjs tools/policy/worker-integration-gate.spec.mjs tools/policy/worker-integration-runner.spec.mjs tools/policy/run-restricted-worker.spec.mjs tools/policy/supervised-peon-run.spec.mjs tools/policy/peon-metering-proxy.spec.mjs",
+    "policy:test": "node --test tools/policy/validate-issue.spec.mjs tools/policy/validate-issue-event.spec.mjs tools/policy/validate-commit-message.spec.mjs tools/policy/issue-worktree.spec.mjs tools/policy/manage-issue-worktree.spec.mjs tools/policy/update-issue.spec.mjs tools/policy/prepare-pr.spec.mjs tools/policy/supervise-worker.spec.mjs tools/policy/worker-integration-gate.spec.mjs tools/policy/worker-integration-runner.spec.mjs tools/policy/run-restricted-worker.spec.mjs tools/policy/supervised-peon-run.spec.mjs tools/policy/peon-metering-proxy.spec.mjs tools/policy/worker-image-compatibility.spec.mjs",
     "policy:docs": "node tools/policy/validate-docs.mjs"
   },
   "private": true,

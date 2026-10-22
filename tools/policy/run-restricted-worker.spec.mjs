@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
+  buildWorkerImageInspectionArgs,
   buildMeteringProxyArgs,
   buildPodmanArgs,
   buildRestrictedVerificationArgs,
@@ -289,6 +290,29 @@ test('rejects image tags without an immutable digest', () => {
         command: ['hermes'],
       }),
     /ghcr\.io\/stellar-ai-corp\/hermes-worker/,
+  );
+});
+
+test('uses an offline read-only sha256 command for the embedded proxy', () => {
+  const args = buildWorkerImageInspectionArgs(image);
+
+  assert.deepEqual(args.slice(0, 2), ['run', '--rm']);
+  assert.ok(args.includes('--pull=never'));
+  assert.ok(args.includes('--network=none'));
+  assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--entrypoint=/usr/bin/sha256sum'));
+  assert.equal(
+    args.some((argument) =>
+      /GH_TOKEN|STELLAR_INTEGRATION_TOKEN|secret|18436/i.test(argument),
+    ),
+    false,
+  );
+  assert.throws(
+    () =>
+      buildWorkerImageInspectionArgs(
+        'ghcr.io/stellar-ai-corp/hermes-worker:latest',
+      ),
+    /pinned by a lowercase SHA-256 digest/,
   );
 });
 
