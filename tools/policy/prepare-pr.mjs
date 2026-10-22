@@ -21,16 +21,31 @@ export function validatePrepareState({
   now = Date.now(),
 }) {
   const errors = [];
-  const validation = validateFreshIssue(issue, worker);
-  if (!validation.valid) errors.push(...validation.errors);
   const labels = (issue.labels ?? []).map((label) =>
     typeof label === 'string' ? label : label.name,
   );
   const target = labels.find((label) => label.startsWith('target:'))?.slice(7);
+  const mainPromotionBootstrap =
+    target === 'main' &&
+    labels.includes('status:triage') &&
+    labels.includes('type:blocker') &&
+    ['owner:codex', 'owner:maintainer'].includes(ownerLabel(worker)) &&
+    claim?.mainPromotionBootstrap === true;
+  const validatedIssue = mainPromotionBootstrap
+    ? {
+        ...issue,
+        labels: labels.map((label) =>
+          label === 'status:triage' ? 'status:ready' : label,
+        ),
+      }
+    : issue;
+  const validation = validateFreshIssue(validatedIssue, worker);
+  if (!validation.valid) errors.push(...validation.errors);
   if (
     !['status:in-progress', 'status:review'].some((label) =>
       labels.includes(label),
-    )
+    ) &&
+    !mainPromotionBootstrap
   )
     errors.push('Issue must be in progress or already in review.');
   if (!target) errors.push('Issue target is missing.');

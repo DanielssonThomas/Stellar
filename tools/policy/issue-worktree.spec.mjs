@@ -123,12 +123,114 @@ describe('issue worktree assignment', () => {
     );
   });
 
+  it('permits only a validated Codex main-promotion blocker to be bootstrapped from triage', () => {
+    const mainIssue = fixtureIssue({
+      labels: [
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'status:triage',
+        'owner:codex',
+      ],
+    });
+    const validateMain = (issue, worker = 'codex') =>
+      validateAssignment({
+        issue,
+        worker,
+        targetBranch: 'main',
+        dependencies: [],
+        existingBranches: ['develop', 'main'],
+        allowMainPromotionBootstrap: true,
+      });
+    assert.deepEqual(validateMain(mainIssue), { valid: true, errors: [] });
+    for (const changed of [
+      {
+        ...mainIssue,
+        labels: mainIssue.labels.map((label) =>
+          label === 'type:blocker' ? 'type:chore' : label,
+        ),
+      },
+      {
+        ...mainIssue,
+        labels: mainIssue.labels.map((label) =>
+          label === 'target:main' ? 'target:develop' : label,
+        ),
+      },
+      {
+        ...mainIssue,
+        labels: mainIssue.labels.map((label) =>
+          label === 'status:triage' ? 'status:ready' : label,
+        ),
+      },
+    ])
+      assert.equal(validateMain(changed).valid, false);
+    assert.equal(validateMain(mainIssue, 'peon').valid, false);
+    assert.equal(
+      validateAssignment({
+        issue: mainIssue,
+        worker: 'codex',
+        targetBranch: 'main',
+        dependencies: [],
+        existingBranches: ['develop', 'main'],
+      }).valid,
+      false,
+    );
+  });
+
   it('derives a stable issue branch name', () => {
     assert.equal(issueBranch(fixtureIssue()), 'issue/42-repair-a-small-widget');
   });
 });
 
 describe('durable worktree claims', () => {
+  it('creates a triage main-promotion worktree from origin/main without changing issue state', async () => {
+    const checkout = join(root, 'main-promotion-checkout');
+    const remote = join(root, 'main-promotion-origin.git');
+    await mkdir(checkout);
+    git(root, 'init', '--bare', remote);
+    git(checkout, 'init', '-b', 'develop');
+    git(checkout, 'config', 'user.name', 'Stellar Test');
+    git(checkout, 'config', 'user.email', 'stellar-test@example.invalid');
+    await writeFile(join(checkout, 'README.md'), 'develop base\n');
+    git(checkout, 'add', 'README.md');
+    git(checkout, 'commit', '-m', 'develop fixture');
+    git(checkout, 'remote', 'add', 'origin', remote);
+    git(checkout, 'push', '-u', 'origin', 'develop');
+    git(checkout, 'checkout', '-b', 'main');
+    await writeFile(join(checkout, 'README.md'), 'main base\n');
+    git(checkout, 'commit', '-am', 'main fixture');
+    git(checkout, 'push', '-u', 'origin', 'main');
+    git(checkout, 'checkout', 'develop');
+    git(checkout, 'fetch', 'origin');
+    const issue = fixtureIssue({
+      labels: [
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'status:triage',
+        'owner:codex',
+      ],
+    });
+    const claim = await claimWorktree({
+      repoRoot: checkout,
+      issue,
+      worker: 'codex',
+      sessionId: 'main-promotion-test',
+      targetBranch: 'main',
+    });
+    assert.equal(claim.mainPromotionBootstrap, true);
+    assert.equal(claim.target, 'main');
+    assert.equal(
+      git(claim.worktreePath, 'rev-parse', 'HEAD'),
+      git(checkout, 'rev-parse', 'origin/main'),
+    );
+    assert.notEqual(
+      git(claim.worktreePath, 'rev-parse', 'HEAD'),
+      git(checkout, 'rev-parse', 'origin/develop'),
+    );
+    assert.ok(issue.labels.includes('status:triage'));
+  });
+
   it('creates a dedicated worktree, resumes only the same session, and preserves changes', async () => {
     const checkout = join(root, 'checkout');
     const remote = join(root, 'origin.git');

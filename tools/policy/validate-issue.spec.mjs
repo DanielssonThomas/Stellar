@@ -22,6 +22,29 @@ describe('issue metadata policy', () => {
     assert.deepEqual(result, { valid: true, ready: true, errors: [] });
   });
 
+  it('accepts a main promotion only for a Codex-owned blocker', () => {
+    const labels = [
+      'priority:high',
+      'target:main',
+      'type:blocker',
+      'owner:codex',
+      'status:ready',
+    ];
+    assert.deepEqual(validateIssue(issue(labels)), {
+      valid: true,
+      ready: true,
+      errors: [],
+    });
+    for (const changed of [
+      labels.map((label) => (label === 'owner:codex' ? 'worker:peon' : label)),
+      labels.map((label) => (label === 'type:blocker' ? 'type:chore' : label)),
+    ]) {
+      const result = validateIssue(issue(changed));
+      assert.equal(result.valid, false);
+      assert.ok(result.errors.includes('Invalid target label.'));
+    }
+  });
+
   it('keeps incomplete issues in triage', () => {
     const result = validateIssue({
       title: 'Needs refinement',
