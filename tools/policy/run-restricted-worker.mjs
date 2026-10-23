@@ -39,6 +39,7 @@ const workerImageRepository = 'ghcr.io/stellar-ai-corp/hermes-worker';
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 const diagnosticStreamLimitBytes = 8 * 1024;
+const allowedUsageStages = new Set(['inspect', 'implement']);
 
 export function inspectPinnedWorkerImageProxy(image) {
   const result = spawnSync(
@@ -205,6 +206,121 @@ function issueWorkspace(issueNumber) {
   return path.posix.join(workspaceRoot, `issue-${issueNumber}`);
 }
 
+export function createReadOnlyInspectionSnapshot({
+  issueNumber,
+  attemptNumber,
+  requiredPaths = [
+    'AGENTS.md',
+    'docs/guides/issue-workflow.md',
+    '.agents/skills/implement-issue/SKILL.md',
+  ],
+  execute = wslWorker,
+}) {
+  const number = positiveInteger(issueNumber, 'issueNumber');
+  const attempt = positiveInteger(attemptNumber, 'attemptNumber');
+  const source = issueWorkspace(number);
+  const parent = '/home/peon/.cache/stellar-stage1';
+  const snapshotPath = `${parent}/issue-${number}-attempt-${attempt}`;
+  const archivePath = `${snapshotPath}.tar`;
+  const repositoryRoot = execute(
+    'git',
+    '-C',
+    source,
+    'rev-parse',
+    '--show-toplevel',
+  );
+  if (repositoryRoot !== source)
+    throw new Error('Stage 1 source is not the assigned issue worktree.');
+  const branch = execute('git', '-C', source, 'branch', '--show-current');
+  if (!new RegExp(`^issue/${number}-[a-z0-9-]+$`).test(branch))
+    throw new Error(
+      'Stage 1 source branch does not belong to the assigned issue.',
+    );
+  const clean = execute(
+    'git',
+    '-C',
+    source,
+    'status',
+    '--porcelain=v1',
+    '--untracked-files=all',
+  );
+  if (clean)
+    throw new Error('Stage 1 requires a clean assigned issue worktree.');
+  const commit = execute('git', '-C', source, 'rev-parse', 'HEAD');
+  if (!/^[a-f0-9]{40,64}$/.test(commit))
+    throw new Error('Stage 1 could not validate the source commit.');
+  execute('mkdir', '-p', '--', '/home/peon/.cache');
+  if (execute('realpath', '-e', '/home/peon/.cache') !== '/home/peon/.cache')
+    throw new Error('Stage 1 cache parent resolves through an untrusted path.');
+  execute('mkdir', '-p', '--', parent);
+  if (execute('realpath', '-e', parent) !== parent)
+    throw new Error('Stage 1 snapshot parent resolves through a symlink.');
+  execute('chmod', '700', '--', parent);
+  execute('test', '!', '-e', snapshotPath);
+  execute('test', '!', '-e', archivePath);
+  execute('mkdir', '-m', '700', '--', snapshotPath);
+  try {
+    execute(
+      'git',
+      '-C',
+      source,
+      'archive',
+      '--format=tar',
+      `--output=${archivePath}`,
+      commit,
+    );
+    execute('chmod', '600', '--', archivePath);
+    execute(
+      'tar',
+      '--extract',
+      '--file',
+      archivePath,
+      '--directory',
+      snapshotPath,
+    );
+    execute('test', '!', '-e', `${snapshotPath}/.git`);
+    for (const entry of requiredPaths) {
+      if (
+        typeof entry !== 'string' ||
+        !entry ||
+        entry.startsWith('/') ||
+        /[\\,:\0]/.test(entry) ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..')
+      )
+        throw new Error('Required Stage 1 guidance path is invalid.');
+      execute('test', '-f', `${snapshotPath}/${entry}`);
+    }
+    execute('rm', '--', archivePath);
+  } catch {
+    try {
+      execute('rm', '-rf', '--', snapshotPath, archivePath);
+    } catch {
+      throw new Error(
+        'Stage 1 snapshot preparation and cleanup are inconclusive.',
+      );
+    }
+    throw new Error('Stage 1 could not create a clean source snapshot.');
+  }
+  return { snapshotPath, commit };
+}
+
+export function removeReadOnlyInspectionSnapshot({
+  issueNumber,
+  attemptNumber,
+  execute = wslWorker,
+}) {
+  const number = positiveInteger(issueNumber, 'issueNumber');
+  const attempt = positiveInteger(attemptNumber, 'attemptNumber');
+  const snapshotPath = `/home/peon/.cache/stellar-stage1/issue-${number}-attempt-${attempt}`;
+  const archivePath = `${snapshotPath}.tar`;
+  if (execute('realpath', '-e', snapshotPath) !== snapshotPath)
+    throw new Error('Stage 1 snapshot cleanup path changed unexpectedly.');
+  execute('rm', '-rf', '--', snapshotPath, archivePath);
+  execute('test', '!', '-e', snapshotPath);
+  execute('test', '!', '-e', archivePath);
+  return { confirmed: true };
+}
+
 function trustedHermesConfigSource(profile) {
   const filename = peonHermesConfigFilename(profile);
   const windowsSource = path.join(repositoryRoot, 'tools', 'policy', filename);
@@ -236,6 +352,9 @@ export function buildPodmanArgs({
   attemptNumber = 1,
   hermesProfile = defaultPeonHermesProfile,
   hermesConfigSource,
+  workspaceSource,
+  workspaceAccess = 'read-write',
+  includeGithubCredential = true,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
@@ -275,6 +394,34 @@ export function buildPodmanArgs({
     hermesProfile,
     hermesConfigSource,
   );
+  if (!['read-only', 'read-write'].includes(workspaceAccess))
+    throw new Error('Workspace access must be read-only or read-write.');
+  if (typeof includeGithubCredential !== 'boolean')
+    throw new Error(
+      'GitHub credential selection must be trusted boolean metadata.',
+    );
+  if (workspaceAccess === 'read-only' && includeGithubCredential)
+    throw new Error(
+      'Read-only inspection containers cannot receive GitHub credentials.',
+    );
+  const workspaceMountSource = workspaceSource ?? workspace;
+  if (
+    typeof workspaceMountSource !== 'string' ||
+    !path.posix.isAbsolute(workspaceMountSource) ||
+    /[,:\\\0]/.test(workspaceMountSource) ||
+    workspaceMountSource.split('/').some((part) => part === '..')
+  )
+    throw new Error('Workspace mount source must be a trusted absolute path.');
+  if (
+    workspaceAccess === 'read-only' &&
+    !new RegExp(
+      `^/home/peon/\\.cache/stellar-stage1/issue-${number}-attempt-[1-9][0-9]*$`,
+    ).test(workspaceMountSource)
+  )
+    throw new Error(
+      'Read-only inspection requires an attempt-scoped archive snapshot.',
+    );
+  const workspaceMountMode = workspaceAccess === 'read-only' ? 'ro' : 'rw';
   return [
     'run',
     '--rm',
@@ -294,11 +441,11 @@ export function buildPodmanArgs({
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
-    `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    `--mount=type=bind,src=${workspaceMountSource},dst=/workspace,${workspaceMountMode}`,
     `--mount=type=bind,src=${trustedConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
     ...protectedPaths.map(
       (entry) =>
-        `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
+        `--mount=type=bind,src=${path.posix.join(workspaceMountSource, entry)},dst=/workspace/${entry},ro`,
     ),
     '--workdir=/workspace',
     '--env=HOME=/tmp',
@@ -316,7 +463,9 @@ export function buildPodmanArgs({
     '--env=https_proxy=http://peon-meter:3128',
     '--env=http_proxy=http://peon-meter:3128',
     '--env=NO_PROXY=localhost,127.0.0.1,peon-meter',
-    `--secret=source=${workerSecret},type=env,target=GH_TOKEN`,
+    ...(includeGithubCredential
+      ? [`--secret=source=${workerSecret},type=env,target=GH_TOKEN`]
+      : []),
     image,
     ...command,
   ];
@@ -330,6 +479,7 @@ export function buildMeteringProxyArgs({
   maxModelTokens,
   maxToolCalls,
   maxForwardedRequests,
+  twoStage = false,
   initialModelTokens = 0,
   initialToolCalls = 0,
 }) {
@@ -345,6 +495,8 @@ export function buildMeteringProxyArgs({
     maxForwardedRequests === undefined
       ? null
       : positiveInteger(maxForwardedRequests, 'maxForwardedRequests');
+  if (twoStage && maxRequests !== 2)
+    throw new Error('Two-stage metering requires exactly two total requests.');
   const initialTokens = Number(initialModelTokens);
   const initialTools = Number(initialToolCalls);
   if (
@@ -387,12 +539,58 @@ export function buildMeteringProxyArgs({
     ...(maxRequests === null
       ? []
       : [`--env=STELLAR_MAX_FORWARDED_REQUESTS=${maxRequests}`]),
+    ...(twoStage ? ['--env=STELLAR_TWO_STAGE=1'] : []),
     `--env=STELLAR_INITIAL_MODEL_TOKENS=${initialTokens}`,
     `--env=STELLAR_INITIAL_TOOL_CALLS=${initialTools}`,
     image,
     'node',
     '/opt/stellar-peon-metering-proxy.mjs',
   ];
+}
+
+export function advanceTwoStageMeter(meterName, execute = wslWorker) {
+  if (!/^stellar-peon-meter-[1-9][0-9]*-[1-9][0-9]*$/.test(meterName ?? ''))
+    throw new Error('Meter name must identify one issue attempt.');
+  const control =
+    "const r=await fetch('http://127.0.0.1:18437/stage/implement',{method:'POST'});const b=await r.json();if(!r.ok||b.stage!=='implement')process.exit(1);process.stdout.write(JSON.stringify({stage:b.stage}));";
+  const result = JSON.parse(
+    execute(
+      'podman',
+      'exec',
+      meterName,
+      'node',
+      '--input-type=module',
+      '-e',
+      control,
+    ),
+  );
+  if (result?.stage !== 'implement')
+    throw new Error('Trusted meter rejected the Stage 2 transition.');
+  return result;
+}
+
+export function readTwoStageMeterIdentity(meterName, execute = wslWorker) {
+  if (!/^stellar-peon-meter-[1-9][0-9]*-[1-9][0-9]*$/.test(meterName ?? ''))
+    throw new Error('Meter name must identify one issue attempt.');
+  const output = execute(
+    'podman',
+    'inspect',
+    '--format',
+    '{{.Id}}|{{.State.StartedAt}}|{{.RestartCount}}',
+    meterName,
+  );
+  const [id, startedAt, restartCountText, ...extra] = output.split('|');
+  const restartCount = Number(restartCountText);
+  if (
+    extra.length > 0 ||
+    !/^[a-f0-9]{64}$/.test(id ?? '') ||
+    typeof startedAt !== 'string' ||
+    !startedAt ||
+    !Number.isSafeInteger(restartCount) ||
+    restartCount < 0
+  )
+    throw new Error('Attempt metering identity is invalid or unavailable.');
+  return { id, startedAt, restartCount };
 }
 
 function meterLifecycleError(category, phase, message, elapsedMs = 0) {
@@ -445,6 +643,9 @@ function readMeterUsage(
     ? value.requestRecords.length <= 32
       ? value.requestRecords.map((record) => ({
           request: safeNumber(record?.request),
+          ...(allowedUsageStages.has(record?.stage)
+            ? { stage: record.stage }
+            : {}),
           decision: decisions.includes(record?.decision)
             ? record.decision
             : 'unknown',
@@ -478,6 +679,10 @@ function readMeterUsage(
     toolCalls: safeNumber(value.toolCalls),
     modelTokens: safeNumber(value.modelTokens),
     forwardedRequests: safeNumber(value.forwardedRequests),
+    ...(allowedUsageStages.has(value.stage) ? { stage: value.stage } : {}),
+    ...(value.inflightRequests === undefined
+      ? {}
+      : { inflightRequests: safeNumber(value.inflightRequests) }),
     exceededResource: value.exceededResource,
     requestRecords: records,
   };
@@ -565,6 +770,7 @@ function readMeterUsage(
   const validRequestRecord = (record) =>
     Number.isSafeInteger(record?.request) &&
     record.request >= 1 &&
+    (record.stage === undefined || allowedUsageStages.has(record.stage)) &&
     requestDecisions.includes(record.decision) &&
     (record.promptTokens === null ||
       (Number.isSafeInteger(record.promptTokens) &&
@@ -593,6 +799,7 @@ function readMeterUsage(
     Object.keys(record).every((key) =>
       [
         'request',
+        'stage',
         'decision',
         'promptTokens',
         'remainingTokens',
@@ -612,6 +819,10 @@ function readMeterUsage(
     usage.modelTokens < 0 ||
     !Number.isSafeInteger(usage.forwardedRequests) ||
     usage.forwardedRequests < 0 ||
+    (usage.stage !== undefined && !allowedUsageStages.has(usage.stage)) ||
+    (usage.inflightRequests !== undefined &&
+      (!Number.isSafeInteger(usage.inflightRequests) ||
+        usage.inflightRequests < 0)) ||
     !Array.isArray(usage.requestRecords) ||
     usage.requestRecords.length > 32 ||
     usage.requestRecords.some((record) => !validRequestRecord(record)) ||

@@ -164,7 +164,7 @@ export async function runSupervisedPeonIssue({
   });
   if (task.hermesWorkflow === 'two-stage')
     throw new Error(
-      'The two-stage workflow is selected but disabled until trusted stage and read-only inspection boundaries are implemented.',
+      'The two-stage workflow is selected but disabled until the trusted stage controller is integrated, the worker image supports the stage gate, and Hermes stage completion is proven.',
     );
   const initialWorkspace = await inspectWorktree(number, task.branch);
   if (!initialWorkspace || typeof initialWorkspace.fingerprint !== 'string')

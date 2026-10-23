@@ -6,6 +6,10 @@ import {
   buildWorkerImageInspectionArgs,
   buildMeteringProxyArgs,
   buildPodmanArgs,
+  advanceTwoStageMeter,
+  createReadOnlyInspectionSnapshot,
+  removeReadOnlyInspectionSnapshot,
+  readTwoStageMeterIdentity,
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
@@ -170,6 +174,191 @@ test('changes only the read-only Hermes config source for an opted-in profile', 
   );
 });
 
+test('builds an inspection container with a read-only snapshot and no GitHub credential', () => {
+  const snapshot = '/home/peon/.cache/stellar-stage1/issue-50-attempt-1';
+  const args = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    protectedPaths,
+    command: ['hermes', 'chat'],
+    hermesConfigSource: trustedFocusConfig,
+    workspaceSource: snapshot,
+    workspaceAccess: 'read-only',
+    includeGithubCredential: false,
+  });
+
+  assert.ok(
+    args.includes(`--mount=type=bind,src=${snapshot},dst=/workspace,ro`),
+  );
+  assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--network=stellar-peon-worker'));
+  assert.equal(
+    args.some((argument) => argument.startsWith('--secret=')),
+    false,
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('/.git/')),
+    false,
+  );
+  assert.equal(args.includes('--network=stellar-peon-egress'), false);
+  assert.equal(args.includes('--network=stellar-peon-model'), false);
+  assert.ok(
+    args
+      .filter((argument) => argument.includes('dst=/workspace/'))
+      .every((argument) => argument.endsWith(',ro')),
+  );
+  assert.throws(
+    () =>
+      buildPodmanArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        protectedPaths,
+        command: ['hermes', 'chat'],
+        hermesConfigSource: trustedFocusConfig,
+        workspaceSource: snapshot,
+        workspaceAccess: 'read-only',
+      }),
+    /cannot receive GitHub credentials/,
+  );
+  assert.throws(
+    () =>
+      buildPodmanArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        protectedPaths,
+        command: ['hermes', 'chat'],
+        hermesConfigSource: trustedFocusConfig,
+        workspaceAccess: 'read-only',
+        includeGithubCredential: false,
+      }),
+    /attempt-scoped archive snapshot/,
+  );
+});
+
+test('creates Stage 1 snapshots only from clean worktrees and omits Git metadata', () => {
+  const calls = [];
+  const snapshot = createReadOnlyInspectionSnapshot({
+    issueNumber: 84,
+    attemptNumber: 3,
+    execute: (...args) => {
+      calls.push(args);
+      if (args[0] === 'git' && args.includes('--show-toplevel'))
+        return '/home/peon/workspaces/issue-84';
+      if (args[0] === 'git' && args.includes('--show-current'))
+        return 'issue/84-add-an-opt-in-bounded-two-stage-peon-coding-work';
+      if (args[0] === 'git' && args.at(-1) === 'HEAD') return 'f'.repeat(40);
+      if (args[0] === 'realpath') return args.at(-1);
+      return '';
+    },
+  });
+  assert.deepEqual(snapshot, {
+    snapshotPath: '/home/peon/.cache/stellar-stage1/issue-84-attempt-3',
+    commit: 'f'.repeat(40),
+  });
+  assert.ok(
+    calls.some(
+      (args) =>
+        args[0] === 'git' &&
+        args.includes('status') &&
+        args.includes('--untracked-files=all'),
+    ),
+  );
+  assert.ok(
+    calls.some((args) => args[0] === 'git' && args.includes('archive')),
+  );
+  assert.ok(
+    calls.some((args) => args[0] === 'test' && args.at(-1).endsWith('/.git')),
+  );
+  assert.ok(calls.some((args) => args[0] === 'chmod' && args[1] === '700'));
+});
+
+test('refuses dirty or symlinked Stage 1 snapshot sources before creating artifacts', () => {
+  const dirtyCalls = [];
+  assert.throws(
+    () =>
+      createReadOnlyInspectionSnapshot({
+        issueNumber: 84,
+        attemptNumber: 3,
+        execute: (...args) => {
+          dirtyCalls.push(args);
+          if (args[0] === 'git' && args.includes('--show-toplevel'))
+            return '/home/peon/workspaces/issue-84';
+          if (args[0] === 'git' && args.includes('--show-current'))
+            return 'issue/84-safe-branch';
+          return args.includes('--porcelain=v1') ? ' M AGENTS.md' : '';
+        },
+      }),
+    /clean assigned issue worktree/,
+  );
+  assert.equal(dirtyCalls.length, 3);
+
+  const symlinkCalls = [];
+  assert.throws(
+    () =>
+      createReadOnlyInspectionSnapshot({
+        issueNumber: 84,
+        attemptNumber: 3,
+        execute: (...args) => {
+          symlinkCalls.push(args);
+          return args[0] === 'git' && args.at(-1) === '--show-toplevel'
+            ? '/home/peon/workspaces/issue-84'
+            : args[0] === 'git' && args.at(-1) === '--show-current'
+              ? 'issue/84-safe-branch'
+              : args[0] === 'git' && args.at(-1) === 'HEAD'
+                ? 'f'.repeat(40)
+                : args[0] === 'realpath' && args.at(-1) === '/home/peon/.cache'
+                  ? '/tmp/untrusted'
+                  : '';
+        },
+      }),
+    /untrusted path/,
+  );
+  assert.equal(
+    symlinkCalls.some((args) => args[0] === 'chmod'),
+    false,
+  );
+});
+
+test('removes only the exact attempt-scoped Stage 1 snapshot after path verification', () => {
+  const calls = [];
+  assert.deepEqual(
+    removeReadOnlyInspectionSnapshot({
+      issueNumber: 84,
+      attemptNumber: 3,
+      execute: (...args) => {
+        calls.push(args);
+        return args[0] === 'realpath' ? args.at(-1) : '';
+      },
+    }),
+    { confirmed: true },
+  );
+  assert.ok(
+    calls.some(
+      (args) =>
+        args[0] === 'rm' &&
+        args.includes('/home/peon/.cache/stellar-stage1/issue-84-attempt-3') &&
+        args.includes(
+          '/home/peon/.cache/stellar-stage1/issue-84-attempt-3.tar',
+        ),
+    ),
+  );
+  assert.throws(
+    () =>
+      removeReadOnlyInspectionSnapshot({
+        issueNumber: 84,
+        attemptNumber: 3,
+        execute: () => '/tmp/untrusted',
+      }),
+    /path changed unexpectedly/,
+  );
+});
+
 test('builds a separate hardened metering proxy on the worker, model, and egress networks', () => {
   const args = buildMeteringProxyArgs({
     name: 'stellar-peon-meter-24-1',
@@ -273,6 +462,77 @@ test('passes only a trusted explicit forwarded-request ceiling to the meter', ()
       }),
     /hard limits/,
   );
+});
+
+test('starts two-stage metering only with a trusted total ceiling and advances through the loopback control path', () => {
+  const args = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-84-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 32_000,
+    maxToolCalls: 64,
+    maxForwardedRequests: 2,
+    twoStage: true,
+  });
+  assert.ok(args.includes('--env=STELLAR_MAX_FORWARDED_REQUESTS=2'));
+  assert.ok(args.includes('--env=STELLAR_TWO_STAGE=1'));
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'stellar-peon-meter-84-1',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 32_000,
+        maxToolCalls: 64,
+        twoStage: true,
+      }),
+    /exactly two total requests/,
+  );
+  let invocation;
+  const result = advanceTwoStageMeter('stellar-peon-meter-84-1', (...args) => {
+    invocation = args;
+    return '{"stage":"implement"}';
+  });
+  assert.deepEqual(result, { stage: 'implement' });
+  assert.equal(invocation[0], 'podman');
+  assert.equal(invocation[1], 'exec');
+  assert.equal(invocation[2], 'stellar-peon-meter-84-1');
+  assert.ok(invocation[invocation.length - 1].includes('/stage/implement'));
+  assert.throws(
+    () => advanceTwoStageMeter('bad-name', () => '{"stage":"implement"}'),
+    /identify one issue attempt/,
+  );
+  assert.throws(
+    () =>
+      advanceTwoStageMeter(
+        'stellar-peon-meter-84-1',
+        () => '{"stage":"inspect"}',
+      ),
+    /rejected the Stage 2 transition/,
+  );
+});
+
+test('pins trusted stage transitions to an exact meter container lifecycle identity', () => {
+  const id = 'b'.repeat(64);
+  assert.deepEqual(
+    readTwoStageMeterIdentity(
+      'stellar-peon-meter-84-1',
+      () => `${id}|2026-10-23T06:00:00Z|0`,
+    ),
+    { id, startedAt: '2026-10-23T06:00:00Z', restartCount: 0 },
+  );
+  for (const malformed of [
+    `short|2026-10-23T06:00:00Z|0`,
+    `${id}|2026-10-23T06:00:00Z|1.5`,
+    `${id}|2026-10-23T06:00:00Z|-1`,
+  ])
+    assert.throws(
+      () =>
+        readTwoStageMeterIdentity('stellar-peon-meter-84-1', () => malformed),
+      /identity is invalid/,
+    );
 });
 
 test('waits for a successful usage read from the exact sidecar after health', () => {
