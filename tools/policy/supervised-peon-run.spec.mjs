@@ -77,6 +77,8 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
     branch: 'issue/50-avatar-skeleton',
     worktreePath: join(root, 'issue-50'),
     hermesProfile: 'focus',
+    hermesWorkflow: 'standard',
+    maxForwardedRequests: null,
   });
   assert.throws(
     () =>
@@ -125,6 +127,43 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
       }),
     /trusted worker image digest/,
   );
+});
+
+test('does not launch a selected two-stage issue before stage boundaries are enforced', async () => {
+  let workerCreated = false;
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:two-stage',
+    ],
+  };
+  const validated = validateLivePeonAssignment({
+    issue: selectedIssue,
+    claim: claim(),
+    sessionId,
+    image,
+  });
+  assert.equal(validated.hermesWorkflow, 'two-stage');
+  assert.equal(validated.maxForwardedRequests, 2);
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => selectedIssue,
+      readClaim: async () => claim(),
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+    }),
+    /selected but disabled/,
+  );
+  assert.equal(workerCreated, false);
 });
 
 test('does not create the live worker until the current assignment is valid', async () => {

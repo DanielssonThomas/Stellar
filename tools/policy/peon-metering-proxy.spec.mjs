@@ -110,6 +110,7 @@ test('charges prompt and maximum requested output tokens on upstream failures', 
     toolCalls: 0,
     exceededResource: null,
     requests: 1,
+    forwardedRequests: 1,
     failures: 1,
     cancellations: 0,
     requestRecords: [
@@ -292,6 +293,193 @@ test('keeps only a bounded window of numeric request records', async (t) => {
   assert.equal(records.length, 32);
   assert.equal(records[0].request, 3);
   assert.equal(records[31].request, 34);
+});
+
+test('enforces a trusted forwarded-request ceiling before the third upstream completion', async (t) => {
+  let upstreamCompletions = 0;
+  const meter = await withProxy(t, {
+    maxForwardedRequests: 2,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize')) return json({ tokens: [1] });
+      upstreamCompletions += 1;
+      return json({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      });
+    },
+  });
+  assert.equal((await request(meter.url, { max_tokens: 4 })).status, 200);
+  assert.equal((await request(meter.url, { max_tokens: 4 })).status, 200);
+  const denied = await request(meter.url, { max_tokens: 4 });
+  assert.equal(denied.status, 429);
+  assert.equal(upstreamCompletions, 2);
+  assert.equal(meter.snapshot().forwardedRequests, 2);
+  assert.equal(meter.snapshot().exceededResource, 'model-requests');
+  assert.equal(
+    meter.snapshot().requestRecords[2].decision,
+    'denied-request-limit',
+  );
+});
+
+test('serializes concurrent requests at the request ceiling', async (t) => {
+  let upstreamCompletions = 0;
+  const meter = await withProxy(t, {
+    maxForwardedRequests: 2,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize')) return json({ tokens: [1] });
+      upstreamCompletions += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return json({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      });
+    },
+  });
+  const responses = await Promise.all(
+    Array.from({ length: 8 }, () => request(meter.url, { max_tokens: 4 })),
+  );
+  assert.equal(
+    responses.filter((response) => response.status === 200).length,
+    2,
+  );
+  assert.equal(
+    responses.filter((response) => response.status === 429).length,
+    6,
+  );
+  assert.equal(upstreamCompletions, 2);
+  assert.equal(meter.snapshot().forwardedRequests, 2);
+});
+
+test('failed or cancelled forwarded requests consume capacity without resetting it', async (t) => {
+  let completionCalls = 0;
+  const failed = await withProxy(t, {
+    maxForwardedRequests: 1,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize')) return json({ tokens: [1] });
+      completionCalls += 1;
+      return json({ error: 'unavailable' }, 503);
+    },
+  });
+  assert.equal((await request(failed.url, { max_tokens: 4 })).status, 503);
+  assert.equal((await request(failed.url, { max_tokens: 4 })).status, 429);
+  assert.equal(completionCalls, 1);
+  assert.equal(failed.snapshot().forwardedRequests, 1);
+  assert.deepEqual(
+    failed.snapshot().requestRecords.map(({ decision }) => decision),
+    ['upstream-failed', 'denied-request-limit'],
+  );
+
+  const cancelled = await withProxy(t, {
+    maxForwardedRequests: 1,
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize')) return json({ tokens: [1] });
+      return new Promise((_, reject) =>
+        init.signal.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        ),
+      );
+    },
+  });
+  const controller = new AbortController();
+  const pending = fetch(`${cancelled.url}/v1/chat/completions`, {
+    method: 'POST',
+    signal: controller.signal,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: 'small prompt' }],
+      max_tokens: 4,
+    }),
+  }).catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  controller.abort();
+  await pending;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(cancelled.snapshot().forwardedRequests, 1);
+  assert.equal(cancelled.snapshot().requestRecords[0].decision, 'cancelled');
+});
+
+test('validates request limits and leaves unselected mode uncapped', async (t) => {
+  for (const maxForwardedRequests of [0, -1, 1.5, 65, '2'])
+    assert.throws(
+      () => createPeonMeteringProxy({ maxForwardedRequests }),
+      /Invalid forwarded request limit/,
+    );
+  let completions = 0;
+  const meter = await withProxy(t, {
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize')) return json({ tokens: [1] });
+      completions += 1;
+      return json({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      });
+    },
+  });
+  for (let index = 0; index < 3; index += 1)
+    assert.equal((await request(meter.url, { max_tokens: 4 })).status, 200);
+  assert.equal(completions, 3);
+});
+
+test('keeps cumulative usage monotonic and rejects negative upstream counters', async (t) => {
+  const meter = await withProxy(t, {
+    maxModelTokens: 20,
+    fetchImpl: async (url) => {
+      if (String(url).endsWith('/apply-template'))
+        return json({ prompt: 'rendered' });
+      if (String(url).endsWith('/tokenize'))
+        return json({ tokens: [1, 2, 3, 4, 5] });
+      return json({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      });
+    },
+  });
+  assert.equal((await request(meter.url, { max_tokens: 4 })).status, 200);
+  assert.equal(meter.snapshot().modelTokens, 6);
+  assert.equal(meter.snapshot().requestRecords[0].promptTokens, 1);
+
+  for (const streaming of [false, true]) {
+    const invalid = await withProxy(t, {
+      maxModelTokens: 20,
+      fetchImpl: async (url) => {
+        if (String(url).endsWith('/apply-template'))
+          return json({ prompt: 'rendered' });
+        if (String(url).endsWith('/tokenize'))
+          return json({ tokens: [1, 2, 3] });
+        return streaming
+          ? new Response(
+              'data: {"choices":[],"usage":{"prompt_tokens":-1,"completion_tokens":1}}\n\ndata: [DONE]\n\n',
+              { headers: { 'content-type': 'text/event-stream' } },
+            )
+          : json({
+              choices: [{ message: { role: 'assistant', content: 'bad' } }],
+              usage: { prompt_tokens: -1, completion_tokens: 1 },
+            });
+      },
+    });
+    assert.equal(
+      (await request(invalid.url, { max_tokens: 4, stream: streaming })).status,
+      502,
+    );
+    assert.equal(invalid.snapshot().modelTokens, 7);
+    assert.equal(invalid.snapshot().modelTokens >= 0, true);
+    assert.equal(
+      invalid.snapshot().requestRecords[0].decision,
+      'upstream-failed',
+    );
+  }
 });
 
 test('counts streamed tool calls before releasing the completed stream', async (t) => {

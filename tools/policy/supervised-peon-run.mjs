@@ -10,7 +10,11 @@ import {
 } from './run-restricted-worker.mjs';
 import { validateFreshIssue } from './update-issue.mjs';
 import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
-import { resolvePeonHermesProfile } from './peon-hermes-profiles.mjs';
+import {
+  resolvePeonHermesProfile,
+  resolvePeonHermesWorkflow,
+  maxForwardedRequestsForWorkflow,
+} from './peon-hermes-profiles.mjs';
 
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -43,6 +47,9 @@ export function validateLivePeonAssignment({
   if (issueOwner(issue) !== 'worker:peon')
     throw new Error('The assigned issue must be owned by worker:peon.');
   const hermesProfile = resolvePeonHermesProfile(issue);
+  const hermesWorkflow = resolvePeonHermesWorkflow(issue);
+  const maxForwardedRequests =
+    maxForwardedRequestsForWorkflow(hermesWorkflow) ?? null;
   if (label(issue, 'status:') !== 'status:in-progress')
     throw new Error('The assigned issue must be in progress.');
   if (label(issue, 'target:') !== 'target:develop')
@@ -88,6 +95,8 @@ export function validateLivePeonAssignment({
     branch: claim.branch,
     worktreePath: claim.worktreePath,
     hermesProfile,
+    hermesWorkflow,
+    maxForwardedRequests,
   };
 }
 
@@ -153,6 +162,10 @@ export async function runSupervisedPeonIssue({
     sessionId,
     image,
   });
+  if (task.hermesWorkflow === 'two-stage')
+    throw new Error(
+      'The two-stage workflow is selected but disabled until trusted stage and read-only inspection boundaries are implemented.',
+    );
   const initialWorkspace = await inspectWorktree(number, task.branch);
   if (!initialWorkspace || typeof initialWorkspace.fingerprint !== 'string')
     throw new Error('Trusted restricted workspace inspection failed.');
@@ -165,6 +178,9 @@ export async function runSupervisedPeonIssue({
   const worker = createWorkerAdapter({
     image,
     hermesProfile: task.hermesProfile,
+    ...(task.maxForwardedRequests === null
+      ? {}
+      : { maxForwardedRequests: task.maxForwardedRequests }),
   });
   const mira = {
     id: 'mira',

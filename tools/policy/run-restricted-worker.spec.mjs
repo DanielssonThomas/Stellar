@@ -222,6 +222,59 @@ test('builds a separate hardened metering proxy on the worker, model, and egress
   );
 });
 
+test('passes only a trusted explicit forwarded-request ceiling to the meter', () => {
+  const args = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-24-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 32_000,
+    maxToolCalls: 64,
+    maxForwardedRequests: 2,
+  });
+  assert.ok(args.includes('--env=STELLAR_MAX_FORWARDED_REQUESTS=2'));
+  assert.equal(
+    buildMeteringProxyArgs({
+      name: 'stellar-peon-meter-24-1',
+      image,
+      uid: 1001,
+      gid: 1001,
+      maxModelTokens: 32_000,
+      maxToolCalls: 64,
+    }).some((argument) =>
+      argument.startsWith('--env=STELLAR_MAX_FORWARDED_REQUESTS='),
+    ),
+    false,
+  );
+  for (const maxForwardedRequests of [0, 2.5])
+    assert.throws(
+      () =>
+        buildMeteringProxyArgs({
+          name: 'stellar-peon-meter-24-1',
+          image,
+          uid: 1001,
+          gid: 1001,
+          maxModelTokens: 32_000,
+          maxToolCalls: 64,
+          maxForwardedRequests,
+        }),
+      /positive integer/,
+    );
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'stellar-peon-meter-24-1',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 32_000,
+        maxToolCalls: 64,
+        maxForwardedRequests: 65,
+      }),
+    /hard limits/,
+  );
+});
+
 test('waits for a successful usage read from the exact sidecar after health', () => {
   const events = [];
   let time = 0;
@@ -482,12 +535,15 @@ test('memoizes repeated worker cancellation for one exact attempt', async () => 
 
 test('passes only the validated profile through the adapter and fails mismatches closed', async () => {
   let selectedProfile;
+  let selectedRequestLimit;
   const adapter = createPeonWorkerAdapter({
     image,
     hermesProfile: 'narrow-coding',
+    maxForwardedRequests: 2,
     commandForTask: () => ['hermes', 'chat'],
     runAttempt: async (input) => {
       selectedProfile = input.hermesProfile;
+      selectedRequestLimit = input.maxForwardedRequests;
       return { exitCode: 0, usage: { modelTokens: 0, toolCalls: 0 } };
     },
   });
@@ -501,13 +557,18 @@ test('passes only the validated profile through the adapter and fails mismatches
     /profile differs from the validated issue/,
   );
   const run = adapter.run({
-    task: { issueNumber: 50, hermesProfile: 'narrow-coding' },
+    task: {
+      issueNumber: 50,
+      hermesProfile: 'narrow-coding',
+      maxForwardedRequests: 99,
+    },
     attemptNumber: 2,
     limits: { maxRuntimeMsPerWorker: 600_000 },
     budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
   });
   assert.equal((await run).status, 'completed');
   assert.equal(selectedProfile, 'narrow-coding');
+  assert.equal(selectedRequestLimit, 2);
   assert.equal(defaultPeonHermesProfile, 'focus');
   assert.equal(
     peonHermesConfigFilename('narrow-coding'),

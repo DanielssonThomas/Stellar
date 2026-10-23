@@ -329,6 +329,7 @@ export function buildMeteringProxyArgs({
   gid,
   maxModelTokens,
   maxToolCalls,
+  maxForwardedRequests,
   initialModelTokens = 0,
   initialToolCalls = 0,
 }) {
@@ -340,11 +341,16 @@ export function buildMeteringProxyArgs({
     );
   const maxTokens = positiveInteger(maxModelTokens, 'maxModelTokens');
   const maxTools = positiveInteger(maxToolCalls, 'maxToolCalls');
+  const maxRequests =
+    maxForwardedRequests === undefined
+      ? null
+      : positiveInteger(maxForwardedRequests, 'maxForwardedRequests');
   const initialTokens = Number(initialModelTokens);
   const initialTools = Number(initialToolCalls);
   if (
     maxTokens > 64_000 ||
     maxTools > 128 ||
+    (maxRequests !== null && maxRequests > 64) ||
     !Number.isSafeInteger(initialTokens) ||
     initialTokens < 0 ||
     initialTokens > maxTokens ||
@@ -378,6 +384,9 @@ export function buildMeteringProxyArgs({
     `--env=STELLAR_MODEL_UPSTREAM=http://peon-model:18435`,
     `--env=STELLAR_MAX_MODEL_TOKENS=${maxTokens}`,
     `--env=STELLAR_MAX_TOOL_CALLS=${maxTools}`,
+    ...(maxRequests === null
+      ? []
+      : [`--env=STELLAR_MAX_FORWARDED_REQUESTS=${maxRequests}`]),
     `--env=STELLAR_INITIAL_MODEL_TOKENS=${initialTokens}`,
     `--env=STELLAR_INITIAL_TOOL_CALLS=${initialTools}`,
     image,
@@ -425,6 +434,7 @@ function readMeterUsage(
   const decisions = [
     'pending',
     'denied-exhausted',
+    'denied-request-limit',
     'denied-budget',
     'tokenization-failed',
     'forwarded',
@@ -467,6 +477,7 @@ function readMeterUsage(
   const usage = {
     toolCalls: safeNumber(value.toolCalls),
     modelTokens: safeNumber(value.modelTokens),
+    forwardedRequests: safeNumber(value.forwardedRequests),
     exceededResource: value.exceededResource,
     requestRecords: records,
   };
@@ -536,6 +547,7 @@ function readMeterUsage(
   const requestDecisions = [
     'pending',
     'denied-exhausted',
+    'denied-request-limit',
     'denied-budget',
     'tokenization-failed',
     'forwarded',
@@ -598,11 +610,15 @@ function readMeterUsage(
     usage.toolCalls < 0 ||
     !Number.isSafeInteger(usage.modelTokens) ||
     usage.modelTokens < 0 ||
+    !Number.isSafeInteger(usage.forwardedRequests) ||
+    usage.forwardedRequests < 0 ||
     !Array.isArray(usage.requestRecords) ||
     usage.requestRecords.length > 32 ||
     usage.requestRecords.some((record) => !validRequestRecord(record)) ||
     (usage.exceededResource !== null &&
-      !['tool-calls', 'model-tokens'].includes(usage.exceededResource))
+      !['tool-calls', 'model-tokens', 'model-requests'].includes(
+        usage.exceededResource,
+      ))
   )
     throw meterLifecycleError(
       'invalid-usage',
@@ -974,6 +990,7 @@ export async function runRestrictedWorker({
   lifecycle = {},
   onUsageReady = null,
   hermesProfile = defaultPeonHermesProfile,
+  maxForwardedRequests,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   peonHermesConfigFilename(hermesProfile);
@@ -1038,6 +1055,7 @@ export async function runRestrictedWorker({
     gid: workerGid,
     maxModelTokens: limits.maxModelTokensPerWorker,
     maxToolCalls: limits.maxToolCallsPerWorker,
+    ...(maxForwardedRequests === undefined ? {} : { maxForwardedRequests }),
     initialModelTokens: initialUsage.modelTokens ?? 0,
     initialToolCalls: initialUsage.toolCalls ?? 0,
   });
@@ -1333,6 +1351,7 @@ export function createPeonWorkerAdapter({
   now = Date.now,
   confirmCancellation = confirmAttemptCleanup,
   readUsage = readMeterUsage,
+  maxForwardedRequests,
 }) {
   peonHermesConfigFilename(hermesProfile);
   let active = null;
@@ -1361,6 +1380,9 @@ export function createPeonWorkerAdapter({
           issueNumber: task.issueNumber,
           image,
           hermesProfile,
+          ...(maxForwardedRequests === undefined
+            ? {}
+            : { maxForwardedRequests }),
           command: commandForTask(task, limits),
           limits,
           initialUsage: budget.snapshot,
