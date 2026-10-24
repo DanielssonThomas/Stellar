@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -79,6 +80,7 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
     hermesProfile: 'focus',
     hermesWorkflow: 'standard',
     maxForwardedRequests: null,
+    sessionId,
   });
   assert.throws(
     () =>
@@ -129,14 +131,14 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
   );
 });
 
-test('does not launch a selected two-stage issue before stage boundaries are enforced', async () => {
+test('does not launch a selected bounded-coding issue before trusted context and compatible image are required', async () => {
   let workerCreated = false;
   const selectedIssue = {
     ...issue,
     labels: [
       ...issue.labels,
       'hermes-profile:narrow-coding',
-      'hermes-workflow:two-stage',
+      'hermes-workflow:bounded-coding',
     ],
   };
   const validated = validateLivePeonAssignment({
@@ -145,7 +147,7 @@ test('does not launch a selected two-stage issue before stage boundaries are enf
     sessionId,
     image,
   });
-  assert.equal(validated.hermesWorkflow, 'two-stage');
+  assert.equal(validated.hermesWorkflow, 'bounded-coding');
   assert.equal(validated.maxForwardedRequests, 2);
   await assert.rejects(
     runSupervisedPeonIssue({
@@ -157,13 +159,145 @@ test('does not launch a selected two-stage issue before stage boundaries are enf
       verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
       loadAssignment: async () => selectedIssue,
       readClaim: async () => claim(),
+      resolveDevelopHead: async () => 'a'.repeat(40),
+      inspectWorktree: async (_number, branch, baseRevision) => ({
+        fingerprint: `clean:${branch}:${baseRevision}`,
+        clean: true,
+        headRevision: 'a'.repeat(40),
+        baseRevision,
+        workspacePath: '/home/peon/workspaces/issue-50',
+        changes: [],
+      }),
+      inspectRegisteredWorktree: async () => ({
+        clean: true,
+        headRevision: 'a'.repeat(40),
+      }),
+      getProtectedPaths: () => [],
+      verifyImageCompatibility: async () => ({ compatible: true }),
       createWorkerAdapter: () => {
         workerCreated = true;
       },
     }),
-    /selected but disabled/,
+    /trusted bounded task context plan is required/,
   );
   assert.equal(workerCreated, false);
+});
+
+test('preflights a selected assignment twice and passes only an in-memory bounded manifest plus a two-request ceiling', async () => {
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:bounded-coding',
+    ],
+  };
+  const repositoryRoot = process.cwd();
+  const head = 'c'.repeat(40);
+  let issueReads = 0;
+  let reservations = 0;
+  let adapterOptions;
+  let verificationCalls = 0;
+  let workspaceInspections = 0;
+  const inspectWorktree = async (_number, _branch, baseRevision) => {
+    workspaceInspections += 1;
+    return {
+      fingerprint: `exact:${head}:${baseRevision}`,
+      clean: true,
+      headRevision: head,
+      baseRevision,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes:
+        workspaceInspections === 3
+          ? ['tools/policy/supervised-peon-run.mjs']
+          : [],
+    };
+  };
+  const result = await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'lint', command: ['pnpm', 'lint'] }],
+    contextPlan: {
+      skills: ['.agents/skills/create-component/SKILL.md'],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+        {
+          kind: 'test',
+          path: 'tools/policy/supervised-peon-run.spec.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: ['tools/policy/supervised-peon-run.mjs'],
+    },
+    loadAssignment: async () => {
+      issueReads += 1;
+      return selectedIssue;
+    },
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree,
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, relativePath) =>
+      readFileSync(join(repositoryRoot, ...relativePath.split('/')), 'utf8'),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    reserveAttempt: () => {
+      reservations += 1;
+    },
+    createWorkerAdapter: (options) => {
+      adapterOptions = options;
+      return { id: 'peon' };
+    },
+    runVerification: async () => {
+      verificationCalls += 1;
+      return { exitCode: 0 };
+    },
+    runSupervisor: async (input) => {
+      assert.equal(input.task.hermesWorkflow, 'bounded-coding');
+      assert.equal(Object.hasOwn(input.task, 'preparedContext'), false);
+      assert.deepEqual(
+        await input.verify({ task: input.task, attemptNumber: 1 }),
+        [
+          {
+            name: 'lint',
+            passed: true,
+            summary: 'Isolated verification exited with code 0.',
+          },
+        ],
+      );
+      assert.deepEqual(
+        await input.verify({ task: input.task, attemptNumber: 1 }),
+        [
+          {
+            name: 'authorized-source-changes',
+            passed: false,
+            summary:
+              'The worker produced no authorized source changes or changed a path outside the trusted allowlist.',
+          },
+        ],
+      );
+      return { status: 'offline-controller-test' };
+    },
+  });
+
+  assert.deepEqual(result, { status: 'offline-controller-test' });
+  assert.equal(issueReads, 2);
+  assert.equal(reservations, 1);
+  assert.equal(adapterOptions.maxForwardedRequests, 2);
+  assert.equal(adapterOptions.preparedContext.manifest.revision.head, head);
+  assert.equal(verificationCalls, 1);
 });
 
 test('does not create the live worker until the current assignment is valid', async () => {

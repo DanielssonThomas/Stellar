@@ -8,8 +8,8 @@ export const peonHermesProfileConfigFiles = Object.freeze({
 const profileLabelPrefix = 'hermes-profile:';
 const narrowProfileLabel = `${profileLabelPrefix}narrow-coding`;
 const workflowLabelPrefix = 'hermes-workflow:';
-const twoStageWorkflowLabel = `${workflowLabelPrefix}two-stage`;
-export const twoStageMaxForwardedRequests = 2;
+const boundedCodingWorkflowLabel = `${workflowLabelPrefix}bounded-coding`;
+export const boundedCodingMaxForwardedRequests = 2;
 
 function labelsOf(issue) {
   return (issue?.labels ?? []).map((label) =>
@@ -47,7 +47,7 @@ export function resolvePeonHermesWorkflow(issue) {
   if (workflowLabels.length === 0) return 'standard';
   if (
     workflowLabels.length !== 1 ||
-    workflowLabels[0] !== twoStageWorkflowLabel
+    workflowLabels[0] !== boundedCodingWorkflowLabel
   )
     throw new Error('Peon issue has an unknown or ambiguous workflow opt-in.');
   const labels = labelsOf(issue);
@@ -58,14 +58,14 @@ export function resolvePeonHermesWorkflow(issue) {
     !labels.includes('hermes-profile:narrow-coding')
   )
     throw new Error(
-      'The two-stage workflow requires a low-priority Peon issue targeting develop with the narrow-coding profile.',
+      'The bounded-coding workflow requires a low-priority Peon issue targeting develop with the narrow-coding profile.',
     );
-  return 'two-stage';
+  return 'bounded-coding';
 }
 
 export function maxForwardedRequestsForWorkflow(workflow) {
   if (workflow === 'standard') return undefined;
-  if (workflow === 'two-stage') return twoStageMaxForwardedRequests;
+  if (workflow === 'bounded-coding') return boundedCodingMaxForwardedRequests;
   throw new Error('Unknown trusted Peon workflow.');
 }
 

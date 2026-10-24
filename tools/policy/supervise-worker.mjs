@@ -824,6 +824,14 @@ export async function superviseWorker({
           };
         }
       }
+      if (
+        outcome.type === 'result' &&
+        budget.snapshot.exceededResource !== null
+      )
+        outcome = {
+          type: 'budget-exceeded',
+          resource: budget.snapshot.exceededResource,
+        };
       const durationMs = Math.max(0, clock() - attemptStarted);
       state.attempts += 1;
       state.runtimeMs += Math.min(durationMs, timeoutMs);

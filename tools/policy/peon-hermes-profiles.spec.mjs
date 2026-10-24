@@ -58,18 +58,18 @@ test('fails closed on unknown or ambiguous profile labels', () => {
   );
 });
 
-test('selects only the explicit eligible two-stage workflow label', () => {
+test('selects only the explicit eligible bounded-coding workflow label', () => {
   assert.equal(resolvePeonHermesWorkflow({ labels: [] }), 'standard');
   assert.equal(maxForwardedRequestsForWorkflow('standard'), undefined);
-  assert.equal(maxForwardedRequestsForWorkflow('two-stage'), 2);
+  assert.equal(maxForwardedRequestsForWorkflow('bounded-coding'), 2);
   assert.throws(
     () => maxForwardedRequestsForWorkflow('three-stage'),
     /Unknown trusted/,
   );
   const selected = {
-    labels: [...eligible.labels, 'hermes-workflow:two-stage'],
+    labels: [...eligible.labels, 'hermes-workflow:bounded-coding'],
   };
-  assert.equal(resolvePeonHermesWorkflow(selected), 'two-stage');
+  assert.equal(resolvePeonHermesWorkflow(selected), 'bounded-coding');
   assert.throws(
     () =>
       resolvePeonHermesWorkflow({
@@ -84,7 +84,7 @@ test('selects only the explicit eligible two-stage workflow label', () => {
           ...eligible.labels.filter(
             (label) => label !== 'hermes-profile:narrow-coding',
           ),
-          'hermes-workflow:two-stage',
+          'hermes-workflow:bounded-coding',
         ],
       }),
     /requires a low-priority Peon issue/,
@@ -92,7 +92,7 @@ test('selects only the explicit eligible two-stage workflow label', () => {
   assert.throws(
     () =>
       resolvePeonHermesWorkflow({
-        labels: [...selected.labels, 'hermes-workflow:two-stage'],
+        labels: [...selected.labels, 'hermes-workflow:bounded-coding'],
       }),
     /unknown or ambiguous/,
   );

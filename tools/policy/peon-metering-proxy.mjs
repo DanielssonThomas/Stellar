@@ -88,7 +88,6 @@ export function createPeonMeteringProxy({
   maxModelTokens = 32_000,
   maxToolCalls = 64,
   maxForwardedRequests = null,
-  twoStage = false,
   initialModelTokens = 0,
   initialToolCalls = 0,
   allowedConnectHosts = [
@@ -119,10 +118,6 @@ export function createPeonMeteringProxy({
       maxForwardedRequests > 64)
   )
     throw new Error('Invalid forwarded request limit.');
-  if (twoStage && maxForwardedRequests !== 2)
-    throw new Error(
-      'Two-stage metering requires a total request limit of two.',
-    );
   if (
     !Number.isSafeInteger(initialModelTokens) ||
     initialModelTokens < 0 ||
@@ -138,9 +133,6 @@ export function createPeonMeteringProxy({
     exceededResource: null,
     requests: 0,
     forwardedRequests: 0,
-    stage: twoStage ? 'inspect' : 'standard',
-    stageRequestStart: 0,
-    stageRequestLimit: twoStage ? 1 : maxForwardedRequests,
     inflightRequests: 0,
     failures: 0,
     cancellations: 0,
@@ -148,17 +140,7 @@ export function createPeonMeteringProxy({
   };
   const snapshot = () => {
     const value = { ...state };
-    if (!twoStage) {
-      delete value.stage;
-      delete value.stageRequestStart;
-      delete value.stageRequestLimit;
-      delete value.inflightRequests;
-      value.requestRecords = state.requestRecords.map((record) =>
-        Object.fromEntries(
-          Object.entries(record).filter(([key]) => key !== 'stage'),
-        ),
-      );
-    }
+    delete value.inflightRequests;
     return value;
   };
   let tail = Promise.resolve();
@@ -276,7 +258,6 @@ export function createPeonMeteringProxy({
         state.requests += 1;
         const record = {
           request: state.requests,
-          ...(twoStage ? { stage: state.stage } : {}),
           decision: 'pending',
           promptTokens: null,
           remainingTokens: maxModelTokens - state.modelTokens,
@@ -301,8 +282,8 @@ export function createPeonMeteringProxy({
           };
         }
         if (
-          state.stageRequestLimit !== null &&
-          state.forwardedRequests >= state.stageRequestLimit
+          maxForwardedRequests !== null &&
+          state.forwardedRequests >= maxForwardedRequests
         ) {
           state.exceededResource = 'model-requests';
           state.failures += 1;
@@ -455,30 +436,6 @@ export function createPeonMeteringProxy({
   const usageServer = createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/usage')
       return json(response, 200, snapshot());
-    if (request.method === 'POST' && request.url === '/stage/implement') {
-      if (!twoStage)
-        return json(response, 404, { error: 'two-stage mode is disabled' });
-      const transition = await locked(() => {
-        const firstRequest = state.requestRecords.find(
-          (record) => record.request === 1,
-        );
-        if (
-          state.stage !== 'inspect' ||
-          state.forwardedRequests !== 1 ||
-          state.inflightRequests !== 0 ||
-          state.exceededResource !== null ||
-          firstRequest?.decision !== 'forwarded'
-        )
-          return false;
-        state.stage = 'implement';
-        state.stageRequestStart = state.forwardedRequests;
-        state.stageRequestLimit = state.stageRequestStart + 1;
-        return true;
-      });
-      return transition
-        ? json(response, 200, { stage: state.stage })
-        : json(response, 409, { error: 'trusted stage transition rejected' });
-    }
     return json(response, 404, { error: 'not found' });
   });
   server.on('connect', (request, client, head) => {
@@ -538,7 +495,6 @@ if (
       process.env.STELLAR_MAX_FORWARDED_REQUESTS === undefined
         ? null
         : Number(process.env.STELLAR_MAX_FORWARDED_REQUESTS),
-    twoStage: process.env.STELLAR_TWO_STAGE === '1',
     initialModelTokens: Number(process.env.STELLAR_INITIAL_MODEL_TOKENS ?? 0),
     initialToolCalls: Number(process.env.STELLAR_INITIAL_TOOL_CALLS ?? 0),
   });
