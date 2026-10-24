@@ -256,6 +256,106 @@ describe('bounded worker supervision', () => {
     assert.equal(stopped.failure.code, 'ResourceLimit');
   });
 
+  it('preserves request-limit exhaustion and unsafe cancellation state', async () => {
+    const requestRecord = {
+      request: 3,
+      decision: 'denied-request-limit',
+      promptTokens: null,
+      remainingTokens: 20_000,
+      completionTokens: null,
+      chargedOutputTokens: 0,
+      emittedToolCalls: 0,
+      messageContentTokensByRole: {},
+      toolSchemaContentTokens: 0,
+      toolOutputMessages: 0,
+    };
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 4_000,
+              forwardedRequests: 2,
+              exceededResource: 'model-requests',
+              requestRecords: [requestRecord],
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-request-limit-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'model-request-limit-exhausted',
+    );
+    assert.equal(result.handoff.attempts[0].forwardedRequests, 2);
+    assert.equal(
+      result.handoff.attempts[0].requestRecords[0].decision,
+      'denied-request-limit',
+    );
+  });
+
+  it('does not verify or complete when the final snapshot shows a denied third request', async () => {
+    const snapshot = {
+      toolCalls: 2,
+      modelTokens: 8_000,
+      forwardedRequests: 2,
+      exceededResource: 'model-requests',
+      requestRecords: [
+        {
+          request: 3,
+          decision: 'denied-request-limit',
+          promptTokens: null,
+          remainingTokens: 24_000,
+          completionTokens: null,
+          chargedOutputTokens: 0,
+          emittedToolCalls: 0,
+          messageContentTokensByRole: {},
+          toolSchemaContentTokens: 0,
+          toolOutputMessages: 0,
+        },
+      ],
+    };
+    let verificationCalls = 0;
+    const result = await superviseWorker(
+      base({
+        task: { ...task, hermesWorkflow: 'bounded-coding' },
+        workers: {
+          peon: {
+            id: 'peon',
+            run: async () => ({ status: 'completed', usage: snapshot }),
+            usage: async () => snapshot,
+            cancel: async () => true,
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        verify: async () => {
+          verificationCalls += 1;
+          return [{ name: 'should-not-run', passed: true }];
+        },
+      }),
+    );
+    assert.equal(verificationCalls, 0);
+    assert.notEqual(result.status, 'complete');
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-request-limit-exhausted',
+    );
+  });
+
   it('records final live counters even when the worker exits before the first poll', async () => {
     const result = await superviseWorker(
       base({

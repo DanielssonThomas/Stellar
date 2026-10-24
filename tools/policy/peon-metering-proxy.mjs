@@ -8,6 +8,13 @@ const json = (response, status, value) => {
 
 const MAX_REQUEST_RECORDS = 32;
 
+function optionalUsageCounter(value) {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new Error('Upstream returned invalid numeric usage.');
+  return value;
+}
+
 async function readJson(request, maxBytes = 5_000_000) {
   const chunks = [];
   let size = 0;
@@ -36,22 +43,24 @@ function sseUsage(body) {
   for (const block of body.toString('utf8').split(/\r?\n\r?\n/)) {
     const line = block.split(/\r?\n/).find((part) => part.startsWith('data:'));
     if (!line || line.slice(5).trim() === '[DONE]') continue;
+    let event;
     try {
-      const event = JSON.parse(line.slice(5).trim());
-      if (Number.isSafeInteger(event.usage?.prompt_tokens))
-        promptTokens = event.usage.prompt_tokens;
-      if (Number.isSafeInteger(event.usage?.completion_tokens))
-        completionTokens = event.usage.completion_tokens;
-      for (const [choiceIndex, choice] of (event.choices ?? []).entries()) {
-        const delta = choice.delta ?? {};
-        if (delta.function_call) toolIndexes.add(`${choiceIndex}:legacy`);
-        for (const tool of delta.tool_calls ?? []) {
-          if (Number.isSafeInteger(tool.index))
-            toolIndexes.add(`${choiceIndex}:${tool.index}`);
-        }
-      }
+      event = JSON.parse(line.slice(5).trim());
     } catch {
       /* malformed frames are passed through only if the complete stream remains valid */
+      continue;
+    }
+    if (event.usage?.prompt_tokens !== undefined)
+      promptTokens = optionalUsageCounter(event.usage.prompt_tokens);
+    if (event.usage?.completion_tokens !== undefined)
+      completionTokens = optionalUsageCounter(event.usage.completion_tokens);
+    for (const [choiceIndex, choice] of (event.choices ?? []).entries()) {
+      const delta = choice.delta ?? {};
+      if (delta.function_call) toolIndexes.add(`${choiceIndex}:legacy`);
+      for (const tool of delta.tool_calls ?? []) {
+        if (Number.isSafeInteger(tool.index))
+          toolIndexes.add(`${choiceIndex}:${tool.index}`);
+      }
     }
   }
   calls = toolIndexes.size;
@@ -61,8 +70,8 @@ function sseUsage(body) {
 function jsonUsage(body) {
   const parsed = JSON.parse(body.toString('utf8'));
   return {
-    promptTokens: parsed.usage?.prompt_tokens,
-    completionTokens: parsed.usage?.completion_tokens,
+    promptTokens: optionalUsageCounter(parsed.usage?.prompt_tokens),
+    completionTokens: optionalUsageCounter(parsed.usage?.completion_tokens),
     calls: (parsed.choices ?? []).reduce(
       (total, choice) =>
         total +
@@ -78,6 +87,7 @@ export function createPeonMeteringProxy({
   upstream = 'http://peon-model:18435',
   maxModelTokens = 32_000,
   maxToolCalls = 64,
+  maxForwardedRequests = null,
   initialModelTokens = 0,
   initialToolCalls = 0,
   allowedConnectHosts = [
@@ -102,6 +112,13 @@ export function createPeonMeteringProxy({
   )
     throw new Error('Invalid tool call budget.');
   if (
+    maxForwardedRequests !== null &&
+    (!Number.isSafeInteger(maxForwardedRequests) ||
+      maxForwardedRequests < 1 ||
+      maxForwardedRequests > 64)
+  )
+    throw new Error('Invalid forwarded request limit.');
+  if (
     !Number.isSafeInteger(initialModelTokens) ||
     initialModelTokens < 0 ||
     initialModelTokens > maxModelTokens ||
@@ -115,9 +132,16 @@ export function createPeonMeteringProxy({
     toolCalls: initialToolCalls,
     exceededResource: null,
     requests: 0,
+    forwardedRequests: 0,
+    inflightRequests: 0,
     failures: 0,
     cancellations: 0,
     requestRecords: [],
+  };
+  const snapshot = () => {
+    const value = { ...state };
+    delete value.inflightRequests;
+    return value;
   };
   let tail = Promise.resolve();
   const locked = (operation) => {
@@ -257,6 +281,18 @@ export function createPeonMeteringProxy({
             },
           };
         }
+        if (
+          maxForwardedRequests !== null &&
+          state.forwardedRequests >= maxForwardedRequests
+        ) {
+          state.exceededResource = 'model-requests';
+          state.failures += 1;
+          record.decision = 'denied-request-limit';
+          return {
+            status: 429,
+            value: { error: 'Forwarded model request limit exhausted.' },
+          };
+        }
         let promptTokens;
         try {
           promptTokens = await tokenize(
@@ -299,6 +335,10 @@ export function createPeonMeteringProxy({
         const outputLimit = Math.min(asked, remaining - promptTokens);
         record.remainingTokens = remaining;
         record.decision = 'forwarded';
+        // The lock serializes reservations. Count before fetch so failed,
+        // cancelled, retried, or fallback upstream calls consume capacity.
+        state.forwardedRequests += 1;
+        state.inflightRequests += 1;
         state.modelTokens += promptTokens;
         body.max_tokens = outputLimit;
         delete body.max_completion_tokens;
@@ -331,12 +371,9 @@ export function createPeonMeteringProxy({
             };
           }
           const usage = body.stream ? sseUsage(bytes) : jsonUsage(bytes);
-          const actualPrompt = Number.isSafeInteger(usage.promptTokens)
-            ? usage.promptTokens
-            : promptTokens;
-          const actualGenerated = Number.isSafeInteger(usage.completionTokens)
-            ? usage.completionTokens
-            : generatedReservation;
+          const actualPrompt = usage.promptTokens ?? promptTokens;
+          const actualGenerated =
+            usage.completionTokens ?? generatedReservation;
           record.promptTokens = actualPrompt;
           record.completionTokens = Number.isSafeInteger(usage.completionTokens)
             ? usage.completionTokens
@@ -345,7 +382,8 @@ export function createPeonMeteringProxy({
           record.emittedToolCalls = usage.calls;
           state.modelTokens += actualGenerated;
           generatedReservation = 0;
-          state.modelTokens += actualPrompt - promptTokens;
+          if (actualPrompt > promptTokens)
+            state.modelTokens += actualPrompt - promptTokens;
           state.toolCalls += usage.calls;
           if (state.toolCalls > maxToolCalls) {
             state.exceededResource = 'tool-calls';
@@ -379,6 +417,8 @@ export function createPeonMeteringProxy({
           }
           record.chargedOutputTokens = generatedReservation;
           throw error;
+        } finally {
+          state.inflightRequests -= 1;
         }
       });
       if (cancelled || response.destroyed) return;
@@ -393,10 +433,10 @@ export function createPeonMeteringProxy({
         json(response, error.status ?? 502, { error: error.message });
     }
   });
-  const usageServer = createServer((request, response) => {
-    if (request.method !== 'GET' || request.url !== '/usage')
-      return json(response, 404, { error: 'not found' });
-    json(response, 200, { ...state });
+  const usageServer = createServer(async (request, response) => {
+    if (request.method === 'GET' && request.url === '/usage')
+      return json(response, 200, snapshot());
+    return json(response, 404, { error: 'not found' });
   });
   server.on('connect', (request, client, head) => {
     const separator = request.url.lastIndexOf(':');
@@ -439,7 +479,7 @@ export function createPeonMeteringProxy({
     egressServer,
     usageServer,
     shutdown,
-    snapshot: () => ({ ...state }),
+    snapshot,
   };
 }
 
@@ -451,6 +491,10 @@ if (
     upstream: process.env.STELLAR_MODEL_UPSTREAM,
     maxModelTokens: Number(process.env.STELLAR_MAX_MODEL_TOKENS),
     maxToolCalls: Number(process.env.STELLAR_MAX_TOOL_CALLS),
+    maxForwardedRequests:
+      process.env.STELLAR_MAX_FORWARDED_REQUESTS === undefined
+        ? null
+        : Number(process.env.STELLAR_MAX_FORWARDED_REQUESTS),
     initialModelTokens: Number(process.env.STELLAR_INITIAL_MODEL_TOKENS ?? 0),
     initialToolCalls: Number(process.env.STELLAR_INITIAL_TOOL_CALLS ?? 0),
   });

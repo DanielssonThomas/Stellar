@@ -110,6 +110,7 @@ export async function readHandoff(path) {
 function createWorkerBudget(limits, previous = {}) {
   let toolCalls = previous.toolCalls ?? 0;
   let modelTokens = previous.modelTokens ?? 0;
+  let forwardedRequests = previous.forwardedRequests ?? 0;
   let requestRecords = [];
   let exceededResource = null;
   let reservedTokens = 0;
@@ -123,7 +124,13 @@ function createWorkerBudget(limits, previous = {}) {
 
   return {
     get snapshot() {
-      return { toolCalls, modelTokens, exceededResource, requestRecords };
+      return {
+        toolCalls,
+        modelTokens,
+        forwardedRequests,
+        exceededResource,
+        requestRecords,
+      };
     },
     async runTool(name, operation) {
       if (
@@ -157,6 +164,7 @@ function createWorkerBudget(limits, previous = {}) {
               ![
                 'pending',
                 'denied-exhausted',
+                'denied-request-limit',
                 'denied-budget',
                 'tokenization-failed',
                 'forwarded',
@@ -210,10 +218,21 @@ function createWorkerBudget(limits, previous = {}) {
           );
         requestRecords = usage.requestRecords.map((record) => ({ ...record }));
       }
+      if (
+        usage.forwardedRequests !== undefined &&
+        (!Number.isSafeInteger(usage.forwardedRequests) ||
+          usage.forwardedRequests < forwardedRequests)
+      )
+        throw new Error('Trusted forwarded request count must be monotonic.');
+      if (usage.forwardedRequests !== undefined)
+        forwardedRequests = usage.forwardedRequests;
       toolCalls = usage.toolCalls;
       modelTokens = usage.modelTokens;
       const exhausted = usage.exceededResource;
-      if (exhausted && !['tool-calls', 'model-tokens'].includes(exhausted))
+      if (
+        exhausted &&
+        !['tool-calls', 'model-tokens', 'model-requests'].includes(exhausted)
+      )
         throw new Error(
           'Trusted live usage reported an unknown exhausted resource.',
         );
@@ -222,7 +241,13 @@ function createWorkerBudget(limits, previous = {}) {
         exceededResource = 'tool-calls';
       if (modelTokens > limits.maxModelTokensPerWorker)
         exceededResource = 'model-tokens';
-      return { toolCalls, modelTokens, exceededResource, requestRecords };
+      return {
+        toolCalls,
+        modelTokens,
+        forwardedRequests,
+        exceededResource,
+        requestRecords,
+      };
     },
     async runModel({ promptTokens = 0, maxOutputTokens, invoke }) {
       if (
@@ -563,6 +588,8 @@ function getPrimaryStopReason(outcome) {
     case 'interrupted':
       return 'interrupted';
     case 'budget-exceeded':
+      if (outcome.resource === 'model-requests')
+        return 'model-request-limit-exhausted';
       return ['model-tokens', 'tool-calls'].includes(outcome.resource)
         ? `${outcome.resource}-budget-exhausted`
         : 'unknown';
@@ -688,7 +715,9 @@ export async function superviseWorker({
       runtimeMs: 0,
       toolCalls: 0,
       modelTokens: 0,
+      forwardedRequests: 0,
     };
+    handoff.workerUsage[id].forwardedRequests ??= 0;
   }
 
   const startedAt = clock();
@@ -795,11 +824,20 @@ export async function superviseWorker({
           };
         }
       }
+      if (
+        outcome.type === 'result' &&
+        budget.snapshot.exceededResource !== null
+      )
+        outcome = {
+          type: 'budget-exceeded',
+          resource: budget.snapshot.exceededResource,
+        };
       const durationMs = Math.max(0, clock() - attemptStarted);
       state.attempts += 1;
       state.runtimeMs += Math.min(durationMs, timeoutMs);
       state.toolCalls = budget.snapshot.toolCalls;
       state.modelTokens = budget.snapshot.modelTokens;
+      state.forwardedRequests = budget.snapshot.forwardedRequests;
       const attempt = {
         workerId,
         attemptNumber,
@@ -809,6 +847,7 @@ export async function superviseWorker({
         changedFiles: before.changes,
         toolCalls: budget.snapshot.toolCalls,
         modelTokens: budget.snapshot.modelTokens,
+        forwardedRequests: budget.snapshot.forwardedRequests,
         requestRecords: budget.snapshot.requestRecords,
       };
       if (
@@ -900,7 +939,9 @@ export async function superviseWorker({
         });
         stopReason =
           outcome.type === 'budget-exceeded'
-            ? `${outcome.resource}-budget-exhausted`
+            ? outcome.resource === 'model-requests'
+              ? 'model-request-limit-exhausted'
+              : `${outcome.resource}-budget-exhausted`
             : 'usage-accounting-failed';
       } else if (outcome.type === 'error') {
         failure = failureDetails(outcome.error);
@@ -1035,7 +1076,10 @@ export async function superviseWorker({
       state.repeatedFailures = repeatedFailures;
       state.noProgressAttempts = noProgressAttempts;
       if (budget.snapshot.exceededResource) {
-        stopReason = `${budget.snapshot.exceededResource}-budget-exhausted`;
+        stopReason =
+          budget.snapshot.exceededResource === 'model-requests'
+            ? 'model-request-limit-exhausted'
+            : `${budget.snapshot.exceededResource}-budget-exhausted`;
       }
       attempt.status ??= failure ? 'failed' : 'continued';
       handoff.attempts.push(attempt);

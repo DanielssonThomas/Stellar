@@ -4,8 +4,10 @@ import test from 'node:test';
 import {
   assertMatchingHermesConfigDigest,
   defaultPeonHermesProfile,
+  maxForwardedRequestsForWorkflow,
   peonHermesConfigFilename,
   resolvePeonHermesProfile,
+  resolvePeonHermesWorkflow,
   validatePeonHermesConfigSource,
 } from './peon-hermes-profiles.mjs';
 
@@ -51,6 +53,46 @@ test('fails closed on unknown or ambiguous profile labels', () => {
     () =>
       resolvePeonHermesProfile({
         labels: [...eligible.labels, 'hermes-profile:other'],
+      }),
+    /unknown or ambiguous/,
+  );
+});
+
+test('selects only the explicit eligible bounded-coding workflow label', () => {
+  assert.equal(resolvePeonHermesWorkflow({ labels: [] }), 'standard');
+  assert.equal(maxForwardedRequestsForWorkflow('standard'), undefined);
+  assert.equal(maxForwardedRequestsForWorkflow('bounded-coding'), 2);
+  assert.throws(
+    () => maxForwardedRequestsForWorkflow('three-stage'),
+    /Unknown trusted/,
+  );
+  const selected = {
+    labels: [...eligible.labels, 'hermes-workflow:bounded-coding'],
+  };
+  assert.equal(resolvePeonHermesWorkflow(selected), 'bounded-coding');
+  assert.throws(
+    () =>
+      resolvePeonHermesWorkflow({
+        labels: [...eligible.labels, 'hermes-workflow:future'],
+      }),
+    /unknown or ambiguous/,
+  );
+  assert.throws(
+    () =>
+      resolvePeonHermesWorkflow({
+        labels: [
+          ...eligible.labels.filter(
+            (label) => label !== 'hermes-profile:narrow-coding',
+          ),
+          'hermes-workflow:bounded-coding',
+        ],
+      }),
+    /requires a low-priority Peon issue/,
+  );
+  assert.throws(
+    () =>
+      resolvePeonHermesWorkflow({
+        labels: [...selected.labels, 'hermes-workflow:bounded-coding'],
       }),
     /unknown or ambiguous/,
   );
@@ -119,7 +161,7 @@ test('keeps the production focus profile unchanged and narrows only the separate
     assert.ok(focus.includes(setting));
     assert.ok(narrow.includes(setting));
   }
-  assert.match(narrow, /disabled_toolsets:\n(?:[ ]{4}- [a-z_]+\n)+$/);
+  assert.match(narrow, /disabled_toolsets:\r?\n(?:[ ]{4}- [a-z_]+\r?\n)+$/);
   for (const toolset of [
     'browser',
     'clarify',
@@ -132,5 +174,5 @@ test('keeps the production focus profile unchanged and narrows only the separate
     'vision',
     'web',
   ])
-    assert.match(narrow, new RegExp(`[ ]{4}- ${toolset}\\n`));
+    assert.match(narrow, new RegExp(`[ ]{4}- ${toolset}\\r?\\n`));
 });
