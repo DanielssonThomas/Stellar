@@ -33,6 +33,27 @@ function section(body, name) {
   return match?.[1]?.trim() ?? '';
 }
 
+function withoutSection(body, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return body
+    .replace(
+      new RegExp(
+        `(^|\\n)##\\s+${escaped}\\s*\\n[\\s\\S]*?(?=\\n##\\s+|$)`,
+        'i',
+      ),
+      '$1',
+    )
+    .trim();
+}
+
+function guidanceAttestationMatches(attestation, sha256) {
+  return (
+    attestation?.path === 'AGENTS.md' &&
+    attestation?.guidanceSha256 === sha256 &&
+    /^[a-f0-9]{64}$/.test(attestation.systemPromptSha256 ?? '')
+  );
+}
+
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
     for (const nested of Object.values(value)) deepFreeze(nested);
@@ -112,6 +133,7 @@ export function buildPeonTaskContextManifest({
   workspaceIdentity = worktreePath,
   workspaceReader,
   protectedPaths = [],
+  systemPromptGuidanceAttestation,
 }) {
   if (
     !Number.isSafeInteger(issue?.number) ||
@@ -193,10 +215,24 @@ export function buildPeonTaskContextManifest({
       throw new Error(
         'Required repository guidance exceeds the per-file context limit.',
       );
+    const sha256 = createHash('sha256').update(content).digest('hex');
+    if (relativePath === 'AGENTS.md') {
+      if (!guidanceAttestationMatches(systemPromptGuidanceAttestation, sha256))
+        throw new Error(
+          'Runtime Hermes system prompt did not verify the exact trusted AGENTS.md content.',
+        );
+      return {
+        kind: 'guidance',
+        path: relativePath,
+        sha256,
+        source: 'verified-runtime-system-prompt',
+        systemPromptSha256: systemPromptGuidanceAttestation.systemPromptSha256,
+      };
+    }
     return {
       kind: 'guidance',
       path: relativePath,
-      sha256: createHash('sha256').update(content).digest('hex'),
+      sha256,
       content,
     };
   });
@@ -230,7 +266,10 @@ export function buildPeonTaskContextManifest({
         }),
       ),
       acceptanceCriteria: section(issue.body ?? '', 'Acceptance criteria'),
-      untrustedIssueBody: issue.body ?? '',
+      untrustedIssueBody: withoutSection(
+        issue.body ?? '',
+        'Acceptance criteria',
+      ),
       labels: (issue.labels ?? []).map((entry) =>
         typeof entry === 'string' ? entry : entry.name,
       ),

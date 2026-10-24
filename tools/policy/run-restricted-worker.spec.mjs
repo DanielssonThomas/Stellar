@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
   buildWorkerImageInspectionArgs,
+  buildHermesPromptInspectionArgs,
   buildMeteringProxyArgs,
   buildPodmanArgs,
   assertMeterIdentityUnchanged,
@@ -16,6 +17,7 @@ import {
   formatWorkerFailure,
   parseArguments,
   redactWorkerDiagnostics,
+  runRestrictedWorker,
   waitForMeter,
 } from './run-restricted-worker.mjs';
 import {
@@ -833,6 +835,71 @@ test('passes the complete Hermes executable command through the pinned image ent
     /ENTRYPOINT \["\/usr\/local\/libexec\/hermes-worker-entrypoint"\]/,
   );
   assert.match(containerfile, /'exec "\$@"'/);
+});
+
+test('prepared context transport is interactive, read-only inspectable, and does not use a host-sized prompt argument', () => {
+  const args = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    protectedPaths,
+    command: ['python3', '-c', 'read stdin'],
+    hermesConfigSource: trustedFocusConfig,
+    interactive: true,
+  });
+  assert.ok(args.includes('--interactive'));
+
+  const inspect = buildHermesPromptInspectionArgs({
+    image,
+    uid: 1001,
+    gid: 1001,
+    workspace: '/home/peon/workspaces/issue-50',
+    hermesConfigSource: trustedFocusConfig,
+    inspectionScriptSource:
+      '/mnt/d/ai-repositories/stellar/tools/policy/inspect-hermes-system-prompt.py',
+    runnerScriptSource:
+      '/mnt/d/ai-repositories/stellar/tools/policy/run-hermes-system-prompt-inspection.sh',
+  });
+  assert.ok(inspect.includes('--network=none'));
+  assert.ok(inspect.includes('--read-only'));
+  assert.ok(inspect.includes('--cap-drop=all'));
+  assert.ok(
+    inspect.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50,dst=/workspace,ro',
+    ),
+  );
+  assert.ok(
+    inspect.includes(
+      '--mount=type=bind,src=/mnt/d/ai-repositories/stellar/tools/policy/run-hermes-system-prompt-inspection.sh,dst=/usr/local/libexec/verify-hermes-runtime.py,ro',
+    ),
+  );
+  assert.ok(!inspect.some((argument) => argument.startsWith('--secret=')));
+  assert.ok(!inspect.some((argument) => argument.includes('OPENAI_API_KEY')));
+  assert.throws(
+    () =>
+      buildHermesPromptInspectionArgs({
+        image,
+        uid: 1001,
+        gid: 1001,
+        workspace: '/home/peon/workspaces/issue-50',
+        hermesConfigSource: trustedFocusConfig,
+        inspectionScriptSource: '/tmp/bad,source.py',
+        runnerScriptSource: '/tmp/runner.sh',
+      }),
+    /trusted absolute mount paths/,
+  );
+});
+
+test('rejects oversized or NUL-containing prepared input before launcher preflight', async () => {
+  await assert.rejects(
+    runRestrictedWorker({ issueNumber: 50, taskInput: 'x'.repeat(52_001) }),
+    /Prepared task input is invalid or exceeds its trusted size limit/,
+  );
+  await assert.rejects(
+    runRestrictedWorker({ issueNumber: 50, taskInput: 'bad\0input' }),
+    /Prepared task input is invalid or exceeds its trusted size limit/,
+  );
 });
 
 test('captures bounded diagnostics and redacts credentials, headers, and secret assignments', () => {

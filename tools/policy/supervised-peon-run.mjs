@@ -7,6 +7,7 @@ import {
   cancelRestrictedVerification,
   createPeonWorkerAdapter,
   getTrustedProtectedPathsForContext,
+  inspectHermesSystemPromptGuidance,
   inspectRestrictedWorkspace,
   readRestrictedWorkspaceFile,
   runRestrictedVerification,
@@ -229,6 +230,7 @@ export async function runSupervisedPeonIssue({
   resolveDevelopHead = resolveCurrentDevelopHead,
   reserveAttempt = reserveBoundedCodingAttempt,
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
+  verifySystemPromptGuidance = inspectHermesSystemPromptGuidance,
   createWorkerAdapter = createPeonWorkerAdapter,
   runVerification = runRestrictedVerification,
   cancelVerification = cancelRestrictedVerification,
@@ -293,6 +295,16 @@ export async function runSupervisedPeonIssue({
 
   let preparedContext;
   if (task.hermesWorkflow === 'bounded-coding') {
+    const agentsContent = readWorkspaceFile(number, 'AGENTS.md');
+    const agentsSha256 = createHash('sha256')
+      .update(agentsContent)
+      .digest('hex');
+    const systemPromptGuidanceAttestation = await verifySystemPromptGuidance({
+      issueNumber: number,
+      image,
+      hermesProfile: task.hermesProfile,
+      expectedGuidanceSha256: agentsSha256,
+    });
     preparedContext = buildPeonTaskContextManifest({
       issue,
       task,
@@ -304,6 +316,7 @@ export async function runSupervisedPeonIssue({
       workspaceReader: (relativePath) =>
         readWorkspaceFile(number, relativePath),
       protectedPaths: getProtectedPaths(),
+      systemPromptGuidanceAttestation,
     });
     const [
       currentIssue,

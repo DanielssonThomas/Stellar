@@ -173,7 +173,13 @@ test('does not launch a selected bounded-coding issue before trusted context and
         headRevision: 'a'.repeat(40),
       }),
       getProtectedPaths: () => [],
+      readWorkspaceFile: () => 'Repository policy.\n',
       verifyImageCompatibility: async () => ({ compatible: true }),
+      verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+        path: 'AGENTS.md',
+        guidanceSha256: expectedGuidanceSha256,
+        systemPromptSha256: 'd'.repeat(64),
+      }),
       createWorkerAdapter: () => {
         workerCreated = true;
       },
@@ -253,6 +259,11 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
       readFileSync(join(repositoryRoot, ...relativePath.split('/')), 'utf8'),
     getProtectedPaths: () => [],
     verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+      path: 'AGENTS.md',
+      guidanceSha256: expectedGuidanceSha256,
+      systemPromptSha256: 'd'.repeat(64),
+    }),
     reserveAttempt: () => {
       reservations += 1;
     },
