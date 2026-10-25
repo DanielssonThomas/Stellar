@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, open, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -13,6 +13,16 @@ import { config } from './ai-review.mjs';
 const root = await mkdtemp(join(tmpdir(), 'stellar-ai-ledger-'));
 after(() => rm(root, { recursive: true, force: true }));
 const clock = () => new Date('2026-10-25T20:00:00Z');
+async function provision(name) {
+  const path = join(root, name);
+  const file = await open(path, 'wx');
+  try {
+    await file.sync();
+  } finally {
+    await file.close();
+  }
+  return path;
+}
 const policy = {
   enabled: true,
   monthlyUsd: 5,
@@ -63,7 +73,9 @@ describe('durable shared spending ledger', () => {
     );
   });
   it('serializes independent callers and reserves the worst case before use', async () => {
-    const store = new FileSpendingLedger(join(root, 'shared.jsonl'), { clock });
+    const store = new FileSpendingLedger(await provision('shared.jsonl'), {
+      clock,
+    });
     const first = await store.reserve(base);
     assert.equal(first.action, 'reserve');
     assert.equal(first.entry.reservedMicroUsd, 1_440_000);
@@ -93,7 +105,7 @@ describe('durable shared spending ledger', () => {
     assert.equal((await other.reserve(base)).state, 'committed');
   });
   it('holds uncertain charges and denies retries or missing usage', async () => {
-    const store = new FileSpendingLedger(join(root, 'uncertain.jsonl'), {
+    const store = new FileSpendingLedger(await provision('uncertain.jsonl'), {
       clock,
     });
     await store.reserve(base);
@@ -117,7 +129,7 @@ describe('durable shared spending ledger', () => {
     );
   });
   it('calls a simulated provider once after durable reservation', async () => {
-    const store = new FileSpendingLedger(join(root, 'simulated.jsonl'), {
+    const store = new FileSpendingLedger(await provision('simulated.jsonl'), {
       clock,
     });
     let calls = 0;
@@ -146,7 +158,9 @@ describe('durable shared spending ledger', () => {
     assert.equal(calls, 1);
   });
   it('preserves a simulated provider quota failure without retry', async () => {
-    const store = new FileSpendingLedger(join(root, 'quota.jsonl'), { clock });
+    const store = new FileSpendingLedger(await provision('quota.jsonl'), {
+      clock,
+    });
     let calls = 0;
     const invoke = async () => {
       calls += 1;
@@ -196,6 +210,50 @@ describe('durable shared spending ledger', () => {
         .reason,
       'token-limit',
     );
+  });
+  it('keeps session cost and request limits across UTC month boundaries', async () => {
+    const path = await provision('cross-month.jsonl');
+    const october = new FileSpendingLedger(path, { clock });
+    assert.equal((await october.reserve(base)).action, 'reserve');
+    const november = new FileSpendingLedger(path, {
+      clock: () => new Date('2026-11-01T00:00:00Z'),
+    });
+    const next = {
+      ...base,
+      key: 'Stellar#42:new-head:critical',
+      month: '2026-11',
+    };
+    assert.equal(
+      (await november.reserve(next)).reason,
+      'session-spending-limit',
+    );
+    assert.equal((await november.report('2026-11')).requests, 0);
+    assert.equal((await november.report('2026-10')).reservedUsd, 1.44);
+    const limited = {
+      ...next,
+      policy: { ...policy, maxSessionUsd: 5, maxRequestsPerSession: 1 },
+    };
+    assert.equal(
+      (await november.reserve(limited)).reason,
+      'session-request-limit',
+    );
+  });
+  it('never creates a missing journal or invokes a provider before durable provisioning', async () => {
+    const path = join(root, 'never-created.jsonl');
+    const store = new FileSpendingLedger(path, { clock });
+    let calls = 0;
+    await assert.rejects(
+      invokeWithSpendingLimit({
+        ledger: store,
+        request: base,
+        invoke: async () => {
+          calls += 1;
+        },
+      }),
+      /ENOENT/,
+    );
+    assert.equal(calls, 0);
+    await assert.rejects(readFile(path, 'utf8'), /ENOENT/);
   });
   it('fails closed on a held lock and incomplete journal after interruption', async () => {
     const path = join(root, 'interrupted.jsonl');

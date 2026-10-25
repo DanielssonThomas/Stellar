@@ -168,7 +168,7 @@ export function planSpendingReservation({
   const monthEntries = entries.filter((entry) => entry.month === month);
   if (monthEntries.length >= policy.maxRequestsPerMonth)
     return { action: 'deny', reason: 'monthly-request-limit' };
-  const sessionEntries = monthEntries.filter(
+  const sessionEntries = entries.filter(
     (entry) => entry.sessionId === sessionId,
   );
   if (sessionEntries.length >= policy.maxRequestsPerSession)
@@ -223,16 +223,29 @@ export class FileSpendingLedger {
         JSON.stringify({ pid: process.pid, at: new Date().toISOString() }),
       );
       await lock.sync();
-      const raw = await readFile(this.path, 'utf8').catch((error) => {
-        if (error.code === 'ENOENT') return '';
-        throw error;
-      });
+      // A missing journal may have been lost after an earlier paid request.
+      // Provision it durably before enabling providers; never create it here.
+      const raw = await readFile(this.path, 'utf8');
       const entries = parseLedger(raw);
       const { result, append } = callback(entries);
       if (append) {
-        const ledger = await open(this.path, 'a');
+        const ledger = await open(this.path, 'r+');
         try {
-          await ledger.writeFile(`${JSON.stringify(append)}\n`);
+          const data = Buffer.from(`${JSON.stringify(append)}\n`);
+          let position = (await ledger.stat()).size;
+          let offset = 0;
+          while (offset < data.length) {
+            const { bytesWritten } = await ledger.write(
+              data,
+              offset,
+              data.length - offset,
+              position,
+            );
+            if (bytesWritten === 0)
+              throw new Error('Ledger append made no progress.');
+            offset += bytesWritten;
+            position += bytesWritten;
+          }
           await ledger.sync();
         } finally {
           await ledger.close();
