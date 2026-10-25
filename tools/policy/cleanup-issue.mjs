@@ -45,9 +45,8 @@ export async function main(argv = process.argv.slice(2)) {
     stopped,
     auditPath: args.audit,
     releaseSessionId: args['session-id'],
-    remoteAuthorized:
-      stopped.crossCloneSafe === true &&
-      stopped.remoteDeletionAuthorized === true,
+    // A stop receipt cannot authorize deletion in other clones or a remote.
+    remoteAuthorized: false,
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);
   return result;
