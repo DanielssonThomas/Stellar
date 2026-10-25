@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -199,7 +200,10 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
     ],
   };
   const repositoryRoot = process.cwd();
-  const head = 'c'.repeat(40);
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
   let issueReads = 0;
   let reservations = 0;
   let adapterOptions;
@@ -256,7 +260,15 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
       headRevision: head,
     }),
     readWorkspaceFile: (_number, relativePath) =>
-      readFileSync(join(repositoryRoot, ...relativePath.split('/')), 'utf8'),
+      relativePath === 'AGENTS.md'
+        ? execFileSync('git', ['show', `${head}:${relativePath}`], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+          })
+        : readFileSync(
+            join(repositoryRoot, ...relativePath.split('/')),
+            'utf8',
+          ),
     getProtectedPaths: () => [],
     verifyImageCompatibility: async () => ({ compatible: true }),
     verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({

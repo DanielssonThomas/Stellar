@@ -31,6 +31,8 @@ The local setup uses WSL 2, Ubuntu, and rootless Podman. The Linux `peon` accoun
 
 The rootless user namespace and absent mounts were verified in the local WSL environment. The default supervisor also bounds attempts, runtime, tools, and model tokens; see [agent supervision](agent-supervision.md).
 
+The trusted task-context manifest may include only its mandatory guidance and explicitly selected repository guides or skills, read from regular Git blobs at the pinned repository revision. Each guidance entry carries that revision and a content SHA-256; `AGENTS.md` must also match the pinned Hermes system-prompt attestation. This read-only context exception does not authorize edits: every CODEOWNERS-protected path remains forbidden in source, test, and config excerpts and in the worker's authorized change paths. It does not change the worker's read-only protected mounts or permissions.
+
 ## Private WSL inference service
 
 The local Peon model service runs separately from the worker in rootless Podman. NVIDIA Container Toolkit CDI was generated in Ubuntu WSL from the WSL-provided NVIDIA driver, and a CUDA sample completed on the RTX 4070 SUPER. The service uses the pinned `ghcr.io/ggml-org/llama.cpp` image digest `sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7` and the Qwen3.5-4B Q4_K_M GGUF copied onto WSL's Linux filesystem. The model file is mounted read-only; its SHA-256 is `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`.

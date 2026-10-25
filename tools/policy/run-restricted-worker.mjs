@@ -214,6 +214,10 @@ export function readRestrictedWorkspaceFile(issueNumber, relativePath) {
     relativePath.startsWith('/') ||
     relativePath.includes('\\') ||
     relativePath.includes(':') ||
+    [...relativePath].some((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint < 0x20 || codePoint === 0x7f;
+    }) ||
     relativePath
       .split('/')
       .some((part) => !part || part === '.' || part === '..')
@@ -225,10 +229,11 @@ export function readRestrictedWorkspaceFile(issueNumber, relativePath) {
   const canonicalFile = wslWorker('realpath', '-e', candidate);
   if (
     canonicalRoot !== workspace ||
-    !canonicalFile.startsWith(`${canonicalRoot}/`)
+    !canonicalFile.startsWith(`${canonicalRoot}/`) ||
+    canonicalFile !== candidate
   )
     throw new Error(
-      'Trusted context file escaped the assigned Peon workspace.',
+      'Trusted context file escaped its assigned Peon path or used a symlink.',
     );
   const result = spawnSync(
     'wsl.exe',

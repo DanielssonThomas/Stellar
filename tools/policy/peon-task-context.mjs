@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
@@ -18,6 +19,10 @@ function safeRelativePath(value, label) {
     value.startsWith('/') ||
     value.includes('\\') ||
     value.includes(':') ||
+    [...value].some((character) => {
+      const codePoint = character.codePointAt(0);
+      return codePoint < 0x20 || codePoint === 0x7f;
+    }) ||
     value.split('/').some((part) => !part || part === '.' || part === '..')
   )
     throw new Error(`${label} must be a normalized repository-relative path.`);
@@ -79,10 +84,54 @@ function readContextFile(root, relativePath, workspaceReader) {
   const canonicalFile = realpathSync(absolutePath);
   if (
     !canonicalFile.startsWith(`${canonicalRoot}${path.sep}`) ||
+    canonicalFile !== absolutePath ||
     !statSync(canonicalFile).isFile()
   )
-    throw new Error('Context path must be a regular file within its checkout.');
+    throw new Error(
+      'Context path must be a regular, non-symlink file within its checkout.',
+    );
   return readFileSync(canonicalFile, 'utf8');
+}
+
+function readTrustedRevisionFile(root, revision, relativePath) {
+  let treeEntry;
+  try {
+    treeEntry = execFileSync(
+      'git',
+      ['--literal-pathspecs', 'ls-tree', '-z', revision, '--', relativePath],
+      { cwd: root, encoding: 'utf8', maxBuffer: 4_096, windowsHide: true },
+    );
+  } catch {
+    throw new Error(
+      'Trusted guidance is unavailable at the pinned repository revision.',
+    );
+  }
+  const [record] = treeEntry.split('\0');
+  const [metadata, treePath] = (record ?? '').split('\t');
+  const match = /^(100644|100755) blob ([a-f0-9]{40,64})$/.exec(metadata ?? '');
+  if (!match || treePath !== relativePath)
+    throw new Error(
+      'Trusted guidance must be a regular file at the pinned repository revision.',
+    );
+  let bytes;
+  try {
+    bytes = execFileSync('git', ['cat-file', 'blob', match[2]], {
+      cwd: root,
+      maxBuffer: maxFileBytes + 1,
+      windowsHide: true,
+    });
+  } catch {
+    throw new Error(
+      'Trusted guidance could not be read from the pinned repository revision.',
+    );
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+      bytes,
+    );
+  } catch {
+    throw new Error('Trusted guidance must be valid UTF-8.');
+  }
 }
 
 function readBoundedExcerpt(
@@ -201,14 +250,10 @@ export function buildPeonTaskContextManifest({
     }),
   ];
   const guidance = [...new Set(guidancePaths)].map((relativePath) => {
-    if (protectedPath(relativePath, protectedPaths))
-      throw new Error(
-        'Required guidance cannot be sourced from a protected path.',
-      );
-    const content = readContextFile(
-      worktreePath,
+    const content = readTrustedRevisionFile(
+      repositoryRoot,
+      headRevision,
       relativePath,
-      workspaceReader,
     );
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > maxFileBytes)
@@ -225,6 +270,7 @@ export function buildPeonTaskContextManifest({
         kind: 'guidance',
         path: relativePath,
         sha256,
+        revision: headRevision,
         source: 'verified-runtime-system-prompt',
         systemPromptSha256: systemPromptGuidanceAttestation.systemPromptSha256,
       };
@@ -233,6 +279,7 @@ export function buildPeonTaskContextManifest({
       kind: 'guidance',
       path: relativePath,
       sha256,
+      revision: headRevision,
       content,
     };
   });

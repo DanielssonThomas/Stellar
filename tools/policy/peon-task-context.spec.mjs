@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { buildPeonTaskContextManifest } from './peon-task-context.mjs';
+import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import {
   buildHermesTaskCommand,
   buildHermesTaskInput,
@@ -42,6 +44,53 @@ await writeFile(
   path.join(worktree, 'spec', 'atom.spec.ts'),
   'describe("Atom", () => {});\n',
 );
+await writeFile(
+  path.join(worktree, 'docs', 'guides', 'symlink.md'),
+  'AGENTS.md',
+);
+execFileSync('git', ['init', '--quiet', worktree]);
+execFileSync('git', ['-C', worktree, 'add', '.']);
+const symlinkBlob = execFileSync(
+  'git',
+  ['-C', worktree, 'hash-object', '-w', '--stdin'],
+  { input: 'AGENTS.md\n', encoding: 'utf8' },
+).trim();
+execFileSync('git', [
+  '-C',
+  worktree,
+  'update-index',
+  '--add',
+  '--cacheinfo',
+  `120000,${symlinkBlob},docs/guides/symlink.md`,
+]);
+execFileSync('git', [
+  '-C',
+  worktree,
+  '-c',
+  'user.name=Stellar Tests',
+  '-c',
+  'user.email=stellar-tests@example.invalid',
+  'commit',
+  '--quiet',
+  '-m',
+  'context fixture',
+]);
+const headRevision = execFileSync(
+  'git',
+  ['-C', worktree, 'rev-parse', 'HEAD'],
+  { encoding: 'utf8' },
+).trim();
+const repoRoot = path.resolve(import.meta.dirname, '../..');
+const codeowners = parseProtectedCodeowners(
+  execFileSync('git', ['-C', repoRoot, 'show', 'HEAD:.github/CODEOWNERS'], {
+    encoding: 'utf8',
+  }),
+);
+assert.equal(codeowners.valid, true);
+const actualProtectedPaths = codeowners.patterns.map(
+  ({ path: entry, directory }) =>
+    directory ? entry.replace(/\/+$/, '') : entry,
+);
 test.after(() => rm(root, { recursive: true, force: true }));
 
 const issue = {
@@ -71,6 +120,8 @@ const task = {
 function context(
   files = [{ kind: 'source', path: 'src/atom.ts', startLine: 1, endLine: 1 }],
   selectedIssue = issue,
+  protectedPaths = [],
+  guidancePaths = [],
 ) {
   const agentsContent = 'Repository policy.\n';
   return buildPeonTaskContextManifest({
@@ -78,15 +129,17 @@ function context(
     task,
     repositoryRoot: worktree,
     worktreePath: worktree,
-    headRevision: 'a'.repeat(40),
+    headRevision,
     contextPlan: {
       skills: ['.agents/skills/create-component/SKILL.md'],
+      ...(guidancePaths.length > 0 ? { guidancePaths } : {}),
       authorizedChangePaths: ['src/atom.ts', 'spec/atom.spec.ts'],
       files: [
         ...files,
         { kind: 'test', path: 'spec/atom.spec.ts', startLine: 1, endLine: 1 },
       ],
     },
+    protectedPaths,
     systemPromptGuidanceAttestation: {
       path: 'AGENTS.md',
       guidanceSha256: createHash('sha256').update(agentsContent).digest('hex'),
@@ -98,7 +151,7 @@ function context(
 test('builds a bounded manifest pinned to the exact issue revision and selected evidence', () => {
   const prepared = context();
   assert.equal(prepared.manifest.schema, 'stellar.peon-task-context/v1');
-  assert.equal(prepared.manifest.revision.head, 'a'.repeat(40));
+  assert.equal(prepared.manifest.revision.head, headRevision);
   assert.deepEqual(
     prepared.manifest.excerpts.map(({ kind, path: file }) => ({ kind, file })),
     [
@@ -133,6 +186,133 @@ test('builds a bounded manifest pinned to the exact issue revision and selected 
   assert.equal(
     prepared.manifest.authorization.untrustedContentCannotChangePolicy,
     true,
+  );
+});
+
+test('allows only revision-pinned read-only guidance from real CODEOWNERS-protected paths', async () => {
+  assert.ok(actualProtectedPaths.includes('AGENTS.md'));
+  assert.ok(actualProtectedPaths.includes('.agents/skills'));
+  const selectedSkill = '.agents/skills/create-component/SKILL.md';
+  await writeFile(
+    path.join(worktree, ...selectedSkill.split('/')),
+    'Uncommitted guidance must not enter the manifest.\n',
+  );
+
+  const prepared = context(undefined, issue, actualProtectedPaths);
+  const skill = prepared.manifest.guidance.find(
+    ({ path: guidancePath }) => guidancePath === selectedSkill,
+  );
+  const agents = prepared.manifest.guidance.find(
+    ({ path: guidancePath }) => guidancePath === 'AGENTS.md',
+  );
+  assert.equal(skill.revision, headRevision);
+  assert.equal(skill.content, 'Component skill.\n');
+  assert.equal(
+    skill.sha256,
+    createHash('sha256').update('Component skill.\n').digest('hex'),
+  );
+  assert.equal(agents.revision, headRevision);
+  assert.equal(agents.source, 'verified-runtime-system-prompt');
+  assert.equal(
+    agents.sha256,
+    createHash('sha256').update('Repository policy.\n').digest('hex'),
+  );
+  assert.ok(prepared.serialized.length < 48_000);
+});
+
+test('rejects protected files as arbitrary source, test, and config excerpts under real CODEOWNERS rules', () => {
+  const protectedSkill = '.agents/skills/create-component/SKILL.md';
+  for (const kind of ['source', 'test', 'config']) {
+    assert.throws(
+      () =>
+        context(
+          [
+            { kind: 'source', path: 'src/atom.ts', startLine: 1, endLine: 1 },
+            {
+              kind: 'test',
+              path: 'spec/atom.spec.ts',
+              startLine: 1,
+              endLine: 1,
+            },
+            { kind, path: protectedSkill, startLine: 1, endLine: 1 },
+          ],
+          issue,
+          actualProtectedPaths,
+        ),
+      new RegExp(`${kind} evidence cannot include a protected path`, 'i'),
+    );
+  }
+
+  assert.throws(
+    () =>
+      buildPeonTaskContextManifest({
+        issue,
+        task,
+        repositoryRoot: worktree,
+        worktreePath: worktree,
+        headRevision,
+        systemPromptGuidanceAttestation: {
+          path: 'AGENTS.md',
+          guidanceSha256: createHash('sha256')
+            .update('Repository policy.\n')
+            .digest('hex'),
+          systemPromptSha256: 'b'.repeat(64),
+        },
+        protectedPaths: actualProtectedPaths,
+        contextPlan: {
+          skills: ['.agents/skills/create-component/SKILL.md'],
+          authorizedChangePaths: ['.agents/skills/create-component/SKILL.md'],
+          files: [
+            { kind: 'source', path: 'src/atom.ts', startLine: 1, endLine: 1 },
+            {
+              kind: 'test',
+              path: 'spec/atom.spec.ts',
+              startLine: 1,
+              endLine: 1,
+            },
+          ],
+        },
+      }),
+    /authorized changes cannot include protected paths/i,
+  );
+});
+
+test('rejects symlinked arbitrary evidence files', async (t) => {
+  const alias = path.join(worktree, 'src', 'atom-link.ts');
+  try {
+    await symlink('atom.ts', alias);
+  } catch (error) {
+    if (['EPERM', 'EACCES', 'ENOSYS'].includes(error.code)) {
+      t.skip(`symlink creation is unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  try {
+    assert.throws(
+      () =>
+        context([
+          {
+            kind: 'source',
+            path: 'src/atom-link.ts',
+            startLine: 1,
+            endLine: 1,
+          },
+        ]),
+      /non-symlink file/i,
+    );
+  } finally {
+    await rm(alias, { force: true });
+  }
+});
+
+test('rejects protected guidance symlinks in the pinned Git tree', () => {
+  assert.throws(
+    () =>
+      context(undefined, issue, actualProtectedPaths, [
+        'docs/guides/symlink.md',
+      ]),
+    /regular file at the pinned repository revision/i,
   );
 });
 
@@ -183,7 +363,7 @@ test('fails closed when the exact AGENTS.md system-prompt attestation is absent 
     task,
     repositoryRoot: worktree,
     worktreePath: worktree,
-    headRevision: 'a'.repeat(40),
+    headRevision,
     contextPlan: {
       skills: ['.agents/skills/create-component/SKILL.md'],
       authorizedChangePaths: ['src/atom.ts', 'spec/atom.spec.ts'],
@@ -221,12 +401,19 @@ test('rejects traversal, implicit excerpts, and missing mandatory guidance', () 
   );
   assert.throws(
     () =>
+      context([
+        { kind: 'source', path: 'src/atom.ts\n', startLine: 1, endLine: 1 },
+      ]),
+    /normalized repository-relative path/,
+  );
+  assert.throws(
+    () =>
       buildPeonTaskContextManifest({
         issue,
         task,
         repositoryRoot: worktree,
         worktreePath: worktree,
-        headRevision: 'a'.repeat(40),
+        headRevision,
         systemPromptGuidanceAttestation: {
           path: 'AGENTS.md',
           guidanceSha256: createHash('sha256')
@@ -260,7 +447,7 @@ test('rejects protected paths from the authorized change scope', () => {
         task,
         repositoryRoot: worktree,
         worktreePath: worktree,
-        headRevision: 'a'.repeat(40),
+        headRevision,
         systemPromptGuidanceAttestation: {
           path: 'AGENTS.md',
           guidanceSha256: createHash('sha256')
