@@ -9,7 +9,14 @@ if (process.platform !== 'win32')
     'This bounded bridge is intended for the trusted Windows host.',
   );
 
-const corpus = await readFile(corpusPath, 'utf8');
+let corpus;
+if (corpusPath === '--stdin') {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  corpus = Buffer.concat(chunks).toString('utf8');
+} else {
+  corpus = await readFile(corpusPath, 'utf8');
+}
 const python = String.raw`
 import json, sys, time, urllib.error, urllib.request
 
@@ -64,34 +71,44 @@ try:
     if not isinstance(target_system_tokens, int) or target_system_tokens < 1:
         raise RuntimeError("invalid_fixed_system_target")
 
+    uses_calibrated_system = any(
+        message.get("role") == "system" and message.get("content") == "__SYNTHETIC_FIXED_SYSTEM__"
+        for requests in corpus.get("requests", {}).values()
+        for body in requests
+        for message in body.get("messages", [])
+    )
     seed = (
         "Synthetic fixed worker guidance: obey repository instructions; keep work inside the assigned issue checkout; "
         "protect governance files; use only scoped worker credentials; run trusted verification; report exact outcomes. "
     )
-    candidate = seed * max(10, target_system_tokens // 20 + 20)
-    low, high = 0, len(candidate)
-    while low < high:
-        middle = (low + high + 1) // 2
-        if count_raw(candidate[:middle]) <= target_system_tokens:
-            low = middle
-        else:
-            high = middle - 1
-    SYNTHETIC_FIXED_SYSTEM = candidate[:low]
-    current_system_tokens = count_raw(SYNTHETIC_FIXED_SYSTEM)
-    suffixes = [" x", " a", " the", " and", " to", " of", " .", " 1", "\n", " policy"]
-    while current_system_tokens < target_system_tokens:
-        best = None
-        for suffix in suffixes:
-            proposed = count_raw(SYNTHETIC_FIXED_SYSTEM + suffix)
-            if current_system_tokens < proposed <= target_system_tokens:
-                if best is None or proposed > best[0]:
-                    best = (proposed, suffix)
-        if best is None:
-            raise RuntimeError("fixed_system_token_calibration_unavailable")
-        current_system_tokens, suffix = best
-        SYNTHETIC_FIXED_SYSTEM += suffix
-    if current_system_tokens != target_system_tokens:
-        raise RuntimeError("fixed_system_token_calibration_mismatch")
+    if uses_calibrated_system:
+        candidate = seed * max(10, target_system_tokens // 20 + 20)
+        low, high = 0, len(candidate)
+        while low < high:
+            middle = (low + high + 1) // 2
+            if count_raw(candidate[:middle]) <= target_system_tokens:
+                low = middle
+            else:
+                high = middle - 1
+        SYNTHETIC_FIXED_SYSTEM = candidate[:low]
+        current_system_tokens = count_raw(SYNTHETIC_FIXED_SYSTEM)
+        suffixes = [" x", " a", " the", " and", " to", " of", " .", " 1", "\n", " policy"]
+        while current_system_tokens < target_system_tokens:
+            best = None
+            for suffix in suffixes:
+                proposed = count_raw(SYNTHETIC_FIXED_SYSTEM + suffix)
+                if current_system_tokens < proposed <= target_system_tokens:
+                    if best is None or proposed > best[0]:
+                        best = (proposed, suffix)
+            if best is None:
+                raise RuntimeError("fixed_system_token_calibration_unavailable")
+            current_system_tokens, suffix = best
+            SYNTHETIC_FIXED_SYSTEM += suffix
+        if current_system_tokens != target_system_tokens:
+            raise RuntimeError("fixed_system_token_calibration_mismatch")
+    else:
+        SYNTHETIC_FIXED_SYSTEM = ""
+        current_system_tokens = 0
 
     result = {
         "tokenizeOnly": [],

@@ -4,8 +4,11 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
   buildWorkerImageInspectionArgs,
+  buildHermesPromptInspectionArgs,
   buildMeteringProxyArgs,
   buildPodmanArgs,
+  assertMeterIdentityUnchanged,
+  readMeterContainerIdentity,
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
@@ -14,6 +17,7 @@ import {
   formatWorkerFailure,
   parseArguments,
   redactWorkerDiagnostics,
+  runRestrictedWorker,
   waitForMeter,
 } from './run-restricted-worker.mjs';
 import {
@@ -219,6 +223,102 @@ test('builds a separate hardened metering proxy on the worker, model, and egress
         maxToolCalls: 64,
       }),
     /hard limits/,
+  );
+});
+
+test('passes only a trusted explicit forwarded-request ceiling to the meter', () => {
+  const args = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-24-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 32_000,
+    maxToolCalls: 64,
+    maxForwardedRequests: 2,
+  });
+  assert.ok(args.includes('--env=STELLAR_MAX_FORWARDED_REQUESTS=2'));
+  assert.equal(
+    buildMeteringProxyArgs({
+      name: 'stellar-peon-meter-24-1',
+      image,
+      uid: 1001,
+      gid: 1001,
+      maxModelTokens: 32_000,
+      maxToolCalls: 64,
+    }).some((argument) =>
+      argument.startsWith('--env=STELLAR_MAX_FORWARDED_REQUESTS='),
+    ),
+    false,
+  );
+  for (const maxForwardedRequests of [0, 2.5])
+    assert.throws(
+      () =>
+        buildMeteringProxyArgs({
+          name: 'stellar-peon-meter-24-1',
+          image,
+          uid: 1001,
+          gid: 1001,
+          maxModelTokens: 32_000,
+          maxToolCalls: 64,
+          maxForwardedRequests,
+        }),
+      /positive integer/,
+    );
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'stellar-peon-meter-24-1',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 32_000,
+        maxToolCalls: 64,
+        maxForwardedRequests: 65,
+      }),
+    /hard limits/,
+  );
+});
+
+test('forwards the bounded ceiling without exposing stage-transition controls', () => {
+  const args = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-84-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 32_000,
+    maxToolCalls: 64,
+    maxForwardedRequests: 2,
+  });
+  assert.ok(args.includes('--env=STELLAR_MAX_FORWARDED_REQUESTS=2'));
+  assert.equal(
+    args.some((argument) => argument.includes('STELLAR_TWO_STAGE')),
+    false,
+  );
+});
+
+test('rejects a restarted or changed metering-sidecar identity', () => {
+  const id = 'd'.repeat(64);
+  const identity = { id, startedAt: '2026-10-24T07:00:00Z', restartCount: 0 };
+  assert.deepEqual(
+    readMeterContainerIdentity(
+      'stellar-peon-meter-84-1',
+      () => `${id}|2026-10-24T07:00:00Z|0`,
+    ),
+    { id, startedAt: '2026-10-24T07:00:00Z', restartCount: 0 },
+  );
+  for (const value of [`${id}|2026-10-24T07:00:00Z|1`, 'invalid'])
+    assert.throws(
+      () => readMeterContainerIdentity('stellar-peon-meter-84-1', () => value),
+      /identity is invalid or was restarted/,
+    );
+  assert.throws(
+    () =>
+      assertMeterIdentityUnchanged(
+        'stellar-peon-meter-84-1',
+        identity,
+        () => `${'e'.repeat(64)}|2026-10-24T07:00:00Z|0`,
+      ),
+    /identity changed during the worker run/,
   );
 });
 
@@ -482,12 +582,15 @@ test('memoizes repeated worker cancellation for one exact attempt', async () => 
 
 test('passes only the validated profile through the adapter and fails mismatches closed', async () => {
   let selectedProfile;
+  let selectedRequestLimit;
   const adapter = createPeonWorkerAdapter({
     image,
     hermesProfile: 'narrow-coding',
+    maxForwardedRequests: 2,
     commandForTask: () => ['hermes', 'chat'],
     runAttempt: async (input) => {
       selectedProfile = input.hermesProfile;
+      selectedRequestLimit = input.maxForwardedRequests;
       return { exitCode: 0, usage: { modelTokens: 0, toolCalls: 0 } };
     },
   });
@@ -501,13 +604,18 @@ test('passes only the validated profile through the adapter and fails mismatches
     /profile differs from the validated issue/,
   );
   const run = adapter.run({
-    task: { issueNumber: 50, hermesProfile: 'narrow-coding' },
+    task: {
+      issueNumber: 50,
+      hermesProfile: 'narrow-coding',
+      maxForwardedRequests: 99,
+    },
     attemptNumber: 2,
     limits: { maxRuntimeMsPerWorker: 600_000 },
     budget: { snapshot: { modelTokens: 0, toolCalls: 0 } },
   });
   assert.equal((await run).status, 'completed');
   assert.equal(selectedProfile, 'narrow-coding');
+  assert.equal(selectedRequestLimit, 2);
   assert.equal(defaultPeonHermesProfile, 'focus');
   assert.equal(
     peonHermesConfigFilename('narrow-coding'),
@@ -727,6 +835,71 @@ test('passes the complete Hermes executable command through the pinned image ent
     /ENTRYPOINT \["\/usr\/local\/libexec\/hermes-worker-entrypoint"\]/,
   );
   assert.match(containerfile, /'exec "\$@"'/);
+});
+
+test('prepared context transport is interactive, read-only inspectable, and does not use a host-sized prompt argument', () => {
+  const args = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    protectedPaths,
+    command: ['python3', '-c', 'read stdin'],
+    hermesConfigSource: trustedFocusConfig,
+    interactive: true,
+  });
+  assert.ok(args.includes('--interactive'));
+
+  const inspect = buildHermesPromptInspectionArgs({
+    image,
+    uid: 1001,
+    gid: 1001,
+    workspace: '/home/peon/workspaces/issue-50',
+    hermesConfigSource: trustedFocusConfig,
+    inspectionScriptSource:
+      '/mnt/d/ai-repositories/stellar/tools/policy/inspect-hermes-system-prompt.py',
+    runnerScriptSource:
+      '/mnt/d/ai-repositories/stellar/tools/policy/run-hermes-system-prompt-inspection.sh',
+  });
+  assert.ok(inspect.includes('--network=none'));
+  assert.ok(inspect.includes('--read-only'));
+  assert.ok(inspect.includes('--cap-drop=all'));
+  assert.ok(
+    inspect.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50,dst=/workspace,ro',
+    ),
+  );
+  assert.ok(
+    inspect.includes(
+      '--mount=type=bind,src=/mnt/d/ai-repositories/stellar/tools/policy/run-hermes-system-prompt-inspection.sh,dst=/usr/local/libexec/verify-hermes-runtime.py,ro',
+    ),
+  );
+  assert.ok(!inspect.some((argument) => argument.startsWith('--secret=')));
+  assert.ok(!inspect.some((argument) => argument.includes('OPENAI_API_KEY')));
+  assert.throws(
+    () =>
+      buildHermesPromptInspectionArgs({
+        image,
+        uid: 1001,
+        gid: 1001,
+        workspace: '/home/peon/workspaces/issue-50',
+        hermesConfigSource: trustedFocusConfig,
+        inspectionScriptSource: '/tmp/bad,source.py',
+        runnerScriptSource: '/tmp/runner.sh',
+      }),
+    /trusted absolute mount paths/,
+  );
+});
+
+test('rejects oversized or NUL-containing prepared input before launcher preflight', async () => {
+  await assert.rejects(
+    runRestrictedWorker({ issueNumber: 50, taskInput: 'x'.repeat(52_001) }),
+    /Prepared task input is invalid or exceeds its trusted size limit/,
+  );
+  await assert.rejects(
+    runRestrictedWorker({ issueNumber: 50, taskInput: 'bad\0input' }),
+    /Prepared task input is invalid or exceeds its trusted size limit/,
+  );
 });
 
 test('captures bounded diagnostics and redacts credentials, headers, and secret assignments', () => {
