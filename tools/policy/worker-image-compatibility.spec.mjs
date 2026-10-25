@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   buildWorkerImageInspectionArgs,
@@ -15,6 +18,7 @@ const root = await mkdtemp(join(tmpdir(), 'stellar-image-compatibility-'));
 const sourcePath = join(root, 'peon-metering-proxy.mjs');
 const source = 'trusted metering proxy source';
 const sourceSha256 = createHash('sha256').update(source).digest('hex');
+const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 await writeFile(sourcePath, source);
 
@@ -60,6 +64,59 @@ test('rejects a mismatched proxy hash with sanitized rebuild guidance', async ()
       assert.match(error.message, /Pinned worker image is incompatible/);
       assert.match(error.message, /Rebuild from current develop/);
       assert.match(error.message, new RegExp(sourceSha256));
+      return true;
+    },
+  );
+});
+
+test('preserves exact LF bytes for the trusted proxy checkout on Windows', () => {
+  const attributes = readFileSync(
+    join(repositoryRoot, '.gitattributes'),
+    'utf8',
+  );
+  const proxyBytes = readFileSync(
+    new URL('./peon-metering-proxy.mjs', import.meta.url),
+  );
+  const checkedAttributes = execFileSync(
+    'git',
+    ['check-attr', 'text', 'eol', '--', 'tools/policy/peon-metering-proxy.mjs'],
+    { cwd: repositoryRoot, encoding: 'utf8' },
+  );
+
+  assert.match(
+    attributes,
+    /^\/tools\/policy\/peon-metering-proxy\.mjs text eol=lf$/m,
+  );
+  assert.match(checkedAttributes, /text: set/);
+  assert.match(checkedAttributes, /eol: lf/);
+  assert.equal(proxyBytes.includes(0x0d), false);
+});
+
+test('does not normalize CRLF trusted source to match an LF image', async () => {
+  const crlfPath = `${sourcePath}.crlf`;
+  const crlfSource = `${source}\r\n`;
+  const crlfSha256 = createHash('sha256').update(crlfSource).digest('hex');
+  await writeFile(crlfPath, crlfSource);
+
+  await assert.rejects(
+    verifyWorkerImageCompatibility({
+      image,
+      sourcePath: crlfPath,
+      inspectImage: inspection(
+        `${sourceSha256}  ${embeddedMeteringProxyPath}\n`,
+      ),
+    }),
+    (error) => {
+      assert.match(error.message, /Pinned worker image is incompatible/);
+      assert.match(
+        error.message,
+        new RegExp(`embedded metering proxy SHA-256 ${sourceSha256}`),
+      );
+      assert.match(
+        error.message,
+        new RegExp(`differs from trusted source ${crlfSha256}`),
+      );
+      assert.match(error.message, new RegExp(crlfSha256));
       return true;
     },
   );
