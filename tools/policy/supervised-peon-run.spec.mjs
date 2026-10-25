@@ -19,7 +19,7 @@ const handoffPath = join(root, 'handoff.json');
 test('pins the independently verified compatible worker image digest', () => {
   assert.equal(
     trustedPeonWorkerImage,
-    'ghcr.io/stellar-ai-corp/hermes-worker@sha256:e847e440fb57416aba8336781114a4f9b29d8c9275131cf5a84e019ee870ef31',
+    'ghcr.io/stellar-ai-corp/hermes-worker@sha256:619cd1dba336ea1426f4a2b667f92ea022c4e36a0b305dad4eb922fc135098b2',
   );
 });
 
