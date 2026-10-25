@@ -1,6 +1,10 @@
 {
   "enabled": false,
-  "monthlyUsd": 20,
+  "monthlyUsd": 5,
+  "maxSessionUsd": 2,
+  "maxRequestsPerSession": 4,
+  "maxRetriesPerRequest": 0,
+  "maxRequestsPerMonth": 20,
   "tiers": {
     "light": {
       "model": "gpt-6-luna",
