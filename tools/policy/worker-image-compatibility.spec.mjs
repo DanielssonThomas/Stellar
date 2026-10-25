@@ -92,44 +92,38 @@ test('preserves exact LF bytes for the trusted proxy checkout on Windows', () =>
   assert.equal(proxyBytes.includes(0x0d), false);
 });
 
-test(
-  'preserves exact LF bytes for the trusted prompt-inspection shell checkout on Windows',
-  () => {
-    const attributes = readFileSync(
-      join(repositoryRoot, '.gitattributes'),
-      'utf8',
-    );
-    const inspectionBytes = readFileSync(
-      join(
-        repositoryRoot,
-        'tools/policy/run-hermes-system-prompt-inspection.sh',
-      ),
-    );
-    const checkedAttributes = execFileSync(
-      'git',
-      [
-        'check-attr',
-        'text',
-        'eol',
-        '--',
-        'tools/policy/run-hermes-system-prompt-inspection.sh',
-      ],
-      { cwd: repositoryRoot, encoding: 'utf8' },
-    );
+test('preserves exact LF bytes for the trusted prompt-inspection shell checkout on Windows', () => {
+  const attributes = readFileSync(
+    join(repositoryRoot, '.gitattributes'),
+    'utf8',
+  );
+  const inspectionBytes = readFileSync(
+    join(repositoryRoot, 'tools/policy/run-hermes-system-prompt-inspection.sh'),
+  );
+  const checkedAttributes = execFileSync(
+    'git',
+    [
+      'check-attr',
+      'text',
+      'eol',
+      '--',
+      'tools/policy/run-hermes-system-prompt-inspection.sh',
+    ],
+    { cwd: repositoryRoot, encoding: 'utf8' },
+  );
 
-    assert.match(
-      attributes,
-      /^\/tools\/policy\/run-hermes-system-prompt-inspection\.sh text eol=lf$/m,
-    );
-    assert.match(checkedAttributes, /text: set/);
-    assert.match(checkedAttributes, /eol: lf/);
-    assert.equal(inspectionBytes.includes(0x0d), false);
-    assert.equal(
-      inspectionBytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])),
-      false,
-    );
-  },
-);
+  assert.match(
+    attributes,
+    /^\/tools\/policy\/run-hermes-system-prompt-inspection\.sh text eol=lf$/m,
+  );
+  assert.match(checkedAttributes, /text: set/);
+  assert.match(checkedAttributes, /eol: lf/);
+  assert.equal(inspectionBytes.includes(0x0d), false);
+  assert.equal(
+    inspectionBytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])),
+    false,
+  );
+});
 
 test('does not normalize CRLF trusted source to match an LF image', async () => {
   const crlfPath = `${sourcePath}.crlf`;
