@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
+import {
+  defaultPeonHermesProfile,
+  maxForwardedRequestsForWorkflow,
+  peonHermesConfigFilename,
+} from './peon-hermes-profiles.mjs';
 
 export const defaultLimits = Object.freeze({
   maxAttemptsPerWorker: 2,
@@ -63,12 +68,41 @@ function issueContext(task) {
     throw new Error('An absolute issue worktreePath is required.');
   if (!/^(?:owner|worker):[a-z0-9._-]+$/.test(task.owner ?? ''))
     throw new Error('The current issue owner label is required.');
+  const hermesProfile = Object.hasOwn(task, 'hermesProfile')
+    ? task.hermesProfile
+    : defaultPeonHermesProfile;
+  peonHermesConfigFilename(hermesProfile);
+  const hermesWorkflow = Object.hasOwn(task, 'hermesWorkflow')
+    ? task.hermesWorkflow
+    : 'standard';
+  const expectedRequestCeiling =
+    maxForwardedRequestsForWorkflow(hermesWorkflow);
+  if (hermesWorkflow === 'bounded-coding' && hermesProfile !== 'narrow-coding')
+    throw new Error(
+      'Bounded Hermes workflow requires the narrow-coding profile.',
+    );
+  const suppliedRequestCeiling = Object.hasOwn(task, 'maxForwardedRequests')
+    ? task.maxForwardedRequests
+    : undefined;
+  if (expectedRequestCeiling === undefined) {
+    if (suppliedRequestCeiling !== undefined && suppliedRequestCeiling !== null)
+      throw new Error(
+        'Standard Hermes workflow cannot declare a forwarded-request ceiling.',
+      );
+  } else if (suppliedRequestCeiling !== expectedRequestCeiling) {
+    throw new Error(
+      'Bounded Hermes workflow requires its validated forwarded-request ceiling.',
+    );
+  }
   return {
     issueNumber: task.issueNumber,
     owner: task.owner,
     targetBranch: task.targetBranch,
     branch: task.branch,
     worktreePath: task.worktreePath,
+    hermesProfile,
+    hermesWorkflow,
+    maxForwardedRequests: expectedRequestCeiling ?? null,
   };
 }
 

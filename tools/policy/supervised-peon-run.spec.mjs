@@ -11,6 +11,7 @@ import {
   trustedPeonWorkerImage,
   validateLivePeonAssignment,
 } from './supervised-peon-run.mjs';
+import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
 const image = trustedPeonWorkerImage;
 const sessionId = 'peon-issue-50-controlled-trial';
@@ -207,6 +208,7 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   let issueReads = 0;
   let reservations = 0;
   let adapterOptions;
+  let adapterAttempt;
   let verificationCalls = 0;
   let workspaceInspections = 0;
   const inspectWorktree = async (_number, _branch, baseRevision) => {
@@ -218,7 +220,7 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
       baseRevision,
       workspacePath: '/home/peon/workspaces/issue-50',
       changes:
-        workspaceInspections === 3
+        workspaceInspections >= 4
           ? ['tools/policy/supervised-peon-run.mjs']
           : [],
     };
@@ -281,45 +283,33 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
     },
     createWorkerAdapter: (options) => {
       adapterOptions = options;
-      return { id: 'peon' };
+      return createPeonWorkerAdapter({
+        ...options,
+        commandForTask: () => ['offline-test'],
+        runAttempt: async (input) => {
+          adapterAttempt = input;
+          return {
+            exitCode: 0,
+            usage: { toolCalls: 0, modelTokens: 0, forwardedRequests: 0 },
+          };
+        },
+      });
     },
     runVerification: async () => {
       verificationCalls += 1;
       return { exitCode: 0 };
     },
-    runSupervisor: async (input) => {
-      assert.equal(input.task.hermesWorkflow, 'bounded-coding');
-      assert.equal(Object.hasOwn(input.task, 'preparedContext'), false);
-      assert.deepEqual(
-        await input.verify({ task: input.task, attemptNumber: 1 }),
-        [
-          {
-            name: 'lint',
-            passed: true,
-            summary: 'Isolated verification exited with code 0.',
-          },
-        ],
-      );
-      assert.deepEqual(
-        await input.verify({ task: input.task, attemptNumber: 1 }),
-        [
-          {
-            name: 'authorized-source-changes',
-            passed: false,
-            summary:
-              'The worker produced no authorized source changes or changed a path outside the trusted allowlist.',
-          },
-        ],
-      );
-      return { status: 'offline-controller-test' };
-    },
   });
 
-  assert.deepEqual(result, { status: 'offline-controller-test' });
+  assert.equal(result.status, 'complete');
   assert.equal(issueReads, 2);
   assert.equal(reservations, 1);
   assert.equal(adapterOptions.maxForwardedRequests, 2);
   assert.equal(adapterOptions.preparedContext.manifest.revision.head, head);
+  assert.equal(adapterAttempt.hermesProfile, 'narrow-coding');
+  assert.equal(adapterAttempt.maxForwardedRequests, 2);
+  assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
+  assert.equal(workspaceInspections, 5);
   assert.equal(verificationCalls, 1);
 });
 
