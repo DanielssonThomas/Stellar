@@ -1,0 +1,30 @@
+{
+  "enabled": false,
+  "monthlyUsd": 20,
+  "tiers": {
+    "light": {
+      "model": "gpt-6-luna",
+      "maxInputTokens": 12000,
+      "maxOutputTokens": 1500,
+      "maxReviewUsd": 0.1,
+      "maxInputUsdPerMillion": 2,
+      "maxOutputUsdPerMillion": 8
+    },
+    "standard": {
+      "model": "gpt-6.1-sol",
+      "maxInputTokens": 24000,
+      "maxOutputTokens": 3000,
+      "maxReviewUsd": 0.25,
+      "maxInputUsdPerMillion": 5,
+      "maxOutputUsdPerMillion": 20
+    },
+    "critical": {
+      "model": "gpt-6-astra",
+      "maxInputTokens": 48000,
+      "maxOutputTokens": 6000,
+      "maxReviewUsd": 2,
+      "maxInputUsdPerMillion": 20,
+      "maxOutputUsdPerMillion": 80
+    }
+  }
+}
