@@ -18,6 +18,43 @@ const fixture = (status = 'status:ready', owner = 'owner:codex') => ({
 });
 
 describe('claim status reconciliation', () => {
+  it('returns a review-stage issue to implementation only while the PR remains current', async () => {
+    let live = fixture('status:review');
+    const reviewPr = {
+      number: 80,
+      state: 'OPEN',
+      headRefOid: 'a'.repeat(40),
+      headRefName: 'issue/42-test',
+      baseRefName: 'develop',
+      body: 'Fixes #42',
+    };
+    await reconcileClaimStatus({
+      issueNumber: 42,
+      worker: 'codex',
+      resumed: false,
+      reviewPr,
+      fetchReview: async () => reviewPr,
+      fetchIssue: async () => structuredClone(live),
+      updateLabels: async (_number, labels) => {
+        live = { ...live, labels };
+      },
+    });
+    assert.ok(live.labels.includes('status:in-progress'));
+    live = fixture('status:review');
+    await assert.rejects(
+      reconcileClaimStatus({
+        issueNumber: 42,
+        worker: 'codex',
+        resumed: false,
+        reviewPr,
+        fetchReview: async () => ({ ...reviewPr, headRefOid: 'b'.repeat(40) }),
+        fetchIssue: async () => structuredClone(live),
+        updateLabels: async () =>
+          assert.fail('stale PR must not change issue status'),
+      }),
+      /PR changed/,
+    );
+  });
   it('uses current state after stale reads and preserves unrelated labels', async () => {
     let live = fixture();
     let reads = 0;
