@@ -89,6 +89,25 @@ function issueLabels(issue) {
   );
 }
 
+export function assertReviewResumeStatus({ issue, claim, worker, sessionId }) {
+  const statuses = issueLabels(issue).filter((label) =>
+    label.startsWith('status:'),
+  );
+  if (statuses.length === 1 && statuses[0] === 'status:review') return;
+  if (
+    statuses.length === 1 &&
+    statuses[0] === 'status:in-progress' &&
+    claim?.state === 'active' &&
+    claim.worker === ownerLabel(worker) &&
+    claim.sessionId === sessionId &&
+    Date.parse(claim.expiresAt) > Date.now()
+  )
+    return;
+  throw new Error(
+    'Review rework requires a review-stage issue or its active claim in the same authorized session.',
+  );
+}
+
 function updateIssueLabels(number, labels) {
   run(
     'gh',
@@ -346,8 +365,15 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === 'resume-review') {
     if (!args.worker || !args['session-id']) usage();
     const issue = loadIssue(number);
-    if (!issueLabels(issue).includes('status:review'))
-      throw new Error('Only a review-stage issue can resume PR rework.');
+    const claim = issueLabels(issue).includes('status:in-progress')
+      ? await inspectClaim(repoRoot, number)
+      : null;
+    assertReviewResumeStatus({
+      issue,
+      claim,
+      worker: args.worker,
+      sessionId: args['session-id'],
+    });
     const target = issueLabels(issue)
       .find((label) => label.startsWith('target:'))
       ?.slice(7);
