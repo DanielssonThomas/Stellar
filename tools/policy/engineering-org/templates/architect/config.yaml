@@ -1,0 +1,15 @@
+model:
+  default: __SET_APPROVED_OPENAI_MODEL__
+  provider: openai-codex
+agent:
+  reasoning_effort: high
+  max_turns: 80
+memory:
+  memory_enabled: true
+  write_approval: true
+local_runtime:
+  enabled: false
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
