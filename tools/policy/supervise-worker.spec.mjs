@@ -8,6 +8,7 @@ import {
   readHandoff,
   superviseWorker,
 } from './supervise-worker.mjs';
+import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'stellar-supervisor-'));
 after(async () => rm(temporaryRoot, { recursive: true, force: true }));
@@ -52,6 +53,132 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('delivers validated narrow bounded metadata to the Peon adapter and verification', async () => {
+    const manifest = {
+      schema: 'stellar.peon-task-context/v1',
+      issue: { number: task.issueNumber },
+      authorization: {
+        maxForwardedRequests: 2,
+        allowedChangePaths: ['libs/ui/atoms/src/lib/skeleton-atom.ts'],
+      },
+    };
+    let adapterInput;
+    let verifiedTask;
+    const peon = createPeonWorkerAdapter({
+      image: 'test-image',
+      hermesProfile: 'narrow-coding',
+      maxForwardedRequests: 2,
+      preparedContext: { manifest, serialized: JSON.stringify(manifest) },
+      commandForTask: () => ['offline-test'],
+      runAttempt: async (input) => {
+        adapterInput = input;
+        return {
+          exitCode: 0,
+          usage: { toolCalls: 0, modelTokens: 0, forwardedRequests: 0 },
+        };
+      },
+    });
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          hermesProfile: 'narrow-coding',
+          hermesWorkflow: 'bounded-coding',
+          maxForwardedRequests: 2,
+          untrustedIssueMetadata: 'must not cross projection',
+        },
+        workers: {
+          peon,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        verify: async ({ task: verified }) => {
+          verifiedTask = verified;
+          return [{ name: 'authorized-source-changes', passed: true }];
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'complete');
+    assert.equal(adapterInput.hermesProfile, 'narrow-coding');
+    assert.equal(adapterInput.maxForwardedRequests, 2);
+    assert.equal(verifiedTask.hermesWorkflow, 'bounded-coding');
+    assert.equal(verifiedTask.maxForwardedRequests, 2);
+    assert.equal(Object.hasOwn(verifiedTask, 'untrustedIssueMetadata'), false);
+    assert.equal(result.handoff.task.hermesProfile, 'narrow-coding');
+    assert.equal(result.handoff.task.hermesWorkflow, 'bounded-coding');
+  });
+
+  it('rejects unsupported or inconsistent Hermes task metadata before dispatch', async () => {
+    let dispatched = false;
+    const args = base({
+      workers: {
+        peon: worker('peon', async () => {
+          dispatched = true;
+          return { status: 'completed' };
+        }),
+        mira: worker('mira', async () => ({ status: 'completed' })),
+      },
+    });
+    for (const invalid of [
+      { hermesProfile: 'untrusted-profile' },
+      { hermesProfile: null },
+      { hermesWorkflow: 'unbounded' },
+      {
+        hermesProfile: 'focus',
+        hermesWorkflow: 'bounded-coding',
+        maxForwardedRequests: 2,
+      },
+      { hermesWorkflow: 'bounded-coding', maxForwardedRequests: null },
+      { hermesWorkflow: 'standard', maxForwardedRequests: 2 },
+    ]) {
+      await assert.rejects(
+        superviseWorker({ ...args, task: { ...task, ...invalid } }),
+      );
+    }
+    assert.equal(dispatched, false);
+  });
+
+  it('retains adapter rejection when a supported but mismatched profile is delivered', async () => {
+    let attemptStarted = false;
+    const adapter = createPeonWorkerAdapter({
+      image: 'test-image',
+      hermesProfile: 'narrow-coding',
+      runAttempt: async () => {
+        attemptStarted = true;
+        return { exitCode: 0, usage: { toolCalls: 0, modelTokens: 0 } };
+      },
+    });
+    await assert.rejects(
+      adapter.run({
+        task: { ...task, hermesProfile: 'focus' },
+        attemptNumber: 1,
+        limits: { maxRuntimeMsPerWorker: 60_000 },
+        budget: { snapshot: { toolCalls: 0, modelTokens: 0 } },
+      }),
+      /Worker adapter profile differs from the validated issue/,
+    );
+    assert.equal(attemptStarted, false);
+  });
+
+  it('keeps omitted metadata compatible with the standard focus workflow', async () => {
+    let delivered;
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker('peon', async ({ task: selected }) => {
+            delivered = selected;
+            return { status: 'completed' };
+          }),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+    assert.equal(result.status, 'complete');
+    assert.equal(delivered.hermesProfile, 'focus');
+    assert.equal(delivered.hermesWorkflow, 'standard');
+    assert.equal(delivered.maxForwardedRequests, null);
+  });
+
   it('completes only after trusted verification passes', async () => {
     let verified = 0;
     const result = await superviseWorker(
@@ -332,7 +459,12 @@ describe('bounded worker supervision', () => {
     let verificationCalls = 0;
     const result = await superviseWorker(
       base({
-        task: { ...task, hermesWorkflow: 'bounded-coding' },
+        task: {
+          ...task,
+          hermesProfile: 'narrow-coding',
+          hermesWorkflow: 'bounded-coding',
+          maxForwardedRequests: 2,
+        },
         workers: {
           peon: {
             id: 'peon',
