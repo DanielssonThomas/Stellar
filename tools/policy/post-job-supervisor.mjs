@@ -42,6 +42,7 @@ export async function supervisePostJob({
     cwd: root,
     stdio: 'inherit',
     windowsHide: true,
+    detached: process.platform === 'linux',
   });
   if (!Number.isSafeInteger(child.pid) || child.pid < 1)
     throw new Error('Worker process identity is unavailable; preserve work.');

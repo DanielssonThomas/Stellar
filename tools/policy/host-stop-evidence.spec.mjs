@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { inspectHostStop } from './host-stop-evidence.mjs';
+import {
+  createLocalContainerOperations,
+  inspectHostStop,
+} from './host-stop-evidence.mjs';
 
 const headSha = 'a'.repeat(40);
 const handoff = {
@@ -10,6 +13,27 @@ const handoff = {
 };
 
 describe('trusted host stop inspection', () => {
+  it('parses only exact local WSL Podman container evidence', async () => {
+    const name = 'stellar-peon-worker-42-1';
+    const operations = createLocalContainerOperations({
+      run: (_command, args) => {
+        assert.ok(args.includes(`name=^${name}$`));
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ Names: [name], State: 'exited' }]),
+        };
+      },
+    });
+    assert.equal(await operations.inspect(name, 1500), 'stopped');
+    assert.equal(await operations.inspect('unsafe-name', 1500), 'inconclusive');
+    const conflicting = createLocalContainerOperations({
+      run: () => ({
+        status: 0,
+        stdout: JSON.stringify([{ Names: ['other'], State: 'exited' }]),
+      }),
+    });
+    assert.equal(await conflicting.inspect(name, 1500), 'inconclusive');
+  });
   it('requires fresh process and exact Windows/WSL attempt container states', async () => {
     const inspected = [];
     const stopped = await inspectHostStop({
