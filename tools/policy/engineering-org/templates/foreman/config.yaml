@@ -5,6 +5,24 @@ model:
 agent:
   reasoning_effort: high
   max_turns: 80
+  disabled_toolsets:
+    - browser-use
+    - browser
+    - clarify
+    - code_execution
+    - connections
+    - delegation
+    - file
+    - image_gen
+    - cronjob
+    - computer_use
+    - memory
+    - session_search
+    - terminal
+    - todo
+    - tts
+    - vision
+    - web
 memory:
   memory_enabled: true
   write_approval: true

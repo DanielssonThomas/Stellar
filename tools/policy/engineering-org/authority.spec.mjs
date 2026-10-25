@@ -3,9 +3,59 @@ import test from 'node:test';
 import {
   authorizeOperation,
   classifyProviderFailure,
+  managerAvailability,
   mapPeonInstance,
+  transitionManagerAvailability,
   validateReviewReport,
 } from './authority.mjs';
+
+test('models verified provider failure, approval-required, recovery, and return to available', () => {
+  assert.deepEqual(managerAvailability, [
+    'available',
+    'temporarily-unavailable',
+    'approval-required',
+    'recovered',
+  ]);
+  const failure = classifyProviderFailure({ status: 429 });
+  assert.equal(
+    transitionManagerAvailability('available', {
+      type: 'provider-failure',
+      failure,
+    }),
+    'temporarily-unavailable',
+  );
+  assert.throws(
+    () =>
+      transitionManagerAvailability('available', {
+        type: 'provider-failure',
+        failure: { kind: 'quota', verified: false },
+      }),
+    /Unverified/,
+  );
+  assert.equal(
+    transitionManagerAvailability('temporarily-unavailable', {
+      type: 'approval-required',
+    }),
+    'approval-required',
+  );
+  assert.equal(
+    transitionManagerAvailability('approval-required', {
+      type: 'provider-recovered',
+    }),
+    'recovered',
+  );
+  assert.equal(
+    transitionManagerAvailability('recovered', { type: 'manager-resumed' }),
+    'available',
+  );
+  assert.throws(
+    () =>
+      transitionManagerAvailability('temporarily-unavailable', {
+        type: 'manager-resumed',
+      }),
+    /not authorized/,
+  );
+});
 
 test('maps configured Peons to compatibility owner without conflating writable instances', () => {
   assert.equal(mapPeonInstance('Peon-01').issueOwner, 'worker:peon');

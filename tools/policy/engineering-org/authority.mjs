@@ -6,6 +6,30 @@ export const managerAvailability = Object.freeze([
   'recovered',
 ]);
 
+export function transitionManagerAvailability(current, event) {
+  if (!managerAvailability.includes(current))
+    throw new Error('Manager availability state is invalid.');
+  if (event?.type === 'approval-required') return 'approval-required';
+  if (
+    event?.type === 'provider-failure' &&
+    event.failure?.verified === true &&
+    event.failure.kind !== 'unknown'
+  )
+    return 'temporarily-unavailable';
+  if (event?.type === 'provider-failure')
+    throw new Error(
+      'Unverified provider failures cannot change manager state.',
+    );
+  if (
+    event?.type === 'provider-recovered' &&
+    ['temporarily-unavailable', 'approval-required'].includes(current)
+  )
+    return 'recovered';
+  if (event?.type === 'manager-resumed' && current === 'recovered')
+    return 'available';
+  throw new Error('Manager availability transition is not authorized.');
+}
+
 const providerFailureKinds = new Set([
   'quota',
   'timeout',
@@ -18,7 +42,6 @@ const providerFailureKinds = new Set([
 export function classifyProviderFailure(error) {
   const status = Number(error?.status ?? error?.statusCode);
   const code = String(error?.code ?? '').toLowerCase();
-  const message = String(error?.message ?? '').toLowerCase();
   let kind = 'unknown';
   if (status === 401 || status === 403 || /auth|credential/.test(code))
     kind = 'authentication';

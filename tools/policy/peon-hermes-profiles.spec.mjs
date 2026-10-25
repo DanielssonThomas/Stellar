@@ -9,6 +9,7 @@ import {
   resolvePeonHermesProfile,
   resolvePeonHermesWorkflow,
   validatePeonHermesConfigSource,
+  validatePeonHermesSoulSource,
 } from './peon-hermes-profiles.mjs';
 
 const eligible = {
@@ -123,6 +124,22 @@ test('maps only fixed trusted configs and rejects arbitrary or issue-worktree pa
     assert.throws(
       () => validatePeonHermesConfigSource('narrow-coding', source),
       /does not match its profile/,
+    );
+});
+
+test('maps Peon SOUL only to the version-controlled identity template', () => {
+  const trusted =
+    '/mnt/d/repo/tools/policy/engineering-org/templates/peon/soul.md';
+  assert.equal(validatePeonHermesSoulSource(trusted), trusted);
+  for (const source of [
+    '/home/peon/workspaces/issue-50/SOUL.md',
+    '/mnt/d/repo/tools/policy/SOUL.md',
+    '/mnt/d/repo/tools/policy/engineering-org/templates/peon/../soul.md',
+    `${trusted},ro`,
+  ])
+    assert.throws(
+      () => validatePeonHermesSoulSource(source),
+      /version-controlled identity template/,
     );
 });
 

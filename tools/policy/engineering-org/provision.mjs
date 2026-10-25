@@ -1,13 +1,15 @@
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { cp, copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
-const allowed = new Set(['architect', 'foreman']);
+const allowed = new Set(['architect', 'foreman', 'peon']);
 const roleSkills = Object.freeze({
   architect: ['epic-planning'],
   foreman: ['technical-dispatch', 'code-review', 'reconciliation'],
+  peon: [],
 });
 
 function run(executable, args, env) {
@@ -76,6 +78,65 @@ export async function provision({
   if (!hermesRoot || !path.isAbsolute(hermesRoot))
     throw new Error('Set HERMES_ROOT to the installed Hermes home.');
   const env = { ...process.env, HERMES_HOME: hermesRoot };
+  if (role === 'peon') {
+    const home = path.join(hermesRoot, 'profiles', role);
+    const configPath = path.join(home, 'config.yaml');
+    const soulPath = path.join(home, 'SOUL.md');
+    const configBefore = await readFile(configPath);
+    let previousSoul = null;
+    try {
+      previousSoul = await readFile(soulPath);
+      if (!force)
+        throw new Error(
+          `${soulPath} already exists; explicit --replace-identity-files is required.`,
+        );
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (previousSoul) {
+      const backup = path.join(
+        home,
+        'backups',
+        'stellar-org',
+        'SOUL.md.previous',
+      );
+      await mkdir(path.dirname(backup), { recursive: true });
+      try {
+        await stat(backup);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        await copyFile(soulPath, backup, 1);
+      }
+    }
+    await copyFile(
+      path.join(sourceRoot, 'templates', role, 'soul.md'),
+      soulPath,
+    );
+    const loadedSoul = await readFile(soulPath, 'utf8');
+    const configAfter = await readFile(configPath);
+    if (!loadedSoul.startsWith('# Peon'))
+      throw new Error('Peon SOUL identity does not match its role.');
+    if (!configBefore.equals(configAfter))
+      throw new Error(
+        'Peon runtime config changed during identity provisioning.',
+      );
+    const prompt = JSON.parse(
+      await commandRunner(hermes, ['-p', role, 'prompt-size', '--json'], env),
+    );
+    return {
+      role,
+      home,
+      soulFileValidated: true,
+      configUnchanged: true,
+      qwenModelPreserved: configAfter.includes(
+        Buffer.from('Qwen3.5-4B-Q4_K_M'),
+      ),
+      historicalSoulBackedUp: Boolean(previousSoul),
+      promptSizeBytes: prompt.system_prompt.bytes,
+      credentialsCopied: false,
+      inferenceStarted: false,
+    };
+  }
   const description =
     role === 'architect'
       ? 'Stellar engineering manager; coordinates Foreman and governs plans.'
@@ -110,13 +171,38 @@ export async function provision({
     throw new Error(
       'Profile no longer has its explicit unconfigured provider sentinel.',
     );
+  const prompt = JSON.parse(
+    await command(['-p', role, 'prompt-size', '--json']),
+  );
+  const tools = await command(['-p', role, 'tools', 'list']);
+  const enabledToolsets = [
+    ...tools.matchAll(/^\s*✓ enabled\s+([a-z_]+)/gm),
+  ].map((match) => match[1]);
+  const visibleToolsets = new Set(
+    prompt.toolsets_breakdown.map((entry) => entry.toolset),
+  );
+  if (enabledToolsets.some((toolset) => toolset !== 'skills'))
+    throw new Error(
+      `Management profile exposes unexpected toolsets: ${enabledToolsets.filter((toolset) => toolset !== 'skills').join(', ')}.`,
+    );
+  if (enabledToolsets.length !== 1 || enabledToolsets[0] !== 'skills')
+    throw new Error(
+      'Management profiles may expose only the skills toolset until trusted orchestration is installed.',
+    );
+  if (
+    !roleSkills[role].every((skill) =>
+      prompt.skills_breakdown.some((entry) => entry.name === skill),
+    )
+  )
+    throw new Error('Hermes did not load every role-specific skill.');
   return {
     role,
     home,
     profileCreated: !existed,
-    soulLoaded: true,
+    soulFileValidated: true,
     configLoaded: true,
-    skillsInstalled: roleSkills[role],
+    visibleToolsets: [...visibleToolsets],
+    skillsLoaded: roleSkills[role],
     credentialsCopied: false,
     inferenceStarted: false,
   };

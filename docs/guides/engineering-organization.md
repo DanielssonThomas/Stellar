@@ -8,20 +8,21 @@ Role prompts guide behavior. `tools/policy/engineering-org/authority.mjs` and th
 
 ## Identity templates and Hermes profiles
 
-Version-controlled identity and config templates live under `tools/policy/engineering-org/templates/`. Architect and Foreman use independent Hermes named profiles, homes, sessions, and memory. Peon retains the existing restricted worker image, Qwen service, `worker:peon` claim identity, budgets, and historical handoffs. `Peon-01` is the initially configured instance name; add other IDs explicitly in trusted host configuration. Each instance still needs a separate issue claim/session/worktree, and actual Qwen inference is serialized to the existing single slot.
+Version-controlled identity and config templates live under `tools/policy/engineering-org/templates/`. Architect and Foreman use independent Hermes named profiles, homes, sessions, and memory. Their current configs expose only the skills toolset; terminal, file, code execution, browser, delegation, connections, memory, and other direct tools remain disabled until a trusted orchestration interface is installed and reviewed. Peon retains the existing restricted worker image, Qwen service, `worker:peon` claim identity, budgets, and historical handoffs. `Peon-01` is the initially configured instance name; add other IDs explicitly in trusted host configuration. Each instance still needs a separate issue claim/session/worktree, and actual Qwen inference is serialized to the existing single slot.
 
 The pinned installed runtime inspected for this work is Hermes Agent `v0.22.2+6.g835cc27.dirty` (2026.9.24). Its CLI supports named profiles, profile-specific homes/config, `SOUL.md`, and the `openai-codex` provider. The source template selects that supported provider route for Architect but leaves the model as `__SET_APPROVED_OPENAI_MODEL__`. Foreman's config proposes the same provider with an unconfigured model sentinel; the CEO must select its runtime. The relevant profile currently has no OpenAI/Codex credential. No credential was copied or created. Hermes supports Codex sign-in, but use of that subscription/API route and any inference must be explicitly approved first. API-backed OpenAI configuration is also possible after separately provisioned credentials and model selection.
 
-Provision a profile only after resolving the model sentinel and deciding whether credentials should be added independently:
+Provisioning creates the profile homes without resolving the model sentinel or adding credentials. These commands create identities and perform offline profile inspection only; they do not start sessions or inference:
 
 ```powershell
 $env:HERMES_BIN = 'D:\Hermes\bin\hermes.exe'
 $env:HERMES_ROOT = 'D:\Hermes'
-node tools/policy/engineering-org/provision.mjs architect
-node tools/policy/engineering-org/provision.mjs foreman
+node tools/policy/engineering-org/provision.mjs architect --replace-identity-files
+node tools/policy/engineering-org/provision.mjs foreman --replace-identity-files
+node tools/policy/engineering-org/provision.mjs peon --replace-identity-files
 ```
 
-Provisioning refuses to overwrite existing SOUL/config files, clones no profile, copies no secrets, and starts no session or inference. Review the resulting profile files and `hermes -p architect config` / `hermes -p foreman config` before enabling any session. Do not use `--replace-identity-files` without reviewing the runtime files first.
+Provisioning clones no profile and copies no secrets. Architect and Foreman get new independent homes. Peon receives only the new SOUL file; the existing Peon config is byte-checked and left intact, and its previous SOUL is backed up. The supervised worker mounts the version-controlled Peon SOUL read-only into its ephemeral Hermes home and the offline system-prompt inspector verifies its exact hash and single inclusion. Existing identity/config files are never replaced unless `--replace-identity-files` is explicit. The management-profile provisioner runs Hermes `config`, offline `prompt-size --json`, and `tools list`, and fails if the role skill is absent, the model sentinel is missing, or any direct toolset is enabled. Review the profile-specific file paths before enabling a session. Choose an approved model and independently provision approved credentials before any session can call a provider.
 
 ## Short-session records
 

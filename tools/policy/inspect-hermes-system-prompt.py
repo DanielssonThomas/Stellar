@@ -25,19 +25,25 @@ import model_tools  # noqa: E402
 
 
 agents_path = Path("/workspace/AGENTS.md")
+peon_soul_path = Path("/tmp/.hermes/SOUL.md")
 if not agents_path.is_file() or agents_path.is_symlink():
     raise SystemExit("Trusted workspace AGENTS.md is unavailable.")
+if not peon_soul_path.is_file() or peon_soul_path.is_symlink():
+    raise SystemExit("Trusted Peon SOUL.md is unavailable.")
 
 raw_agents = agents_path.read_bytes()
+raw_peon_soul = peon_soul_path.read_bytes()
 try:
     agents_text = raw_agents.decode("utf-8-sig")
+    peon_soul_text = raw_peon_soul.decode("utf-8-sig")
 except UnicodeDecodeError as error:
-    raise SystemExit("Trusted workspace AGENTS.md is not valid UTF-8.") from error
+    raise SystemExit("Trusted guidance is not valid UTF-8.") from error
 
 prompt = build_system_prompt(_build_inspection_agent("cli"))
 matches = prompt.count(agents_text)
-if not agents_text or matches != 1:
-    raise SystemExit("Hermes system prompt did not contain one exact AGENTS.md copy.")
+peon_soul_matches = prompt.count(peon_soul_text)
+if not agents_text or matches != 1 or not peon_soul_text or peon_soul_matches != 1:
+    raise SystemExit("Hermes system prompt did not contain one exact copy of trusted guidance and Peon identity.")
 
 config = load_config()
 model_config = config.get("model") or {}
@@ -69,8 +75,10 @@ if sys.argv[1:] == ["--study-export"]:
             {
                 "schema": "stellar.hermes-prompt-study/v1",
                 "agentsSha256": hashlib.sha256(raw_agents).hexdigest(),
+                "peonSoulSha256": hashlib.sha256(raw_peon_soul).hexdigest(),
                 "systemPromptSha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
                 "exactMatchCount": matches,
+                "peonSoulExactMatchCount": peon_soul_matches,
                 "model": model_config.get("default"),
                 "systemPrompt": prompt,
                 "toolSchemas": schemas,
@@ -86,8 +94,10 @@ print(
         {
             "schema": "stellar.hermes-system-prompt-attestation/v1",
             "agentsSha256": hashlib.sha256(raw_agents).hexdigest(),
+            "peonSoulSha256": hashlib.sha256(raw_peon_soul).hexdigest(),
             "systemPromptSha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             "exactMatchCount": matches,
+            "peonSoulExactMatchCount": peon_soul_matches,
             "networkRequests": 0,
             "completionRequests": 0,
         },

@@ -27,6 +27,13 @@ test('creates an isolated credential-free Hermes profile and validates loaded fi
           await writeFile(path.join(home, '.env'), 'preserve-this-secret');
           return '';
         }
+        if (args[0] === '-p' && args.includes('prompt-size'))
+          return JSON.stringify({
+            toolsets_breakdown: [{ toolset: 'skills' }],
+            skills_breakdown: [{ name: 'epic-planning' }],
+          });
+        if (args[0] === '-p' && args.includes('tools'))
+          return '✓ enabled  skills 📚 Skills\n✗ disabled terminal\n';
         if (args[0] === '-p' && args[1] === 'architect')
           return await readFile(
             path.join(env.HERMES_HOME, 'profiles', 'architect', 'config.yaml'),
@@ -38,6 +45,7 @@ test('creates an isolated credential-free Hermes profile and validates loaded fi
     assert.equal(result.profileCreated, true);
     assert.equal(result.credentialsCopied, false);
     assert.equal(result.inferenceStarted, false);
+    assert.deepEqual(result.visibleToolsets, ['skills']);
     assert.match(
       await readFile(
         path.join(hermesRoot, 'profiles', 'architect', 'SOUL.md'),
@@ -95,6 +103,52 @@ test('refuses to overwrite an existing runtime identity without explicit replace
     assert.equal(
       await readFile(path.join(profile, 'SOUL.md'), 'utf8'),
       'existing state',
+    );
+  } finally {
+    await rm(hermesRoot, { recursive: true, force: true });
+  }
+});
+
+test('updates Peon identity while preserving its existing Qwen config and backing up the prior identity', async () => {
+  const hermesRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'stellar-hermes-peon-'),
+  );
+  try {
+    const profile = path.join(hermesRoot, 'profiles', 'peon');
+    await mkdir(profile, { recursive: true });
+    const config = 'model:\n  default: Qwen3.5-4B-Q4_K_M\n  provider: custom\n';
+    await writeFile(path.join(profile, 'config.yaml'), config);
+    await writeFile(path.join(profile, 'SOUL.md'), 'historical Peon identity');
+    await assert.rejects(
+      provision({ role: 'peon', hermesRoot }),
+      /explicit --replace-identity-files/,
+    );
+    const result = await provision({
+      role: 'peon',
+      hermesRoot,
+      force: true,
+      commandRunner: async (_exe, args) => {
+        assert.deepEqual(args, ['-p', 'peon', 'prompt-size', '--json']);
+        return JSON.stringify({ system_prompt: { bytes: 1000 } });
+      },
+    });
+    assert.equal(result.configUnchanged, true);
+    assert.equal(result.qwenModelPreserved, true);
+    assert.equal(result.historicalSoulBackedUp, true);
+    assert.equal(
+      await readFile(path.join(profile, 'config.yaml'), 'utf8'),
+      config,
+    );
+    assert.equal(
+      await readFile(
+        path.join(profile, 'backups', 'stellar-org', 'SOUL.md.previous'),
+        'utf8',
+      ),
+      'historical Peon identity',
+    );
+    assert.match(
+      await readFile(path.join(profile, 'SOUL.md'), 'utf8'),
+      /^# Peon/,
     );
   } finally {
     await rm(hermesRoot, { recursive: true, force: true });
