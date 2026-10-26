@@ -194,6 +194,31 @@ test('builds a bounded manifest pinned to the exact issue revision and selected 
   );
 });
 
+test('retains requirements from all heading levels accepted by issue validation', () => {
+  const prepared = context(undefined, {
+    ...issue,
+    body: [
+      '### Objective',
+      'Add the avatar skeleton.',
+      '# Acceptance criteria',
+      '- [ ] Render a loading avatar.',
+      '#### Design notes',
+      'Do not include these notes in acceptance criteria.',
+      '###### Constraints',
+      'Change only authorized atom paths.',
+    ].join('\n'),
+  });
+  assert.equal(prepared.manifest.issue.objective, 'Add the avatar skeleton.');
+  assert.equal(
+    prepared.manifest.issue.acceptanceCriteria,
+    '- [ ] Render a loading avatar.',
+  );
+  assert.equal(
+    prepared.manifest.issue.constraints,
+    'Change only authorized atom paths.',
+  );
+});
+
 test('allows only revision-pinned read-only guidance from real CODEOWNERS-protected paths', async () => {
   assert.ok(actualProtectedPaths.includes('AGENTS.md'));
   assert.ok(actualProtectedPaths.includes('.agents/skills'));
