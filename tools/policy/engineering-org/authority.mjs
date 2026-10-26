@@ -117,12 +117,19 @@ export function authorizeOperation({ caller, operation, issue, facts = {} }) {
       facts.sessionId !== facts.claimSessionId)
   )
     throw new Error('Peon may inspect only its current claimed assignment.');
-  if (
-    operation === 'review' &&
-    facts.authorId &&
-    facts.authorId === facts.reviewerId
-  )
-    throw new Error('A worker cannot independently review its own changes.');
+  if (operation === 'review') {
+    const identity = /^[a-z][a-z0-9._-]{0,63}$/;
+    if (
+      !identity.test(facts.authorId ?? '') ||
+      !identity.test(facts.reviewerId ?? '') ||
+      facts.reviewerId !== caller
+    )
+      throw new Error(
+        'Independent review requires validated author and reviewer identities.',
+      );
+    if (facts.authorId === facts.reviewerId)
+      throw new Error('A worker cannot independently review its own changes.');
+  }
   if (
     operation === 'request-integration' &&
     facts.approval !== 'architect-approved'

@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -149,6 +157,75 @@ test('updates Peon identity while preserving its existing Qwen config and backin
     assert.match(
       await readFile(path.join(profile, 'SOUL.md'), 'utf8'),
       /^# Peon/,
+    );
+  } finally {
+    await rm(hermesRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects a Peon SOUL symlink during replacement without writing its target', async (t) => {
+  const hermesRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'stellar-hermes-symlink-'),
+  );
+  try {
+    const profile = path.join(hermesRoot, 'profiles', 'peon');
+    await mkdir(profile, { recursive: true });
+    const outside = path.join(hermesRoot, 'outside.md');
+    await writeFile(outside, 'preserve this file');
+    await writeFile(
+      path.join(profile, 'config.yaml'),
+      'model: Qwen3.5-4B-Q4_K_M',
+    );
+    try {
+      await symlink(outside, path.join(profile, 'SOUL.md'), 'file');
+    } catch (error) {
+      if (error.code === 'EPERM') {
+        t.skip('file symlinks unavailable');
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      provision({ role: 'peon', hermesRoot, force: true }),
+      /unsafe file type/,
+    );
+    assert.equal(await readFile(outside, 'utf8'), 'preserve this file');
+  } finally {
+    await rm(hermesRoot, { recursive: true, force: true });
+  }
+});
+
+test('rejects a Peon backup parent junction before copying identity', async (t) => {
+  const hermesRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'stellar-hermes-junction-'),
+  );
+  try {
+    const profile = path.join(hermesRoot, 'profiles', 'peon');
+    const outside = path.join(hermesRoot, 'outside');
+    await mkdir(profile, { recursive: true });
+    await mkdir(outside);
+    await writeFile(
+      path.join(profile, 'config.yaml'),
+      'model: Qwen3.5-4B-Q4_K_M',
+    );
+    await writeFile(path.join(profile, 'SOUL.md'), 'historical identity');
+    try {
+      await symlink(outside, path.join(profile, 'backups'), 'junction');
+    } catch (error) {
+      if (error.code === 'EPERM') {
+        t.skip('junctions unavailable');
+        return;
+      }
+      throw error;
+    }
+    await assert.rejects(
+      provision({ role: 'peon', hermesRoot, force: true }),
+      /unsafe file type/,
+    );
+    assert.deepEqual(await readdir(outside), []);
+    assert.equal(
+      await readFile(path.join(profile, 'SOUL.md'), 'utf8'),
+      'historical identity',
     );
   } finally {
     await rm(hermesRoot, { recursive: true, force: true });

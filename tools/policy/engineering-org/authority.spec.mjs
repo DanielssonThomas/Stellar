@@ -112,9 +112,33 @@ test('requires Foreman for dispatch and bars manager approval bypass', () => {
       authorizeOperation({
         caller: 'foreman',
         operation: 'review',
-        facts: { fallbackMergeEnabled: true },
+        facts: {
+          authorId: 'peon',
+          reviewerId: 'foreman',
+          fallbackMergeEnabled: true,
+        },
       }),
     /disabled/,
+  );
+  for (const facts of [
+    {},
+    { authorId: 'peon' },
+    { reviewerId: 'foreman' },
+    { authorId: 'peon', reviewerId: 'other' },
+    { authorId: '../peon', reviewerId: 'foreman' },
+  ])
+    assert.throws(
+      () =>
+        authorizeOperation({ caller: 'foreman', operation: 'review', facts }),
+      /validated author and reviewer/,
+    );
+  assert.equal(
+    authorizeOperation({
+      caller: 'foreman',
+      operation: 'review',
+      facts: { authorId: 'peon', reviewerId: 'foreman' },
+    }).authorized,
+    true,
   );
 });
 

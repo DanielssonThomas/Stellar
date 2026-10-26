@@ -1,6 +1,17 @@
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { cp, copyFile, mkdir, readFile, stat } from 'node:fs/promises';
+import {
+  cp,
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+} from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +36,72 @@ function run(executable, args, env) {
   return result.stdout.trim();
 }
 
+async function plainEntry(file, kind, allowMissing = false) {
+  let entry;
+  try {
+    entry = await lstat(file);
+  } catch (error) {
+    if (allowMissing && error.code === 'ENOENT') return false;
+    throw error;
+  }
+  if (
+    entry.isSymbolicLink() ||
+    (kind === 'file' && !entry.isFile()) ||
+    (kind === 'directory' && !entry.isDirectory())
+  )
+    throw new Error(`Identity path has an unsafe file type: ${file}`);
+  return true;
+}
+
+async function plainParents(root, destination) {
+  let ancestor = path.parse(root).root;
+  await plainEntry(ancestor, 'directory');
+  for (const part of path
+    .relative(ancestor, root)
+    .split(path.sep)
+    .filter(Boolean)) {
+    ancestor = path.join(ancestor, part);
+    await plainEntry(ancestor, 'directory');
+  }
+  const relative = path.relative(root, path.dirname(destination));
+  if (relative.startsWith('..') || path.isAbsolute(relative))
+    throw new Error('Identity destination escapes its Hermes root.');
+  let current = root;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, part);
+    await plainEntry(current, 'directory', true);
+  }
+}
+
+async function plainTree(directory) {
+  if (!(await plainEntry(directory, 'directory', true))) return;
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const child = path.join(directory, entry.name);
+    if (entry.isDirectory()) await plainTree(child);
+    else await plainEntry(child, 'file');
+  }
+}
+
+async function installIdentityFile(source, destination, force) {
+  await plainEntry(destination, 'file', true);
+  if (!force) {
+    await copyFile(source, destination, constants.COPYFILE_EXCL);
+    return;
+  }
+  const staged = path.join(
+    path.dirname(destination),
+    `.stellar-identity-${randomUUID()}.tmp`,
+  );
+  try {
+    await copyFile(source, staged, constants.COPYFILE_EXCL);
+    await rename(staged, destination);
+  } finally {
+    await unlink(staged).catch((error) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+}
+
 async function copyIdentity(role, home, force) {
   const template = path.join(sourceRoot, 'templates', role);
   for (const [sourceFile, destinationFile] of [
@@ -32,29 +109,26 @@ async function copyIdentity(role, home, force) {
     ['config.yaml', 'config.yaml'],
   ]) {
     const destination = path.join(home, destinationFile);
-    try {
-      await stat(destination);
-      if (!force)
-        throw new Error(
-          `${destination} already exists; refusing to overwrite runtime state.`,
-        );
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    await copyFile(path.join(template, sourceFile), destination, force ? 0 : 1);
+    await plainParents(path.dirname(path.dirname(home)), destination);
+    if ((await plainEntry(destination, 'file', true)) && !force)
+      throw new Error(
+        `${destination} already exists; refusing to overwrite runtime state.`,
+      );
+    await installIdentityFile(
+      path.join(template, sourceFile),
+      destination,
+      force,
+    );
   }
   const skillsRoot = path.join(home, 'skills', 'stellar');
   for (const skill of roleSkills[role]) {
     const destination = path.join(skillsRoot, skill);
-    try {
-      await stat(destination);
-      if (!force)
-        throw new Error(
-          `${destination} already exists; refusing to overwrite runtime state.`,
-        );
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    await plainParents(path.dirname(path.dirname(home)), destination);
+    await plainTree(destination);
+    if ((await plainEntry(destination, 'directory', true)) && !force)
+      throw new Error(
+        `${destination} already exists; refusing to overwrite runtime state.`,
+      );
     await mkdir(path.dirname(destination), { recursive: true });
     await cp(path.join(sourceRoot, 'skills', skill), destination, {
       recursive: true,
@@ -82,6 +156,9 @@ export async function provision({
     const home = path.join(hermesRoot, 'profiles', role);
     const configPath = path.join(home, 'config.yaml');
     const soulPath = path.join(home, 'SOUL.md');
+    await plainParents(hermesRoot, configPath);
+    await plainEntry(configPath, 'file');
+    await plainEntry(soulPath, 'file', true);
     const configBefore = await readFile(configPath);
     let previousSoul = null;
     try {
@@ -100,17 +177,16 @@ export async function provision({
         'stellar-org',
         'SOUL.md.previous',
       );
+      await plainParents(hermesRoot, backup);
       await mkdir(path.dirname(backup), { recursive: true });
-      try {
-        await stat(backup);
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-        await copyFile(soulPath, backup, 1);
-      }
+      await plainParents(hermesRoot, backup);
+      if (!(await plainEntry(backup, 'file', true)))
+        await copyFile(soulPath, backup, constants.COPYFILE_EXCL);
     }
-    await copyFile(
+    await installIdentityFile(
       path.join(sourceRoot, 'templates', role, 'soul.md'),
       soulPath,
+      force,
     );
     const loadedSoul = await readFile(soulPath, 'utf8');
     const configAfter = await readFile(configPath);
