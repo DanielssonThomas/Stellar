@@ -23,6 +23,8 @@ The migration boundary is issue #102: existing issues numbered through #102 may 
 
 Targets must name an existing authorized branch. The release target uses a four-digit year and two-digit month. `release:blocking` is a maintainer-controlled supplemental label for issues that must be resolved before promoting that release.
 
+The `main` target is reserved for a fully specified `type:blocker` issue owned by Codex or a maintainer when promoting a narrowly scoped protected policy fix. While the current default-branch validator does not yet accept that target, the issue remains in triage; the issue claim and PR preflight tools permit only this verified rollout bootstrap and do not move it to ready or in-progress. Worker-owned issues cannot target `main`.
+
 ## Status and ownership
 
 - `triage` is the only state for incomplete or invalid issues. New issues enter triage and may omit other metadata while being refined. A triage issue may move to `ready` only after the status helper revalidates it as ready and confirms every listed native dependency is closed with `status:done`.

@@ -47,6 +47,7 @@ export function validateAssignment({
   dependencies,
   existingBranches,
   allowTriageRecovery = false,
+  allowMainPromotionBootstrap = false,
   allowReviewResume = false,
 }) {
   const errors = [];
@@ -54,8 +55,19 @@ export function validateAssignment({
     typeof label === 'string' ? label : label.name,
   );
   const owner = ownerLabel(worker);
+  if (
+    allowMainPromotionBootstrap &&
+    (targetBranch !== 'main' ||
+      !labels.includes('status:triage') ||
+      !labels.includes('type:blocker') ||
+      !['owner:codex', 'owner:maintainer'].includes(owner))
+  )
+    errors.push(
+      'Main-promotion bootstrap requires a triage blocker owned by Codex or a maintainer and targeting main.',
+    );
   const policyIssue =
-    allowTriageRecovery && labels.includes('status:triage')
+    (allowTriageRecovery || allowMainPromotionBootstrap) &&
+    labels.includes('status:triage')
       ? {
           ...issue,
           labels: labels.map((label) =>
@@ -71,7 +83,9 @@ export function validateAssignment({
       'status:ready',
       'status:in-progress',
       ...(allowReviewResume ? ['status:review'] : []),
-      ...(allowTriageRecovery ? ['status:triage'] : []),
+      ...(allowTriageRecovery || allowMainPromotionBootstrap
+        ? ['status:triage']
+        : []),
     ].some((label) => labels.includes(label))
   )
     errors.push('Issue must be ready or already in progress.');
@@ -256,6 +270,22 @@ export async function claimWorktree({
       record?.state === 'active' &&
       record.worker === ownerLabel(worker) &&
       record.sessionId === sessionId;
+    const mainPromotionBootstrap =
+      targetBranch === 'main' &&
+      ['codex', 'maintainer'].includes(worker) &&
+      (issue.labels ?? []).some(
+        (label) =>
+          (typeof label === 'string' ? label : label.name) === 'status:triage',
+      ) &&
+      (issue.labels ?? []).some(
+        (label) =>
+          (typeof label === 'string' ? label : label.name) === 'type:blocker',
+      ) &&
+      (issue.labels ?? []).some(
+        (label) =>
+          (typeof label === 'string' ? label : label.name) ===
+          ownerLabel(worker),
+      );
     const nativeDependencies = issue.dependencies ?? [];
     const validation = validateAssignment({
       issue,
@@ -264,6 +294,8 @@ export async function claimWorktree({
       dependencies: nativeDependencies,
       existingBranches,
       allowTriageRecovery: recoverTriage,
+      allowMainPromotionBootstrap:
+        mainPromotionBootstrap || record?.mainPromotionBootstrap === true,
       allowReviewResume: Boolean(reviewPr),
     });
     if (!validation.valid)
@@ -401,6 +433,8 @@ export async function claimWorktree({
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + ttl * 3_600_000).toISOString(),
       handoffs: record?.handoffs ?? [],
+      mainPromotionBootstrap:
+        mainPromotionBootstrap || record?.mainPromotionBootstrap === true,
     };
     if (
       await access(claimFile, constants.F_OK)
@@ -433,7 +467,9 @@ export async function claimWorktree({
       );
       if (!registered || registered.branch !== branch)
         throw new Error('Git did not register the expected issue worktree.');
-      return record;
+      return record.mainPromotionBootstrap
+        ? { ...record, mainPromotionBootstrap: true }
+        : record;
     } catch (error) {
       record.state = 'recovery-required';
       record.lastError = error.message;

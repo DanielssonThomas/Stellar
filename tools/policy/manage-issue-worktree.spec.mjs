@@ -21,6 +21,31 @@ const fixture = (status = 'status:ready', owner = 'owner:codex') => ({
 });
 
 describe('claim status reconciliation', () => {
+  it('preserves triage for an eligible main-promotion bootstrap claim', async () => {
+    const mainIssue = {
+      ...fixture('status:triage'),
+      labels: [
+        'priority:high',
+        'target:main',
+        'type:blocker',
+        'status:triage',
+        'owner:codex',
+      ],
+    };
+    let writes = 0;
+    const current = await reconcileClaimStatus({
+      issueNumber: 42,
+      worker: 'codex',
+      resumed: false,
+      mainPromotionBootstrap: true,
+      fetchIssue: async () => structuredClone(mainIssue),
+      updateLabels: async () => {
+        writes += 1;
+      },
+    });
+    assert.equal(writes, 0);
+    assert.ok(current.labels.includes('status:triage'));
+  });
   it('permits a lost status-write response to be retried only by the same live session', async () => {
     const reviewPr = {
       number: 80,

@@ -128,6 +128,7 @@ export async function reconcileClaimStatus({
   issueNumber,
   worker,
   resumed,
+  mainPromotionBootstrap = false,
   reviewPr = null,
   fetchReview = null,
   fetchIssue = loadIssue,
@@ -173,6 +174,27 @@ export async function reconcileClaimStatus({
       throw new Error(
         `Issue #${issueNumber} status changed; the worktree was preserved.`,
       );
+    if (mainPromotionBootstrap) {
+      const bootstrapIssue = {
+        ...current,
+        labels: labels.map((label) =>
+          label === 'status:triage' ? 'status:ready' : label,
+        ),
+      };
+      const validation = validateIssue(bootstrapIssue);
+      if (
+        statuses[0] !== 'status:triage' ||
+        labelIssueTarget(labels) !== 'target:main' ||
+        !labels.includes('type:blocker') ||
+        !['owner:codex', 'owner:maintainer'].includes(owner) ||
+        !validation.valid ||
+        !validation.ready
+      )
+        throw new Error(
+          `Issue #${issueNumber} no longer qualifies for the main-promotion bootstrap; the worktree was preserved.`,
+        );
+      return current;
+    }
     if (statuses[0] === 'status:triage' && !resumed)
       throw new Error(
         `Issue #${issueNumber} is in triage without a recoverable active claim.`,
@@ -237,6 +259,10 @@ export async function reconcileClaimStatus({
   throw new Error(
     `Issue #${issueNumber} kept changing; claim status was not reconciled after ${maxAttempts} guarded attempts.`,
   );
+}
+
+function labelIssueTarget(labels) {
+  return labels.find((label) => label.startsWith('target:'));
 }
 
 function fetchTarget(repoRoot, target) {
@@ -358,6 +384,7 @@ export async function main(argv = process.argv.slice(2)) {
       issueNumber: number,
       worker: args.worker,
       resumed: Boolean(result.resumed),
+      mainPromotionBootstrap: Boolean(result.mainPromotionBootstrap),
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result;
