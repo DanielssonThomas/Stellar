@@ -20,7 +20,7 @@ const historical = new Map([
   ],
   [
     'issue-50-pilot-20261026-handoff.json',
-    '3576f7bc4c3e4bd55d5deeb81482949edfa72e4eda1edc325a5f549953805f68e',
+    '3576f7bc4c3e4bd55d5deb81482949edfa72e4eda1edc325a5f549953805f68e',
   ],
 ]);
 const run = (program, args, cwd = root) =>
