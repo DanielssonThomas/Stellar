@@ -27,7 +27,10 @@ import {
   buildPeonTaskContextManifest,
   buildMinimalPeonTaskContextManifest,
 } from './peon-task-context.mjs';
-import { reserveBoundedCodingAttempt } from './bounded-attempt-lease.mjs';
+import {
+  reserveBoundedCodingAttempt,
+  reserveMinimalCodingAttempt,
+} from './bounded-attempt-lease.mjs';
 
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -235,6 +238,7 @@ export async function runSupervisedPeonIssue({
   getProtectedPaths = getTrustedProtectedPathsForContext,
   resolveDevelopHead = resolveCurrentDevelopHead,
   reserveAttempt = reserveBoundedCodingAttempt,
+  reserveMinimalAttempt = reserveMinimalCodingAttempt,
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
   verifySystemPromptGuidance = inspectHermesSystemPromptGuidance,
   createWorkerAdapter = createPeonWorkerAdapter,
@@ -375,7 +379,16 @@ export async function runSupervisedPeonIssue({
       throw new Error(
         'Trusted issue, claim, or worktree changed during context preparation.',
       );
-    if (!minimalCoding)
+    if (minimalCoding)
+      reserveMinimalAttempt({
+        repositoryRoot,
+        issueNumber: number,
+        sessionId,
+        branch: task.branch,
+        worktreePath: task.worktreePath,
+        revision: initialWorkspace.headRevision,
+      });
+    else
       reserveAttempt({
         repositoryRoot,
         issueNumber: number,

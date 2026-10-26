@@ -60,6 +60,7 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
     ],
   };
   let reserved = false;
+  let minimalReserved = false;
   let inspectedOverlay = false;
   let adapterOptions;
   const result = await runSupervisedPeonIssue({
@@ -111,6 +112,10 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
     reserveAttempt: () => {
       reserved = true;
     },
+    reserveMinimalAttempt: () => {
+      assert.equal(adapterOptions, undefined);
+      minimalReserved = true;
+    },
     createWorkerAdapter: (options) => {
       adapterOptions = options;
       return {};
@@ -120,6 +125,7 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
   });
   assert.equal(inspectedOverlay, true);
   assert.equal(reserved, false);
+  assert.equal(minimalReserved, true);
   assert.deepEqual(adapterOptions.preparedContext.manifest.writablePaths, [
     'tools',
   ]);

@@ -1,10 +1,56 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { reserveBoundedCodingAttempt } from './bounded-attempt-lease.mjs';
+import {
+  reserveBoundedCodingAttempt,
+  reserveMinimalCodingAttempt,
+} from './bounded-attempt-lease.mjs';
+
+test('admits one minimal run per issue revision across concurrent sessions', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'stellar-minimal-attempt-'));
+  try {
+    const input = {
+      repositoryRoot: path.join(root, 'repo'),
+      issueNumber: 50,
+      sessionId: 'session-a',
+      branch: 'issue/50-avatar-shape',
+      worktreePath: path.join(root, 'worktree'),
+      revision: 'a'.repeat(40),
+    };
+    await mkdir(input.repositoryRoot);
+    const results = await Promise.allSettled([
+      Promise.resolve().then(() => reserveMinimalCodingAttempt(input)),
+      Promise.resolve().then(() =>
+        reserveMinimalCodingAttempt({ ...input, sessionId: 'session-b' }),
+      ),
+    ]);
+    assert.equal(
+      results.filter(({ status }) => status === 'fulfilled').length,
+      1,
+    );
+    assert.equal(
+      results.filter(({ status }) => status === 'rejected').length,
+      1,
+    );
+    assert.match(
+      results.find(({ status }) => status === 'rejected').reason.message,
+      /already admitted/,
+    );
+    const first = results.find(({ status }) => status === 'fulfilled').value;
+    const record = JSON.parse(await readFile(first.marker, 'utf8'));
+    assert.equal(record.issueNumber, 50);
+    assert.equal(record.revision, input.revision);
+    assert.throws(() => reserveMinimalCodingAttempt(input), /already admitted/);
+    assert.doesNotThrow(() =>
+      reserveMinimalCodingAttempt({ ...input, revision: 'b'.repeat(40) }),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('atomically consumes one supervisor session so relaunch cannot reset request capacity', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'stellar-bounded-attempt-'));
