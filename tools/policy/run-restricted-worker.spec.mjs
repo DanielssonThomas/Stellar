@@ -52,6 +52,60 @@ const protectedPaths = [
   'tools/policy',
 ];
 
+test('minimal coding mounts only selected writable directories over a read-only workspace', () => {
+  const workspace = '/home/peon/workspaces/issue-50';
+  const guidance = '/mnt/d/repo/tools/policy/peon-coding-agents.md';
+  const args = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    command: ['hermes', 'chat'],
+    protectedPaths,
+    hermesProfile: 'narrow-coding',
+    hermesConfigSource:
+      '/mnt/d/repo/tools/policy/peon-hermes-narrow-config.yaml',
+    writablePaths: ['libs/ui/atoms/src/lib/atoms'],
+    minimalGuidanceSource: guidance,
+  });
+  assert.ok(
+    args.includes(`--mount=type=bind,src=${workspace},dst=/workspace,ro`),
+  );
+  assert.ok(
+    args.includes(
+      `--mount=type=bind,src=${workspace}/libs/ui/atoms/src/lib/atoms,dst=/workspace/libs/ui/atoms/src/lib/atoms,rw`,
+    ),
+  );
+  assert.ok(
+    args.includes(
+      `--mount=type=bind,src=${guidance},dst=/workspace/AGENTS.md,ro`,
+    ),
+  );
+  assert.ok(
+    !args.includes(
+      `--mount=type=bind,src=${workspace}/AGENTS.md,dst=/workspace/AGENTS.md,ro`,
+    ),
+  );
+  assert.ok(!args.some((arg) => arg.includes('target=GH_TOKEN')));
+  assert.throws(
+    () =>
+      buildPodmanArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        command: ['hermes'],
+        protectedPaths,
+        hermesProfile: 'narrow-coding',
+        hermesConfigSource:
+          '/mnt/d/repo/tools/policy/peon-hermes-narrow-config.yaml',
+        writablePaths: ['tools/policy'],
+        minimalGuidanceSource: guidance,
+      }),
+    /trusted writable/,
+  );
+});
+
 test('four-request worker and meter mount exact read-only evidence code without raising resource ceilings', () => {
   const worker = buildPodmanArgs({
     issueNumber: 50,

@@ -139,6 +139,23 @@ test('four-request evidence profile is explicit and restricted to issue 50', () 
   );
 });
 
+test('minimal coding uses the narrow tools without a scripted request count', () => {
+  const selected = {
+    number: 50,
+    labels: [
+      'worker:peon',
+      'priority:low',
+      'target:develop',
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:minimal-coding',
+    ],
+  };
+  assert.equal(resolvePeonHermesProfile(selected), 'narrow-coding');
+  assert.equal(resolvePeonHermesWorkflow(selected), 'minimal-coding');
+  assert.equal(maxForwardedRequestsForWorkflow('minimal-coding'), undefined);
+  assert.equal(modelTokenLimitForWorkflow('minimal-coding'), 32_000);
+});
+
 test('maps only fixed trusted configs and rejects arbitrary or issue-worktree paths', () => {
   assert.equal(peonHermesConfigFilename('focus'), 'peon-hermes-config.yaml');
   assert.equal(
