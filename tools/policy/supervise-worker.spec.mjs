@@ -53,12 +53,90 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
+    const pre = {
+      phase: 'pre',
+      callId: 'a'.repeat(24),
+      toolName: 'terminal',
+      argumentBytes: 18,
+      argumentCount: 1,
+    };
+    const post = {
+      ...pre,
+      phase: 'post',
+      status: 'error',
+      elapsedMs: 31,
+      outputBytes: 20,
+      exitCode: 1,
+    };
+    let observedLimits;
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          issueNumber: 50,
+          owner: 'worker:peon',
+          branch: 'issue/50-avatar-shape',
+          hermesProfile: 'narrow-evidence',
+          hermesWorkflow: 'edit-first-4',
+          maxForwardedRequests: 4,
+        },
+        limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 52_000 },
+        workers: {
+          peon: worker('peon', async ({ limits, budget }) => {
+            observedLimits = limits;
+            budget.observeUsage({
+              toolCalls: 1,
+              modelTokens: 100,
+              forwardedRequests: 1,
+              toolEvents: [pre, post],
+            });
+            return {
+              status: 'failed',
+              usage: {
+                toolCalls: 1,
+                modelTokens: 100,
+                forwardedRequests: 1,
+                toolEvents: [pre, post],
+              },
+              failure: { code: 'OfflineFailure', message: 'offline fixture' },
+            };
+          }),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    assert.equal(observedLimits.maxModelTokensPerWorker, 52_000);
+    assert.equal(observedLimits.maxToolCallsPerWorker, 64);
+    assert.equal(observedLimits.maxRuntimeMsPerWorker, 600_000);
+    assert.deepEqual(result.handoff.attempts[0].toolEvents, [pre, post]);
+    await assert.rejects(
+      superviseWorker(
+        base({
+          task: {
+            ...task,
+            issueNumber: 50,
+            owner: 'worker:peon',
+            branch: 'issue/50-avatar-shape',
+            hermesProfile: 'narrow-evidence',
+            hermesWorkflow: 'edit-first-4',
+            maxForwardedRequests: 4,
+          },
+          limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 32_000 },
+        }),
+      ),
+      /exactly 52,000/,
+    );
+  });
   it('delivers validated narrow bounded metadata to the Peon adapter and verification', async () => {
     const manifest = {
       schema: 'stellar.peon-task-context/v1',
       issue: { number: task.issueNumber },
       authorization: {
         maxForwardedRequests: 2,
+        limits: { modelTokens: 32_000 },
         allowedChangePaths: ['libs/ui/atoms/src/lib/skeleton-atom.ts'],
       },
     };

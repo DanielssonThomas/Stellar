@@ -344,6 +344,109 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   assert.equal(verificationCalls, 1);
 });
 
+test('threads the issue-50 experiment ceilings through reservation, adapter, and supervisor without launch', async () => {
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-evidence',
+      'hermes-workflow:edit-first-4',
+    ],
+  };
+  const repositoryRoot = process.cwd();
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+  let reservation;
+  let adapter;
+  let supervisor;
+  await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'lint', command: ['pnpm', 'lint'] }],
+    contextPlan: {
+      skills: ['.agents/skills/implement-issue/SKILL.md'],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+        {
+          kind: 'test',
+          path: 'tools/policy/supervised-peon-run.spec.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
+    },
+    loadAssignment: async () => selectedIssue,
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree: async (_number, _branch, baseRevision) => ({
+      fingerprint: `exact:${head}:${baseRevision}`,
+      clean: true,
+      headRevision: head,
+      baseRevision,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes: [],
+    }),
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, relativePath) =>
+      relativePath === 'AGENTS.md'
+        ? execFileSync('git', ['show', `${head}:${relativePath}`], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+          })
+        : readFileSync(
+            join(repositoryRoot, ...relativePath.split('/')),
+            'utf8',
+          ),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+      path: 'AGENTS.md',
+      guidanceSha256: expectedGuidanceSha256,
+      systemPromptSha256: 'd'.repeat(64),
+    }),
+    reserveAttempt: (input) => {
+      reservation = input;
+    },
+    createWorkerAdapter: (input) => {
+      adapter = input;
+      return { id: 'peon' };
+    },
+    runSupervisor: async (input) => {
+      supervisor = input;
+      return { status: 'paused' };
+    },
+  });
+  assert.equal(reservation.requestLimit, 4);
+  assert.equal(reservation.modelTokenLimit, 52_000);
+  assert.equal(adapter.maxForwardedRequests, 4);
+  assert.equal(adapter.hermesProfile, 'narrow-evidence');
+  assert.equal(
+    adapter.preparedContext.manifest.authorization.limits.modelTokens,
+    52_000,
+  );
+  assert.equal(supervisor.limits.maxModelTokensPerWorker, 52_000);
+  assert.equal(supervisor.limits.maxAttemptsPerWorker, 1);
+  assert.equal(supervisor.limits.maxToolCallsPerWorker, 64);
+  assert.equal(supervisor.limits.maxRuntimeMsPerWorker, 600_000);
+});
+
 test('does not create the live worker until the current assignment is valid', async () => {
   let workerCreated = false;
   await assert.rejects(

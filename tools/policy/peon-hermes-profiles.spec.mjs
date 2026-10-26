@@ -5,6 +5,7 @@ import {
   assertMatchingHermesConfigDigest,
   defaultPeonHermesProfile,
   maxForwardedRequestsForWorkflow,
+  modelTokenLimitForWorkflow,
   peonHermesConfigFilename,
   resolvePeonHermesProfile,
   resolvePeonHermesWorkflow,
@@ -92,6 +93,46 @@ test('selects only the explicit eligible bounded-coding workflow label', () => {
   assert.throws(
     () =>
       resolvePeonHermesWorkflow({
+        labels: [...selected.labels, 'hermes-workflow:bounded-coding'],
+      }),
+    /unknown or ambiguous/,
+  );
+});
+
+test('four-request evidence profile is explicit and restricted to issue 50', () => {
+  const selected = {
+    number: 50,
+    labels: [
+      ...eligible.labels.filter(
+        (label) => label !== 'hermes-profile:narrow-coding',
+      ),
+      'hermes-profile:narrow-evidence',
+      'hermes-workflow:edit-first-4',
+    ],
+  };
+  assert.equal(resolvePeonHermesProfile(selected), 'narrow-evidence');
+  assert.equal(resolvePeonHermesWorkflow(selected), 'edit-first-4');
+  assert.equal(maxForwardedRequestsForWorkflow('edit-first-4'), 4);
+  assert.equal(modelTokenLimitForWorkflow('edit-first-4'), 52_000);
+  assert.equal(modelTokenLimitForWorkflow('bounded-coding'), 32_000);
+  assert.throws(
+    () => resolvePeonHermesProfile({ ...selected, number: 51 }),
+    /requires issue #50/,
+  );
+  assert.throws(
+    () =>
+      resolvePeonHermesWorkflow({
+        ...selected,
+        labels: selected.labels.filter(
+          (label) => label !== 'hermes-profile:narrow-evidence',
+        ),
+      }),
+    /requires a low-priority Peon issue/,
+  );
+  assert.throws(
+    () =>
+      resolvePeonHermesWorkflow({
+        ...selected,
         labels: [...selected.labels, 'hermes-workflow:bounded-coding'],
       }),
     /unknown or ambiguous/,

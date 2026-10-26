@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
+import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import {
   defaultPeonHermesProfile,
   maxForwardedRequestsForWorkflow,
+  isPreparedPeonWorkflow,
   peonHermesConfigFilename,
 } from './peon-hermes-profiles.mjs';
 
@@ -77,7 +79,11 @@ function issueContext(task) {
     : 'standard';
   const expectedRequestCeiling =
     maxForwardedRequestsForWorkflow(hermesWorkflow);
-  if (hermesWorkflow === 'bounded-coding' && hermesProfile !== 'narrow-coding')
+  if (
+    isPreparedPeonWorkflow(hermesWorkflow) &&
+    hermesProfile !==
+      (hermesWorkflow === 'edit-first-4' ? 'narrow-evidence' : 'narrow-coding')
+  )
     throw new Error(
       'Bounded Hermes workflow requires the narrow-coding profile.',
     );
@@ -146,6 +152,7 @@ function createWorkerBudget(limits, previous = {}) {
   let modelTokens = previous.modelTokens ?? 0;
   let forwardedRequests = previous.forwardedRequests ?? 0;
   let requestRecords = [];
+  let toolEvents = [];
   let exceededResource = null;
   let reservedTokens = 0;
 
@@ -164,6 +171,7 @@ function createWorkerBudget(limits, previous = {}) {
         forwardedRequests,
         exceededResource,
         requestRecords,
+        toolEvents,
       };
     },
     async runTool(name, operation) {
@@ -178,6 +186,22 @@ function createWorkerBudget(limits, previous = {}) {
       return operation();
     },
     observeUsage(usage) {
+      if (usage?.toolEvents !== undefined) {
+        if (
+          !Array.isArray(usage.toolEvents) ||
+          usage.toolEvents.length > 128 ||
+          usage.toolEvents.some((event) => !validSanitizedToolEvent(event)) ||
+          usage.toolEvents.length < toolEvents.length ||
+          toolEvents.some(
+            (event, index) =>
+              JSON.stringify(event) !== JSON.stringify(usage.toolEvents[index]),
+          )
+        )
+          throw new Error(
+            'Trusted sanitized tool evidence is invalid or nonmonotonic.',
+          );
+        toolEvents = usage.toolEvents.map((event) => ({ ...event }));
+      }
       if (
         !Number.isSafeInteger(usage?.toolCalls) ||
         usage.toolCalls < toolCalls ||
@@ -281,6 +305,7 @@ function createWorkerBudget(limits, previous = {}) {
         forwardedRequests,
         exceededResource,
         requestRecords,
+        toolEvents,
       };
     },
     async runModel({ promptTokens = 0, maxOutputTokens, invoke }) {
@@ -714,6 +739,15 @@ export async function superviseWorker({
 }) {
   const task = issueContext(rawTask);
   const limits = normalizeLimits(requestedLimits);
+  if (
+    task.hermesWorkflow === 'edit-first-4' &&
+    (task.issueNumber !== 50 ||
+      limits.maxModelTokensPerWorker !== 52_000 ||
+      limits.maxAttemptsPerWorker !== 1)
+  )
+    throw new Error(
+      'Issue #50 experiment requires one attempt and exactly 52,000 model tokens.',
+    );
   if (typeof inspectWorktree !== 'function' || typeof verify !== 'function')
     throw new Error(
       'Trusted inspectWorktree and verify callbacks are required.',
@@ -887,6 +921,7 @@ export async function superviseWorker({
         modelTokens: budget.snapshot.modelTokens,
         forwardedRequests: budget.snapshot.forwardedRequests,
         requestRecords: budget.snapshot.requestRecords,
+        toolEvents: budget.snapshot.toolEvents,
       };
       if (
         [
