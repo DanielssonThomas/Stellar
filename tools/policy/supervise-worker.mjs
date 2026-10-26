@@ -518,6 +518,7 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
         usage = await worker.usage({
           task: context.task,
           attemptNumber: context.attemptNumber,
+          signal: controller.signal,
         });
       } catch (error) {
         resolve({
@@ -904,6 +905,15 @@ export async function superviseWorker({
             : {}),
         });
         attempt.primaryStopReason = primaryStopReason;
+        if (outcome.type === 'usage-accounting-failed')
+          attempt.primaryFailure = failureDetails({
+            code: outcome.error?.code ?? 'UsageAccountingFailure',
+            message:
+              'Trusted live usage accounting failed before cancellation.',
+            ...(outcome.error?.diagnostic
+              ? { diagnostic: outcome.error.diagnostic }
+              : {}),
+          });
         attempt.status = 'cancellation-unconfirmed';
         attempt.failure = failure;
         handoff.attempts.push(attempt);

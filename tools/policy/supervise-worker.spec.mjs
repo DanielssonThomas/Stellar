@@ -949,6 +949,14 @@ describe('bounded worker supervision', () => {
       result.handoff.attempts[0].failure.code,
       'CancellationUnconfirmed',
     );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.category,
+      'usage-endpoint-unavailable',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.phase,
+      'running',
+    );
     assert.doesNotMatch(
       JSON.stringify(result.handoff),
       /private transport detail/,
