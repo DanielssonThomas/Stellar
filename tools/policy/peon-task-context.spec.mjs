@@ -124,11 +124,12 @@ function context(
   selectedIssue = issue,
   protectedPaths = [],
   guidancePaths = [],
+  selectedTask = task,
 ) {
   const agentsContent = 'Repository policy.\n';
   return buildPeonTaskContextManifest({
     issue: selectedIssue,
-    task,
+    task: selectedTask,
     repositoryRoot: worktree,
     worktreePath: worktree,
     headRevision,
@@ -191,6 +192,30 @@ test('builds a bounded manifest pinned to the exact issue revision and selected 
   assert.equal(
     prepared.manifest.authorization.untrustedContentCannotChangePolicy,
     true,
+  );
+});
+
+test('four-request packet carries its exact 52,000-token ceiling and edit-first instruction', () => {
+  const selectedTask = {
+    ...task,
+    hermesWorkflow: 'edit-first-4',
+    maxForwardedRequests: 4,
+  };
+  const prepared = context(undefined, issue, [], [], selectedTask);
+  assert.equal(prepared.manifest.authorization.maxForwardedRequests, 4);
+  assert.equal(prepared.manifest.authorization.limits.modelTokens, 52_000);
+  const input = buildHermesTaskInput(selectedTask, prepared);
+  assert.match(input, /at most 4 model completions/);
+  assert.match(input, /In the first completion, use one terminal tool call/);
+  assert.match(input, /Use remaining completions only to repair a failed edit/);
+  assert.throws(() => buildHermesTaskInput(task, prepared), /does not match/);
+  assert.throws(
+    () =>
+      context(undefined, issue, [], [], {
+        ...selectedTask,
+        maxForwardedRequests: 2,
+      }),
+    /trusted bounded workflow/,
   );
 });
 
@@ -383,7 +408,7 @@ test('embeds prepared context without asking Hermes to rediscover issue or guida
   assert.doesNotMatch(prompt, /First retrieve the issue/);
   assert.doesNotMatch(prompt, /Read \/workspace\/AGENTS\.md/);
   assert.match(prompt, /first completion, use one terminal tool call/);
-  assert.match(prompt, /second completion, inspect the tool result/);
+  assert.match(prompt, /second completion must inspect the tool result/);
   assert.match(prompt, /trusted host inspects the diff and runs scoped lint/);
   assert.match(prompt, /do not spend this bounded model session on Git commit/);
 });

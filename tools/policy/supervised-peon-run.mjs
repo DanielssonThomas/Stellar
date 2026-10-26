@@ -19,6 +19,8 @@ import {
   resolvePeonHermesProfile,
   resolvePeonHermesWorkflow,
   maxForwardedRequestsForWorkflow,
+  isPreparedPeonWorkflow,
+  modelTokenLimitForWorkflow,
 } from './peon-hermes-profiles.mjs';
 import { buildPeonTaskContextManifest } from './peon-task-context.mjs';
 import { reserveBoundedCodingAttempt } from './bounded-attempt-lease.mjs';
@@ -259,10 +261,9 @@ export async function runSupervisedPeonIssue({
     sessionId,
     image,
   });
-  const targetRevision =
-    task.hermesWorkflow === 'bounded-coding'
-      ? await resolveDevelopHead(repositoryRoot)
-      : undefined;
+  const targetRevision = isPreparedPeonWorkflow(task.hermesWorkflow)
+    ? await resolveDevelopHead(repositoryRoot)
+    : undefined;
   const initialWorkspace = await inspectWorktree(
     number,
     task.branch,
@@ -270,7 +271,7 @@ export async function runSupervisedPeonIssue({
   );
   if (!initialWorkspace || typeof initialWorkspace.fingerprint !== 'string')
     throw new Error('Trusted restricted workspace inspection failed.');
-  if (task.hermesWorkflow === 'bounded-coding') {
+  if (isPreparedPeonWorkflow(task.hermesWorkflow)) {
     const claimedWorkspace = await inspectRegisteredWorktree(
       repositoryRoot,
       claim,
@@ -294,7 +295,7 @@ export async function runSupervisedPeonIssue({
   });
 
   let preparedContext;
-  if (task.hermesWorkflow === 'bounded-coding') {
+  if (isPreparedPeonWorkflow(task.hermesWorkflow)) {
     const agentsContent = readWorkspaceFile(number, 'AGENTS.md');
     const agentsSha256 = createHash('sha256')
       .update(agentsContent)
@@ -361,6 +362,7 @@ export async function runSupervisedPeonIssue({
       worktreePath: task.worktreePath,
       revision: initialWorkspace.headRevision,
       requestLimit: task.maxForwardedRequests,
+      modelTokenLimit: modelTokenLimitForWorkflow(task.hermesWorkflow),
     });
   }
 
@@ -385,7 +387,7 @@ export async function runSupervisedPeonIssue({
         'Verification issue differs from the validated assignment.',
       );
     const results = [];
-    if (verifiedTask.hermesWorkflow === 'bounded-coding') {
+    if (isPreparedPeonWorkflow(verifiedTask.hermesWorkflow)) {
       const finalWorkspace = await inspectWorktree(
         number,
         task.branch,
@@ -447,7 +449,11 @@ export async function runSupervisedPeonIssue({
     },
     verify,
     handoffPath,
-    limits: { ...defaultLimits, maxAttemptsPerWorker: 1 },
+    limits: {
+      ...defaultLimits,
+      maxAttemptsPerWorker: 1,
+      maxModelTokensPerWorker: modelTokenLimitForWorkflow(task.hermesWorkflow),
+    },
     signal,
   });
 }

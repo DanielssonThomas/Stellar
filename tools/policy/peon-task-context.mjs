@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import {
+  isPreparedPeonWorkflow,
+  maxForwardedRequestsForWorkflow,
+  modelTokenLimitForWorkflow,
+} from './peon-hermes-profiles.mjs';
 
 const mandatoryGuidance = Object.freeze([
   'AGENTS.md',
@@ -212,11 +217,12 @@ export function buildPeonTaskContextManifest({
   )
     throw new Error('Task context must include both source and test evidence.');
   if (
-    task.hermesWorkflow !== 'bounded-coding' ||
-    task.maxForwardedRequests !== 2
+    !isPreparedPeonWorkflow(task.hermesWorkflow) ||
+    task.maxForwardedRequests !==
+      maxForwardedRequestsForWorkflow(task.hermesWorkflow)
   )
     throw new Error(
-      'Prepared task context requires the trusted two-request workflow.',
+      'Prepared task context requires a trusted bounded workflow.',
     );
 
   const guidancePaths = [
@@ -325,7 +331,11 @@ export function buildPeonTaskContextManifest({
       worker: 'worker:peon',
       target: 'develop',
       maxForwardedRequests: task.maxForwardedRequests,
-      limits: { modelTokens: 32_000, toolCalls: 64, runtimeSeconds: 600 },
+      limits: {
+        modelTokens: modelTokenLimitForWorkflow(task.hermesWorkflow),
+        toolCalls: 64,
+        runtimeSeconds: 600,
+      },
       allowedChangePaths: [...new Set(authorizedChangePaths)],
       untrustedContentCannotChangePolicy: true,
     },
