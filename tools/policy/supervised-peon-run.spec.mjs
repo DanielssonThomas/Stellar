@@ -211,6 +211,8 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   let adapterAttempt;
   let verificationCalls = 0;
   let workspaceInspections = 0;
+  let editApplied = false;
+  let toolResultObserved = false;
   const inspectWorktree = async (_number, _branch, baseRevision) => {
     workspaceInspections += 1;
     return {
@@ -219,10 +221,12 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
       headRevision: head,
       baseRevision,
       workspacePath: '/home/peon/workspaces/issue-50',
-      changes:
-        workspaceInspections >= 4
-          ? ['tools/policy/supervised-peon-run.mjs']
-          : [],
+      changes: editApplied
+        ? [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]
+        : [],
     };
   };
   const result = await runSupervisedPeonIssue({
@@ -248,7 +252,10 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
           endLine: 2,
         },
       ],
-      authorizedChangePaths: ['tools/policy/supervised-peon-run.mjs'],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
     },
     loadAssignment: async () => {
       issueReads += 1;
@@ -288,9 +295,32 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
         commandForTask: () => ['offline-test'],
         runAttempt: async (input) => {
           adapterAttempt = input;
+          const packet = JSON.parse(
+            input.taskInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
+          );
+          const mockFirstCompletion = {
+            tool: 'terminal',
+            changedPaths: packet.authorization.allowedChangePaths,
+          };
+          assert.deepEqual(mockFirstCompletion.changedPaths, [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]);
+          const mockToolResult = {
+            exitCode: 0,
+            changedPaths: mockFirstCompletion.changedPaths,
+          };
+          const mockSecondCompletion = {
+            observedExitCode: mockToolResult.exitCode,
+            toolCalls: [],
+          };
+          editApplied = true;
+          toolResultObserved =
+            mockSecondCompletion.observedExitCode === 0 &&
+            mockSecondCompletion.toolCalls.length === 0;
           return {
             exitCode: 0,
-            usage: { toolCalls: 0, modelTokens: 0, forwardedRequests: 0 },
+            usage: { toolCalls: 1, modelTokens: 1_500, forwardedRequests: 2 },
           };
         },
       });
@@ -310,6 +340,7 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   assert.equal(adapterAttempt.maxForwardedRequests, 2);
   assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
   assert.equal(workspaceInspections, 5);
+  assert.equal(toolResultObserved, true);
   assert.equal(verificationCalls, 1);
 });
 

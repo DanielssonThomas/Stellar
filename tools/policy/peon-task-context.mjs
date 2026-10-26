@@ -38,19 +38,6 @@ function section(body, name) {
   return match?.[1]?.trim() ?? '';
 }
 
-function withoutSection(body, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return body
-    .replace(
-      new RegExp(
-        `(^|\\n)##\\s+${escaped}\\s*\\n[\\s\\S]*?(?=\\n##\\s+|$)`,
-        'i',
-      ),
-      '$1',
-    )
-    .trim();
-}
-
 function guidanceAttestationMatches(attestation, sha256) {
   return (
     attestation?.path === 'AGENTS.md' &&
@@ -275,6 +262,15 @@ export function buildPeonTaskContextManifest({
         systemPromptSha256: systemPromptGuidanceAttestation.systemPromptSha256,
       };
     }
+    if (relativePath === 'docs/guides/issue-workflow.md') {
+      return {
+        kind: 'guidance',
+        path: relativePath,
+        sha256,
+        revision: headRevision,
+        source: 'trusted-host-preflight',
+      };
+    }
     return {
       kind: 'guidance',
       path: relativePath,
@@ -313,13 +309,11 @@ export function buildPeonTaskContextManifest({
         }),
       ),
       acceptanceCriteria: section(issue.body ?? '', 'Acceptance criteria'),
-      untrustedIssueBody: withoutSection(
-        issue.body ?? '',
-        'Acceptance criteria',
-      ),
-      labels: (issue.labels ?? []).map((entry) =>
-        typeof entry === 'string' ? entry : entry.name,
-      ),
+      objective: section(issue.body ?? '', 'Objective'),
+      constraints: section(issue.body ?? '', 'Constraints'),
+      issueBodySha256: createHash('sha256')
+        .update(issue.body ?? '')
+        .digest('hex'),
     },
     revision: { head: headRevision, workspace: workspaceIdentity },
     authorization: {
