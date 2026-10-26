@@ -9,6 +9,55 @@ function issue(labels) {
 }
 
 describe('issue metadata policy', () => {
+  it('requires one independent review tier on new actionable issues', () => {
+    const labels = [
+      'priority:low',
+      'target:develop',
+      'type:chore',
+      'owner:codex',
+      'status:ready',
+    ];
+    const fresh = { ...issue(labels), number: 103 };
+    assert.ok(
+      validateIssue(fresh).errors.includes(
+        'Use exactly one review label for new actionable issues.',
+      ),
+    );
+    assert.equal(
+      validateIssue({ ...fresh, labels: [...labels, 'review:light'] }).ready,
+      true,
+    );
+    assert.ok(
+      validateIssue({
+        ...fresh,
+        labels: [...labels, 'review:light', 'review:critical'],
+      }).errors.includes(
+        'Use exactly one review label for new actionable issues.',
+      ),
+    );
+    assert.ok(
+      validateIssue({
+        ...fresh,
+        labels: [...labels, 'review:unknown'],
+      }).errors.includes('Invalid review label.'),
+    );
+  });
+
+  it('accepts a historical issue without a review tier but rejects duplicate tiers', () => {
+    const labels = [
+      'priority:medium',
+      'target:develop',
+      'type:feature',
+      'owner:codex',
+      'status:ready',
+    ];
+    assert.equal(validateIssue(issue(labels)).ready, true);
+    assert.ok(
+      validateIssue(
+        issue([...labels, 'review:light', 'review:standard']),
+      ).errors.includes('Use at most one review label for historical issues.'),
+    );
+  });
   it('accepts a complete ready issue', () => {
     const result = validateIssue(
       issue([

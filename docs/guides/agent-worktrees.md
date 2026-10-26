@@ -7,6 +7,12 @@ node tools/policy/manage-issue-worktree.mjs claim 123 --worker codex --session-i
 node tools/policy/manage-issue-worktree.mjs inspect 123
 ```
 
+For corrections to an open issue-linked PR already in `status:review`, use `resume-review` with a new stable session ID after the prior claim is released. It checks the same owner, authorized target, exact PR head, existing issue branch and registered worktree, then atomically claims that worktree and reconciles the issue to `status:in-progress`. The PR stays open. A different active session, changed PR, stale claim, missing worktree, or unresolved dependency stops the operation with work preserved. Repeating it with the same session recovers an interrupted status write.
+
+```powershell
+node tools/policy/manage-issue-worktree.mjs resume-review 123 --worker codex --session-id <stable-session-id>
+```
+
 The supervisor must provide a stable session ID and reuse it to resume. A different session cannot take an active claim. Claims expire after 12 hours; a fresh claim from the same session renews the lease. A stale claim must be inspected and explicitly handed off:
 
 ```powershell

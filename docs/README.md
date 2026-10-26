@@ -6,6 +6,7 @@
 - [Manual release guide](guides/manual-release.md): maintainer-controlled monthly release procedure.
 - [Nx generators](guides/generators.md): application, atomic component, and service generator commands and defaults.
 - [Issue workflow](guides/issue-workflow.md): metadata, ownership, dependencies, and status transitions.
+- [AI review priority](guides/ai-review-policy.md): review tiers, trusted file risk, offline dispatch limits, and future enforcement.
 - [Agent issue worktrees](guides/agent-worktrees.md): claim, resume, transfer, and preserve issue-specific worktrees.
 - [Agent supervision](guides/agent-supervision.md): bounded worker attempts, durable handoffs, verification, and escalation requests.
 - [Worker integration policy](guides/worker-integration-policy.md): deterministic offline eligibility checks for restricted worker pull requests.

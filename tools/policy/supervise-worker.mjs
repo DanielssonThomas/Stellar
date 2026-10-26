@@ -1,6 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
+import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
+import {
+  defaultPeonHermesProfile,
+  maxForwardedRequestsForWorkflow,
+  isPreparedPeonWorkflow,
+  peonHermesConfigFilename,
+} from './peon-hermes-profiles.mjs';
 
 export const defaultLimits = Object.freeze({
   maxAttemptsPerWorker: 2,
@@ -19,7 +26,8 @@ const hardLimits = Object.freeze({
   maxRepeatedFailures: 3,
   maxNoProgressAttempts: 3,
 });
-const cancellationGraceMs = 5_000;
+export const cancellationGraceMs = 5_000;
+export const usageReadinessTimeoutMs = 10_000;
 
 class BudgetLimitError extends Error {
   constructor(resource) {
@@ -62,12 +70,45 @@ function issueContext(task) {
     throw new Error('An absolute issue worktreePath is required.');
   if (!/^(?:owner|worker):[a-z0-9._-]+$/.test(task.owner ?? ''))
     throw new Error('The current issue owner label is required.');
+  const hermesProfile = Object.hasOwn(task, 'hermesProfile')
+    ? task.hermesProfile
+    : defaultPeonHermesProfile;
+  peonHermesConfigFilename(hermesProfile);
+  const hermesWorkflow = Object.hasOwn(task, 'hermesWorkflow')
+    ? task.hermesWorkflow
+    : 'standard';
+  const expectedRequestCeiling =
+    maxForwardedRequestsForWorkflow(hermesWorkflow);
+  if (
+    isPreparedPeonWorkflow(hermesWorkflow) &&
+    hermesProfile !==
+      (hermesWorkflow === 'edit-first-4' ? 'narrow-evidence' : 'narrow-coding')
+  )
+    throw new Error(
+      'Bounded Hermes workflow requires the narrow-coding profile.',
+    );
+  const suppliedRequestCeiling = Object.hasOwn(task, 'maxForwardedRequests')
+    ? task.maxForwardedRequests
+    : undefined;
+  if (expectedRequestCeiling === undefined) {
+    if (suppliedRequestCeiling !== undefined && suppliedRequestCeiling !== null)
+      throw new Error(
+        'Standard Hermes workflow cannot declare a forwarded-request ceiling.',
+      );
+  } else if (suppliedRequestCeiling !== expectedRequestCeiling) {
+    throw new Error(
+      'Bounded Hermes workflow requires its validated forwarded-request ceiling.',
+    );
+  }
   return {
     issueNumber: task.issueNumber,
     owner: task.owner,
     targetBranch: task.targetBranch,
     branch: task.branch,
     worktreePath: task.worktreePath,
+    hermesProfile,
+    hermesWorkflow,
+    maxForwardedRequests: expectedRequestCeiling ?? null,
   };
 }
 
@@ -109,6 +150,9 @@ export async function readHandoff(path) {
 function createWorkerBudget(limits, previous = {}) {
   let toolCalls = previous.toolCalls ?? 0;
   let modelTokens = previous.modelTokens ?? 0;
+  let forwardedRequests = previous.forwardedRequests ?? 0;
+  let requestRecords = [];
+  let toolEvents = [];
   let exceededResource = null;
   let reservedTokens = 0;
 
@@ -121,7 +165,14 @@ function createWorkerBudget(limits, previous = {}) {
 
   return {
     get snapshot() {
-      return { toolCalls, modelTokens, exceededResource };
+      return {
+        toolCalls,
+        modelTokens,
+        forwardedRequests,
+        exceededResource,
+        requestRecords,
+        toolEvents,
+      };
     },
     async runTool(name, operation) {
       if (
@@ -135,6 +186,22 @@ function createWorkerBudget(limits, previous = {}) {
       return operation();
     },
     observeUsage(usage) {
+      if (usage?.toolEvents !== undefined) {
+        if (
+          !Array.isArray(usage.toolEvents) ||
+          usage.toolEvents.length > 128 ||
+          usage.toolEvents.some((event) => !validSanitizedToolEvent(event)) ||
+          usage.toolEvents.length < toolEvents.length ||
+          toolEvents.some(
+            (event, index) =>
+              JSON.stringify(event) !== JSON.stringify(usage.toolEvents[index]),
+          )
+        )
+          throw new Error(
+            'Trusted sanitized tool evidence is invalid or nonmonotonic.',
+          );
+        toolEvents = usage.toolEvents.map((event) => ({ ...event }));
+      }
       if (
         !Number.isSafeInteger(usage?.toolCalls) ||
         usage.toolCalls < toolCalls ||
@@ -144,10 +211,86 @@ function createWorkerBudget(limits, previous = {}) {
         throw new Error(
           'Trusted live usage counters must be monotonic safe integers.',
         );
+      if (usage.requestRecords !== undefined) {
+        if (
+          !Array.isArray(usage.requestRecords) ||
+          usage.requestRecords.length > 32 ||
+          usage.requestRecords.some(
+            (record) =>
+              !Number.isSafeInteger(record?.request) ||
+              record.request < 1 ||
+              ![
+                'pending',
+                'denied-exhausted',
+                'denied-request-limit',
+                'denied-budget',
+                'tokenization-failed',
+                'forwarded',
+                'upstream-failed',
+                'cancelled',
+              ].includes(record?.decision) ||
+              (record.promptTokens !== null &&
+                !Number.isSafeInteger(record.promptTokens)) ||
+              !Number.isSafeInteger(record.remainingTokens) ||
+              (record.completionTokens !== null &&
+                !Number.isSafeInteger(record.completionTokens)) ||
+              !Number.isSafeInteger(record.chargedOutputTokens) ||
+              !Number.isSafeInteger(record.emittedToolCalls) ||
+              !Number.isSafeInteger(record.toolSchemaContentTokens) ||
+              !Number.isSafeInteger(record.toolOutputMessages) ||
+              !record.messageContentTokensByRole ||
+              typeof record.messageContentTokensByRole !== 'object' ||
+              Object.values(record.messageContentTokensByRole).some(
+                (tokens) => !Number.isSafeInteger(tokens),
+              ) ||
+              Object.keys(record.messageContentTokensByRole).some(
+                (role) =>
+                  ![
+                    'system',
+                    'developer',
+                    'user',
+                    'assistant',
+                    'tool',
+                    'other',
+                  ].includes(role),
+              ) ||
+              Object.keys(record).some(
+                (key) =>
+                  ![
+                    'request',
+                    'decision',
+                    'promptTokens',
+                    'remainingTokens',
+                    'completionTokens',
+                    'chargedOutputTokens',
+                    'emittedToolCalls',
+                    'messageContentTokensByRole',
+                    'toolSchemaContentTokens',
+                    'toolOutputMessages',
+                  ].includes(key),
+              ),
+          )
+        )
+          throw new Error(
+            'Trusted live request records must contain bounded numeric-only metadata.',
+          );
+        requestRecords = usage.requestRecords.map((record) => ({ ...record }));
+      }
+      if (
+        usage.forwardedRequests !== undefined &&
+        (!Number.isSafeInteger(usage.forwardedRequests) ||
+          usage.forwardedRequests < forwardedRequests)
+      )
+        throw new Error('Trusted forwarded request count must be monotonic.');
+      if (usage.forwardedRequests !== undefined)
+        forwardedRequests = usage.forwardedRequests;
       toolCalls = usage.toolCalls;
       modelTokens = usage.modelTokens;
       const exhausted = usage.exceededResource;
-      if (exhausted && !['tool-calls', 'model-tokens'].includes(exhausted))
+      if (
+        exhausted &&
+        !['tool-calls', 'model-tokens', 'model-requests'].includes(exhausted)
+      )
         throw new Error(
           'Trusted live usage reported an unknown exhausted resource.',
         );
@@ -156,7 +299,14 @@ function createWorkerBudget(limits, previous = {}) {
         exceededResource = 'tool-calls';
       if (modelTokens > limits.maxModelTokensPerWorker)
         exceededResource = 'model-tokens';
-      return { toolCalls, modelTokens, exceededResource };
+      return {
+        toolCalls,
+        modelTokens,
+        forwardedRequests,
+        exceededResource,
+        requestRecords,
+        toolEvents,
+      };
     },
     async runModel({ promptTokens = 0, maxOutputTokens, invoke }) {
       if (
@@ -211,11 +361,40 @@ function failureDetails(error) {
   )
     .trim()
     .replace(/\s+/g, ' ');
-  return {
+  const details = {
     code,
     message: message.slice(0, 2_000),
     fingerprint: stableFingerprint(`${code}:${message}`),
   };
+  if (error?.diagnostic) {
+    const { category, phase, elapsedMs } = error.diagnostic;
+    const categories = [
+      'sidecar-not-started',
+      'readiness-timeout',
+      'transport-timeout',
+      'podman-execution-failure',
+      'usage-endpoint-unavailable',
+      'model-unavailable',
+      'poll-cancelled',
+      'http-failure',
+      'malformed-response',
+      'invalid-usage',
+      'sidecar-terminated',
+      'cleanup-inconclusive',
+      'unknown',
+    ];
+    details.diagnostic = {
+      category: categories.includes(category) ? category : 'unknown',
+      phase: ['startup', 'running', 'cancellation', 'cleanup'].includes(phase)
+        ? phase
+        : 'unknown',
+      elapsedMs:
+        Number.isSafeInteger(elapsedMs) && elapsedMs >= 0
+          ? Math.min(elapsedMs, 900_000)
+          : null,
+    };
+  }
+  return details;
 }
 
 function redactEvidence(value) {
@@ -260,6 +439,100 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ type: 'timeout' }), timeoutMs);
   });
+  const interruption = externalSignal
+    ? new Promise((resolve) => {
+        abortListener = () => resolve({ type: 'interrupted' });
+        externalSignal.addEventListener('abort', abortListener, { once: true });
+        if (externalSignal.aborted) abortListener();
+      })
+    : null;
+  if (typeof worker.waitForUsageReady === 'function') {
+    const readinessStartedAt = Date.now();
+    let readyTimer;
+    const readiness = Promise.race([
+      Promise.resolve()
+        .then(() =>
+          worker.waitForUsageReady({
+            task: context.task,
+            attemptNumber: context.attemptNumber,
+          }),
+        )
+        .then(
+          () => ({ type: 'ready' }),
+          (error) => ({ type: 'usage-readiness-failed', error }),
+        ),
+      new Promise((resolve) => {
+        readyTimer = setTimeout(
+          () => resolve({ type: 'usage-readiness-timeout' }),
+          Math.min(usageReadinessTimeoutMs, timeoutMs),
+        );
+      }),
+    ]);
+    const startupRaces = [completion, timeout, readiness];
+    if (interruption) startupRaces.push(interruption);
+    const startup = await Promise.race(startupRaces);
+    clearTimeout(readyTimer);
+    if (startup.type === 'ready') {
+      // Usage polling starts only after the trusted adapter has proven the
+      // exact attempt's metering endpoint is readable.
+    } else {
+      clearTimeout(timer);
+      if (abortListener)
+        externalSignal.removeEventListener('abort', abortListener);
+      const outcome =
+        startup.type === 'usage-readiness-timeout'
+          ? {
+              type: 'usage-accounting-failed',
+              error: {
+                code: 'UsageReadinessTimeout',
+                message:
+                  'Trusted usage endpoint was not ready before the deadline.',
+                diagnostic: {
+                  category: 'readiness-timeout',
+                  phase: 'startup',
+                  elapsedMs: Date.now() - readinessStartedAt,
+                },
+              },
+            }
+          : startup.type === 'usage-readiness-failed'
+            ? {
+                type: 'usage-accounting-failed',
+                error: {
+                  code: 'UsageReadinessFailed',
+                  message: 'Trusted usage endpoint failed during startup.',
+                  diagnostic: {
+                    ...(startup.error?.diagnostic ?? {}),
+                    phase: 'startup',
+                    elapsedMs: Date.now() - readinessStartedAt,
+                  },
+                },
+              }
+            : startup;
+      if (
+        ['timeout', 'interrupted', 'usage-accounting-failed', 'error'].includes(
+          outcome.type,
+        )
+      ) {
+        controller.abort(outcome.type);
+        const cancellationStartedAt = Date.now();
+        const workerStopped = await confirmWorkerStopped(worker, outcome.type);
+        return {
+          ...outcome,
+          workerStopped,
+          ...(!workerStopped
+            ? {
+                cancellationDiagnostic: {
+                  category: 'cleanup-inconclusive',
+                  phase: 'cancellation',
+                  elapsedMs: Date.now() - cancellationStartedAt,
+                },
+              }
+            : {}),
+        };
+      }
+      return outcome;
+    }
+  }
   const races = [completion, timeout];
   let usageTimer;
   let polling = false;
@@ -268,11 +541,30 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
     usageTimer = setInterval(async () => {
       if (polling) return;
       polling = true;
+      let usage;
       try {
-        const usage = await worker.usage({
+        usage = await worker.usage({
           task: context.task,
           attemptNumber: context.attemptNumber,
+          signal: controller.signal,
         });
+      } catch (error) {
+        resolve({
+          type: 'usage-accounting-failed',
+          error: {
+            code: 'UsageAccountingFailure',
+            message: 'Trusted live usage polling failed.',
+            diagnostic: {
+              ...(error?.diagnostic ?? {
+                category: 'unknown',
+                phase: 'running',
+              }),
+            },
+          },
+        });
+        return;
+      }
+      try {
         const snapshot = context.budget.observeUsage(usage);
         if (snapshot.exceededResource)
           resolve({
@@ -280,7 +572,17 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
             resource: snapshot.exceededResource,
           });
       } catch {
-        resolve({ type: 'usage-accounting-failed' });
+        resolve({
+          type: 'usage-accounting-failed',
+          error: {
+            code: 'InvalidUsageSnapshot',
+            message: 'Trusted live usage snapshot failed validation.',
+            diagnostic: {
+              category: 'invalid-usage',
+              phase: 'running',
+            },
+          },
+        });
       } finally {
         polling = false;
       }
@@ -289,13 +591,7 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
   });
   if (typeof worker.usage === 'function') races.push(resourceLimit);
   if (externalSignal) {
-    races.push(
-      new Promise((resolve) => {
-        abortListener = () => resolve({ type: 'interrupted' });
-        externalSignal.addEventListener('abort', abortListener, { once: true });
-        if (externalSignal.aborted) abortListener();
-      }),
-    );
+    races.push(interruption);
   }
   const outcome = await Promise.race(races);
   clearTimeout(timer);
@@ -307,12 +603,24 @@ async function runBounded(worker, context, timeoutMs, externalSignal) {
       'interrupted',
       'budget-exceeded',
       'usage-accounting-failed',
+      'error',
     ].includes(outcome.type)
   ) {
     controller.abort(outcome.type);
+    const cancellationStartedAt = Date.now();
+    const workerStopped = await confirmWorkerStopped(worker, outcome.type);
     return {
       ...outcome,
-      workerStopped: await confirmWorkerStopped(worker, outcome.type),
+      workerStopped,
+      ...(!workerStopped
+        ? {
+            cancellationDiagnostic: {
+              category: 'cleanup-inconclusive',
+              phase: 'cancellation',
+              elapsedMs: Date.now() - cancellationStartedAt,
+            },
+          }
+        : {}),
     };
   }
   return outcome;
@@ -333,6 +641,25 @@ async function confirmWorkerStopped(worker, reason) {
     return false;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function getPrimaryStopReason(outcome) {
+  switch (outcome.type) {
+    case 'timeout':
+      return 'runtime-budget-exhausted';
+    case 'interrupted':
+      return 'interrupted';
+    case 'budget-exceeded':
+      if (outcome.resource === 'model-requests')
+        return 'model-request-limit-exhausted';
+      return ['model-tokens', 'tool-calls'].includes(outcome.resource)
+        ? `${outcome.resource}-budget-exhausted`
+        : 'unknown';
+    case 'usage-accounting-failed':
+      return 'usage-accounting-failed';
+    default:
+      return 'unknown';
   }
 }
 
@@ -412,6 +739,15 @@ export async function superviseWorker({
 }) {
   const task = issueContext(rawTask);
   const limits = normalizeLimits(requestedLimits);
+  if (
+    task.hermesWorkflow === 'edit-first-4' &&
+    (task.issueNumber !== 50 ||
+      limits.maxModelTokensPerWorker !== 52_000 ||
+      limits.maxAttemptsPerWorker !== 1)
+  )
+    throw new Error(
+      'Issue #50 experiment requires one attempt and exactly 52,000 model tokens.',
+    );
   if (typeof inspectWorktree !== 'function' || typeof verify !== 'function')
     throw new Error(
       'Trusted inspectWorktree and verify callbacks are required.',
@@ -451,7 +787,9 @@ export async function superviseWorker({
       runtimeMs: 0,
       toolCalls: 0,
       modelTokens: 0,
+      forwardedRequests: 0,
     };
+    handoff.workerUsage[id].forwardedRequests ??= 0;
   }
 
   const startedAt = clock();
@@ -558,11 +896,20 @@ export async function superviseWorker({
           };
         }
       }
+      if (
+        outcome.type === 'result' &&
+        budget.snapshot.exceededResource !== null
+      )
+        outcome = {
+          type: 'budget-exceeded',
+          resource: budget.snapshot.exceededResource,
+        };
       const durationMs = Math.max(0, clock() - attemptStarted);
       state.attempts += 1;
       state.runtimeMs += Math.min(durationMs, timeoutMs);
       state.toolCalls = budget.snapshot.toolCalls;
       state.modelTokens = budget.snapshot.modelTokens;
+      state.forwardedRequests = budget.snapshot.forwardedRequests;
       const attempt = {
         workerId,
         attemptNumber,
@@ -572,6 +919,9 @@ export async function superviseWorker({
         changedFiles: before.changes,
         toolCalls: budget.snapshot.toolCalls,
         modelTokens: budget.snapshot.modelTokens,
+        forwardedRequests: budget.snapshot.forwardedRequests,
+        requestRecords: budget.snapshot.requestRecords,
+        toolEvents: budget.snapshot.toolEvents,
       };
       if (
         [
@@ -579,19 +929,35 @@ export async function superviseWorker({
           'interrupted',
           'budget-exceeded',
           'usage-accounting-failed',
+          'error',
         ].includes(outcome.type) &&
         !outcome.workerStopped
       ) {
+        const primaryStopReason = getPrimaryStopReason(outcome);
         const failure = failureDetails({
           code: 'CancellationUnconfirmed',
           message:
             'Worker stop was not confirmed; do not resume or hand off this worktree until the process is stopped.',
+          ...(outcome.cancellationDiagnostic
+            ? { diagnostic: outcome.cancellationDiagnostic }
+            : {}),
         });
+        attempt.primaryStopReason = primaryStopReason;
+        if (outcome.type === 'usage-accounting-failed')
+          attempt.primaryFailure = failureDetails({
+            code: outcome.error?.code ?? 'UsageAccountingFailure',
+            message:
+              'Trusted live usage accounting failed before cancellation.',
+            ...(outcome.error?.diagnostic
+              ? { diagnostic: outcome.error.diagnostic }
+              : {}),
+          });
         attempt.status = 'cancellation-unconfirmed';
         attempt.failure = failure;
         handoff.attempts.push(attempt);
         appendFailure(handoff, workerId, failure);
         handoff.currentWorkerId = workerId;
+        handoff.lastStopReason = primaryStopReason;
         handoff.safeToResume = false;
         await save('paused');
         return { status: 'paused', handoff, safeToResume: false };
@@ -644,15 +1010,20 @@ export async function superviseWorker({
           code:
             outcome.type === 'budget-exceeded'
               ? 'ResourceLimit'
-              : 'UsageAccountingFailure',
+              : (outcome.error?.code ?? 'UsageAccountingFailure'),
           message:
             outcome.type === 'budget-exceeded'
               ? `Trusted live ${outcome.resource} budget was exhausted.`
               : 'Trusted live usage accounting failed; worker stopped fail-closed.',
+          ...(outcome.error?.diagnostic
+            ? { diagnostic: outcome.error.diagnostic }
+            : {}),
         });
         stopReason =
           outcome.type === 'budget-exceeded'
-            ? `${outcome.resource}-budget-exhausted`
+            ? outcome.resource === 'model-requests'
+              ? 'model-request-limit-exhausted'
+              : `${outcome.resource}-budget-exhausted`
             : 'usage-accounting-failed';
       } else if (outcome.type === 'error') {
         failure = failureDetails(outcome.error);
@@ -703,7 +1074,9 @@ export async function superviseWorker({
             state.runtimeMs += Math.min(verifyDuration, verifyRemaining);
             attempt.durationMs += verifyDuration;
             if (
-              ['timeout', 'interrupted'].includes(verificationOutcome.type) &&
+              ['timeout', 'interrupted', 'error'].includes(
+                verificationOutcome.type,
+              ) &&
               !verificationOutcome.workerStopped
             ) {
               failure = failureDetails({
@@ -785,7 +1158,10 @@ export async function superviseWorker({
       state.repeatedFailures = repeatedFailures;
       state.noProgressAttempts = noProgressAttempts;
       if (budget.snapshot.exceededResource) {
-        stopReason = `${budget.snapshot.exceededResource}-budget-exhausted`;
+        stopReason =
+          budget.snapshot.exceededResource === 'model-requests'
+            ? 'model-request-limit-exhausted'
+            : `${budget.snapshot.exceededResource}-budget-exhausted`;
       }
       attempt.status ??= failure ? 'failed' : 'continued';
       handoff.attempts.push(attempt);

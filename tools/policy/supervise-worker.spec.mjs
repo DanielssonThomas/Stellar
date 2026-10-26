@@ -8,6 +8,7 @@ import {
   readHandoff,
   superviseWorker,
 } from './supervise-worker.mjs';
+import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'stellar-supervisor-'));
 after(async () => rm(temporaryRoot, { recursive: true, force: true }));
@@ -52,6 +53,210 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
+    const pre = {
+      phase: 'pre',
+      callId: 'a'.repeat(24),
+      toolName: 'terminal',
+      argumentBytes: 18,
+      argumentCount: 1,
+    };
+    const post = {
+      ...pre,
+      phase: 'post',
+      status: 'error',
+      elapsedMs: 31,
+      outputBytes: 20,
+      exitCode: 1,
+    };
+    let observedLimits;
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          issueNumber: 50,
+          owner: 'worker:peon',
+          branch: 'issue/50-avatar-shape',
+          hermesProfile: 'narrow-evidence',
+          hermesWorkflow: 'edit-first-4',
+          maxForwardedRequests: 4,
+        },
+        limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 52_000 },
+        workers: {
+          peon: worker('peon', async ({ limits, budget }) => {
+            observedLimits = limits;
+            budget.observeUsage({
+              toolCalls: 1,
+              modelTokens: 100,
+              forwardedRequests: 1,
+              toolEvents: [pre, post],
+            });
+            return {
+              status: 'failed',
+              usage: {
+                toolCalls: 1,
+                modelTokens: 100,
+                forwardedRequests: 1,
+                toolEvents: [pre, post],
+              },
+              failure: { code: 'OfflineFailure', message: 'offline fixture' },
+            };
+          }),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    assert.equal(observedLimits.maxModelTokensPerWorker, 52_000);
+    assert.equal(observedLimits.maxToolCallsPerWorker, 64);
+    assert.equal(observedLimits.maxRuntimeMsPerWorker, 600_000);
+    assert.deepEqual(result.handoff.attempts[0].toolEvents, [pre, post]);
+    await assert.rejects(
+      superviseWorker(
+        base({
+          task: {
+            ...task,
+            issueNumber: 50,
+            owner: 'worker:peon',
+            branch: 'issue/50-avatar-shape',
+            hermesProfile: 'narrow-evidence',
+            hermesWorkflow: 'edit-first-4',
+            maxForwardedRequests: 4,
+          },
+          limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 32_000 },
+        }),
+      ),
+      /exactly 52,000/,
+    );
+  });
+  it('delivers validated narrow bounded metadata to the Peon adapter and verification', async () => {
+    const manifest = {
+      schema: 'stellar.peon-task-context/v1',
+      issue: { number: task.issueNumber },
+      authorization: {
+        maxForwardedRequests: 2,
+        limits: { modelTokens: 32_000 },
+        allowedChangePaths: ['libs/ui/atoms/src/lib/skeleton-atom.ts'],
+      },
+    };
+    let adapterInput;
+    let verifiedTask;
+    const peon = createPeonWorkerAdapter({
+      image: 'test-image',
+      hermesProfile: 'narrow-coding',
+      maxForwardedRequests: 2,
+      preparedContext: { manifest, serialized: JSON.stringify(manifest) },
+      commandForTask: () => ['offline-test'],
+      runAttempt: async (input) => {
+        adapterInput = input;
+        return {
+          exitCode: 0,
+          usage: { toolCalls: 0, modelTokens: 0, forwardedRequests: 0 },
+        };
+      },
+    });
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          hermesProfile: 'narrow-coding',
+          hermesWorkflow: 'bounded-coding',
+          maxForwardedRequests: 2,
+          untrustedIssueMetadata: 'must not cross projection',
+        },
+        workers: {
+          peon,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        verify: async ({ task: verified }) => {
+          verifiedTask = verified;
+          return [{ name: 'authorized-source-changes', passed: true }];
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'complete');
+    assert.equal(adapterInput.hermesProfile, 'narrow-coding');
+    assert.equal(adapterInput.maxForwardedRequests, 2);
+    assert.equal(verifiedTask.hermesWorkflow, 'bounded-coding');
+    assert.equal(verifiedTask.maxForwardedRequests, 2);
+    assert.equal(Object.hasOwn(verifiedTask, 'untrustedIssueMetadata'), false);
+    assert.equal(result.handoff.task.hermesProfile, 'narrow-coding');
+    assert.equal(result.handoff.task.hermesWorkflow, 'bounded-coding');
+  });
+
+  it('rejects unsupported or inconsistent Hermes task metadata before dispatch', async () => {
+    let dispatched = false;
+    const args = base({
+      workers: {
+        peon: worker('peon', async () => {
+          dispatched = true;
+          return { status: 'completed' };
+        }),
+        mira: worker('mira', async () => ({ status: 'completed' })),
+      },
+    });
+    for (const invalid of [
+      { hermesProfile: 'untrusted-profile' },
+      { hermesProfile: null },
+      { hermesWorkflow: 'unbounded' },
+      {
+        hermesProfile: 'focus',
+        hermesWorkflow: 'bounded-coding',
+        maxForwardedRequests: 2,
+      },
+      { hermesWorkflow: 'bounded-coding', maxForwardedRequests: null },
+      { hermesWorkflow: 'standard', maxForwardedRequests: 2 },
+    ]) {
+      await assert.rejects(
+        superviseWorker({ ...args, task: { ...task, ...invalid } }),
+      );
+    }
+    assert.equal(dispatched, false);
+  });
+
+  it('retains adapter rejection when a supported but mismatched profile is delivered', async () => {
+    let attemptStarted = false;
+    const adapter = createPeonWorkerAdapter({
+      image: 'test-image',
+      hermesProfile: 'narrow-coding',
+      runAttempt: async () => {
+        attemptStarted = true;
+        return { exitCode: 0, usage: { toolCalls: 0, modelTokens: 0 } };
+      },
+    });
+    await assert.rejects(
+      adapter.run({
+        task: { ...task, hermesProfile: 'focus' },
+        attemptNumber: 1,
+        limits: { maxRuntimeMsPerWorker: 60_000 },
+        budget: { snapshot: { toolCalls: 0, modelTokens: 0 } },
+      }),
+      /Worker adapter profile differs from the validated issue/,
+    );
+    assert.equal(attemptStarted, false);
+  });
+
+  it('keeps omitted metadata compatible with the standard focus workflow', async () => {
+    let delivered;
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker('peon', async ({ task: selected }) => {
+            delivered = selected;
+            return { status: 'completed' };
+          }),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+    assert.equal(result.status, 'complete');
+    assert.equal(delivered.hermesProfile, 'focus');
+    assert.equal(delivered.hermesWorkflow, 'standard');
+    assert.equal(delivered.maxForwardedRequests, null);
+  });
+
   it('completes only after trusted verification passes', async () => {
     let verified = 0;
     const result = await superviseWorker(
@@ -256,6 +461,111 @@ describe('bounded worker supervision', () => {
     assert.equal(stopped.failure.code, 'ResourceLimit');
   });
 
+  it('preserves request-limit exhaustion and unsafe cancellation state', async () => {
+    const requestRecord = {
+      request: 3,
+      decision: 'denied-request-limit',
+      promptTokens: null,
+      remainingTokens: 20_000,
+      completionTokens: null,
+      chargedOutputTokens: 0,
+      emittedToolCalls: 0,
+      messageContentTokensByRole: {},
+      toolSchemaContentTokens: 0,
+      toolOutputMessages: 0,
+    };
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 4_000,
+              forwardedRequests: 2,
+              exceededResource: 'model-requests',
+              requestRecords: [requestRecord],
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-request-limit-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'model-request-limit-exhausted',
+    );
+    assert.equal(result.handoff.attempts[0].forwardedRequests, 2);
+    assert.equal(
+      result.handoff.attempts[0].requestRecords[0].decision,
+      'denied-request-limit',
+    );
+  });
+
+  it('does not verify or complete when the final snapshot shows a denied third request', async () => {
+    const snapshot = {
+      toolCalls: 2,
+      modelTokens: 8_000,
+      forwardedRequests: 2,
+      exceededResource: 'model-requests',
+      requestRecords: [
+        {
+          request: 3,
+          decision: 'denied-request-limit',
+          promptTokens: null,
+          remainingTokens: 24_000,
+          completionTokens: null,
+          chargedOutputTokens: 0,
+          emittedToolCalls: 0,
+          messageContentTokensByRole: {},
+          toolSchemaContentTokens: 0,
+          toolOutputMessages: 0,
+        },
+      ],
+    };
+    let verificationCalls = 0;
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          hermesProfile: 'narrow-coding',
+          hermesWorkflow: 'bounded-coding',
+          maxForwardedRequests: 2,
+        },
+        workers: {
+          peon: {
+            id: 'peon',
+            run: async () => ({ status: 'completed', usage: snapshot }),
+            usage: async () => snapshot,
+            cancel: async () => true,
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        verify: async () => {
+          verificationCalls += 1;
+          return [{ name: 'should-not-run', passed: true }];
+        },
+      }),
+    );
+    assert.equal(verificationCalls, 0);
+    assert.notEqual(result.status, 'complete');
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-request-limit-exhausted',
+    );
+  });
+
   it('records final live counters even when the worker exits before the first poll', async () => {
     const result = await superviseWorker(
       base({
@@ -275,6 +585,109 @@ describe('bounded worker supervision', () => {
     assert.equal(result.status, 'complete');
     assert.equal(result.handoff.attempts[0].toolCalls, 1);
     assert.equal(result.handoff.attempts[0].modelTokens, 7);
+  });
+
+  it('preserves validated numeric-only per-request metering records in the handoff', async () => {
+    const requestRecord = {
+      request: 2,
+      decision: 'denied-budget',
+      promptTokens: 16_993,
+      remainingTokens: 16_993,
+      completionTokens: null,
+      chargedOutputTokens: 0,
+      emittedToolCalls: 0,
+      messageContentTokensByRole: { system: 100, user: 15 },
+      toolSchemaContentTokens: 250,
+      toolOutputMessages: 0,
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker('peon', async () => ({
+              status: 'failed',
+              usage: {
+                toolCalls: 5,
+                modelTokens: 15_007,
+                exceededResource: 'model-tokens',
+                requestRecords: [requestRecord],
+              },
+            })),
+            usage: async () => ({
+              toolCalls: 5,
+              modelTokens: 15_007,
+              exceededResource: 'model-tokens',
+              requestRecords: [requestRecord],
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.deepEqual(result.handoff.attempts[0].requestRecords, [
+      requestRecord,
+    ]);
+  });
+
+  it('fails closed when a live request record contains prompt content', async () => {
+    let cancelled = false;
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              ({ signal }) =>
+                new Promise((resolve) =>
+                  signal.addEventListener(
+                    'abort',
+                    () => resolve({ status: 'failed' }),
+                    {
+                      once: true,
+                    },
+                  ),
+                ),
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 0,
+              requestRecords: [
+                {
+                  request: 1,
+                  decision: 'denied-budget',
+                  promptTokens: 2,
+                  remainingTokens: 2,
+                  completionTokens: null,
+                  chargedOutputTokens: 0,
+                  emittedToolCalls: 0,
+                  prompt: 'must never be persisted',
+                },
+              ],
+            }),
+            cancel: async () => {
+              cancelled = true;
+              return true;
+            },
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(cancelled, true);
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'InvalidUsageSnapshot',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.diagnostic.category,
+      'invalid-usage',
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /must never be persisted/,
+    );
   });
 
   it('stops and escalates when the trusted live usage channel fails', async () => {
@@ -299,7 +712,13 @@ describe('bounded worker supervision', () => {
               },
             ),
             usage: async () => {
-              throw new Error('meter unavailable');
+              const error = new Error('raw response with sensitive content');
+              error.diagnostic = {
+                category: 'sidecar-terminated',
+                phase: 'running',
+                elapsedMs: 71,
+              };
+              throw error;
             },
           },
           mira: worker('mira', async () => ({ status: 'completed' })),
@@ -314,6 +733,124 @@ describe('bounded worker supervision', () => {
       (attempt) => attempt.workerId === 'peon',
     );
     assert.equal(stopped.failure.code, 'UsageAccountingFailure');
+    assert.deepEqual(stopped.failure.diagnostic, {
+      category: 'sidecar-terminated',
+      phase: 'running',
+      elapsedMs: 71,
+    });
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /raw response with sensitive content/,
+    );
+  });
+
+  it('waits for the exact trusted usage source before polling delayed startup', async () => {
+    let sidecarReady = false;
+    let inferencePermitted = false;
+    let prematurePolls = 0;
+    let successfulPolls = 0;
+    let resolveReadiness;
+    const usageReady = new Promise((resolve) => {
+      resolveReadiness = resolve;
+    });
+    const delayedWorker = {
+      ...worker('peon', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        sidecarReady = true;
+        resolveReadiness();
+        inferencePermitted = true;
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        return {
+          status: 'failed',
+          failure: { code: 'NoInference', message: 'startup-only test' },
+          usage: { toolCalls: 0, modelTokens: 0 },
+        };
+      }),
+      waitForUsageReady: () => usageReady,
+      usage: async () => {
+        if (!sidecarReady || !inferencePermitted) {
+          prematurePolls += 1;
+          const error = new Error('simulated sidecar not ready');
+          error.diagnostic = {
+            category: 'sidecar-not-started',
+            phase: 'startup',
+            elapsedMs: 1,
+          };
+          throw error;
+        }
+        successfulPolls += 1;
+        return { toolCalls: 0, modelTokens: 0 };
+      },
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: delayedWorker,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        limits: { maxRuntimeMsPerWorker: 2_000, maxAttemptsPerWorker: 1 },
+      }),
+    );
+
+    assert.equal(prematurePolls, 0);
+    assert.ok(successfulPolls > 0);
+    assert.equal(result.handoff.attempts[0].failure.code, 'NoInference');
+  });
+
+  it('records only sanitized startup accounting category and timing', async () => {
+    let cancelled = false;
+    const delayedWorker = {
+      ...worker(
+        'peon',
+        ({ signal }) =>
+          new Promise((resolve) =>
+            signal.addEventListener(
+              'abort',
+              () => resolve({ status: 'failed' }),
+              { once: true },
+            ),
+          ),
+        async () => {
+          cancelled = true;
+          return true;
+        },
+      ),
+      waitForUsageReady: async () => {
+        const error = new Error('untrusted raw response must not persist');
+        error.diagnostic = {
+          category: 'usage-endpoint-unavailable',
+          phase: 'startup',
+          elapsedMs: 37,
+          response: 'do not persist',
+        };
+        throw error;
+      },
+      usage: async () =>
+        assert.fail('usage must not be polled before readiness'),
+    };
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: delayedWorker,
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        limits: { maxAttemptsPerWorker: 1 },
+      }),
+    );
+
+    const attempt = result.handoff.attempts[0];
+    assert.equal(cancelled, true);
+    assert.equal(attempt.failure.code, 'UsageReadinessFailed');
+    assert.equal(
+      attempt.failure.diagnostic.category,
+      'usage-endpoint-unavailable',
+    );
+    assert.equal(attempt.failure.diagnostic.phase, 'startup');
+    assert.ok(Number.isSafeInteger(attempt.failure.diagnostic.elapsedMs));
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /untrusted raw response|do not persist/,
+    );
   });
 
   it('stops a timed out worker and routes within the total runtime ceiling', async () => {
@@ -386,6 +923,213 @@ describe('bounded worker supervision', () => {
     await assert.rejects(
       superviseWorker(base({ resume: result.handoff })),
       /Confirm it is stopped/,
+    );
+  });
+
+  it('keeps a failed worker unsafe when container cleanup cannot be confirmed', async () => {
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker(
+            'peon',
+            async () => {
+              throw new Error('worker runner cleanup was inconclusive');
+            },
+            async () => false,
+          ),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+        authorizeHandoff: authorizeMira,
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.attempts[0].status, 'cancellation-unconfirmed');
+    assert.match(
+      result.handoff.attempts[0].failure.message,
+      /Worker stop was not confirmed/,
+    );
+  });
+
+  it('preserves the primary token-budget stop when cancellation is unconfirmed', async () => {
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => ({
+              toolCalls: 0,
+              modelTokens: 11,
+              exceededResource: 'model-tokens',
+            }),
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.safeToResume, false);
+    assert.equal(
+      result.handoff.lastStopReason,
+      'model-tokens-budget-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'model-tokens-budget-exhausted',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+  });
+
+  it('preserves accounting failure separately from unconfirmed cancellation', async () => {
+    const result = await superviseWorker(
+      base({
+        limits: { maxRuntimeMsPerWorker: 2_000 },
+        workers: {
+          peon: {
+            ...worker(
+              'peon',
+              () => new Promise(() => undefined),
+              async () => false,
+            ),
+            usage: async () => {
+              throw Object.assign(new Error('private transport detail'), {
+                diagnostic: {
+                  category: 'usage-endpoint-unavailable',
+                  phase: 'running',
+                },
+              });
+            },
+          },
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.lastStopReason, 'usage-accounting-failed');
+    assert.equal(
+      result.handoff.attempts[0].primaryStopReason,
+      'usage-accounting-failed',
+    );
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.category,
+      'usage-endpoint-unavailable',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.phase,
+      'running',
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.handoff),
+      /private transport detail/,
+    );
+  });
+
+  it('persists bounded timeout, cancellation, and model categories after either cancellation outcome', async () => {
+    for (const category of [
+      'transport-timeout',
+      'poll-cancelled',
+      'model-unavailable',
+    ]) {
+      for (const confirmed of [false, true]) {
+        const result = await superviseWorker(
+          base({
+            limits: { maxAttemptsPerWorker: 1 },
+            workers: {
+              peon: {
+                ...worker(
+                  'peon',
+                  () => new Promise(() => undefined),
+                  async () => confirmed,
+                ),
+                usage: async () => {
+                  const error = new Error('private response must not persist');
+                  error.diagnostic = {
+                    category,
+                    phase:
+                      category === 'model-unavailable' ? 'startup' : 'running',
+                    elapsedMs: 33,
+                  };
+                  throw error;
+                },
+              },
+              mira: worker('mira', async () => ({ status: 'completed' })),
+            },
+          }),
+        );
+        const attempt = result.handoff.attempts[0];
+        const persisted = confirmed ? attempt.failure : attempt.primaryFailure;
+        assert.equal(persisted.diagnostic.category, category);
+        assert.equal(persisted.diagnostic.elapsedMs, 33);
+        assert.doesNotMatch(JSON.stringify(result.handoff), /private response/);
+      }
+    }
+  });
+
+  it('keeps an unclassified primary stop cause explicitly unknown', async () => {
+    const result = await superviseWorker(
+      base({
+        workers: {
+          peon: worker(
+            'peon',
+            async () => {
+              throw new Error('unclassified worker failure');
+            },
+            async () => false,
+          ),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(result.handoff.lastStopReason, 'unknown');
+    assert.equal(result.handoff.attempts[0].primaryStopReason, 'unknown');
+    assert.equal(
+      result.handoff.attempts[0].failure.code,
+      'CancellationUnconfirmed',
+    );
+  });
+
+  it('keeps verification work unsafe when verification failure cannot be stopped', async () => {
+    const verify = Object.assign(
+      async () => {
+        throw new Error('verification runner failed');
+      },
+      { cancel: async () => false },
+    );
+    const result = await superviseWorker(
+      base({
+        verify,
+        workers: {
+          peon: worker('peon', async () => ({ status: 'completed' })),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+
+    assert.equal(result.status, 'paused');
+    assert.equal(result.safeToResume, false);
+    assert.equal(
+      result.handoff.attempts[0].status,
+      'verification-cancellation-unconfirmed',
     );
   });
 

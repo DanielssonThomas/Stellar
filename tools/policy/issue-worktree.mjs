@@ -48,6 +48,7 @@ export function validateAssignment({
   existingBranches,
   allowTriageRecovery = false,
   allowMainPromotionBootstrap = false,
+  allowReviewResume = false,
 }) {
   const errors = [];
   const labels = (issue.labels ?? []).map((label) =>
@@ -81,6 +82,7 @@ export function validateAssignment({
     ![
       'status:ready',
       'status:in-progress',
+      ...(allowReviewResume ? ['status:review'] : []),
       ...(allowTriageRecovery || allowMainPromotionBootstrap
         ? ['status:triage']
         : []),
@@ -232,6 +234,7 @@ export async function claimWorktree({
   worker,
   sessionId,
   targetBranch,
+  reviewPr = null,
   ttlHours: ttl = leaseHours,
 }) {
   if (!sessionId || !/^[a-zA-Z0-9._:-]{1,128}$/.test(sessionId))
@@ -293,6 +296,7 @@ export async function claimWorktree({
       allowTriageRecovery: recoverTriage,
       allowMainPromotionBootstrap:
         mainPromotionBootstrap || record?.mainPromotionBootstrap === true,
+      allowReviewResume: Boolean(reviewPr),
     });
     if (!validation.valid)
       throw new Error(
@@ -333,6 +337,15 @@ export async function claimWorktree({
         throw new Error(
           'The active claim does not match a registered worktree; preserve it and use explicit recovery.',
         );
+      if (
+        reviewPr &&
+        (reviewPr.state !== 'OPEN' ||
+          reviewPr.baseRefName !== targetBranch ||
+          reviewPr.headRefName !== record.branch ||
+          git(['rev-parse', 'HEAD'], registered.path).stdout.trim() !==
+            reviewPr.headRefOid)
+      )
+        throw new Error('Review PR changed during claim recovery.');
       record.expiresAt = new Date(now + ttl * 3_600_000).toISOString();
       record.lastResumedAt = new Date(now).toISOString();
       await writeRecord(claimFile, record);
@@ -383,6 +396,32 @@ export async function claimWorktree({
       git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], root, {
         allowFailure: true,
       }).status === 0;
+    if (reviewPr) {
+      const link = new RegExp(
+        `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issue.number}\\b`,
+        'i',
+      );
+      if (
+        reviewPr.state !== 'OPEN' ||
+        reviewPr.baseRefName !== targetBranch ||
+        reviewPr.headRefName !== branch ||
+        !link.test(reviewPr.body ?? '') ||
+        !/^[0-9a-f]{40}$/.test(reviewPr.headRefOid ?? '') ||
+        !pathEntry ||
+        !branchExists ||
+        !record ||
+        record.state !== 'released' ||
+        record.worker !== ownerLabel(worker) ||
+        record.target !== targetBranch ||
+        record.branch !== branch ||
+        resolve(record.worktreePath) !== worktreePath ||
+        git(['rev-parse', 'HEAD'], worktreePath).stdout.trim() !==
+          reviewPr.headRefOid
+      )
+        throw new Error(
+          'Review resume requires the same open issue-linked PR, released claim, branch, and registered worktree at its current head.',
+        );
+    }
     record = {
       issue: issue.number,
       worker: ownerLabel(worker),

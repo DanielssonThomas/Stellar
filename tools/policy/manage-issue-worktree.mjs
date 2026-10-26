@@ -89,6 +89,25 @@ function issueLabels(issue) {
   );
 }
 
+export function assertReviewResumeStatus({ issue, claim, worker, sessionId }) {
+  const statuses = issueLabels(issue).filter((label) =>
+    label.startsWith('status:'),
+  );
+  if (statuses.length === 1 && statuses[0] === 'status:review') return;
+  if (
+    statuses.length === 1 &&
+    statuses[0] === 'status:in-progress' &&
+    claim?.state === 'active' &&
+    claim.worker === ownerLabel(worker) &&
+    claim.sessionId === sessionId &&
+    Date.parse(claim.expiresAt) > Date.now()
+  )
+    return;
+  throw new Error(
+    'Review rework requires a review-stage issue or its active claim in the same authorized session.',
+  );
+}
+
 function updateIssueLabels(number, labels) {
   run(
     'gh',
@@ -110,11 +129,31 @@ export async function reconcileClaimStatus({
   worker,
   resumed,
   mainPromotionBootstrap = false,
+  reviewPr = null,
+  fetchReview = null,
   fetchIssue = loadIssue,
   updateLabels = updateIssueLabels,
   maxAttempts = 3,
 }) {
   const owner = ownerLabel(worker);
+  const confirmReview = async () => {
+    if (!reviewPr) return;
+    if (typeof fetchReview !== 'function')
+      throw new Error('A trusted review PR fetch is required.');
+    const freshPr = await fetchReview(reviewPr.number);
+    const link = new RegExp(
+      `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issueNumber}\\b`,
+      'i',
+    );
+    if (
+      freshPr.state !== 'OPEN' ||
+      freshPr.headRefOid !== reviewPr.headRefOid ||
+      freshPr.headRefName !== reviewPr.headRefName ||
+      freshPr.baseRefName !== reviewPr.baseRefName ||
+      !link.test(freshPr.body ?? '')
+    )
+      throw new Error('Review PR changed; claim is preserved for recovery.');
+  };
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const current = await fetchIssue(issueNumber);
     const labels = issueLabels(current);
@@ -125,9 +164,12 @@ export async function reconcileClaimStatus({
     const statuses = labels.filter((label) => label.startsWith('status:'));
     if (
       statuses.length !== 1 ||
-      !['status:ready', 'status:in-progress', 'status:triage'].includes(
-        statuses[0],
-      )
+      ![
+        'status:ready',
+        'status:in-progress',
+        'status:triage',
+        ...(reviewPr ? ['status:review'] : []),
+      ].includes(statuses[0])
     )
       throw new Error(
         `Issue #${issueNumber} status changed; the worktree was preserved.`,
@@ -171,7 +213,11 @@ export async function reconcileClaimStatus({
       throw new Error(
         `Issue #${issueNumber} metadata is invalid: ${policy.errors.join(' ')}`,
       );
-    if (statuses[0] === 'status:in-progress') return current;
+    if (statuses[0] === 'status:in-progress') {
+      await confirmReview();
+      return current;
+    }
+    await confirmReview();
     const guarded = await fetchIssue(issueNumber);
     if (
       JSON.stringify(issueLabels(current).sort()) !==
@@ -191,8 +237,10 @@ export async function reconcileClaimStatus({
       latestLabels.includes(owner) &&
       latestStatuses.length === 1 &&
       latestStatuses[0] === 'status:in-progress'
-    )
+    ) {
+      await confirmReview();
       return latest;
+    }
     if (!latestLabels.includes(owner))
       throw new Error(
         `Issue #${issueNumber} ownership changed after the status write; inspect the preserved claim.`,
@@ -230,11 +278,63 @@ function fetchTarget(repoRoot, target) {
   );
 }
 
+function loadOpenReviewPr(number, target) {
+  const prs = JSON.parse(
+    run(
+      'gh',
+      [
+        'pr',
+        'list',
+        '--repo',
+        repository,
+        '--state',
+        'open',
+        '--limit',
+        '100',
+        '--json',
+        'number,body,state,baseRefName,headRefName,headRefOid',
+      ],
+      process.cwd(),
+    ),
+  ).filter(
+    (pr) =>
+      pr.baseRefName === target &&
+      new RegExp(
+        `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${number}\\b`,
+        'i',
+      ).test(pr.body ?? ''),
+  );
+  if (prs.length !== 1)
+    throw new Error(
+      'Review resume requires exactly one linked open PR to the authorized target.',
+    );
+  return prs[0];
+}
+
+function fetchReviewPr(number) {
+  return JSON.parse(
+    run(
+      'gh',
+      [
+        'pr',
+        'view',
+        String(number),
+        '--repo',
+        repository,
+        '--json',
+        'number,body,state,baseRefName,headRefName,headRefOid',
+      ],
+      process.cwd(),
+    ),
+  );
+}
+
 function usage() {
   throw new Error(
     [
       'Usage:',
       '  manage-issue-worktree.mjs claim <issue> --worker <codex|maintainer|profile-id> --session-id <stable-session-id>',
+      '  manage-issue-worktree.mjs resume-review <issue> --worker <identity> --session-id <stable-session-id>',
       '  manage-issue-worktree.mjs inspect <issue>',
       '  manage-issue-worktree.mjs release <issue> --worker <identity> --session-id <stable-session-id>',
       '  manage-issue-worktree.mjs handoff <issue> --from <identity> --to <identity> --reason <text> [--session-id <id>]',
@@ -285,6 +385,42 @@ export async function main(argv = process.argv.slice(2)) {
       worker: args.worker,
       resumed: Boolean(result.resumed),
       mainPromotionBootstrap: Boolean(result.mainPromotionBootstrap),
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result;
+  }
+  if (command === 'resume-review') {
+    if (!args.worker || !args['session-id']) usage();
+    const issue = loadIssue(number);
+    const claim = issueLabels(issue).includes('status:in-progress')
+      ? await inspectClaim(repoRoot, number)
+      : null;
+    assertReviewResumeStatus({
+      issue,
+      claim,
+      worker: args.worker,
+      sessionId: args['session-id'],
+    });
+    const target = issueLabels(issue)
+      .find((label) => label.startsWith('target:'))
+      ?.slice(7);
+    if (!target) throw new Error('Issue target is missing.');
+    const reviewPr = loadOpenReviewPr(number, target);
+    fetchTarget(repoRoot, target);
+    const result = await claimWorktree({
+      repoRoot,
+      issue,
+      worker: args.worker,
+      sessionId: args['session-id'],
+      targetBranch: target,
+      reviewPr,
+    });
+    await reconcileClaimStatus({
+      issueNumber: number,
+      worker: args.worker,
+      resumed: Boolean(result.resumed),
+      reviewPr,
+      fetchReview: fetchReviewPr,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result;

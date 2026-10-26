@@ -1,18 +1,49 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { readHandoff, superviseWorker } from './supervise-worker.mjs';
 import {
   runSupervisedPeonIssue,
+  trustedPeonWorkerImage,
   validateLivePeonAssignment,
 } from './supervised-peon-run.mjs';
+import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
-const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
+const image = trustedPeonWorkerImage;
 const sessionId = 'peon-issue-50-controlled-trial';
 const root = await mkdtemp(join(tmpdir(), 'stellar-live-supervisor-'));
 const handoffPath = join(root, 'handoff.json');
+
+test('pins the independently verified compatible worker image digest', () => {
+  assert.equal(
+    trustedPeonWorkerImage,
+    'ghcr.io/stellar-ai-corp/hermes-worker@sha256:619cd1dba336ea1426f4a2b667f92ea022c4e36a0b305dad4eb922fc135098b2',
+  );
+});
+
+test('pins both preserved #50 handoff hashes in the experimental runner', () => {
+  const runner = readFileSync(
+    new URL('./experiments/run-issue-50-edit-first-four.mjs', import.meta.url),
+    'utf8',
+  );
+  const pins = [
+    ...runner.matchAll(/'(issue-50-[^']+-handoff\.json)',\s*'([a-f0-9]{64})'/g),
+  ];
+  assert.equal(pins.length, 2);
+  assert.deepEqual(
+    Object.fromEntries(pins.map(([, filename, hash]) => [filename, hash])),
+    {
+      'issue-50-bounded-20261026-02-handoff.json':
+        '17eaaaa6c90e6f2000687fcdf175d6597a967a22e23a8bce17c68be6b851d27a',
+      'issue-50-pilot-20261026-handoff.json':
+        '3576f7bc4c3e4bd55d5deb81482949edfa72e4eda1edc325a5f549953805f68e',
+    },
+  );
+});
 
 const issue = {
   number: 50,
@@ -68,6 +99,10 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
     targetBranch: 'develop',
     branch: 'issue/50-avatar-skeleton',
     worktreePath: join(root, 'issue-50'),
+    hermesProfile: 'focus',
+    hermesWorkflow: 'standard',
+    maxForwardedRequests: null,
+    sessionId,
   });
   assert.throws(
     () =>
@@ -106,6 +141,330 @@ test('validates issue metadata, closed dependencies, claim, and immutable image 
       }),
     /pinned worker image/,
   );
+  assert.throws(
+    () =>
+      validateLivePeonAssignment({
+        issue,
+        claim: claim(),
+        sessionId,
+        image: `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`,
+      }),
+    /trusted worker image digest/,
+  );
+});
+
+test('does not launch a selected bounded-coding issue before trusted context and compatible image are required', async () => {
+  let workerCreated = false;
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:bounded-coding',
+    ],
+  };
+  const validated = validateLivePeonAssignment({
+    issue: selectedIssue,
+    claim: claim(),
+    sessionId,
+    image,
+  });
+  assert.equal(validated.hermesWorkflow, 'bounded-coding');
+  assert.equal(validated.maxForwardedRequests, 2);
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => selectedIssue,
+      readClaim: async () => claim(),
+      resolveDevelopHead: async () => 'a'.repeat(40),
+      inspectWorktree: async (_number, branch, baseRevision) => ({
+        fingerprint: `clean:${branch}:${baseRevision}`,
+        clean: true,
+        headRevision: 'a'.repeat(40),
+        baseRevision,
+        workspacePath: '/home/peon/workspaces/issue-50',
+        changes: [],
+      }),
+      inspectRegisteredWorktree: async () => ({
+        clean: true,
+        headRevision: 'a'.repeat(40),
+      }),
+      getProtectedPaths: () => [],
+      readWorkspaceFile: () => 'Repository policy.\n',
+      verifyImageCompatibility: async () => ({ compatible: true }),
+      verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+        path: 'AGENTS.md',
+        guidanceSha256: expectedGuidanceSha256,
+        systemPromptSha256: 'd'.repeat(64),
+      }),
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+    }),
+    /trusted bounded task context plan is required/,
+  );
+  assert.equal(workerCreated, false);
+});
+
+test('preflights a selected assignment twice and passes only an in-memory bounded manifest plus a two-request ceiling', async () => {
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:bounded-coding',
+    ],
+  };
+  const repositoryRoot = process.cwd();
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+  let issueReads = 0;
+  let reservations = 0;
+  let adapterOptions;
+  let adapterAttempt;
+  let verificationCalls = 0;
+  let workspaceInspections = 0;
+  let editApplied = false;
+  let toolResultObserved = false;
+  const inspectWorktree = async (_number, _branch, baseRevision) => {
+    workspaceInspections += 1;
+    return {
+      fingerprint: `exact:${head}:${baseRevision}`,
+      clean: true,
+      headRevision: head,
+      baseRevision,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes: editApplied
+        ? [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]
+        : [],
+    };
+  };
+  const result = await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'lint', command: ['pnpm', 'lint'] }],
+    contextPlan: {
+      skills: ['.agents/skills/create-component/SKILL.md'],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+        {
+          kind: 'test',
+          path: 'tools/policy/supervised-peon-run.spec.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
+    },
+    loadAssignment: async () => {
+      issueReads += 1;
+      return selectedIssue;
+    },
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree,
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, relativePath) =>
+      relativePath === 'AGENTS.md'
+        ? execFileSync('git', ['show', `${head}:${relativePath}`], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+          })
+        : readFileSync(
+            join(repositoryRoot, ...relativePath.split('/')),
+            'utf8',
+          ),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+      path: 'AGENTS.md',
+      guidanceSha256: expectedGuidanceSha256,
+      systemPromptSha256: 'd'.repeat(64),
+    }),
+    reserveAttempt: () => {
+      reservations += 1;
+    },
+    createWorkerAdapter: (options) => {
+      adapterOptions = options;
+      return createPeonWorkerAdapter({
+        ...options,
+        commandForTask: () => ['offline-test'],
+        runAttempt: async (input) => {
+          adapterAttempt = input;
+          const packet = JSON.parse(
+            input.taskInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
+          );
+          const mockFirstCompletion = {
+            tool: 'terminal',
+            changedPaths: packet.authorization.allowedChangePaths,
+          };
+          assert.deepEqual(mockFirstCompletion.changedPaths, [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]);
+          const mockToolResult = {
+            exitCode: 0,
+            changedPaths: mockFirstCompletion.changedPaths,
+          };
+          const mockSecondCompletion = {
+            observedExitCode: mockToolResult.exitCode,
+            toolCalls: [],
+          };
+          editApplied = true;
+          toolResultObserved =
+            mockSecondCompletion.observedExitCode === 0 &&
+            mockSecondCompletion.toolCalls.length === 0;
+          return {
+            exitCode: 0,
+            usage: { toolCalls: 1, modelTokens: 1_500, forwardedRequests: 2 },
+          };
+        },
+      });
+    },
+    runVerification: async () => {
+      verificationCalls += 1;
+      return { exitCode: 0 };
+    },
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(issueReads, 2);
+  assert.equal(reservations, 1);
+  assert.equal(adapterOptions.maxForwardedRequests, 2);
+  assert.equal(adapterOptions.preparedContext.manifest.revision.head, head);
+  assert.equal(adapterAttempt.hermesProfile, 'narrow-coding');
+  assert.equal(adapterAttempt.maxForwardedRequests, 2);
+  assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
+  assert.equal(workspaceInspections, 5);
+  assert.equal(toolResultObserved, true);
+  assert.equal(verificationCalls, 1);
+});
+
+test('threads the issue-50 experiment ceilings through reservation, adapter, and supervisor without launch', async () => {
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-evidence',
+      'hermes-workflow:edit-first-4',
+    ],
+  };
+  const repositoryRoot = process.cwd();
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+  let reservation;
+  let adapter;
+  let supervisor;
+  await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'lint', command: ['pnpm', 'lint'] }],
+    contextPlan: {
+      skills: ['.agents/skills/implement-issue/SKILL.md'],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+        {
+          kind: 'test',
+          path: 'tools/policy/supervised-peon-run.spec.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
+    },
+    loadAssignment: async () => selectedIssue,
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree: async (_number, _branch, baseRevision) => ({
+      fingerprint: `exact:${head}:${baseRevision}`,
+      clean: true,
+      headRevision: head,
+      baseRevision,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes: [],
+    }),
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, relativePath) =>
+      relativePath === 'AGENTS.md'
+        ? execFileSync('git', ['show', `${head}:${relativePath}`], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+          })
+        : readFileSync(
+            join(repositoryRoot, ...relativePath.split('/')),
+            'utf8',
+          ),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+      path: 'AGENTS.md',
+      guidanceSha256: expectedGuidanceSha256,
+      systemPromptSha256: 'd'.repeat(64),
+    }),
+    reserveAttempt: (input) => {
+      reservation = input;
+    },
+    createWorkerAdapter: (input) => {
+      adapter = input;
+      return { id: 'peon' };
+    },
+    runSupervisor: async (input) => {
+      supervisor = input;
+      return { status: 'paused' };
+    },
+  });
+  assert.equal(reservation.requestLimit, 4);
+  assert.equal(reservation.modelTokenLimit, 52_000);
+  assert.equal(adapter.maxForwardedRequests, 4);
+  assert.equal(adapter.hermesProfile, 'narrow-evidence');
+  assert.equal(
+    adapter.preparedContext.manifest.authorization.limits.modelTokens,
+    52_000,
+  );
+  assert.equal(supervisor.limits.maxModelTokensPerWorker, 52_000);
+  assert.equal(supervisor.limits.maxAttemptsPerWorker, 1);
+  assert.equal(supervisor.limits.maxToolCallsPerWorker, 64);
+  assert.equal(supervisor.limits.maxRuntimeMsPerWorker, 600_000);
 });
 
 test('does not create the live worker until the current assignment is valid', async () => {
@@ -130,6 +489,48 @@ test('does not create the live worker until the current assignment is valid', as
   assert.equal(workerCreated, false);
 });
 
+test('rejects incompatible images before worker creation and supervision', async () => {
+  let workerCreated = false;
+  let supervisorStarted = false;
+  let verificationStarted = false;
+  let inspectedImage;
+
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => issue,
+      readClaim: async () => claim(),
+      inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+      verifyImageCompatibility: async (input) => {
+        inspectedImage = input.image;
+        throw new Error(
+          'Pinned worker image is incompatible: metering proxy hashes differ.',
+        );
+      },
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+      runSupervisor: async () => {
+        supervisorStarted = true;
+      },
+      runVerification: async () => {
+        verificationStarted = true;
+      },
+    }),
+    /Pinned worker image is incompatible/,
+  );
+
+  assert.equal(inspectedImage, image);
+  assert.equal(workerCreated, false);
+  assert.equal(supervisorStarted, false);
+  assert.equal(verificationStarted, false);
+});
+
 test('wires one live attempt to the deterministic supervisor and isolated verifier', async () => {
   let options;
   let verification;
@@ -147,12 +548,17 @@ test('wires one live attempt to the deterministic supervisor and isolated verifi
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
-    createWorkerAdapter: ({ image: selectedImage }) => ({
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
+    createWorkerAdapter: ({ image: selectedImage, hermesProfile }) => ({
       id: 'peon',
       run: async () => ({ status: 'completed' }),
       usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
       cancel: async () => true,
       selectedImage,
+      hermesProfile,
     }),
     runVerification: async (input) => {
       verification = input;
@@ -184,11 +590,83 @@ test('wires one live attempt to the deterministic supervisor and isolated verifi
   assert.equal(options.limits.maxModelTokensPerWorker, 32_000);
   assert.equal(options.authorizeHandoff, undefined);
   assert.equal(options.workers.peon.selectedImage, image);
+  assert.equal(options.task.hermesProfile, 'focus');
+  assert.equal(options.workers.peon.hermesProfile, 'focus');
   assert.equal(options.workers.mira.id, 'mira');
   assert.equal(verification.image, image);
   assert.deepEqual(verification.command, ['corepack', 'pnpm', 'test']);
   assert.equal(canceled, true);
   assert.equal(result.checks[0].passed, false);
+});
+
+test('opts into the narrow profile only from eligible live issue labels', async () => {
+  let workerProfile;
+  let taskProfile;
+  const result = await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot: root,
+    handoffPath,
+    verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+    loadAssignment: async () => ({
+      ...issue,
+      labels: [...issue.labels, 'hermes-profile:narrow-coding'],
+    }),
+    readClaim: async () => claim(),
+    inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
+    createWorkerAdapter: ({ hermesProfile }) => {
+      workerProfile = hermesProfile;
+      return {
+        id: 'peon',
+        run: async () => ({ status: 'completed' }),
+        usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
+        cancel: async () => true,
+      };
+    },
+    runVerification: async () => ({ exitCode: 0 }),
+    runSupervisor: async (input) => {
+      taskProfile = input.task.hermesProfile;
+      return { status: 'complete' };
+    },
+  });
+
+  assert.equal(result.status, 'complete');
+  assert.equal(workerProfile, 'narrow-coding');
+  assert.equal(taskProfile, 'narrow-coding');
+});
+
+test('rejects ineligible narrow opt-in before worker adapter creation', async () => {
+  let workerCreated = false;
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      issueNumber: 50,
+      sessionId,
+      image,
+      repositoryRoot: root,
+      handoffPath,
+      verificationCommands: [{ name: 'unit-tests', command: ['pnpm', 'test'] }],
+      loadAssignment: async () => ({
+        ...issue,
+        labels: [
+          ...issue.labels.filter((entry) => entry !== 'priority:low'),
+          'priority:high',
+          'hermes-profile:narrow-coding',
+        ],
+      }),
+      readClaim: async () => claim(),
+      inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+      createWorkerAdapter: () => {
+        workerCreated = true;
+      },
+    }),
+    /requires a low-priority Peon issue targeting develop/,
+  );
+  assert.equal(workerCreated, false);
 });
 
 test('requires named trusted verification commands and an absolute handoff path', async () => {
@@ -226,6 +704,10 @@ test('stops a live adapter at the metered tool budget and persists a handoff', a
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
     createWorkerAdapter: () => ({
       id: 'peon',
       run: ({ signal }) =>
@@ -270,6 +752,10 @@ test('stops and preserves a handoff when the live usage channel fails', async ()
     loadAssignment: async () => issue,
     readClaim: async () => claim(),
     inspectWorktree: async () => ({ fingerprint: 'clean', changes: [] }),
+    verifyImageCompatibility: async () => ({
+      sourceSha256: 'a',
+      imageSha256: 'a',
+    }),
     createWorkerAdapter: () => ({
       id: 'peon',
       run: ({ signal }) =>

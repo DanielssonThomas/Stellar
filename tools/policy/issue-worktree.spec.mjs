@@ -8,6 +8,7 @@ import {
   claimWorktree,
   inspectClaim,
   issueBranch,
+  releaseClaim,
   transferClaim,
   validateAssignment,
 } from './issue-worktree.mjs';
@@ -179,6 +180,112 @@ describe('issue worktree assignment', () => {
 
   it('derives a stable issue branch name', () => {
     assert.equal(issueBranch(fixtureIssue()), 'issue/42-repair-a-small-widget');
+  });
+
+  it('admits review status only for the explicit resume path', () => {
+    const review = fixtureIssue({
+      labels: fixtureIssue().labels.map((label) =>
+        label === 'status:ready' ? 'status:review' : label,
+      ),
+    });
+    assert.equal(assignment({ issue: review }).valid, false);
+    assert.equal(
+      assignment({ issue: review, allowReviewResume: true }).valid,
+      true,
+    );
+  });
+});
+
+describe('review-stage worktree resume', () => {
+  it('reclaims only the existing linked PR head and preserves dirty work', async () => {
+    const checkout = join(root, 'review-checkout');
+    const remote = join(root, 'review-origin.git');
+    await mkdir(checkout);
+    git(root, 'init', '--bare', remote);
+    git(checkout, 'init', '-b', 'develop');
+    git(checkout, 'config', 'user.name', 'Stellar Test');
+    git(checkout, 'config', 'user.email', 'stellar-test@example.invalid');
+    await writeFile(join(checkout, 'README.md'), 'fixture\n');
+    git(checkout, 'add', 'README.md');
+    git(checkout, 'commit', '-m', 'fixture');
+    git(checkout, 'remote', 'add', 'origin', remote);
+    git(checkout, 'push', '-u', 'origin', 'develop');
+    git(
+      checkout,
+      'fetch',
+      'origin',
+      'refs/heads/develop:refs/remotes/origin/develop',
+    );
+    const issue = fixtureIssue();
+    const initial = await claimWorktree({
+      repoRoot: checkout,
+      issue,
+      worker: 'codex',
+      sessionId: 'first-session',
+      targetBranch: 'develop',
+    });
+    const headRefOid = git(initial.worktreePath, 'rev-parse', 'HEAD');
+    await releaseClaim({
+      repoRoot: checkout,
+      issueNumber: 42,
+      worker: 'codex',
+      sessionId: 'first-session',
+    });
+    await writeFile(join(initial.worktreePath, 'untracked.txt'), 'preserve me');
+    const review = fixtureIssue({
+      labels: issue.labels.map((label) =>
+        label === 'status:ready' ? 'status:review' : label,
+      ),
+    });
+    const reviewPr = {
+      number: 80,
+      state: 'OPEN',
+      baseRefName: 'develop',
+      headRefName: initial.branch,
+      headRefOid,
+      body: 'Fixes #42',
+    };
+    for (const changed of [
+      { ...reviewPr, headRefOid: 'a'.repeat(40) },
+      { ...reviewPr, baseRefName: 'main' },
+      { ...reviewPr, body: 'No issue link' },
+    ]) {
+      await assert.rejects(
+        claimWorktree({
+          repoRoot: checkout,
+          issue: review,
+          worker: 'codex',
+          sessionId: 'second-session',
+          targetBranch: 'develop',
+          reviewPr: changed,
+        }),
+        /Review resume/,
+      );
+    }
+    const resumed = await claimWorktree({
+      repoRoot: checkout,
+      issue: review,
+      worker: 'codex',
+      sessionId: 'second-session',
+      targetBranch: 'develop',
+      reviewPr,
+    });
+    assert.equal(resumed.branch, initial.branch);
+    assert.equal(
+      await readFile(join(initial.worktreePath, 'untracked.txt'), 'utf8'),
+      'preserve me',
+    );
+    await assert.rejects(
+      claimWorktree({
+        repoRoot: checkout,
+        issue: review,
+        worker: 'codex',
+        sessionId: 'third-session',
+        targetBranch: 'develop',
+        reviewPr,
+      }),
+      /already active/,
+    );
   });
 });
 

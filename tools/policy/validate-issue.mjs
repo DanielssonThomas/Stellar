@@ -10,6 +10,7 @@ export const categories = {
     'priority:high',
     'priority:critical',
   ],
+  review: ['review:light', 'review:standard', 'review:critical'],
   target: ['target:develop'],
   type: [
     'type:feature',
@@ -118,6 +119,13 @@ export function validateIssue(
   for (const category of ['priority', 'target', 'type', 'owner']) {
     if (found[category].length !== 1)
       errors.push(`Use exactly one ${category} label.`);
+  }
+  // Issue numbers through #102 predate this policy. Draft CLI validation has no number.
+  if (!issue.number || issue.number > 102) {
+    if (found.review.length !== 1)
+      errors.push('Use exactly one review label for new actionable issues.');
+  } else if (found.review.length > 1) {
+    errors.push('Use at most one review label for historical issues.');
   }
   if (found.owner.some((label) => !ownerLabel.test(label)))
     errors.push('Use owner:codex, owner:maintainer, or worker:<profile-id>.');

@@ -44,6 +44,7 @@ function validInput() {
       body: `## Objective\nAdd a small component test.\n\n## Context\nA targeted task.\n\n## Expected outcome\nOne checked change.\n\n## Acceptance criteria\n- [ ] Add the component test.\n\n## Constraints\nStay in the assigned scope.\n\n## Dependencies\n#45\n\n## Agent integration scope\nRisk: low\nAllowed files:\n- \`libs/ui/atoms/src/lib/example.spec.ts\`\n\n## Verification expectations\nRun the focused test.`,
       labels: [
         'priority:medium',
+        'review:light',
         'target:develop',
         'type:feature',
         'status:review',
