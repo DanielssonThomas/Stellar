@@ -963,6 +963,47 @@ describe('bounded worker supervision', () => {
     );
   });
 
+  it('persists bounded timeout, cancellation, and model categories after either cancellation outcome', async () => {
+    for (const category of [
+      'transport-timeout',
+      'poll-cancelled',
+      'model-unavailable',
+    ]) {
+      for (const confirmed of [false, true]) {
+        const result = await superviseWorker(
+          base({
+            limits: { maxAttemptsPerWorker: 1 },
+            workers: {
+              peon: {
+                ...worker(
+                  'peon',
+                  () => new Promise(() => undefined),
+                  async () => confirmed,
+                ),
+                usage: async () => {
+                  const error = new Error('private response must not persist');
+                  error.diagnostic = {
+                    category,
+                    phase:
+                      category === 'model-unavailable' ? 'startup' : 'running',
+                    elapsedMs: 33,
+                  };
+                  throw error;
+                },
+              },
+              mira: worker('mira', async () => ({ status: 'completed' })),
+            },
+          }),
+        );
+        const attempt = result.handoff.attempts[0];
+        const persisted = confirmed ? attempt.failure : attempt.primaryFailure;
+        assert.equal(persisted.diagnostic.category, category);
+        assert.equal(persisted.diagnostic.elapsedMs, 33);
+        assert.doesNotMatch(JSON.stringify(result.handoff), /private response/);
+      }
+    }
+  });
+
   it('keeps an unclassified primary stop cause explicitly unknown', async () => {
     const result = await superviseWorker(
       base({

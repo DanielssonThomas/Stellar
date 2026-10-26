@@ -346,8 +346,11 @@ function failureDetails(error) {
     const categories = [
       'sidecar-not-started',
       'readiness-timeout',
+      'transport-timeout',
       'podman-execution-failure',
       'usage-endpoint-unavailable',
+      'model-unavailable',
+      'poll-cancelled',
       'http-failure',
       'malformed-response',
       'invalid-usage',
