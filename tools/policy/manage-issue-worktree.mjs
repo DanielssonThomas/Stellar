@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolve, win32 } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   claimWorktree,
@@ -316,7 +316,10 @@ function containsCompletePath(commandLine, target, separators) {
 }
 
 export function windowsProcessReferencesWorktree(processes, worktreePath) {
-  const target = resolve(worktreePath).toLowerCase().replaceAll('/', '\\');
+  const target = win32
+    .resolve(worktreePath)
+    .toLowerCase()
+    .replaceAll('/', '\\');
   return processes.some(
     ({ Name, CommandLine }) =>
       /^(?:codex|node|git|hermes|podman|wsl)(?:\.exe)?$/i.test(Name ?? '') &&
