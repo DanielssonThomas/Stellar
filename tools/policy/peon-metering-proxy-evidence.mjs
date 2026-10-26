@@ -7,6 +7,19 @@ const baseSource = fileURLToPath(import.meta.url).startsWith('/opt/')
   : './peon-metering-proxy.mjs';
 const { createPeonMeteringProxy: createBaseMeter } = await import(baseSource);
 const maxToolEvents = 128;
+const allowedTools = new Set([
+  'terminal',
+  'process_manage',
+  'read_file',
+  'write_file',
+  'patch',
+  'search_files',
+  'skills_list',
+  'skill_view',
+  'tool_search',
+  'tool_describe',
+  'tool_call',
+]);
 
 const json = (response, status, value) => {
   response.writeHead(status, { 'content-type': 'application/json' });
@@ -40,7 +53,7 @@ export function validSanitizedToolEvent(event) {
     Number.isSafeInteger(value) && value >= 0 && value <= maximum;
   return (
     /^[a-f0-9]{24}$/.test(event.callId ?? '') &&
-    /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(event.toolName ?? '') &&
+    allowedTools.has(event.toolName) &&
     count(event.argumentBytes, 1_000_000) &&
     count(event.argumentCount, 256) &&
     (pre ||

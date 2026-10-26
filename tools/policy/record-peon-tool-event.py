@@ -6,6 +6,12 @@ import json
 import sys
 import urllib.request
 
+ALLOWED_TOOLS = {
+    "terminal", "process_manage", "read_file", "write_file", "patch",
+    "search_files", "skills_list", "skill_view", "tool_search",
+    "tool_describe", "tool_call",
+}
+
 
 def bounded_size(value):
     return min(len(json.dumps(value, ensure_ascii=False).encode("utf-8")), 1_000_000)
@@ -16,7 +22,7 @@ def sanitized_event(payload):
     if phase not in ("pre_tool_call", "post_tool_call"):
         raise ValueError("unknown hook phase")
     name = payload.get("tool_name")
-    if not isinstance(name, str) or not name.isidentifier() or len(name) > 64:
+    if name not in ALLOWED_TOOLS:
         raise ValueError("invalid tool name")
     extra = payload.get("extra") or {}
     call_id = extra.get("tool_call_id")

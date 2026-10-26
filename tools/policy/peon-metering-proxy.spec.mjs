@@ -78,6 +78,7 @@ test('accepts only bounded content-free pre/post tool evidence', async (t) => {
   assert.equal(validSanitizedToolEvent(pre), true);
   assert.equal((await send(post)).status, 409);
   assert.equal((await send({ ...pre, command: 'secret=raw' })).status, 400);
+  assert.equal((await send({ ...pre, toolName: 'TOP_SECRET' })).status, 400);
   assert.equal((await send(pre)).status, 204);
   assert.equal((await send(post)).status, 204);
   assert.deepEqual(meter.snapshot().toolEvents, [pre, post]);
