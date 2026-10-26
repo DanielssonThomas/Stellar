@@ -3,7 +3,53 @@ import { describe, it } from 'node:test';
 import {
   assertReviewResumeStatus,
   reconcileClaimStatus,
+  windowsProcessReferencesWorktree,
+  wslProcessReferencesIssueWorkspace,
 } from './manage-issue-worktree.mjs';
+
+describe('expired review live-process guard', () => {
+  it('treats a running Codex process on the exact worktree as active', () => {
+    const worktree = 'D:\\ai-repositories\\stellar-issue-42';
+    assert.equal(
+      windowsProcessReferencesWorktree(
+        [{ Name: 'codex.exe', CommandLine: `codex --cd "${worktree}"` }],
+        worktree,
+      ),
+      true,
+    );
+    assert.equal(
+      windowsProcessReferencesWorktree(
+        [{ Name: 'codex.exe', CommandLine: `codex --cd "${worktree}0"` }],
+        worktree,
+      ),
+      false,
+    );
+  });
+
+  it('matches a complete WSL issue path without matching numeric prefixes', () => {
+    assert.equal(
+      wslProcessReferencesIssueWorkspace(
+        ['node /home/peon/workspaces/issue-420/tools/worker.mjs'],
+        42,
+      ),
+      false,
+    );
+    assert.equal(
+      wslProcessReferencesIssueWorkspace(
+        ['node /home/peon/workspaces/issue-42/tools/worker.mjs'],
+        42,
+      ),
+      true,
+    );
+    assert.equal(
+      wslProcessReferencesIssueWorkspace(
+        ['hermes --in "/home/peon/workspaces/issue-42"'],
+        42,
+      ),
+      true,
+    );
+  });
+});
 
 const fixture = (status = 'status:ready', owner = 'owner:codex') => ({
   number: 42,

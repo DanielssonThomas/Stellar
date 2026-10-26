@@ -304,6 +304,37 @@ function fetchReviewPr(number) {
   );
 }
 
+function containsCompletePath(commandLine, target, separators) {
+  let from = 0;
+  while (true) {
+    const index = commandLine.indexOf(target, from);
+    if (index < 0) return false;
+    const after = commandLine[index + target.length] ?? '';
+    if (!after || separators.includes(after) || /\s/.test(after)) return true;
+    from = index + 1;
+  }
+}
+
+export function windowsProcessReferencesWorktree(processes, worktreePath) {
+  const target = resolve(worktreePath).toLowerCase().replaceAll('/', '\\');
+  return processes.some(
+    ({ Name, CommandLine }) =>
+      /^(?:codex|node|git|hermes|podman|wsl)(?:\.exe)?$/i.test(Name ?? '') &&
+      containsCompletePath(
+        (CommandLine ?? '').toLowerCase().replaceAll('/', '\\'),
+        target,
+        ['\\', '"', "'"],
+      ),
+  );
+}
+
+export function wslProcessReferencesIssueWorkspace(lines, issueNumber) {
+  const target = `/home/peon/workspaces/issue-${issueNumber}`;
+  return lines.some((line) =>
+    containsCompletePath(line, target, ['/', '"', "'"]),
+  );
+}
+
 function assertNoLiveReviewWork({ issueNumber, worktreePath }) {
   const windows = spawnSync(
     'powershell.exe',
@@ -324,17 +355,7 @@ function assertNoLiveReviewWork({ issueNumber, worktreePath }) {
   } catch {
     throw new Error('Trusted Windows process inspection was malformed.');
   }
-  const target = resolve(worktreePath).toLowerCase().replaceAll('/', '\\');
-  if (
-    processes.some(
-      ({ Name, CommandLine }) =>
-        /^(?:node|git|hermes|podman|wsl)(?:\.exe)?$/i.test(Name ?? '') &&
-        (CommandLine ?? '')
-          .toLowerCase()
-          .replaceAll('/', '\\')
-          .includes(target),
-    )
-  )
+  if (windowsProcessReferencesWorktree(processes, worktreePath))
     throw new Error('A process still references the review worktree.');
   const wsl = (command) => {
     const result = spawnSync(
@@ -357,9 +378,10 @@ function assertNoLiveReviewWork({ issueNumber, worktreePath }) {
     throw new Error(
       'A worker or meter container is still running for the issue.',
     );
-  const linuxPath = `/home/peon/workspaces/issue-${issueNumber}`;
   const processesWsl = wsl(['ps', '-eo', 'args']);
-  if (processesWsl.split(/\r?\n/).some((line) => line.includes(linuxPath)))
+  if (
+    wslProcessReferencesIssueWorkspace(processesWsl.split(/\r?\n/), issueNumber)
+  )
     throw new Error('A WSL process still references the review workspace.');
 }
 
