@@ -390,6 +390,15 @@ test('live usage polling distinguishes timeout, stopped meter, malformed usage, 
     async () => ({ status: null, output: '', reason: 'timeout' }),
     'transport-timeout',
   );
+  const laterCancellation = new AbortController();
+  await check(
+    async () => {
+      laterCancellation.abort();
+      return { status: null, output: '', reason: 'timeout' };
+    },
+    'transport-timeout',
+    laterCancellation.signal,
+  );
   await check(
     async () => ({
       status: 0,

@@ -220,10 +220,13 @@ function wslWorkerAsync(args, { timeoutMs = 3000, signal } = {}) {
       resolveResult({ status, output, reason });
     };
     const abort = () => {
+      if (reason !== null) return;
       reason = 'cancelled';
+      clearTimeout(timer);
       child.kill();
     };
     const timer = setTimeout(() => {
+      if (reason !== null) return;
       reason = 'timeout';
       child.kill();
     }, timeoutMs);
@@ -980,18 +983,18 @@ export async function readLiveMeterUsage(
       timeoutMs: 3000,
       signal,
     });
-    if (result.reason === 'cancelled' || signal?.aborted)
-      throw meterLifecycleError(
-        'poll-cancelled',
-        'running',
-        'Trusted metering poll was cancelled.',
-        Date.now() - startedAt,
-      );
     if (result.reason === 'timeout')
       throw meterLifecycleError(
         'transport-timeout',
         'running',
         'Trusted metering poll exceeded its transport deadline.',
+        Date.now() - startedAt,
+      );
+    if (result.reason === 'cancelled' || signal?.aborted)
+      throw meterLifecycleError(
+        'poll-cancelled',
+        'running',
+        'Trusted metering poll was cancelled.',
         Date.now() - startedAt,
       );
     return result;
