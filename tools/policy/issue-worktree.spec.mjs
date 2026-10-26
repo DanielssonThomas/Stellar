@@ -9,6 +9,7 @@ import {
   inspectClaim,
   issueBranch,
   releaseClaim,
+  recoverExpiredReviewClaim,
   transferClaim,
   validateAssignment,
 } from './issue-worktree.mjs';
@@ -236,6 +237,106 @@ describe('review-stage worktree resume', () => {
 });
 
 describe('durable worktree claims', () => {
+  it('recovers only an expired clean review claim for the exact PR and idle worktree', async () => {
+    const checkout = join(root, 'expired-review-checkout');
+    const remote = join(root, 'expired-review-origin.git');
+    await mkdir(checkout);
+    git(root, 'init', '--bare', remote);
+    git(checkout, 'init', '-b', 'develop');
+    git(checkout, 'config', 'user.name', 'Stellar Test');
+    git(checkout, 'config', 'user.email', 'stellar-test@example.invalid');
+    await writeFile(join(checkout, 'README.md'), 'fixture\n');
+    git(checkout, 'add', 'README.md');
+    git(checkout, 'commit', '-m', 'fixture');
+    git(checkout, 'remote', 'add', 'origin', remote);
+    git(checkout, 'push', '-u', 'origin', 'develop');
+    git(checkout, 'fetch', 'origin');
+    const claim = await claimWorktree({
+      repoRoot: checkout,
+      issue: fixtureIssue(),
+      worker: 'codex',
+      sessionId: 'expired-session',
+      targetBranch: 'develop',
+    });
+    const review = fixtureIssue({
+      labels: fixtureIssue().labels.map((label) =>
+        label === 'status:ready' ? 'status:review' : label,
+      ),
+    });
+    const pr = {
+      number: 84,
+      state: 'OPEN',
+      baseRefName: 'develop',
+      headRefName: claim.branch,
+      headRefOid: git(claim.worktreePath, 'rev-parse', 'HEAD'),
+      body: 'Fixes #42',
+    };
+    const claimFile = join(
+      checkout,
+      '.git',
+      'stellar-agent',
+      'claims',
+      '42.json',
+    );
+    const base = {
+      repoRoot: checkout,
+      issueNumber: 42,
+      worker: 'codex',
+      fetchIssue: async () => review,
+      fetchReviewPr: async () => pr,
+      assertNoLiveWork: async () => true,
+    };
+    await assert.rejects(recoverExpiredReviewClaim(base), /expired active/);
+    const expired = {
+      ...JSON.parse(await readFile(claimFile, 'utf8')),
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    await writeFile(claimFile, JSON.stringify(expired));
+    await assert.rejects(
+      recoverExpiredReviewClaim({ ...base, worker: 'maintainer' }),
+      /owner/,
+    );
+    await assert.rejects(
+      recoverExpiredReviewClaim({
+        ...base,
+        fetchReviewPr: async () => ({ ...pr, headRefOid: 'a'.repeat(40) }),
+      }),
+      /changed, or dirty/,
+    );
+    await assert.rejects(
+      recoverExpiredReviewClaim({
+        ...base,
+        assertNoLiveWork: async () => {
+          throw new Error('running worker');
+        },
+      }),
+      /running worker/,
+    );
+    await assert.rejects(
+      recoverExpiredReviewClaim({
+        ...base,
+        assertNoLiveWork: async () => {
+          await writeFile(
+            claimFile,
+            JSON.stringify({ ...expired, branch: 'issue/42-other' }),
+          );
+        },
+      }),
+      /changed during recovery/,
+    );
+    await writeFile(claimFile, JSON.stringify(expired));
+    await writeFile(join(claim.worktreePath, 'untracked.txt'), 'preserve');
+    await assert.rejects(recoverExpiredReviewClaim(base), /changed, or dirty/);
+    await rm(join(claim.worktreePath, 'untracked.txt'));
+    const recovered = await recoverExpiredReviewClaim(base);
+    assert.equal(recovered.state, 'released');
+    assert.equal(recovered.reviewRecovery.prNumber, 84);
+    assert.equal(
+      (await recoverExpiredReviewClaim(base)).releasedAt,
+      recovered.releasedAt,
+    );
+    assert.equal((await inspectClaim(checkout, 42)).state, 'released');
+  });
   it('creates a dedicated worktree, resumes only the same session, and preserves changes', async () => {
     const checkout = join(root, 'checkout');
     const remote = join(root, 'origin.git');

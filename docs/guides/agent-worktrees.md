@@ -9,6 +9,8 @@ node tools/policy/manage-issue-worktree.mjs inspect 123
 
 For corrections to an open issue-linked PR already in `status:review`, use `resume-review` with a new stable session ID after the prior claim is released. It checks the same owner, authorized target, exact PR head, existing issue branch and registered worktree, then atomically claims that worktree and reconciles the issue to `status:in-progress`. The PR stays open. A different active session, changed PR, stale claim, missing worktree, or unresolved dependency stops the operation with work preserved. Repeating it with the same session recovers an interrupted status write.
 
+If the previous session ended without releasing its review claim and the lease has expired, use `recover-expired-review <issue> --worker <identity>` from the trusted host. The command re-fetches the current issue and linked PR, checks the exact registered branch/head and a clean worktree, and inspects Windows processes plus WSL processes and containers for live work. It records an explicit recovery in the locked claim file and releases the claim without changing the issue or branch. A live lease, running process, changed PR, dirty checkout, or failed inspection stops recovery. Then use the ordinary `resume-review` command with a new stable session ID.
+
 ```powershell
 node tools/policy/manage-issue-worktree.mjs resume-review 123 --worker codex --session-id <stable-session-id>
 ```
