@@ -190,6 +190,57 @@ function wslWorkerBounded(timeout, ...args) {
   );
 }
 
+function wslWorkerAsync(args, { timeoutMs = 3000, signal } = {}) {
+  return new Promise((resolveResult) => {
+    const child = spawn(
+      'wsl.exe',
+      [
+        '--distribution',
+        distribution,
+        '--user',
+        workerAccount,
+        '--exec',
+        ...args,
+      ],
+      {
+        cwd: repositoryRoot,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    );
+    let output = '';
+    let settled = false;
+    let reason = null;
+    const finish = (status) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(killDeadline);
+      signal?.removeEventListener('abort', abort);
+      resolveResult({ status, output, reason });
+    };
+    const abort = () => {
+      if (reason !== null) return;
+      reason = 'cancelled';
+      clearTimeout(timer);
+      child.kill();
+    };
+    const timer = setTimeout(() => {
+      if (reason !== null) return;
+      reason = 'timeout';
+      child.kill();
+    }, timeoutMs);
+    const killDeadline = setTimeout(() => finish(null), timeoutMs + 500);
+    child.stdout?.on('data', (chunk) => {
+      output = (output + chunk.toString('utf8')).slice(0, 16_384);
+    });
+    child.once('error', () => finish(null));
+    child.once('close', (status) => finish(status));
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
 async function stopRootlessContainer(name, options) {
   return stopAndConfirmContainer(name, options);
 }
@@ -674,11 +725,7 @@ export function assertMeterIdentityUnchanged(
   return current;
 }
 
-function readMeterUsage(
-  containerName,
-  { phase = 'running', startedAt = Date.now() } = {},
-) {
-  const source = `
+const meterUsageSource = `
 (async () => {
   const response = await fetch('http://127.0.0.1:18437/usage', {
     signal: AbortSignal.timeout(1500),
@@ -757,20 +804,33 @@ function readMeterUsage(
   ),
 );
 `.trim();
+
+function readMeterUsage(
+  containerName,
+  { phase = 'running', startedAt = Date.now(), rawOutput } = {},
+) {
   let response;
   try {
     response = JSON.parse(
-      wslWorkerBounded(
-        3000,
-        'podman',
-        'exec',
-        containerName,
-        'node',
-        '-e',
-        source,
-      ),
+      rawOutput ??
+        wslWorkerBounded(
+          3000,
+          'podman',
+          'exec',
+          containerName,
+          'node',
+          '-e',
+          meterUsageSource,
+        ),
     );
   } catch {
+    if (rawOutput !== undefined)
+      throw meterLifecycleError(
+        'malformed-response',
+        phase,
+        'Trusted usage endpoint returned malformed transport output.',
+        Date.now() - startedAt,
+      );
     let category = 'podman-execution-failure';
     const probe = spawnSync(
       'wsl.exe',
@@ -901,18 +961,120 @@ function readMeterUsage(
   return usage;
 }
 
+/** One nonblocking, exact-identity live poll. Missing counters always fail closed. */
+export async function readLiveMeterUsage(
+  containerName,
+  identity,
+  { execute = wslWorkerAsync, signal, startedAt = Date.now() } = {},
+) {
+  if (
+    !/^stellar-peon-meter-[1-9][0-9]*-[1-9][0-9]*$/.test(containerName ?? '') ||
+    !/^[a-f0-9]{64}$/.test(identity?.id ?? '') ||
+    !identity?.startedAt ||
+    identity?.restartCount !== 0
+  )
+    throw meterLifecycleError(
+      'sidecar-terminated',
+      'running',
+      'Attempt metering identity is invalid.',
+    );
+  const checked = async (args) => {
+    const result = await execute(['podman', ...args], {
+      timeoutMs: 3000,
+      signal,
+    });
+    if (result.reason === 'timeout')
+      throw meterLifecycleError(
+        'transport-timeout',
+        'running',
+        'Trusted metering poll exceeded its transport deadline.',
+        Date.now() - startedAt,
+      );
+    if (result.reason === 'cancelled' || signal?.aborted)
+      throw meterLifecycleError(
+        'poll-cancelled',
+        'running',
+        'Trusted metering poll was cancelled.',
+        Date.now() - startedAt,
+      );
+    return result;
+  };
+  const inspected = await checked([
+    'inspect',
+    '--format',
+    '{{.Id}}|{{.State.StartedAt}}|{{.RestartCount}}|{{.State.Running}}',
+    containerName,
+  ]);
+  if (inspected.status !== 0) {
+    const exists = await checked(['container', 'exists', containerName]);
+    throw meterLifecycleError(
+      exists.status === 1 ? 'sidecar-terminated' : 'podman-execution-failure',
+      'running',
+      'Attempt metering identity could not be verified.',
+      Date.now() - startedAt,
+    );
+  }
+  const [id, started, restartText, running, ...extra] = inspected.output
+    .trim()
+    .split('|');
+  if (
+    extra.length ||
+    id !== identity.id ||
+    started !== identity.startedAt ||
+    restartText !== '0' ||
+    running !== 'true'
+  )
+    throw meterLifecycleError(
+      'sidecar-terminated',
+      'running',
+      'Attempt metering identity changed or stopped.',
+      Date.now() - startedAt,
+    );
+  const response = await checked([
+    'exec',
+    containerName,
+    'node',
+    '-e',
+    meterUsageSource,
+  ]);
+  if (response.status !== 0) {
+    const state = await checked([
+      'inspect',
+      '--format',
+      '{{.State.Running}}',
+      containerName,
+    ]);
+    throw meterLifecycleError(
+      state.status !== 0 || state.output.trim() !== 'true'
+        ? 'sidecar-terminated'
+        : 'podman-execution-failure',
+      'running',
+      'Trusted metering container could not be queried.',
+      Date.now() - startedAt,
+    );
+  }
+  return readMeterUsage(containerName, {
+    phase: 'running',
+    startedAt,
+    rawOutput: response.output,
+  });
+}
+
 function readMeterHealth(containerName) {
   const source =
-    "fetch('http://127.0.0.1:18436/health',{signal:AbortSignal.timeout(1000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))";
+    "fetch('http://127.0.0.1:18436/health',{signal:AbortSignal.timeout(1000)}).then(r=>process.stdout.write(JSON.stringify({status:r.status}))).catch(()=>process.stdout.write(JSON.stringify({transportError:true})))";
+  let health;
   try {
-    wslWorkerBounded(
-      1500,
-      'podman',
-      'exec',
-      containerName,
-      'node',
-      '-e',
-      source,
+    health = JSON.parse(
+      wslWorkerBounded(
+        1500,
+        'podman',
+        'exec',
+        containerName,
+        'node',
+        '-e',
+        source,
+      ),
     );
   } catch {
     const probe = spawnSync(
@@ -942,6 +1104,12 @@ function readMeterHealth(containerName) {
       'Trusted metering health endpoint is not available.',
     );
   }
+  if (health.status === 200) return;
+  throw meterLifecycleError(
+    health.status === 503 ? 'model-unavailable' : 'usage-endpoint-unavailable',
+    'startup',
+    'Trusted metering health endpoint is not available.',
+  );
 }
 
 function sleepForMeterRetry() {
@@ -983,6 +1151,7 @@ function waitForMeter(
           'sidecar-not-started',
           'podman-execution-failure',
           'usage-endpoint-unavailable',
+          'model-unavailable',
           'http-failure',
           'malformed-response',
           'invalid-usage',
@@ -1773,7 +1942,7 @@ export function createPeonWorkerAdapter({
   containerOperations = createRootlessContainerOperations(),
   now = Date.now,
   confirmCancellation = confirmAttemptCleanup,
-  readUsage = readMeterUsage,
+  readUsage = readLiveMeterUsage,
   maxForwardedRequests,
   preparedContext = null,
 }) {
@@ -1855,7 +2024,7 @@ export function createPeonWorkerAdapter({
         if (active === current) active = null;
       }
     },
-    async usage() {
+    async usage({ signal } = {}) {
       const current = active ?? lastAttempt;
       if (!current)
         throw meterLifecycleError(
@@ -1879,9 +2048,7 @@ export function createPeonWorkerAdapter({
           'running',
           'Attempt metering identity is unavailable.',
         );
-      if (current.meterIdentity)
-        assertMeterIdentityUnchanged(current.meterName, current.meterIdentity);
-      return readUsage(current.meterName);
+      return readUsage(current.meterName, current.meterIdentity, { signal });
     },
     async waitForUsageReady() {
       const current = active;

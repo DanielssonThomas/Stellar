@@ -9,6 +9,7 @@ import {
   buildPodmanArgs,
   assertMeterIdentityUnchanged,
   readMeterContainerIdentity,
+  readLiveMeterUsage,
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
@@ -322,6 +323,110 @@ test('rejects a restarted or changed metering-sidecar identity', () => {
   );
 });
 
+test('live usage polling stays responsive during a slow valid transport read', async () => {
+  const identity = {
+    id: 'd'.repeat(64),
+    startedAt: '2026-10-24T07:00:00Z',
+    restartCount: 0,
+  };
+  let ticks = 0;
+  const interval = setInterval(() => {
+    ticks += 1;
+  }, 10);
+  try {
+    const usage = await readLiveMeterUsage(
+      'stellar-peon-meter-50-1',
+      identity,
+      {
+        execute: async (args) => {
+          await new Promise((resolve) => setTimeout(resolve, 70));
+          return args[1] === 'inspect'
+            ? {
+                status: 0,
+                output: `${identity.id}|${identity.startedAt}|0|true`,
+                reason: null,
+              }
+            : {
+                status: 0,
+                output: JSON.stringify({
+                  usage: {
+                    toolCalls: 0,
+                    modelTokens: 0,
+                    forwardedRequests: 0,
+                    exceededResource: null,
+                    requestRecords: [],
+                  },
+                }),
+                reason: null,
+              };
+        },
+      },
+    );
+    assert.equal(usage.forwardedRequests, 0);
+    assert.ok(ticks >= 5);
+  } finally {
+    clearInterval(interval);
+  }
+});
+
+test('live usage polling distinguishes timeout, stopped meter, malformed usage, and cancellation', async () => {
+  const identity = {
+    id: 'd'.repeat(64),
+    startedAt: '2026-10-24T07:00:00Z',
+    restartCount: 0,
+  };
+  const check = async (execute, category, signal) =>
+    assert.rejects(
+      readLiveMeterUsage('stellar-peon-meter-50-1', identity, {
+        execute,
+        signal,
+      }),
+      (error) =>
+        error.code === 'UsageAccountingFailure' &&
+        error.diagnostic.category === category &&
+        error.diagnostic.phase === 'running',
+    );
+  await check(
+    async () => ({ status: null, output: '', reason: 'timeout' }),
+    'transport-timeout',
+  );
+  const laterCancellation = new AbortController();
+  await check(
+    async () => {
+      laterCancellation.abort();
+      return { status: null, output: '', reason: 'timeout' };
+    },
+    'transport-timeout',
+    laterCancellation.signal,
+  );
+  await check(
+    async () => ({
+      status: 0,
+      output: `${identity.id}|${identity.startedAt}|0|false`,
+      reason: null,
+    }),
+    'sidecar-terminated',
+  );
+  await check(
+    async (args) =>
+      args[1] === 'inspect'
+        ? {
+            status: 0,
+            output: `${identity.id}|${identity.startedAt}|0|true`,
+            reason: null,
+          }
+        : { status: 0, output: '{broken', reason: null },
+    'malformed-response',
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await check(
+    async () => ({ status: null, output: '', reason: 'cancelled' }),
+    'poll-cancelled',
+    controller.signal,
+  );
+});
+
 test('waits for a successful usage read from the exact sidecar after health', () => {
   const events = [];
   let time = 0;
@@ -386,6 +491,34 @@ test('bounds meter readiness and reports a sanitized startup timeout', () => {
       assert.doesNotMatch(error.message, /raw output/);
       return true;
     },
+  );
+});
+
+test('keeps an unavailable model distinct from a missing usage endpoint during readiness', () => {
+  let time = 0;
+  assert.throws(
+    () =>
+      waitForMeter('stellar-peon-meter-50-1', {
+        now: () => time,
+        timeoutMs: 500,
+        sleep: () => {
+          time += 250;
+        },
+        readHealth: () => {
+          const error = new Error('upstream details must not persist');
+          error.diagnostic = {
+            category: 'model-unavailable',
+            phase: 'startup',
+          };
+          throw error;
+        },
+        readUsage: () =>
+          assert.fail('unhealthy model must not produce usage readiness'),
+      }),
+    (error) =>
+      error.diagnostic.category === 'model-unavailable' &&
+      error.diagnostic.phase === 'startup' &&
+      !error.message.includes('upstream details'),
   );
 });
 
