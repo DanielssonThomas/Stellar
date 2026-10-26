@@ -30,25 +30,17 @@ function safeRelativePath(value, label) {
 }
 
 function section(body, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(
-    `(?:^|\\n)##\\s+${escaped}\\s*\\n([\\s\\S]*?)(?=\\n##\\s+|$)`,
-    'i',
-  ).exec(body);
-  return match?.[1]?.trim() ?? '';
-}
-
-function withoutSection(body, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return body
-    .replace(
-      new RegExp(
-        `(^|\\n)##\\s+${escaped}\\s*\\n[\\s\\S]*?(?=\\n##\\s+|$)`,
-        'i',
-      ),
-      '$1',
-    )
-    .trim();
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((line) =>
+    new RegExp(`^#{1,6}\\s+${name}\\s*$`, 'i').test(line),
+  );
+  if (start < 0) return '';
+  const content = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,6}\s/.test(line)) break;
+    content.push(line);
+  }
+  return content.join('\n').trim();
 }
 
 function guidanceAttestationMatches(attestation, sha256) {
@@ -275,6 +267,15 @@ export function buildPeonTaskContextManifest({
         systemPromptSha256: systemPromptGuidanceAttestation.systemPromptSha256,
       };
     }
+    if (relativePath === 'docs/guides/issue-workflow.md') {
+      return {
+        kind: 'guidance',
+        path: relativePath,
+        sha256,
+        revision: headRevision,
+        source: 'trusted-host-preflight',
+      };
+    }
     return {
       kind: 'guidance',
       path: relativePath,
@@ -313,13 +314,11 @@ export function buildPeonTaskContextManifest({
         }),
       ),
       acceptanceCriteria: section(issue.body ?? '', 'Acceptance criteria'),
-      untrustedIssueBody: withoutSection(
-        issue.body ?? '',
-        'Acceptance criteria',
-      ),
-      labels: (issue.labels ?? []).map((entry) =>
-        typeof entry === 'string' ? entry : entry.name,
-      ),
+      objective: section(issue.body ?? '', 'Objective'),
+      constraints: section(issue.body ?? '', 'Constraints'),
+      issueBodySha256: createHash('sha256')
+        .update(issue.body ?? '')
+        .digest('hex'),
     },
     revision: { head: headRevision, workspace: workspaceIdentity },
     authorization: {

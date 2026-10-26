@@ -176,7 +176,7 @@ function buildPreparedInputs(issue, exported, agentsContent, head, branch) {
     protectedPaths: [],
     systemPromptGuidanceAttestation,
     contextPlan: {
-      skills: ['.agents/skills/create-component/SKILL.md'],
+      skills: ['.agents/skills/implement-issue/SKILL.md'],
       files,
       authorizedChangePaths: [
         files[0].path,
@@ -344,16 +344,35 @@ async function main() {
         ),
         addSpecial: false,
       },
+      ...JSON.parse(currentInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1])
+        .guidance.filter((entry) => typeof entry.content === 'string')
+        .map((entry) => ({
+          kind: 'guidance-content',
+          name: entry.path,
+          content: entry.content,
+          addSpecial: false,
+        })),
+      ...JSON.parse(
+        currentInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
+      ).excerpts.map((entry) => ({
+        kind: 'task-excerpt',
+        name: entry.path,
+        content: entry.content,
+        addSpecial: false,
+      })),
       {
         kind: 'issue-body-with-criteria',
         content: issue.body ?? '',
         addSpecial: false,
       },
       {
-        kind: 'issue-body-without-criteria',
-        content: JSON.parse(
-          currentInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
-        ).issue.untrustedIssueBody,
+        kind: 'issue-objective-and-constraints',
+        content: (() => {
+          const selected = JSON.parse(
+            currentInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
+          ).issue;
+          return `${selected.objective}\n${selected.constraints}`;
+        })(),
         addSpecial: false,
       },
       {
