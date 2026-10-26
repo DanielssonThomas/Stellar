@@ -3,13 +3,27 @@ export const defaultPeonHermesProfile = 'focus';
 export const peonHermesProfileConfigFiles = Object.freeze({
   focus: 'peon-hermes-config.yaml',
   'narrow-coding': 'peon-hermes-narrow-config.yaml',
+  'narrow-evidence': 'peon-hermes-evidence-config.yaml',
 });
 
 const profileLabelPrefix = 'hermes-profile:';
 const narrowProfileLabel = `${profileLabelPrefix}narrow-coding`;
+const evidenceProfileLabel = `${profileLabelPrefix}narrow-evidence`;
 const workflowLabelPrefix = 'hermes-workflow:';
 const boundedCodingWorkflowLabel = `${workflowLabelPrefix}bounded-coding`;
+const editFirstExperimentLabel = `${workflowLabelPrefix}edit-first-4`;
 export const boundedCodingMaxForwardedRequests = 2;
+export const editFirstExperimentMaxForwardedRequests = 4;
+
+export function isPreparedPeonWorkflow(workflow) {
+  return workflow === 'bounded-coding' || workflow === 'edit-first-4';
+}
+
+export function modelTokenLimitForWorkflow(workflow) {
+  if (workflow === 'edit-first-4') return 52_000;
+  if (workflow === 'standard' || workflow === 'bounded-coding') return 32_000;
+  throw new Error('Unknown trusted Peon workflow.');
+}
 
 function labelsOf(issue) {
   return (issue?.labels ?? []).map((label) =>
@@ -22,7 +36,10 @@ export function resolvePeonHermesProfile(issue) {
     label?.startsWith(profileLabelPrefix),
   );
   if (profileLabels.length === 0) return defaultPeonHermesProfile;
-  if (profileLabels.length !== 1 || profileLabels[0] !== narrowProfileLabel)
+  if (
+    profileLabels.length !== 1 ||
+    ![narrowProfileLabel, evidenceProfileLabel].includes(profileLabels[0])
+  )
     throw new Error(
       'Peon issue has an unknown or ambiguous Hermes profile opt-in.',
     );
@@ -36,7 +53,16 @@ export function resolvePeonHermesProfile(issue) {
     throw new Error(
       'The narrow Hermes profile requires a low-priority Peon issue targeting develop.',
     );
-  return 'narrow-coding';
+  if (
+    profileLabels[0] === evidenceProfileLabel &&
+    (issue.number !== 50 || !labels.includes(editFirstExperimentLabel))
+  )
+    throw new Error(
+      'The evidence profile requires issue #50 and its four-request workflow.',
+    );
+  return profileLabels[0] === evidenceProfileLabel
+    ? 'narrow-evidence'
+    : 'narrow-coding';
 }
 
 /** Resolve a closed workflow selection from fresh, trusted issue labels. */
@@ -47,7 +73,9 @@ export function resolvePeonHermesWorkflow(issue) {
   if (workflowLabels.length === 0) return 'standard';
   if (
     workflowLabels.length !== 1 ||
-    workflowLabels[0] !== boundedCodingWorkflowLabel
+    ![boundedCodingWorkflowLabel, editFirstExperimentLabel].includes(
+      workflowLabels[0],
+    )
   )
     throw new Error('Peon issue has an unknown or ambiguous workflow opt-in.');
   const labels = labelsOf(issue);
@@ -55,17 +83,27 @@ export function resolvePeonHermesWorkflow(issue) {
     !labels.includes('worker:peon') ||
     !labels.includes('priority:low') ||
     !labels.includes('target:develop') ||
-    !labels.includes('hermes-profile:narrow-coding')
+    !labels.includes(
+      workflowLabels[0] === editFirstExperimentLabel
+        ? evidenceProfileLabel
+        : narrowProfileLabel,
+    )
   )
     throw new Error(
       'The bounded-coding workflow requires a low-priority Peon issue targeting develop with the narrow-coding profile.',
     );
-  return 'bounded-coding';
+  if (workflowLabels[0] === editFirstExperimentLabel && issue.number !== 50)
+    throw new Error('The four-request experiment is restricted to issue #50.');
+  return workflowLabels[0] === editFirstExperimentLabel
+    ? 'edit-first-4'
+    : 'bounded-coding';
 }
 
 export function maxForwardedRequestsForWorkflow(workflow) {
   if (workflow === 'standard') return undefined;
   if (workflow === 'bounded-coding') return boundedCodingMaxForwardedRequests;
+  if (workflow === 'edit-first-4')
+    return editFirstExperimentMaxForwardedRequests;
   throw new Error('Unknown trusted Peon workflow.');
 }
 

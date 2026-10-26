@@ -128,9 +128,9 @@ export function validateStatusTransition({
       'A linked open pull request to the authorized target is required for review status.',
     );
   if (expected === 'status:review' && next === 'status:in-progress') {
-    if (hasPullRequest)
+    if (!hasPullRequest)
       errors.push(
-        'Close or update the linked pull request before returning the issue to implementation.',
+        'An existing linked open PR is required to resume review rework.',
       );
     if (!hasClaim)
       errors.push(

@@ -169,10 +169,21 @@ describe('issue progress metadata', () => {
         worker: 'codex',
         expected: 'status:review',
         next: 'status:in-progress',
-        hasPullRequest: false,
+        hasPullRequest: true,
         hasClaim: true,
       }).valid,
       true,
+    );
+    assert.equal(
+      validateStatusTransition({
+        issue: issue('status:review'),
+        worker: 'codex',
+        expected: 'status:review',
+        next: 'status:in-progress',
+        hasPullRequest: false,
+        hasClaim: true,
+      }).valid,
+      false,
     );
   });
 

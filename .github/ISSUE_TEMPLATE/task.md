@@ -38,6 +38,7 @@ List the relevant lint, unit, build, or E2E checks.
 Before moving this issue from triage to ready, assign exactly one of each (see `docs/guides/issue-workflow.md` for definitions and validation):
 
 - `priority:low`, `priority:medium`, `priority:high`, or `priority:critical`
+- `review:light`, `review:standard`, or `review:critical` (independent of priority)
 - `target:develop` or `target:release/YYYY.MM`
 - `type:feature`, `type:bug`, `type:chore`, `type:refactor`, `type:blocker`, or `type:epic`
 - `owner:codex`, `owner:maintainer`, or `worker:<profile-id>`

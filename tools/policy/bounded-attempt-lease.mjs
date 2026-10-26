@@ -16,6 +16,7 @@ export function reserveBoundedCodingAttempt({
   worktreePath,
   revision,
   requestLimit,
+  modelTokenLimit = requestLimit === 2 ? 32_000 : undefined,
 }) {
   if (
     !path.isAbsolute(repositoryRoot ?? '') ||
@@ -26,7 +27,10 @@ export function reserveBoundedCodingAttempt({
     !/^issue\/[1-9][0-9]*-[a-z0-9-]+$/.test(branch ?? '') ||
     !path.isAbsolute(worktreePath ?? '') ||
     !/^[a-f0-9]{40,64}$/.test(revision ?? '') ||
-    requestLimit !== 2
+    !(
+      (requestLimit === 2 && modelTokenLimit === 32_000) ||
+      (issueNumber === 50 && requestLimit === 4 && modelTokenLimit === 52_000)
+    )
   )
     throw new Error('Bounded attempt reservation metadata is invalid.');
 
@@ -62,6 +66,7 @@ export function reserveBoundedCodingAttempt({
     worktreePath,
     revision,
     maxForwardedRequests: requestLimit,
+    maxModelTokens: modelTokenLimit,
     reservedAt: new Date().toISOString(),
     outcome: 'reserved',
   };

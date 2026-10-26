@@ -17,6 +17,7 @@ Pass the identity value in the issue owner label without its prefix, such as `co
    ```
 
    A claim error is a stop condition. Do not make another branch or edit a shared checkout as a workaround. Use `inspect` to review a prior claim and `handle-blocker` for a stale or conflicting assignment.
+   For corrections to an existing open PR whose issue is in `status:review`, use `resume-review` with a stable session ID after its prior claim was released. It reuses the exact PR branch and worktree and moves the issue back to `in-progress`; never replace the PR to bypass review history.
 
 3. Inspect the assigned worktree, its current diff, and relevant projects/tags. Preserve existing changes. Write a short bounded plan tied to the issue's acceptance criteria before editing.
 4. Implement the smallest complete change within the issue scope. Add meaningful tests for executable behavior and update the authoritative documentation when behavior changes. Do not modify another issue's worktree.

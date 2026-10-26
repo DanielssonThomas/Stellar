@@ -53,12 +53,90 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
+    const pre = {
+      phase: 'pre',
+      callId: 'a'.repeat(24),
+      toolName: 'terminal',
+      argumentBytes: 18,
+      argumentCount: 1,
+    };
+    const post = {
+      ...pre,
+      phase: 'post',
+      status: 'error',
+      elapsedMs: 31,
+      outputBytes: 20,
+      exitCode: 1,
+    };
+    let observedLimits;
+    const result = await superviseWorker(
+      base({
+        task: {
+          ...task,
+          issueNumber: 50,
+          owner: 'worker:peon',
+          branch: 'issue/50-avatar-shape',
+          hermesProfile: 'narrow-evidence',
+          hermesWorkflow: 'edit-first-4',
+          maxForwardedRequests: 4,
+        },
+        limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 52_000 },
+        workers: {
+          peon: worker('peon', async ({ limits, budget }) => {
+            observedLimits = limits;
+            budget.observeUsage({
+              toolCalls: 1,
+              modelTokens: 100,
+              forwardedRequests: 1,
+              toolEvents: [pre, post],
+            });
+            return {
+              status: 'failed',
+              usage: {
+                toolCalls: 1,
+                modelTokens: 100,
+                forwardedRequests: 1,
+                toolEvents: [pre, post],
+              },
+              failure: { code: 'OfflineFailure', message: 'offline fixture' },
+            };
+          }),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    assert.equal(observedLimits.maxModelTokensPerWorker, 52_000);
+    assert.equal(observedLimits.maxToolCallsPerWorker, 64);
+    assert.equal(observedLimits.maxRuntimeMsPerWorker, 600_000);
+    assert.deepEqual(result.handoff.attempts[0].toolEvents, [pre, post]);
+    await assert.rejects(
+      superviseWorker(
+        base({
+          task: {
+            ...task,
+            issueNumber: 50,
+            owner: 'worker:peon',
+            branch: 'issue/50-avatar-shape',
+            hermesProfile: 'narrow-evidence',
+            hermesWorkflow: 'edit-first-4',
+            maxForwardedRequests: 4,
+          },
+          limits: { maxAttemptsPerWorker: 1, maxModelTokensPerWorker: 32_000 },
+        }),
+      ),
+      /exactly 52,000/,
+    );
+  });
   it('delivers validated narrow bounded metadata to the Peon adapter and verification', async () => {
     const manifest = {
       schema: 'stellar.peon-task-context/v1',
       issue: { number: task.issueNumber },
       authorization: {
         maxForwardedRequests: 2,
+        limits: { modelTokens: 32_000 },
         allowedChangePaths: ['libs/ui/atoms/src/lib/skeleton-atom.ts'],
       },
     };
@@ -949,10 +1027,59 @@ describe('bounded worker supervision', () => {
       result.handoff.attempts[0].failure.code,
       'CancellationUnconfirmed',
     );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.category,
+      'usage-endpoint-unavailable',
+    );
+    assert.equal(
+      result.handoff.attempts[0].primaryFailure.diagnostic.phase,
+      'running',
+    );
     assert.doesNotMatch(
       JSON.stringify(result.handoff),
       /private transport detail/,
     );
+  });
+
+  it('persists bounded timeout, cancellation, and model categories after either cancellation outcome', async () => {
+    for (const category of [
+      'transport-timeout',
+      'poll-cancelled',
+      'model-unavailable',
+    ]) {
+      for (const confirmed of [false, true]) {
+        const result = await superviseWorker(
+          base({
+            limits: { maxAttemptsPerWorker: 1 },
+            workers: {
+              peon: {
+                ...worker(
+                  'peon',
+                  () => new Promise(() => undefined),
+                  async () => confirmed,
+                ),
+                usage: async () => {
+                  const error = new Error('private response must not persist');
+                  error.diagnostic = {
+                    category,
+                    phase:
+                      category === 'model-unavailable' ? 'startup' : 'running',
+                    elapsedMs: 33,
+                  };
+                  throw error;
+                },
+              },
+              mira: worker('mira', async () => ({ status: 'completed' })),
+            },
+          }),
+        );
+        const attempt = result.handoff.attempts[0];
+        const persisted = confirmed ? attempt.failure : attempt.primaryFailure;
+        assert.equal(persisted.diagnostic.category, category);
+        assert.equal(persisted.diagnostic.elapsedMs, 33);
+        assert.doesNotMatch(JSON.stringify(result.handoff), /private response/);
+      }
+    }
   });
 
   it('keeps an unclassified primary stop cause explicitly unknown', async () => {

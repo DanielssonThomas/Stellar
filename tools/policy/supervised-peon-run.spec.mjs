@@ -25,6 +25,26 @@ test('pins the independently verified compatible worker image digest', () => {
   );
 });
 
+test('pins both preserved #50 handoff hashes in the experimental runner', () => {
+  const runner = readFileSync(
+    new URL('./experiments/run-issue-50-edit-first-four.mjs', import.meta.url),
+    'utf8',
+  );
+  const pins = [
+    ...runner.matchAll(/'(issue-50-[^']+-handoff\.json)',\s*'([a-f0-9]{64})'/g),
+  ];
+  assert.equal(pins.length, 2);
+  assert.deepEqual(
+    Object.fromEntries(pins.map(([, filename, hash]) => [filename, hash])),
+    {
+      'issue-50-bounded-20261026-02-handoff.json':
+        '17eaaaa6c90e6f2000687fcdf175d6597a967a22e23a8bce17c68be6b851d27a',
+      'issue-50-pilot-20261026-handoff.json':
+        '3576f7bc4c3e4bd55d5deb81482949edfa72e4eda1edc325a5f549953805f68e',
+    },
+  );
+});
+
 const issue = {
   number: 50,
   state: 'OPEN',
@@ -211,6 +231,8 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   let adapterAttempt;
   let verificationCalls = 0;
   let workspaceInspections = 0;
+  let editApplied = false;
+  let toolResultObserved = false;
   const inspectWorktree = async (_number, _branch, baseRevision) => {
     workspaceInspections += 1;
     return {
@@ -219,10 +241,12 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
       headRevision: head,
       baseRevision,
       workspacePath: '/home/peon/workspaces/issue-50',
-      changes:
-        workspaceInspections >= 4
-          ? ['tools/policy/supervised-peon-run.mjs']
-          : [],
+      changes: editApplied
+        ? [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]
+        : [],
     };
   };
   const result = await runSupervisedPeonIssue({
@@ -248,7 +272,10 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
           endLine: 2,
         },
       ],
-      authorizedChangePaths: ['tools/policy/supervised-peon-run.mjs'],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
     },
     loadAssignment: async () => {
       issueReads += 1;
@@ -288,9 +315,32 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
         commandForTask: () => ['offline-test'],
         runAttempt: async (input) => {
           adapterAttempt = input;
+          const packet = JSON.parse(
+            input.taskInput.split('TRUSTED_TASK_CONTEXT_JSON\n')[1],
+          );
+          const mockFirstCompletion = {
+            tool: 'terminal',
+            changedPaths: packet.authorization.allowedChangePaths,
+          };
+          assert.deepEqual(mockFirstCompletion.changedPaths, [
+            'tools/policy/supervised-peon-run.mjs',
+            'tools/policy/supervised-peon-run.spec.mjs',
+          ]);
+          const mockToolResult = {
+            exitCode: 0,
+            changedPaths: mockFirstCompletion.changedPaths,
+          };
+          const mockSecondCompletion = {
+            observedExitCode: mockToolResult.exitCode,
+            toolCalls: [],
+          };
+          editApplied = true;
+          toolResultObserved =
+            mockSecondCompletion.observedExitCode === 0 &&
+            mockSecondCompletion.toolCalls.length === 0;
           return {
             exitCode: 0,
-            usage: { toolCalls: 0, modelTokens: 0, forwardedRequests: 0 },
+            usage: { toolCalls: 1, modelTokens: 1_500, forwardedRequests: 2 },
           };
         },
       });
@@ -310,7 +360,111 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   assert.equal(adapterAttempt.maxForwardedRequests, 2);
   assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
   assert.equal(workspaceInspections, 5);
+  assert.equal(toolResultObserved, true);
   assert.equal(verificationCalls, 1);
+});
+
+test('threads the issue-50 experiment ceilings through reservation, adapter, and supervisor without launch', async () => {
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-evidence',
+      'hermes-workflow:edit-first-4',
+    ],
+  };
+  const repositoryRoot = process.cwd();
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+  let reservation;
+  let adapter;
+  let supervisor;
+  await runSupervisedPeonIssue({
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'lint', command: ['pnpm', 'lint'] }],
+    contextPlan: {
+      skills: ['.agents/skills/implement-issue/SKILL.md'],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+        {
+          kind: 'test',
+          path: 'tools/policy/supervised-peon-run.spec.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: [
+        'tools/policy/supervised-peon-run.mjs',
+        'tools/policy/supervised-peon-run.spec.mjs',
+      ],
+    },
+    loadAssignment: async () => selectedIssue,
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree: async (_number, _branch, baseRevision) => ({
+      fingerprint: `exact:${head}:${baseRevision}`,
+      clean: true,
+      headRevision: head,
+      baseRevision,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes: [],
+    }),
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, relativePath) =>
+      relativePath === 'AGENTS.md'
+        ? execFileSync('git', ['show', `${head}:${relativePath}`], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+          })
+        : readFileSync(
+            join(repositoryRoot, ...relativePath.split('/')),
+            'utf8',
+          ),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ expectedGuidanceSha256 }) => ({
+      path: 'AGENTS.md',
+      guidanceSha256: expectedGuidanceSha256,
+      systemPromptSha256: 'd'.repeat(64),
+    }),
+    reserveAttempt: (input) => {
+      reservation = input;
+    },
+    createWorkerAdapter: (input) => {
+      adapter = input;
+      return { id: 'peon' };
+    },
+    runSupervisor: async (input) => {
+      supervisor = input;
+      return { status: 'paused' };
+    },
+  });
+  assert.equal(reservation.requestLimit, 4);
+  assert.equal(reservation.modelTokenLimit, 52_000);
+  assert.equal(adapter.maxForwardedRequests, 4);
+  assert.equal(adapter.hermesProfile, 'narrow-evidence');
+  assert.equal(
+    adapter.preparedContext.manifest.authorization.limits.modelTokens,
+    52_000,
+  );
+  assert.equal(supervisor.limits.maxModelTokensPerWorker, 52_000);
+  assert.equal(supervisor.limits.maxAttemptsPerWorker, 1);
+  assert.equal(supervisor.limits.maxToolCallsPerWorker, 64);
+  assert.equal(supervisor.limits.maxRuntimeMsPerWorker, 600_000);
 });
 
 test('does not create the live worker until the current assignment is valid', async () => {

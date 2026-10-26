@@ -9,6 +9,7 @@ import {
   buildPodmanArgs,
   assertMeterIdentityUnchanged,
   readMeterContainerIdentity,
+  readLiveMeterUsage,
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
@@ -30,6 +31,12 @@ const trustedFocusConfig =
   '/mnt/d/ai-repositories/stellar-issue-82/tools/policy/peon-hermes-config.yaml';
 const trustedFocusSoul =
   '/mnt/d/ai-repositories/stellar-issue-82/tools/policy/engineering-org/templates/peon/soul.md';
+const evidenceConfig =
+  '/mnt/d/ai-repositories/stellar/tools/policy/peon-hermes-evidence-config.yaml';
+const evidenceHook =
+  '/mnt/d/ai-repositories/stellar/tools/policy/record-peon-tool-event.py';
+const meterSource =
+  '/mnt/d/ai-repositories/stellar/tools/policy/peon-metering-proxy-evidence.mjs';
 const protectedPaths = [
   '.agents/skills',
   '.github/CODEOWNERS',
@@ -46,6 +53,143 @@ const protectedPaths = [
   'tools/generators',
   'tools/policy',
 ];
+
+test('four-request worker and meter mount exact read-only evidence code without raising resource ceilings', () => {
+  const worker = buildPodmanArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    protectedPaths,
+    command: ['hermes', 'chat'],
+    hermesProfile: 'narrow-evidence',
+    hermesConfigSource: evidenceConfig,
+    toolEvidenceSource: evidenceHook,
+  });
+  assert.ok(
+    worker.includes(
+      `--mount=type=bind,src=${evidenceHook},dst=/usr/local/libexec/record-peon-tool-event.py,ro`,
+    ),
+  );
+  assert.ok(worker.includes('--memory=4g'));
+  assert.ok(worker.includes('--cpus=2'));
+  assert.throws(
+    () =>
+      buildPodmanArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        protectedPaths,
+        command: ['hermes', 'chat'],
+        hermesProfile: 'narrow-evidence',
+        hermesConfigSource: evidenceConfig,
+      }),
+    /trusted tool evidence hook/,
+  );
+  const meter = buildMeteringProxyArgs({
+    name: 'stellar-peon-meter-50-1',
+    image,
+    uid: 1001,
+    gid: 1001,
+    maxModelTokens: 52_000,
+    maxToolCalls: 64,
+    maxForwardedRequests: 4,
+    meterSource,
+  });
+  assert.ok(meter.includes('--env=STELLAR_MAX_FORWARDED_REQUESTS=4'));
+  assert.ok(meter.includes('--env=STELLAR_MAX_MODEL_TOKENS=52000'));
+  assert.ok(
+    meter.includes(
+      `--mount=type=bind,src=${meterSource},dst=/opt/stellar-peon-metering-proxy-evidence.mjs,ro`,
+    ),
+  );
+  assert.equal(meter.at(-1), '/opt/stellar-peon-metering-proxy-evidence.mjs');
+  assert.ok(meter.includes('--memory=512m'));
+  assert.throws(
+    () =>
+      buildMeteringProxyArgs({
+        name: 'stellar-peon-meter-50-1',
+        image,
+        uid: 1001,
+        gid: 1001,
+        maxModelTokens: 32_000,
+        maxToolCalls: 64,
+        maxForwardedRequests: 4,
+        meterSource,
+      }),
+    /exactly 52,000/,
+  );
+});
+
+test('four-request adapter refuses to call a reported edit complete without executed-tool evidence', async () => {
+  const manifest = {
+    schema: 'stellar.peon-task-context/v1',
+    issue: { number: 50 },
+    authorization: {
+      maxForwardedRequests: 4,
+      limits: { modelTokens: 52_000 },
+      allowedChangePaths: [
+        'libs/ui/atoms/src/lib/atoms/skeleton-atom.component.ts',
+      ],
+    },
+  };
+  const adapter = createPeonWorkerAdapter({
+    image,
+    hermesProfile: 'narrow-evidence',
+    maxForwardedRequests: 4,
+    preparedContext: { manifest, serialized: JSON.stringify(manifest) },
+    commandForTask: () => ['offline-test'],
+    runAttempt: async () => ({
+      exitCode: 0,
+      usage: {
+        toolCalls: 1,
+        modelTokens: 100,
+        forwardedRequests: 1,
+        requestRecords: [{ emittedToolCalls: 1 }],
+        toolEvents: [],
+      },
+    }),
+  });
+  const result = await adapter.run({
+    task: {
+      issueNumber: 50,
+      hermesProfile: 'narrow-evidence',
+      hermesWorkflow: 'edit-first-4',
+      maxForwardedRequests: 4,
+    },
+    attemptNumber: 1,
+    limits: { maxRuntimeMsPerWorker: 600_000, maxModelTokensPerWorker: 52_000 },
+    budget: { snapshot: { toolCalls: 0, modelTokens: 0 } },
+  });
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'ToolEvidenceIncomplete');
+});
+
+test('experimental launcher rejects mismatched profile and tokens before workspace access', async () => {
+  await assert.rejects(
+    runRestrictedWorker({
+      issueNumber: 50,
+      image,
+      command: ['offline-test'],
+      hermesProfile: 'narrow-coding',
+      maxForwardedRequests: 4,
+      limits: { maxModelTokensPerWorker: 52_000 },
+    }),
+    /profile, request count, and token ceiling must match/,
+  );
+  await assert.rejects(
+    runRestrictedWorker({
+      issueNumber: 50,
+      image,
+      command: ['offline-test'],
+      hermesProfile: 'narrow-evidence',
+      maxForwardedRequests: 4,
+      limits: { maxModelTokensPerWorker: 32_000 },
+    }),
+    /profile, request count, and token ceiling must match/,
+  );
+});
 
 test('builds a rootless, resource-bounded Podman invocation for one issue clone', () => {
   const args = buildPodmanArgs({
@@ -339,6 +483,146 @@ test('rejects a restarted or changed metering-sidecar identity', () => {
   );
 });
 
+test('live usage polling stays responsive during a slow valid transport read', async () => {
+  const identity = {
+    id: 'd'.repeat(64),
+    startedAt: '2026-10-24T07:00:00Z',
+    restartCount: 0,
+  };
+  let ticks = 0;
+  const interval = setInterval(() => {
+    ticks += 1;
+  }, 10);
+  try {
+    const usage = await readLiveMeterUsage(
+      'stellar-peon-meter-50-1',
+      identity,
+      {
+        execute: async (args) => {
+          await new Promise((resolve) => setTimeout(resolve, 70));
+          return args[1] === 'inspect'
+            ? {
+                status: 0,
+                output: `${identity.id}|${identity.startedAt}|0|true`,
+                reason: null,
+              }
+            : {
+                status: 0,
+                output: JSON.stringify({
+                  usage: {
+                    toolCalls: 1,
+                    modelTokens: 0,
+                    forwardedRequests: 1,
+                    exceededResource: null,
+                    requestRecords: [],
+                    toolEvents: [
+                      {
+                        phase: 'pre',
+                        callId: 'a'.repeat(24),
+                        toolName: 'terminal',
+                        argumentBytes: 10,
+                        argumentCount: 1,
+                      },
+                    ],
+                  },
+                }),
+                reason: null,
+              };
+        },
+      },
+    );
+    assert.equal(usage.forwardedRequests, 1);
+    assert.equal(usage.toolEvents[0].toolName, 'terminal');
+    assert.ok(ticks >= 5);
+  } finally {
+    clearInterval(interval);
+  }
+});
+
+test('live usage polling distinguishes timeout, stopped meter, malformed usage, and cancellation', async () => {
+  const identity = {
+    id: 'd'.repeat(64),
+    startedAt: '2026-10-24T07:00:00Z',
+    restartCount: 0,
+  };
+  const check = async (execute, category, signal) =>
+    assert.rejects(
+      readLiveMeterUsage('stellar-peon-meter-50-1', identity, {
+        execute,
+        signal,
+      }),
+      (error) =>
+        error.code === 'UsageAccountingFailure' &&
+        error.diagnostic.category === category &&
+        error.diagnostic.phase === 'running',
+    );
+  await check(
+    async () => ({ status: null, output: '', reason: 'timeout' }),
+    'transport-timeout',
+  );
+  const laterCancellation = new AbortController();
+  await check(
+    async () => {
+      laterCancellation.abort();
+      return { status: null, output: '', reason: 'timeout' };
+    },
+    'transport-timeout',
+    laterCancellation.signal,
+  );
+  await check(
+    async () => ({
+      status: 0,
+      output: `${identity.id}|${identity.startedAt}|0|false`,
+      reason: null,
+    }),
+    'sidecar-terminated',
+  );
+  await check(
+    async (args) =>
+      args[1] === 'inspect'
+        ? {
+            status: 0,
+            output: `${identity.id}|${identity.startedAt}|0|true`,
+            reason: null,
+          }
+        : { status: 0, output: '{broken', reason: null },
+    'malformed-response',
+  );
+  await check(
+    async (args) =>
+      args[1] === 'inspect'
+        ? {
+            status: 0,
+            output: `${identity.id}|${identity.startedAt}|0|true`,
+            reason: null,
+          }
+        : {
+            status: 0,
+            output: JSON.stringify({
+              usage: {
+                toolCalls: 0,
+                modelTokens: 0,
+                forwardedRequests: 0,
+                exceededResource: null,
+                requestRecords: [],
+                toolEvents: [
+                  { phase: 'pre', command: 'raw output must not persist' },
+                ],
+              },
+            }),
+            reason: null,
+          },
+    'invalid-usage',
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await check(
+    async () => ({ status: null, output: '', reason: 'cancelled' }),
+    'poll-cancelled',
+    controller.signal,
+  );
+});
+
 test('waits for a successful usage read from the exact sidecar after health', () => {
   const events = [];
   let time = 0;
@@ -403,6 +687,34 @@ test('bounds meter readiness and reports a sanitized startup timeout', () => {
       assert.doesNotMatch(error.message, /raw output/);
       return true;
     },
+  );
+});
+
+test('keeps an unavailable model distinct from a missing usage endpoint during readiness', () => {
+  let time = 0;
+  assert.throws(
+    () =>
+      waitForMeter('stellar-peon-meter-50-1', {
+        now: () => time,
+        timeoutMs: 500,
+        sleep: () => {
+          time += 250;
+        },
+        readHealth: () => {
+          const error = new Error('upstream details must not persist');
+          error.diagnostic = {
+            category: 'model-unavailable',
+            phase: 'startup',
+          };
+          throw error;
+        },
+        readUsage: () =>
+          assert.fail('unhealthy model must not produce usage readiness'),
+      }),
+    (error) =>
+      error.diagnostic.category === 'model-unavailable' &&
+      error.diagnostic.phase === 'startup' &&
+      !error.message.includes('upstream details'),
   );
 });
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -48,6 +49,54 @@ test('rejects invalid request ceilings and incomplete attempt identity', async (
     };
     assert.throws(
       () => reserveBoundedCodingAttempt(input),
+      /metadata is invalid/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('reserves one issue-50 experiment only at four requests and 52,000 tokens', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'stellar-four-request-'));
+  try {
+    const input = {
+      repositoryRoot: root,
+      issueNumber: 50,
+      sessionId: `peon-issue-50-edit-first-four-${randomUUID()}`,
+      branch: 'issue/50-avatar-shape',
+      worktreePath: path.join(root, 'worktree'),
+      revision: 'b'.repeat(40),
+      requestLimit: 4,
+      modelTokenLimit: 52_000,
+    };
+    const reservation = reserveBoundedCodingAttempt(input);
+    assert.match(reservation.marker, /issue-50-/);
+    assert.throws(() => reserveBoundedCodingAttempt(input), /already consumed/);
+    assert.throws(
+      () =>
+        reserveBoundedCodingAttempt({
+          ...input,
+          sessionId: 'different',
+          modelTokenLimit: 32_000,
+        }),
+      /metadata is invalid/,
+    );
+    assert.throws(
+      () =>
+        reserveBoundedCodingAttempt({
+          ...input,
+          sessionId: 'different',
+          modelTokenLimit: undefined,
+        }),
+      /metadata is invalid/,
+    );
+    assert.throws(
+      () =>
+        reserveBoundedCodingAttempt({
+          ...input,
+          issueNumber: 51,
+          sessionId: 'different',
+        }),
       /metadata is invalid/,
     );
   } finally {
