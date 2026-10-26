@@ -25,6 +25,26 @@ test('pins the independently verified compatible worker image digest', () => {
   );
 });
 
+test('pins both preserved #50 handoff hashes in the experimental runner', () => {
+  const runner = readFileSync(
+    new URL('./experiments/run-issue-50-edit-first-four.mjs', import.meta.url),
+    'utf8',
+  );
+  const pins = [
+    ...runner.matchAll(/'(issue-50-[^']+-handoff\.json)',\s*'([a-f0-9]{64})'/g),
+  ];
+  assert.equal(pins.length, 2);
+  assert.deepEqual(
+    Object.fromEntries(pins.map(([, filename, hash]) => [filename, hash])),
+    {
+      'issue-50-bounded-20261026-02-handoff.json':
+        '17eaaaa6c90e6f2000687fcdf175d6597a967a22e23a8bce17c68be6b851d27a',
+      'issue-50-pilot-20261026-handoff.json':
+        '3576f7bc4c3e4bd55d5deb81482949edfa72e4eda1edc325a5f549953805f68e',
+    },
+  );
+});
+
 const issue = {
   number: 50,
   state: 'OPEN',
