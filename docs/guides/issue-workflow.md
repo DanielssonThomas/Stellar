@@ -31,6 +31,8 @@ Targets must name an existing authorized branch. The release target uses a four-
 - Use `blocked` only after bounded diagnosis and recording evidence; then link the actual blocking issue and notify the coordinator.
 - `review` means a compliant PR is open. `done` means the acceptance criteria are met and the PR is integrated.
 
+When review finds changes to make, the current issue owner may resume the existing PR branch with the worktree manager's `resume-review` command. It requires the released original claim, matching open PR and exact head, current owner, and registered issue worktree. It keeps the PR open while returning the issue to `in-progress`; a new session cannot take an active claim. Re-run with the same session after an interrupted status write. Return to `review` after pushing and validating the revised head.
+
 GitHub assignees may identify a human maintainer. The owner label is the worker identity, so shared bot accounts do not obscure which profile owns the work.
 
 ## Issue body and dependencies
