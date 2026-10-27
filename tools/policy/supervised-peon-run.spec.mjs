@@ -63,7 +63,7 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
   let minimalReserved = false;
   let inspectedOverlay = false;
   let adapterOptions;
-  const result = await runSupervisedPeonIssue({
+  const options = {
     issueNumber: 50,
     sessionId,
     image,
@@ -120,9 +120,13 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
       adapterOptions = options;
       return {};
     },
-    runVerification: async () => ({ exitCode: 0 }),
+    runVerification: async ({ writablePaths }) => {
+      assert.deepEqual(writablePaths, ['tools']);
+      return { exitCode: 0 };
+    },
     runSupervisor: async ({ verify, task }) => verify({ task }),
-  });
+  };
+  const result = await runSupervisedPeonIssue(options);
   assert.equal(inspectedOverlay, true);
   assert.equal(reserved, false);
   assert.equal(minimalReserved, true);
@@ -133,6 +137,33 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
   assert.deepEqual(
     result.map(({ passed }) => passed),
     [true],
+  );
+
+  let inspections = 0;
+  const afterVerification = await runSupervisedPeonIssue({
+    ...options,
+    reserveMinimalAttempt: () => {
+      assert.equal(inspections, 2);
+    },
+    createWorkerAdapter: () => ({}),
+    inspectWorktree: async (...args) => {
+      const state = await options.inspectWorktree(...args);
+      inspections += 1;
+      return inspections === 4
+        ? {
+            ...state,
+            changes: ['tools/policy/supervised-peon-run.mjs', 'package.json'],
+          }
+        : state;
+    },
+  });
+  assert.deepEqual(
+    afterVerification.map(({ passed }) => passed),
+    [true, false],
+  );
+  assert.equal(
+    afterVerification[1].name,
+    'authorized-source-changes-after-verification',
   );
 });
 

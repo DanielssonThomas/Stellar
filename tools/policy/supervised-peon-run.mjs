@@ -422,29 +422,30 @@ export async function runSupervisedPeonIssue({
         'Verification issue differs from the validated assignment.',
       );
     const results = [];
+    const minimalCoding = verifiedTask.hermesWorkflow === 'minimal-coding';
+    const allowedPaths = minimalCoding
+      ? preparedContext?.manifest?.writablePaths
+      : preparedContext?.manifest?.authorization?.allowedChangePaths;
+    const authorizedChanges = (workspace) =>
+      Array.isArray(allowedPaths) &&
+      workspace?.headRevision === initialWorkspace.headRevision &&
+      workspace?.baseRevision === targetRevision &&
+      Array.isArray(workspace.changes) &&
+      workspace.changes.length > 0 &&
+      workspace.changes.every((changed) =>
+        allowedPaths.some((allowed) =>
+          minimalCoding
+            ? changed.startsWith(`${allowed}/`)
+            : changed === allowed,
+        ),
+      );
     if (isPreparedPeonWorkflow(verifiedTask.hermesWorkflow)) {
       const finalWorkspace = await inspectWorktree(
         number,
         task.branch,
         targetRevision,
       );
-      const minimalCoding = verifiedTask.hermesWorkflow === 'minimal-coding';
-      const allowedPaths = minimalCoding
-        ? preparedContext?.manifest?.writablePaths
-        : preparedContext?.manifest?.authorization?.allowedChangePaths;
-      const changedPaths = finalWorkspace?.changes ?? [];
-      if (
-        !Array.isArray(allowedPaths) ||
-        changedPaths.length === 0 ||
-        changedPaths.some(
-          (changed) =>
-            !allowedPaths.some((allowed) =>
-              minimalCoding
-                ? changed.startsWith(`${allowed}/`)
-                : changed === allowed,
-            ),
-        )
-      )
+      if (!authorizedChanges(finalWorkspace))
         return [
           {
             name: 'authorized-source-changes',
@@ -461,6 +462,7 @@ export async function runSupervisedPeonIssue({
         image,
         command: check.command,
         attemptNumber,
+        ...(minimalCoding ? { writablePaths: allowedPaths } : {}),
       });
       results.push({
         name: check.name,
@@ -468,6 +470,21 @@ export async function runSupervisedPeonIssue({
         summary: `Isolated verification exited with code ${outcome.exitCode}.`,
       });
       activeVerification = null;
+      if (
+        minimalCoding &&
+        !authorizedChanges(
+          await inspectWorktree(number, task.branch, targetRevision),
+        )
+      )
+        return [
+          ...results,
+          {
+            name: 'authorized-source-changes-after-verification',
+            passed: false,
+            summary:
+              'Verification changed a path outside the trusted writable scope.',
+          },
+        ];
       if (outcome.exitCode !== 0) break;
     }
     return results;

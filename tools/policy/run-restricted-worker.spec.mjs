@@ -813,6 +813,50 @@ test('runs trusted checks in an isolated container without worker or integration
   );
 });
 
+test('scoped verification mounts only task source writable and keeps build output ephemeral', () => {
+  const args = buildRestrictedVerificationArgs({
+    issueNumber: 50,
+    image,
+    uid: 1001,
+    gid: 1001,
+    command: ['corepack', 'pnpm', 'exec', 'nx', 'test', 'ui-atoms'],
+    protectedPaths,
+    writablePaths: ['libs/ui/atoms/src/lib/atoms'],
+  });
+  assert.ok(
+    args.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50,dst=/workspace,ro',
+    ),
+  );
+  assert.ok(
+    args.includes(
+      '--mount=type=bind,src=/home/peon/workspaces/issue-50/libs/ui/atoms/src/lib/atoms,dst=/workspace/libs/ui/atoms/src/lib/atoms,rw',
+    ),
+  );
+  assert.ok(
+    args.includes(
+      '--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777',
+    ),
+  );
+  assert.equal(
+    args.some((argument) => argument.includes('dst=/workspace/.git,rw')),
+    false,
+  );
+  assert.throws(
+    () =>
+      buildRestrictedVerificationArgs({
+        issueNumber: 50,
+        image,
+        uid: 1001,
+        gid: 1001,
+        command: ['node', '--test'],
+        protectedPaths,
+        writablePaths: ['tools/policy'],
+      }),
+    /trusted writable paths/,
+  );
+});
+
 test('pins the offline package-manager cache outside the writable worker home', () => {
   const containerfile = readFileSync(
     new URL('../worker-image/Containerfile', import.meta.url),

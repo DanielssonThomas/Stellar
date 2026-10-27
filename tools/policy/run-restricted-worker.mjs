@@ -1464,6 +1464,7 @@ export function buildRestrictedVerificationArgs({
   gid,
   command,
   protectedPaths,
+  writablePaths,
   attemptNumber = 1,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
@@ -1499,6 +1500,28 @@ export function buildRestrictedVerificationArgs({
     throw new Error(
       'Trusted protected paths are required for verification mounts.',
     );
+  if (
+    writablePaths !== undefined &&
+    (!Array.isArray(writablePaths) ||
+      writablePaths.length === 0 ||
+      writablePaths.some(
+        (entry) =>
+          typeof entry !== 'string' ||
+          !entry ||
+          entry.startsWith('/') ||
+          /[\\,:=]/.test(entry) ||
+          entry
+            .split('/')
+            .some((part) => !part || part === '.' || part === '..') ||
+          protectedPaths.some(
+            (protectedPath) =>
+              entry === protectedPath || entry.startsWith(`${protectedPath}/`),
+          ) ||
+          entry === '.git' ||
+          entry.startsWith('.git/'),
+      ))
+  )
+    throw new Error('Scoped verification requires trusted writable paths.');
 
   const workspace = issueWorkspace(number);
   return [
@@ -1519,7 +1542,14 @@ export function buildRestrictedVerificationArgs({
     '--memory-swap=4g',
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
-    `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    `--mount=type=bind,src=${workspace},dst=/workspace,${writablePaths ? 'ro' : 'rw'}`,
+    ...(writablePaths ?? []).map(
+      (entry) =>
+        `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},rw`,
+    ),
+    ...(writablePaths
+      ? ['--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777']
+      : []),
     ...protectedPaths.map(
       (entry) =>
         `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
@@ -1530,6 +1560,9 @@ export function buildRestrictedVerificationArgs({
     '--env=COREPACK_DEFAULT_TO_LATEST=0',
     '--env=COREPACK_ENABLE_NETWORK=0',
     '--env=NX_SKIP_NATIVE_FILE_CACHE=true',
+    ...(writablePaths
+      ? ['--env=NX_CACHE_DIRECTORY=/tmp/nx-cache', '--env=NX_DAEMON=false']
+      : []),
     '--env=HERMES_RUNTIME_DIR=/opt/hermes/tools',
     '--env=TMPDIR=/tmp',
     image,
@@ -1901,6 +1934,7 @@ export async function runRestrictedVerification({
   issueNumber,
   image,
   command,
+  writablePaths,
   attemptNumber = 1,
   containerOperations = createRootlessContainerOperations(),
   spawnProcess = spawn,
@@ -1918,6 +1952,25 @@ export async function runRestrictedVerification({
   );
   const protectedPaths = loadProtectedPaths();
   validateProtectedMountSources(workspace, protectedPaths);
+  if (writablePaths !== undefined) {
+    if (!Array.isArray(writablePaths) || writablePaths.length === 0)
+      throw new Error('Scoped verification requires trusted writable paths.');
+    for (const entry of writablePaths) {
+      if (
+        typeof entry !== 'string' ||
+        !/^[a-zA-Z0-9._/-]+$/.test(entry) ||
+        entry.startsWith('/') ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..')
+      )
+        throw new Error('Invalid scoped verification path.');
+      const source = path.posix.join(workspace, entry);
+      if (
+        wslWorker('realpath', '-e', source) !== source ||
+        !wslWorker('stat', '-c', '%F', '--', source).includes('directory')
+      )
+        throw new Error('Scoped verification path is not a plain directory.');
+    }
+  }
 
   const args = buildRestrictedVerificationArgs({
     issueNumber: number,
@@ -1926,6 +1979,7 @@ export async function runRestrictedVerification({
     gid: workerGid,
     command,
     protectedPaths,
+    writablePaths,
     attemptNumber: attempt,
   });
   wslWorker('podman', 'image', 'exists', image);
