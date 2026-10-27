@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import {
   existsSync,
   mkdtempSync,
@@ -15,6 +16,7 @@ import {
   clientContainerArgs,
   confirmBenchmarkCleanup,
   disposeCheckout,
+  installInterruptGuard,
   makeDisposableCheckout,
   meterContainerArgs,
   reserveOneUseRun,
@@ -227,7 +229,19 @@ test('one-use reservation survives process restarts and refuses a second run', (
   }
 });
 
-test('disposable checkout accepts only the two intended patch paths', () => {
+test('SIGINT and SIGTERM interrupt the one-use run without exiting before cleanup', async () => {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    const emitter = new EventEmitter();
+    const guard = installInterruptGuard(emitter);
+    emitter.emit(signal);
+    assert.equal(guard.signal(), signal);
+    await assert.rejects(guard.checkpoint(), /interrupted/);
+    guard.dispose();
+    assert.equal(emitter.listenerCount(signal), 0);
+  }
+});
+
+test('disposable checkout accepts only the two intended patch paths', async () => {
   const parent = mkdtempSync(
     path.join(path.dirname(process.cwd()), 'avatar-patch-test-'),
   );
@@ -266,7 +280,7 @@ test('disposable checkout accepts only the two intended patch paths', () => {
     applyAndVerify(disposable.checkout, patch);
     assert.ok(existsSync(testFile));
     if (process.env.STELLAR_BENCHMARK_VERIFY_UI === '1')
-      assert.deepEqual(verifyUi(disposable.checkout), [
+      assert.deepEqual(await verifyUi(disposable.checkout), [
         'lint:passed',
         'test:passed',
         'build:passed',
@@ -284,19 +298,23 @@ test('disposable checkout accepts only the two intended patch paths', () => {
 
 test('cleanup starts all stops and never confirms a running or unknown container', async () => {
   const stopped = [];
+  const states = new Map();
   const stop = async (args) => {
-    stopped.push(args.at(-1));
+    const name = args.at(-1);
+    stopped.push(name);
+    states.set(name, 'stopped');
     return true;
   };
   const confirmed = await confirmBenchmarkCleanup({
     stop,
-    inspect: async () => 'stopped',
+    inspect: async (name) => states.get(name) ?? 'running',
   });
   assert.equal(confirmed.confirmed, true);
   assert.equal(stopped.length, 3);
   const running = await confirmBenchmarkCleanup({
     stop,
     inspect: async (name) => (name.includes('meter') ? 'running' : 'absent'),
+    deadlineAt: Date.now() + 30,
   });
   assert.equal(running.confirmed, false);
   const failed = await confirmBenchmarkCleanup({
@@ -306,4 +324,17 @@ test('cleanup starts all stops and never confirms a running or unknown container
     },
   });
   assert.equal(failed.confirmed, false);
+});
+
+test('cleanup cannot confirm after a delayed inspection consumes the deadline', async () => {
+  const startedAt = Date.now();
+  const result = await confirmBenchmarkCleanup({
+    stop: async () => true,
+    inspect: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 45));
+      return 'stopped';
+    },
+    deadlineAt: startedAt + 20,
+  });
+  assert.equal(result.confirmed, false);
 });

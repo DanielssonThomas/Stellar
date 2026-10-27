@@ -21,7 +21,10 @@ import {
   verifyPinnedWorkerImageCompatibility,
 } from '../run-restricted-worker.mjs';
 import { trustedPeonWorkerImage } from '../supervised-peon-run.mjs';
-import { cancellationConfirmationTimeoutMs } from '../worker-container-lifecycle.mjs';
+import {
+  cancellationConfirmationTimeoutMs,
+  stopAndConfirmAttemptContainers,
+} from '../worker-container-lifecycle.mjs';
 import {
   avatarPrompt,
   avatarSource,
@@ -45,6 +48,14 @@ const workerName = 'stellar-peon-worker-50-1001';
 const meterName = 'stellar-peon-meter-50-1001';
 const modelImage =
   'ghcr.io/ggml-org/llama.cpp@sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7';
+const childEnv = () => ({
+  PATH: process.env.PATH,
+  SystemRoot: process.env.SystemRoot,
+  WINDIR: process.env.WINDIR,
+  TEMP: process.env.TEMP,
+  TMP: process.env.TMP,
+  WSLENV: '',
+});
 
 export function clientContainerArgs(scriptSource) {
   if (
@@ -110,14 +121,7 @@ function command(
     timeout,
     maxBuffer,
     windowsHide: true,
-    env: {
-      PATH: process.env.PATH,
-      SystemRoot: process.env.SystemRoot,
-      WINDIR: process.env.WINDIR,
-      TEMP: process.env.TEMP,
-      TMP: process.env.TMP,
-      WSLENV: '',
-    },
+    env: childEnv(),
   });
   if (result.error || result.status !== 0)
     throw new Error(
@@ -145,10 +149,8 @@ function wslPath(file) {
   return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll('\\', '/')}`;
 }
 
-function containerState(name) {
-  const rows = JSON.parse(
-    podman(['ps', '--all', '--filter', `name=^${name}$`, '--format', 'json']),
-  );
+function parseContainerState(raw, name) {
+  const rows = JSON.parse(raw);
   if (!Array.isArray(rows) || rows.length > 1)
     throw new Error('cleanup: ambiguous container');
   if (!rows.length) return 'absent';
@@ -159,6 +161,70 @@ function containerState(name) {
   if (['exited', 'stopped'].includes(state)) return 'stopped';
   if (state === 'running') return 'running';
   throw new Error('cleanup: inconclusive container state');
+}
+
+function containerState(name, timeout = 10_000) {
+  if (timeout <= 0) throw new Error('cleanup: deadline expired');
+  return parseContainerState(
+    podman(['ps', '--all', '--filter', `name=^${name}$`, '--format', 'json'], {
+      timeout,
+    }),
+    name,
+  );
+}
+
+function asyncContainerState(name, timeoutMs) {
+  return new Promise((resolve) => {
+    if (timeoutMs <= 0) return resolve('inconclusive');
+    const child = spawn(
+      'wsl.exe',
+      [
+        '--distribution',
+        'Ubuntu',
+        '--user',
+        'peon',
+        '--exec',
+        'podman',
+        'ps',
+        '--all',
+        '--filter',
+        `name=^${name}$`,
+        '--format',
+        'json',
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        windowsHide: true,
+        env: childEnv(),
+      },
+    );
+    let settled = false;
+    let bytes = 0;
+    let output = '';
+    const finish = (state) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(state);
+    };
+    child.stdout?.on('data', (part) => {
+      bytes += part.length;
+      if (bytes <= 8_192) output += part.toString('utf8');
+    });
+    child.once('error', () => finish('inconclusive'));
+    child.once('exit', (code) => {
+      if (code !== 0 || bytes > 8_192) return finish('inconclusive');
+      try {
+        finish(parseContainerState(output, name));
+      } catch {
+        finish('inconclusive');
+      }
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      finish('inconclusive');
+    }, timeoutMs);
+  });
 }
 
 function networkIsInternal(name) {
@@ -354,7 +420,10 @@ export function applyAndVerify(checkout, patch) {
   );
 }
 
-export function verifyUi(checkout, { onResult = () => undefined } = {}) {
+export async function verifyUi(
+  checkout,
+  { onResult = () => undefined, checkpoint = async () => undefined } = {},
+) {
   const specPath = path.join(checkout, avatarTest);
   const original = readFileSync(specPath, 'utf8');
   const results = [];
@@ -365,6 +434,7 @@ export function verifyUi(checkout, { onResult = () => undefined } = {}) {
       `\nimport { TestBed as BenchmarkTestBed } from '@angular/core/testing';\nimport { expect as benchmarkExpect, it as benchmarkIt } from 'vitest';\nimport { SkeletonAtom as BenchmarkSkeletonAtom } from './skeleton-atom.component';\nbenchmarkIt('trusted avatar acceptance', async () => {\n  await BenchmarkTestBed.configureTestingModule({ imports: [BenchmarkSkeletonAtom] }).compileComponents();\n  const fixture = BenchmarkTestBed.createComponent(BenchmarkSkeletonAtom);\n  const span = () => fixture.nativeElement.querySelector('span');\n  fixture.componentRef.setInput('shape', 'avatar');\n  await fixture.whenStable();\n  for (const cls of ['h-10', 'w-10', 'rounded-full', 'bg-stellar-skeleton']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  benchmarkExpect(span().getAttribute('aria-hidden')).toBe('true');\n  fixture.componentRef.setInput('shape', 'text');\n  await fixture.whenStable();\n  for (const cls of ['h-4', 'w-24']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  fixture.componentRef.setInput('shape', 'control');\n  await fixture.whenStable();\n  for (const cls of ['h-5', 'w-20']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n});\n`,
     );
     for (const target of ['lint', 'test', 'build']) {
+      await checkpoint();
       let failure;
       try {
         podman(verifierContainerArgs(wslPath(checkout), target), {
@@ -389,6 +459,7 @@ export function verifyUi(checkout, { onResult = () => undefined } = {}) {
       results.push(`${target}:passed`);
       onResult(`${target}:passed`);
     }
+    await checkpoint();
   } finally {
     if (verifierCleanupConfirmed) writeFileSync(specPath, original);
   }
@@ -397,10 +468,16 @@ export function verifyUi(checkout, { onResult = () => undefined } = {}) {
 
 function confirmVerifierCleanup(target) {
   const name = `stellar-peon-verify-50-1001-${target}`;
+  const deadlineAt = Date.now() + cancellationConfirmationTimeoutMs;
+  const remaining = () => Math.max(0, deadlineAt - Date.now());
   try {
-    if (containerState(name) === 'running')
-      podman(['stop', '--time', '1', name], { timeout: 4_500 });
-    return ['absent', 'stopped'].includes(containerState(name));
+    if (containerState(name, remaining()) === 'running')
+      podman(['stop', '--time', '1', name], { timeout: remaining() });
+    if (remaining() <= 0) return false;
+    return (
+      ['absent', 'stopped'].includes(containerState(name, remaining())) &&
+      remaining() > 0
+    );
   } catch {
     return false;
   }
@@ -467,7 +544,7 @@ function asyncPodman(args, timeoutMs) {
         'podman',
         ...args,
       ],
-      { stdio: 'ignore', windowsHide: true },
+      { stdio: 'ignore', windowsHide: true, env: childEnv() },
     );
     const timer = setTimeout(
       () => {
@@ -489,27 +566,35 @@ function asyncPodman(args, timeoutMs) {
 
 export async function confirmBenchmarkCleanup({
   stop = asyncPodman,
-  inspect = containerState,
+  inspect = asyncContainerState,
   deadlineAt = Date.now() + cancellationConfirmationTimeoutMs,
 } = {}) {
   const remaining = () => Math.max(0, deadlineAt - Date.now());
-  await Promise.all(
-    [workerName, meterName, modelName].map((name) =>
-      stop(['stop', '--time', '1', name], remaining()),
-    ),
-  );
-  const states = await Promise.all(
-    [workerName, meterName, modelName].map(async (name) => {
-      if (remaining() <= 0) return 'inconclusive';
-      try {
-        return await inspect(name);
-      } catch {
-        return 'inconclusive';
-      }
-    }),
-  );
+  const attempt = stopAndConfirmAttemptContainers({
+    workerName,
+    meterName,
+    deadlineAt,
+    operations: {
+      inspect: (name) => Promise.resolve(inspect(name, remaining())),
+      stop: (name) => stop(['stop', '--time', '1', name], remaining()),
+    },
+  });
+  const model = (async () => {
+    await stop(['stop', '--time', '1', modelName], remaining());
+    if (remaining() <= 0) return 'inconclusive';
+    try {
+      return await inspect(modelName, remaining());
+    } catch {
+      return 'inconclusive';
+    }
+  })();
+  const [workerMeter, modelState] = await Promise.all([attempt, model]);
+  const states = [workerMeter.workerState, workerMeter.meterState, modelState];
   return {
-    confirmed: states.every((state) => ['absent', 'stopped'].includes(state)),
+    confirmed:
+      remaining() > 0 &&
+      workerMeter.confirmed &&
+      ['absent', 'stopped'].includes(modelState),
     states,
   };
 }
@@ -570,6 +655,29 @@ export function reserveOneUseRun(base, parent = stateRoot) {
   return lock;
 }
 
+export function installInterruptGuard(emitter = process) {
+  let signal = null;
+  const onInterrupt = () => {
+    signal ??= 'SIGINT';
+  };
+  const onTerminate = () => {
+    signal ??= 'SIGTERM';
+  };
+  emitter.on('SIGINT', onInterrupt);
+  emitter.on('SIGTERM', onTerminate);
+  return {
+    signal: () => signal,
+    async checkpoint() {
+      await new Promise((resolve) => setImmediate(resolve));
+      if (signal) throw new Error(`interrupted: ${signal}`);
+    },
+    dispose() {
+      emitter.off('SIGINT', onInterrupt);
+      emitter.off('SIGTERM', onTerminate);
+    },
+  };
+}
+
 export async function runAvatarBenchmark(base) {
   assertPreflight(base);
   await verifyPinnedWorkerImageCompatibility({
@@ -577,6 +685,7 @@ export async function runAvatarBenchmark(base) {
     trustedRepositoryRoot: root,
   });
   reserveOneUseRun(base);
+  const interrupt = installInterruptGuard();
   const result = {
     base,
     patchApplied: false,
@@ -588,6 +697,7 @@ export async function runAvatarBenchmark(base) {
   let startedContainers = false;
   const startedAt = Date.now();
   try {
+    await interrupt.checkpoint();
     disposable = makeDisposableCheckout(base);
     const source = readFileSync(
       path.join(disposable.checkout, avatarSource),
@@ -604,14 +714,18 @@ export async function runAvatarBenchmark(base) {
     try {
       startedContainers = true;
       podman(['start', modelName], { timeout: 10_000 });
+      await interrupt.checkpoint();
       podman(meterContainerArgs(), { timeout: 10_000 });
+      await interrupt.checkpoint();
       const deadlineAt = startedAt + 180_000;
       waitForMeter(deadlineAt);
+      await interrupt.checkpoint();
       const raw = podman(clientContainerArgs(wslPath(clientPath)), {
         input: JSON.stringify({ prompt }),
         timeout: Math.max(1, deadlineAt - Date.now()),
         maxBuffer: 32_000,
       });
+      await interrupt.checkpoint();
       const reply = JSON.parse(raw);
       result.usage = validateUsage(reply.usage);
       result.meter = readMeterUsage();
@@ -652,13 +766,16 @@ export async function runAvatarBenchmark(base) {
     }
     if (!result.cleanup.confirmed)
       throw new Error('cleanup: model containers not confirmed stopped');
+    await interrupt.checkpoint();
     applyAndVerify(disposable.checkout, result.patch);
     result.patchApplied = true;
-    verifyUi(disposable.checkout, {
+    await verifyUi(disposable.checkout, {
       onResult: (entry) => result.verification.push(entry),
+      checkpoint: () => interrupt.checkpoint(),
     });
   } catch (error) {
     result.category = String(error.message).split(':')[0].slice(0, 40);
+    if (interrupt.signal()) result.signal = interrupt.signal();
     if (result.category === 'cleanup' && result.cleanup)
       result.cleanup.confirmed = false;
   } finally {
@@ -679,6 +796,7 @@ export async function runAvatarBenchmark(base) {
       JSON.stringify(result, null, 2),
       { flag: 'wx' },
     );
+    interrupt.dispose();
   }
   return result;
 }
