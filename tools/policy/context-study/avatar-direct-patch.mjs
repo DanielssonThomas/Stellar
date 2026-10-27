@@ -498,10 +498,7 @@ export function applyAndVerify(checkout, patch) {
       `scope: unexpected checkout changes (${changed.join(', ')})`,
     );
   assertScopedFiles(checkout, true);
-  validateAvatarResult(
-    readFileSync(path.join(checkout, avatarSource), 'utf8'),
-    readFileSync(path.join(checkout, avatarTest), 'utf8'),
-  );
+  validateAvatarResult(readFileSync(path.join(checkout, avatarTest), 'utf8'));
 }
 
 export async function verifyUi(

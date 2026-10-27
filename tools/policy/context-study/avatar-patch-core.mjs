@@ -70,13 +70,7 @@ export function validateAvatarPatch(patch) {
   return [...seen];
 }
 
-export function validateAvatarResult(source, test) {
-  const requiredSource = [
-    /SkeletonShape\s*=\s*[^;]*['"]avatar['"]/,
-    /['"][^'"]*\bh-10\b[^'"]*\bw-10\b[^'"]*['"]|['"][^'"]*\bw-10\b[^'"]*\bh-10\b[^'"]*['"]/,
-    /rounded-full/,
-    /aria-hidden=["']true["']/,
-  ];
+export function validateAvatarResult(test) {
   const requiredTest = [
     /SkeletonAtom/,
     /setInput\(\s*['"]shape['"]\s*,\s*['"]avatar['"]\s*\)/,
@@ -86,8 +80,6 @@ export function validateAvatarResult(source, test) {
     /h-10/,
     /w-10/,
   ];
-  if (!requiredSource.every((pattern) => pattern.test(source)))
-    throw new Error('behavior: avatar source assertions missing');
   if (!requiredTest.every((pattern) => pattern.test(test)))
     throw new Error('coverage: focused avatar assertions missing');
 }

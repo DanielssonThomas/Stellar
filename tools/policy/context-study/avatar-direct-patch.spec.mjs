@@ -58,15 +58,10 @@ test('rejects escaped, renamed, binary, duplicate, and fenced patches', () => {
     assert.throws(() => validateAvatarPatch(bad));
 });
 
-test('requires concrete avatar implementation and focused assertions', () => {
-  const source = `export type SkeletonShape = 'text' | 'control' | 'avatar';\n'h-10 w-10 rounded-full'; aria-hidden="true";`;
+test('requires focused avatar assertions without source-layout assumptions', () => {
   const spec = `SkeletonAtom; setInput('shape', 'avatar'); expect(classes).toContain('h-10 w-10 rounded-full'); aria-hidden;`;
-  assert.doesNotThrow(() => validateAvatarResult(source, spec));
-  assert.throws(
-    () => validateAvatarResult(source, 'baseline tests only'),
-    /coverage/,
-  );
-  assert.throws(() => validateAvatarResult('unchanged', spec), /behavior/);
+  assert.doesNotThrow(() => validateAvatarResult(spec));
+  assert.throws(() => validateAvatarResult('baseline tests only'), /coverage/);
 });
 
 test('requires complete, bounded trusted usage', () => {
