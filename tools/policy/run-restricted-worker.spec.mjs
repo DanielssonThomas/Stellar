@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
@@ -13,6 +14,7 @@ import {
   buildRestrictedVerificationArgs,
   buildHermesTaskCommand,
   captureBoundedDiagnosticStream,
+  classifyHermesPromptInspectionFailure,
   cancelRestrictedVerification,
   createPeonWorkerAdapter,
   formatWorkerFailure,
@@ -1349,6 +1351,74 @@ test('prepared context transport is interactive, read-only inspectable, and does
       }),
     /trusted absolute mount paths/,
   );
+});
+
+test('pinned prompt matcher accepts only Hermes newline normalization', () => {
+  const source = readFileSync(
+    new URL('./inspect-hermes-system-prompt.py', import.meta.url),
+    'utf8',
+  );
+  const python = `import ast, json, sys
+tree = ast.parse(sys.stdin.read())
+matcher = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'embedded_copy_count')
+scope = {}
+exec(compile(ast.Module(body=[matcher], type_ignores=[]), '<trusted-matcher>', 'exec'), scope)
+count = scope['embedded_copy_count']
+print(json.dumps([
+    count('first\\nsecond\\n', 'first\\r\\nsecond\\r\\n'),
+    count('first\\nsecond\\n', 'first\\r\\nchanged\\r\\n'),
+    count('first\\nsecond\\nfirst\\nsecond\\n', 'first\\r\\nsecond\\r\\n'),
+    count('one line', 'one line\\r\\n', True),
+    count('one line', '', True),
+]))`;
+  const windows = process.platform === 'win32';
+  const run = spawnSync(
+    windows ? 'wsl.exe' : 'python3',
+    [
+      ...(windows
+        ? ['--distribution', 'Ubuntu', '--user', 'peon', '--exec', 'python3']
+        : []),
+      '-c',
+      python,
+    ],
+    { input: source, encoding: 'utf8', windowsHide: true, timeout: 10_000 },
+  );
+  assert.equal(run.status, 0, 'trusted Python matcher must run');
+  assert.deepEqual(JSON.parse(run.stdout), [1, 0, 2, 1, 0]);
+});
+
+test('prompt inspection failures report bounded categories without raw output', () => {
+  const examples = [
+    [
+      {
+        status: 1,
+        stderr:
+          'Hermes system prompt did not contain one exact copy. secret=private',
+      },
+      'attestation',
+      'content-mismatch',
+    ],
+    [
+      { status: 125, stderr: 'Error: statfs mount failed' },
+      'mounts',
+      'mount-failure',
+    ],
+    [
+      { status: 1, stderr: 'Traceback: ModuleNotFoundError' },
+      'hermes',
+      'initialization-failure',
+    ],
+    [{ status: 137, stderr: 'killed' }, 'container', 'resource-exhaustion'],
+    [{ status: null, error: { code: 'ETIMEDOUT' } }, 'container', 'timeout'],
+    [{ status: 1, stderr: 'secret=private' }, 'inspection', 'unknown-failure'],
+  ];
+  for (const [result, stage, category] of examples) {
+    const error = classifyHermesPromptInspectionFailure(result);
+    assert.equal(error.stage, stage);
+    assert.equal(error.exitStatus, result.status);
+    assert.equal(error.category, category);
+    assert.doesNotMatch(error.message, /private|Traceback|statfs/);
+  }
 });
 
 test('rejects oversized or NUL-containing prepared input before launcher preflight', async () => {

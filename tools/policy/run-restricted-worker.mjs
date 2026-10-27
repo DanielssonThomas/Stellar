@@ -623,6 +623,51 @@ export function buildHermesPromptInspectionArgs({
   ];
 }
 
+function promptInspectionError(stage, exitStatus, category) {
+  const error = new Error(
+    `Pinned Hermes prompt inspection failed (stage=${stage}, exit=${exitStatus ?? 'unknown'}, category=${category}).`,
+  );
+  return Object.assign(error, { stage, exitStatus, category });
+}
+
+export function classifyHermesPromptInspectionFailure(result) {
+  const exitStatus = Number.isInteger(result?.status) ? result.status : null;
+  const stderr = String(result?.stderr ?? '').slice(-8 * 1024);
+  if (result?.error?.code === 'ETIMEDOUT')
+    return promptInspectionError('container', exitStatus, 'timeout');
+  if (result?.error?.code === 'ENOBUFS')
+    return promptInspectionError('inspection', exitStatus, 'output-limit');
+  if (result?.error)
+    return promptInspectionError('launch', exitStatus, 'subprocess-failure');
+  if (exitStatus === 137 || result?.signal === 'SIGKILL')
+    return promptInspectionError(
+      'container',
+      exitStatus,
+      'resource-exhaustion',
+    );
+  if (/Hermes system prompt did not contain one exact copy/.test(stderr))
+    return promptInspectionError('attestation', exitStatus, 'content-mismatch');
+  if (
+    /Trusted (?:workspace AGENTS\.md|Peon SOUL\.md) is unavailable/.test(stderr)
+  )
+    return promptInspectionError(
+      'mounts',
+      exitStatus,
+      'trusted-file-unavailable',
+    );
+  if (/\b(?:mount|statfs|lstat|permission denied)\b/i.test(stderr))
+    return promptInspectionError('mounts', exitStatus, 'mount-failure');
+  if (/\b(?:Traceback|ImportError|ModuleNotFoundError|venv)\b/.test(stderr))
+    return promptInspectionError(
+      'hermes',
+      exitStatus,
+      'initialization-failure',
+    );
+  if (/\b(?:podman|OCI runtime|crun|container)\b/i.test(stderr))
+    return promptInspectionError('container', exitStatus, 'startup-failure');
+  return promptInspectionError('inspection', exitStatus, 'unknown-failure');
+}
+
 export function inspectHermesSystemPromptGuidance({
   issueNumber,
   image,
@@ -690,42 +735,42 @@ export function inspectHermesSystemPromptGuidance({
   const minimalGuidanceSource = minimalGuidance
     ? trustedMinimalGuidanceSource()
     : undefined;
-  let stdout;
-  try {
-    stdout = runWsl(
-      [
-        '--distribution',
-        distribution,
-        '--user',
-        workerAccount,
-        '--exec',
-        'podman',
-        ...buildHermesPromptInspectionArgs({
-          image,
-          uid: workerUid,
-          gid: workerGid,
-          workspace,
-          hermesConfigSource: configSource,
-          hermesSoulSource: soulSource,
-          inspectionScriptSource,
-          runnerScriptSource,
-          minimalGuidanceSource,
-        }),
-      ],
-      { timeout: 30_000 },
-    );
-  } catch {
-    throw new Error(
-      'Pinned Hermes prompt inspection failed before producing sanitized evidence.',
-    );
-  }
+  const inspection = spawnSync(
+    'wsl.exe',
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      'podman',
+      ...buildHermesPromptInspectionArgs({
+        image,
+        uid: workerUid,
+        gid: workerGid,
+        workspace,
+        hermesConfigSource: configSource,
+        hermesSoulSource: soulSource,
+        inspectionScriptSource,
+        runnerScriptSource,
+        minimalGuidanceSource,
+      }),
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 30_000,
+      maxBuffer: 64 * 1024,
+    },
+  );
+  if (inspection.error || inspection.status !== 0)
+    throw classifyHermesPromptInspectionFailure(inspection);
   let result;
   try {
-    result = JSON.parse(stdout);
+    result = JSON.parse(inspection.stdout.trim());
   } catch {
-    throw new Error(
-      'Pinned Hermes prompt inspection returned invalid evidence.',
-    );
+    throw promptInspectionError('evidence', inspection.status, 'invalid-json');
   }
   if (
     result?.schema !== 'stellar.hermes-system-prompt-attestation/v1' ||
@@ -737,8 +782,10 @@ export function inspectHermesSystemPromptGuidance({
     result.completionRequests !== 0 ||
     !/^[a-f0-9]{64}$/.test(result.systemPromptSha256 ?? '')
   )
-    throw new Error(
-      'Pinned Hermes system prompt did not verify the exact trusted AGENTS.md content.',
+    throw promptInspectionError(
+      'attestation',
+      inspection.status,
+      'evidence-mismatch',
     );
   return {
     path: 'AGENTS.md',
