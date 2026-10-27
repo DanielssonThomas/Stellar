@@ -11,6 +11,7 @@
 - [Agent supervision](guides/agent-supervision.md): bounded worker attempts, durable handoffs, verification, and escalation requests.
 - [Worker integration policy](guides/worker-integration-policy.md): deterministic offline eligibility checks for restricted worker pull requests.
 - [Restricted worker security](guides/worker-security.md): fork-only identity, local WSL and Podman boundaries, admission, and removal.
+- [Engineering organization](guides/engineering-organization.md): Architect, Foreman, Peon roles, profile setup, authority, and offline workflow.
 - [Development roadmap](implementation/roadmap.md): bootstrap status and links to GitHub work.
 
 Operational guides will be added with the workflows they describe.

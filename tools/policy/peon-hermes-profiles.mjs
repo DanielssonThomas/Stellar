@@ -138,6 +138,21 @@ export function validatePeonHermesConfigSource(profile, source) {
   return source;
 }
 
+export function validatePeonHermesSoulSource(source) {
+  if (
+    typeof source !== 'string' ||
+    !source.startsWith('/mnt/') ||
+    source.includes(',') ||
+    source.includes('\\') ||
+    source.split('/').includes('..') ||
+    !source.endsWith('/tools/policy/engineering-org/templates/peon/soul.md')
+  )
+    throw new Error(
+      'Trusted Peon SOUL source must match the version-controlled identity template.',
+    );
+  return source;
+}
+
 export function assertMatchingHermesConfigDigest(trustedDigest, mountedDigest) {
   if (
     !/^[a-f0-9]{64}$/.test(trustedDigest ?? '') ||

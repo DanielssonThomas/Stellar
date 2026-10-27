@@ -29,6 +29,8 @@ import {
 const image = `ghcr.io/stellar-ai-corp/hermes-worker@sha256:${'a'.repeat(64)}`;
 const trustedFocusConfig =
   '/mnt/d/ai-repositories/stellar-issue-82/tools/policy/peon-hermes-config.yaml';
+const trustedFocusSoul =
+  '/mnt/d/ai-repositories/stellar-issue-82/tools/policy/engineering-org/templates/peon/soul.md';
 const evidenceConfig =
   '/mnt/d/ai-repositories/stellar/tools/policy/peon-hermes-evidence-config.yaml';
 const evidenceHook =
@@ -252,6 +254,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     protectedPaths,
     command: ['hermes', '--issue', '21'],
     hermesConfigSource: trustedFocusConfig,
+    hermesSoulSource: trustedFocusSoul,
   });
 
   assert.deepEqual(args, [
@@ -275,6 +278,7 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21,dst=/workspace,rw',
     `--mount=type=bind,src=${trustedFocusConfig},dst=/tmp/.hermes/config.yaml,ro`,
+    `--mount=type=bind,src=${trustedFocusSoul},dst=/tmp/.hermes/SOUL.md,ro`,
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.agents/skills,dst=/workspace/.agents/skills,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/CODEOWNERS,dst=/workspace/.github/CODEOWNERS,ro',
     '--mount=type=bind,src=/home/peon/workspaces/issue-21/.github/workflows,dst=/workspace/.github/workflows,ro',
@@ -324,6 +328,11 @@ test('builds a rootless, resource-bounded Podman invocation for one issue clone'
       `--mount=type=bind,src=${trustedFocusConfig},dst=/tmp/.hermes/config.yaml,ro`,
     ),
   );
+  assert.ok(
+    args.includes(
+      `--mount=type=bind,src=${trustedFocusSoul},dst=/tmp/.hermes/SOUL.md,ro`,
+    ),
+  );
   assert.equal(
     args.some((argument) =>
       argument.includes('/home/peon/workspaces/issue-21/tools/policy/'),
@@ -345,6 +354,7 @@ test('changes only the read-only Hermes config source for an opted-in profile', 
       command: ['hermes', 'chat'],
       hermesProfile,
       hermesConfigSource,
+      hermesSoulSource: trustedFocusSoul,
     });
   const focus = argsFor('focus', trustedFocusConfig);
   const narrowConfig = trustedFocusConfig.replace(
@@ -354,13 +364,20 @@ test('changes only the read-only Hermes config source for an opted-in profile', 
   const narrow = argsFor('narrow-coding', narrowConfig);
   const withoutConfigMount = (args) =>
     args.filter(
-      (argument) => !argument.includes('dst=/tmp/.hermes/config.yaml'),
+      (argument) =>
+        !argument.includes('dst=/tmp/.hermes/config.yaml') &&
+        !argument.includes('dst=/tmp/.hermes/SOUL.md'),
     );
 
   assert.deepEqual(withoutConfigMount(narrow), withoutConfigMount(focus));
   assert.ok(
     narrow.includes(
       `--mount=type=bind,src=${narrowConfig},dst=/tmp/.hermes/config.yaml,ro`,
+    ),
+  );
+  assert.ok(
+    narrow.includes(
+      `--mount=type=bind,src=${trustedFocusSoul},dst=/tmp/.hermes/SOUL.md,ro`,
     ),
   );
   assert.ok(narrow.includes('--read-only'));
@@ -915,6 +932,7 @@ test('rejects image tags without an immutable digest', () => {
         protectedPaths,
         command: ['hermes'],
         hermesConfigSource: trustedFocusConfig,
+        hermesSoulSource: trustedFocusSoul,
       }),
     /pinned by a lowercase sha256 digest/,
   );
@@ -928,6 +946,7 @@ test('rejects image tags without an immutable digest', () => {
         protectedPaths,
         command: ['hermes'],
         hermesConfigSource: trustedFocusConfig,
+        hermesSoulSource: trustedFocusSoul,
       }),
     /ghcr\.io\/stellar-ai-corp\/hermes-worker/,
   );
@@ -1120,6 +1139,7 @@ test('rejects invalid issue identifiers and empty commands', () => {
         protectedPaths,
         command: ['hermes'],
         hermesConfigSource: trustedFocusConfig,
+        hermesSoulSource: trustedFocusSoul,
       }),
     /issueNumber must be a positive integer/,
   );
@@ -1133,6 +1153,7 @@ test('rejects invalid issue identifiers and empty commands', () => {
         command: [],
         protectedPaths,
         hermesConfigSource: trustedFocusConfig,
+        hermesSoulSource: trustedFocusSoul,
       }),
     /nonempty command argument list/,
   );
@@ -1176,6 +1197,7 @@ test('fails closed when trusted protected paths are missing or unsafe', () => {
     gid: 1001,
     command: ['hermes'],
     hermesConfigSource: trustedFocusConfig,
+    hermesSoulSource: trustedFocusSoul,
   };
   assert.throws(() => buildPodmanArgs(base), /Trusted protected paths/);
   assert.throws(
@@ -1231,6 +1253,7 @@ test('passes the complete Hermes executable command through the pinned image ent
     protectedPaths,
     command,
     hermesConfigSource: trustedFocusConfig,
+    hermesSoulSource: trustedFocusSoul,
   });
   const imagePosition = args.indexOf(image);
   const containerfile = readFileSync(
@@ -1262,6 +1285,7 @@ test('prepared context transport is interactive, read-only inspectable, and does
     protectedPaths,
     command: ['python3', '-c', 'read stdin'],
     hermesConfigSource: trustedFocusConfig,
+    hermesSoulSource: trustedFocusSoul,
     interactive: true,
   });
   assert.ok(args.includes('--interactive'));
@@ -1272,6 +1296,7 @@ test('prepared context transport is interactive, read-only inspectable, and does
     gid: 1001,
     workspace: '/home/peon/workspaces/issue-50',
     hermesConfigSource: trustedFocusConfig,
+    hermesSoulSource: trustedFocusSoul,
     inspectionScriptSource:
       '/mnt/d/ai-repositories/stellar/tools/policy/inspect-hermes-system-prompt.py',
     runnerScriptSource:
@@ -1283,6 +1308,11 @@ test('prepared context transport is interactive, read-only inspectable, and does
   assert.ok(
     inspect.includes(
       '--mount=type=bind,src=/home/peon/workspaces/issue-50,dst=/workspace,ro',
+    ),
+  );
+  assert.ok(
+    inspect.includes(
+      `--mount=type=bind,src=${trustedFocusSoul},dst=/tmp/.hermes/SOUL.md,ro`,
     ),
   );
   assert.ok(
@@ -1300,6 +1330,20 @@ test('prepared context transport is interactive, read-only inspectable, and does
         gid: 1001,
         workspace: '/home/peon/workspaces/issue-50',
         hermesConfigSource: trustedFocusConfig,
+        inspectionScriptSource: '/tmp/inspector.py',
+        runnerScriptSource: '/tmp/runner.sh',
+      }),
+    /trusted absolute mount paths/,
+  );
+  assert.throws(
+    () =>
+      buildHermesPromptInspectionArgs({
+        image,
+        uid: 1001,
+        gid: 1001,
+        workspace: '/home/peon/workspaces/issue-50',
+        hermesConfigSource: trustedFocusConfig,
+        hermesSoulSource: trustedFocusSoul,
         inspectionScriptSource: '/tmp/bad,source.py',
         runnerScriptSource: '/tmp/runner.sh',
       }),

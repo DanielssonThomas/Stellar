@@ -22,6 +22,7 @@ import {
   maxForwardedRequestsForWorkflow,
   modelTokenLimitForWorkflow,
   validatePeonHermesConfigSource,
+  validatePeonHermesSoulSource,
 } from './peon-hermes-profiles.mjs';
 
 export { buildWorkerImageInspectionArgs };
@@ -337,6 +338,33 @@ function trustedHermesConfigSource(profile) {
   return source;
 }
 
+function trustedHermesSoulSource() {
+  const windowsSource = path.join(
+    repositoryRoot,
+    'tools',
+    'policy',
+    'engineering-org',
+    'templates',
+    'peon',
+    'soul.md',
+  );
+  const trustedDigest = createHash('sha256')
+    .update(readFileSync(windowsSource))
+    .digest('hex');
+  const source = validatePeonHermesSoulSource(
+    wslWorker('wslpath', '-a', '-u', windowsSource),
+  );
+  if (wslWorker('realpath', '-e', source) !== source)
+    throw new Error(
+      'Trusted Peon SOUL source must not resolve through a symlink.',
+    );
+  const inspectedDigest = wslWorker('sha256sum', '--', source)
+    .trim()
+    .split(/\s+/)[0];
+  assertMatchingHermesConfigDigest(trustedDigest, inspectedDigest);
+  return source;
+}
+
 function trustedMinimalGuidanceSource() {
   const windowsSource = path.join(
     repositoryRoot,
@@ -366,6 +394,7 @@ export function buildPodmanArgs({
   attemptNumber = 1,
   hermesProfile = defaultPeonHermesProfile,
   hermesConfigSource,
+  hermesSoulSource,
   toolEvidenceSource,
   interactive = false,
   writablePaths,
@@ -410,6 +439,9 @@ export function buildPodmanArgs({
     hermesProfile,
     hermesConfigSource,
   );
+  const trustedSoulSource = hermesSoulSource
+    ? validatePeonHermesSoulSource(hermesSoulSource)
+    : null;
   if (
     writablePaths !== undefined &&
     (!Array.isArray(writablePaths) ||
@@ -480,6 +512,11 @@ export function buildPodmanArgs({
         ]
       : []),
     `--mount=type=bind,src=${trustedConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
+    ...(trustedSoulSource
+      ? [
+          `--mount=type=bind,src=${trustedSoulSource},dst=/tmp/.hermes/SOUL.md,ro`,
+        ]
+      : []),
     ...(hermesProfile === 'narrow-evidence'
       ? [
           `--mount=type=bind,src=${toolEvidenceSource},dst=/usr/local/libexec/record-peon-tool-event.py,ro`,
@@ -521,6 +558,7 @@ export function buildHermesPromptInspectionArgs({
   gid,
   workspace,
   hermesConfigSource,
+  hermesSoulSource,
   inspectionScriptSource,
   runnerScriptSource,
   minimalGuidanceSource,
@@ -532,6 +570,7 @@ export function buildHermesPromptInspectionArgs({
   const mounts = [
     workspace,
     hermesConfigSource,
+    hermesSoulSource,
     inspectionScriptSource,
     runnerScriptSource,
     ...(minimalGuidanceSource ? [minimalGuidanceSource] : []),
@@ -570,6 +609,7 @@ export function buildHermesPromptInspectionArgs({
         ]
       : []),
     `--mount=type=bind,src=${hermesConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
+    `--mount=type=bind,src=${validatePeonHermesSoulSource(hermesSoulSource)},dst=/tmp/.hermes/SOUL.md,ro`,
     `--mount=type=bind,src=${inspectionScriptSource},dst=/usr/local/libexec/hermes-worker-git-askpass,ro`,
     `--mount=type=bind,src=${runnerScriptSource},dst=/usr/local/libexec/verify-hermes-runtime.py,ro`,
     '--workdir=/workspace',
@@ -599,6 +639,22 @@ export function inspectHermesSystemPromptGuidance({
     `issue/${issueNumber}-`,
   );
   const configSource = trustedHermesConfigSource(hermesProfile);
+  const soulSource = trustedHermesSoulSource();
+  const expectedPeonSoulSha256 = createHash('sha256')
+    .update(
+      readFileSync(
+        path.join(
+          repositoryRoot,
+          'tools',
+          'policy',
+          'engineering-org',
+          'templates',
+          'peon',
+          'soul.md',
+        ),
+      ),
+    )
+    .digest('hex');
   const inspectionScriptWindows = path.join(
     repositoryRoot,
     'tools',
@@ -650,6 +706,7 @@ export function inspectHermesSystemPromptGuidance({
           gid: workerGid,
           workspace,
           hermesConfigSource: configSource,
+          hermesSoulSource: soulSource,
           inspectionScriptSource,
           runnerScriptSource,
           minimalGuidanceSource,
@@ -674,6 +731,8 @@ export function inspectHermesSystemPromptGuidance({
     result?.schema !== 'stellar.hermes-system-prompt-attestation/v1' ||
     result.agentsSha256 !== expectedGuidanceSha256 ||
     result.exactMatchCount !== 1 ||
+    result.peonSoulSha256 !== expectedPeonSoulSha256 ||
+    result.peonSoulExactMatchCount !== 1 ||
     result.networkRequests !== 0 ||
     result.completionRequests !== 0 ||
     !/^[a-f0-9]{64}$/.test(result.systemPromptSha256 ?? '')
@@ -684,6 +743,7 @@ export function inspectHermesSystemPromptGuidance({
   return {
     path: 'AGENTS.md',
     guidanceSha256: result.agentsSha256,
+    peonSoulSha256: result.peonSoulSha256,
     systemPromptSha256: result.systemPromptSha256,
   };
 }
@@ -1646,6 +1706,7 @@ export async function runRestrictedWorker({
   const protectedPaths = loadProtectedPaths();
   validateProtectedMountSources(issueWorkspace(number), protectedPaths);
   const hermesConfigSource = trustedHermesConfigSource(hermesProfile);
+  const hermesSoulSource = trustedHermesSoulSource();
   const minimalGuidanceSource = writablePaths
     ? trustedMinimalGuidanceSource()
     : undefined;
@@ -1835,6 +1896,7 @@ export async function runRestrictedWorker({
       attemptNumber: attempt,
       hermesProfile,
       hermesConfigSource,
+      hermesSoulSource,
       toolEvidenceSource,
       interactive: taskInput !== undefined,
       writablePaths,

@@ -7,8 +7,9 @@
   "scripts": {
     "prepare": "husky",
     "policy:validate-issue": "node tools/policy/validate-issue.mjs",
-    "policy:test": "node --test tools/policy/ai-review.spec.mjs tools/policy/ai-spend-ledger.spec.mjs tools/policy/validate-issue.spec.mjs tools/policy/validate-issue-event.spec.mjs tools/policy/validate-commit-message.spec.mjs tools/policy/issue-worktree.spec.mjs tools/policy/manage-issue-worktree.spec.mjs tools/policy/update-issue.spec.mjs tools/policy/prepare-pr.spec.mjs tools/policy/supervise-worker.spec.mjs tools/policy/worker-integration-gate.spec.mjs tools/policy/worker-integration-runner.spec.mjs tools/policy/run-restricted-worker.spec.mjs tools/policy/supervised-peon-run.spec.mjs tools/policy/peon-hermes-profiles.spec.mjs tools/policy/peon-metering-proxy.spec.mjs tools/policy/peon-task-context.spec.mjs tools/policy/bounded-attempt-lease.spec.mjs tools/policy/worker-image-compatibility.spec.mjs tools/policy/worker-container-lifecycle.spec.mjs",
-    "policy:docs": "node tools/policy/validate-docs.mjs"
+    "policy:test": "node --test tools/policy/ai-review.spec.mjs tools/policy/ai-spend-ledger.spec.mjs tools/policy/validate-issue.spec.mjs tools/policy/validate-issue-event.spec.mjs tools/policy/validate-commit-message.spec.mjs tools/policy/issue-worktree.spec.mjs tools/policy/manage-issue-worktree.spec.mjs tools/policy/update-issue.spec.mjs tools/policy/prepare-pr.spec.mjs tools/policy/supervise-worker.spec.mjs tools/policy/worker-integration-gate.spec.mjs tools/policy/worker-integration-runner.spec.mjs tools/policy/run-restricted-worker.spec.mjs tools/policy/supervised-peon-run.spec.mjs tools/policy/peon-hermes-profiles.spec.mjs tools/policy/peon-metering-proxy.spec.mjs tools/policy/peon-task-context.spec.mjs tools/policy/bounded-attempt-lease.spec.mjs tools/policy/worker-image-compatibility.spec.mjs tools/policy/worker-container-lifecycle.spec.mjs tools/policy/engineering-org/*.spec.mjs",
+    "policy:docs": "node tools/policy/validate-docs.mjs",
+    "policy:org": "node --test tools/policy/engineering-org/*.spec.mjs"
   },
   "private": true,
   "devDependencies": {
