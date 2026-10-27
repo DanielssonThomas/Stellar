@@ -524,7 +524,7 @@ export async function verifyUi(
   try {
     writeFileSync(
       acceptancePath,
-      `\nimport { TestBed as BenchmarkTestBed } from '@angular/core/testing';\nimport { expect as benchmarkExpect, it as benchmarkIt } from 'vitest';\nimport { SkeletonAtom as BenchmarkSkeletonAtom } from './skeleton-atom.component';\nbenchmarkIt('trusted avatar acceptance', async () => {\n  await BenchmarkTestBed.configureTestingModule({ imports: [BenchmarkSkeletonAtom] }).compileComponents();\n  const fixture = BenchmarkTestBed.createComponent(BenchmarkSkeletonAtom);\n  const span = () => fixture.nativeElement.querySelector('span');\n  fixture.componentRef.setInput('shape', 'avatar');\n  await fixture.whenStable();\n  for (const cls of ['h-10', 'w-10', 'rounded-full', 'bg-stellar-skeleton']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  benchmarkExpect(span().getAttribute('aria-hidden')).toBe('true');\n  fixture.componentRef.setInput('shape', 'text');\n  await fixture.whenStable();\n  for (const cls of ['h-4', 'w-24']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  fixture.componentRef.setInput('shape', 'control');\n  await fixture.whenStable();\n  for (const cls of ['h-5', 'w-20']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n});\n`,
+      `\nimport { TestBed as BenchmarkTestBed } from '@angular/core/testing';\nimport { expect as benchmarkExpect, it as benchmarkIt } from 'vitest';\nimport { SkeletonAtom as BenchmarkSkeletonAtom } from './skeleton-atom.component';\nbenchmarkIt('trusted avatar acceptance', async () => {\n  await BenchmarkTestBed.configureTestingModule({ imports: [BenchmarkSkeletonAtom] }).compileComponents();\n  const fixture = BenchmarkTestBed.createComponent(BenchmarkSkeletonAtom);\n  const span = () => fixture.nativeElement.querySelector('span');\n  fixture.componentRef.setInput('shape', 'avatar');\n  await fixture.whenStable();\n  for (const cls of ['h-10', 'w-10', 'rounded-full', 'bg-stellar-skeleton']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  benchmarkExpect(span().classList.contains('rounded-stellar')).toBe(false);\n  benchmarkExpect(span().getAttribute('aria-hidden')).toBe('true');\n  fixture.componentRef.setInput('shape', 'text');\n  await fixture.whenStable();\n  for (const cls of ['h-4', 'w-24']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  fixture.componentRef.setInput('shape', 'control');\n  await fixture.whenStable();\n  for (const cls of ['h-5', 'w-20']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n});\n`,
     );
     for (const target of ['lint', 'test', 'build']) {
       await checkpoint();
@@ -855,13 +855,10 @@ export async function runAvatarBenchmark(base) {
         { flag: 'wx' },
       );
     } finally {
-      if (startedContainers && !result.meter) {
-        try {
-          result.meter = readMeterUsage();
-        } catch {
-          result.meter = { status: 'unavailable' };
-        }
-      }
+      // A failed or interrupted client may still have output tokens settling
+      // upstream. Never persist a partial usage snapshot as final metering.
+      if (startedContainers && !result.meter)
+        result.meter = { status: 'unsettled' };
       try {
         result.cleanup = startedContainers
           ? await confirmBenchmarkCleanup()

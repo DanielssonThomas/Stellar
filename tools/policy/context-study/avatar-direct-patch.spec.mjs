@@ -305,8 +305,12 @@ test('disposable checkout accepts only the two intended patch paths', async () =
       original
         .replace("'text' | 'control'", "'text' | 'control' | 'avatar'")
         .replace(
+          'inline-block animate-pulse rounded-stellar bg-stellar-skeleton',
+          'inline-block animate-pulse bg-stellar-skeleton',
+        )
+        .replace(
           "'h-5 w-20': this.shape() === 'control',",
-          "'h-5 w-20': this.shape() === 'control',\n      'h-10 w-10 rounded-full': this.shape() === 'avatar',",
+          "'h-5 w-20': this.shape() === 'control',\n      'rounded-stellar': this.shape() !== 'avatar',\n      'h-10 w-10 rounded-full': this.shape() === 'avatar',",
         ),
     );
     writeFileSync(
