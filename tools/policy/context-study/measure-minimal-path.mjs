@@ -40,7 +40,9 @@ function run(command, args, input, trim = true) {
     ...(input === undefined ? {} : { input }),
   });
   if (result.error || result.status !== 0)
-    throw new Error('offline_minimal_measurement_failed');
+    throw new Error(
+      `offline_minimal_measurement_failed: ${result.error?.message ?? result.stderr?.trim().slice(-1000) ?? `exit ${result.status}`}`,
+    );
   return trim ? result.stdout.trim() : result.stdout;
 }
 function wsl(...args) {
@@ -64,6 +66,12 @@ function inspect(minimalGuidanceSource) {
     workspace,
     hermesConfigSource: wslPath(
       path.join(repositoryRoot, 'tools/policy/peon-hermes-narrow-config.yaml'),
+    ),
+    hermesSoulSource: wslPath(
+      path.join(
+        repositoryRoot,
+        'tools/policy/engineering-org/templates/peon/soul.md',
+      ),
     ),
     inspectionScriptSource: wslPath(
       path.join(repositoryRoot, 'tools/policy/inspect-hermes-system-prompt.py'),

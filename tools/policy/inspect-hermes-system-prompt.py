@@ -41,6 +41,9 @@ except UnicodeDecodeError as error:
 
 prompt = build_system_prompt(_build_inspection_agent("cli"))
 matches = prompt.count(agents_text)
+# Hermes omits one trailing newline when embedding one-line AGENTS.md.
+if matches == 0 and agents_text.endswith("\n"):
+    matches = prompt.count(agents_text[:-1])
 peon_soul_matches = prompt.count(peon_soul_text)
 if not agents_text or matches != 1 or not peon_soul_text or peon_soul_matches != 1:
     raise SystemExit("Hermes system prompt did not contain one exact copy of trusted guidance and Peon identity.")
