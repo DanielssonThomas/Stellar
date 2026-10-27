@@ -12,6 +12,7 @@ import {
   cancellationConfirmationTimeoutMs,
   confirmAttemptCleanup,
   createRootlessContainerOperations,
+  stopAndConfirmAttemptContainers,
   stopAndConfirmContainer,
 } from './worker-container-lifecycle.mjs';
 import {
@@ -2012,13 +2013,20 @@ export async function runRestrictedWorker({
     assertMeterIdentityUnchanged(meterName, meterIdentity);
     usage = readMeterUsage(meterName);
   } finally {
-    if (!workerCleanup.confirmed)
-      workerCleanup = await stopRootlessContainer(workerName, {
-        deadlineAt: cleanupDeadlineAt,
-      });
-    meterCleanup = await stopRootlessContainer(meterName, {
+    const cleanup = await stopAndConfirmAttemptContainers({
+      workerName,
+      meterName,
+      workerCleanup,
       deadlineAt: cleanupDeadlineAt,
     });
+    workerCleanup = {
+      confirmed: ['absent', 'stopped'].includes(cleanup.workerState),
+      state: cleanup.workerState,
+    };
+    meterCleanup = {
+      confirmed: ['absent', 'stopped'].includes(cleanup.meterState),
+      state: cleanup.meterState,
+    };
   }
   if (!workerCleanup.confirmed)
     throw meterLifecycleError(

@@ -15,6 +15,20 @@ const repositoryRoot = path.resolve(
   '../..',
 );
 
+function validAttemptContainers(workerName, meterName) {
+  const workerParts = workerName?.match(attemptContainerName);
+  if (!workerParts || !['worker', 'verify'].includes(workerParts[1]))
+    return false;
+  if (!meterName) return true;
+  const meterParts = meterName.match(attemptContainerName);
+  return (
+    meterParts?.[1] === 'meter' &&
+    meterParts[2] === workerParts[2] &&
+    meterParts[3] === workerParts[3] &&
+    workerParts[1] === 'worker'
+  );
+}
+
 function remainingMs(deadlineAt, now) {
   return Math.max(0, deadlineAt - now());
 }
@@ -73,15 +87,14 @@ function boundedStdout(stream) {
 function runPodman(args, timeoutMs, spawnProcess = spawn) {
   return new Promise((resolve) => {
     let settled = false;
-    let timer;
-    let readStdout;
+    const state = { timer: null, readStdout: null };
     const finish = (result) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clearTimeout(state.timer);
       resolve({
         ...result,
-        stdout: readStdout?.() ?? { text: '', truncated: false },
+        stdout: state.readStdout?.() ?? { text: '', truncated: false },
       });
     };
     let child;
@@ -111,10 +124,10 @@ function runPodman(args, timeoutMs, spawnProcess = spawn) {
       });
       return;
     }
-    readStdout = boundedStdout(child.stdout);
+    state.readStdout = boundedStdout(child.stdout);
     child.once('error', () => finish({ code: null, timedOut: false }));
     child.once('exit', (code) => finish({ code, timedOut: false }));
-    timer = setTimeout(
+    state.timer = setTimeout(
       () => {
         try {
           child.kill();
@@ -230,6 +243,41 @@ export async function stopAndConfirmContainer(
   };
 }
 
+/** Confirm both exact attempt containers within one deadline, without serial starvation. */
+export async function stopAndConfirmAttemptContainers({
+  workerName,
+  meterName,
+  workerCleanup,
+  operations = rootlessContainerOperations,
+  deadlineAt = Date.now() + cancellationConfirmationTimeoutMs,
+  now = Date.now,
+  sleep,
+}) {
+  if (!validAttemptContainers(workerName, meterName))
+    return {
+      confirmed: false,
+      workerState: 'inconclusive',
+      meterState: 'inconclusive',
+    };
+  const options = { operations, deadlineAt, now, ...(sleep ? { sleep } : {}) };
+  const alreadyConfirmed =
+    workerCleanup?.confirmed === true &&
+    ['absent', 'stopped'].includes(workerCleanup.state);
+  const [worker, meter] = await Promise.all([
+    alreadyConfirmed
+      ? workerCleanup
+      : stopAndConfirmContainer(workerName, options),
+    meterName
+      ? stopAndConfirmContainer(meterName, options)
+      : { confirmed: true, state: 'absent' },
+  ]);
+  return {
+    confirmed: worker.confirmed && meter.confirmed,
+    workerState: worker.state,
+    meterState: meter.state,
+  };
+}
+
 export async function confirmAttemptCleanup({
   workerName,
   meterName,
@@ -240,40 +288,21 @@ export async function confirmAttemptCleanup({
   now = Date.now,
   sleep,
 }) {
-  const workerParts = workerName?.match(attemptContainerName);
-  if (!workerParts || !['worker', 'verify'].includes(workerParts[1]))
+  if (!validAttemptContainers(workerName, meterName))
     return {
       confirmed: false,
       workerState: 'inconclusive',
       meterState: 'inconclusive',
     };
-  if (meterName) {
-    const meterParts = meterName.match(attemptContainerName);
-    if (
-      !meterParts ||
-      meterParts[1] !== 'meter' ||
-      meterParts[2] !== workerParts[2] ||
-      meterParts[3] !== workerParts[3] ||
-      workerParts[1] !== 'worker'
-    )
-      return {
-        confirmed: false,
-        workerState: 'inconclusive',
-        meterState: 'inconclusive',
-      };
-  }
 
   if (!isCompletionSettled()) {
     const remaining = remainingMs(deadlineAt, now);
-    try {
-      if (remaining > 0)
-        await operations.stop(
-          workerName,
-          Math.min(podmanCommandTimeoutMs, remaining),
-        );
-    } catch {
-      // A nonzero or failed stop can still be followed by confirmed absence.
-    }
+    if (remaining > 0)
+      await Promise.allSettled(
+        [workerName, ...(meterName ? [meterName] : [])].map((name) =>
+          operations.stop(name, Math.min(podmanCommandTimeoutMs, remaining)),
+        ),
+      );
   }
 
   const completionResult = await waitForCompletion(
@@ -298,23 +327,12 @@ export async function confirmAttemptCleanup({
       return { confirmed: true, workerState, meterState };
   }
 
-  const worker = await stopAndConfirmContainer(workerName, {
+  return stopAndConfirmAttemptContainers({
+    workerName,
+    meterName,
     operations,
     deadlineAt,
     now,
     ...(sleep ? { sleep } : {}),
   });
-  const meter = meterName
-    ? await stopAndConfirmContainer(meterName, {
-        operations,
-        deadlineAt,
-        now,
-        ...(sleep ? { sleep } : {}),
-      })
-    : { confirmed: true, state: 'absent' };
-  return {
-    confirmed: worker.confirmed && meter.confirmed,
-    workerState: worker.state,
-    meterState: meter.state,
-  };
 }

@@ -7,6 +7,7 @@ import {
   cancellationConfirmationTimeoutMs,
   confirmAttemptCleanup,
   createRootlessContainerOperations,
+  stopAndConfirmAttemptContainers,
   stopAndConfirmContainer,
 } from './worker-container-lifecycle.mjs';
 
@@ -82,7 +83,7 @@ test('confirms termination when the worker exits while stop is executing', async
   });
 
   assert.equal(result.confirmed, true);
-  assert.deepEqual(mock.stopped, [workerName]);
+  assert.deepEqual(mock.stopped, [workerName, meterName]);
 });
 
 test('confirms a container already removed before inspection', async () => {
@@ -108,6 +109,12 @@ test('rejects unrelated service names and a sidecar from another attempt', async
 
   assert.deepEqual(service, { confirmed: false, state: 'inconclusive' });
   assert.equal(mismatchedAttempt.confirmed, false);
+  const mismatchedPair = await stopAndConfirmAttemptContainers({
+    workerName,
+    meterName: 'stellar-peon-meter-50-5',
+    operations: mock.operations,
+  });
+  assert.equal(mismatchedPair.confirmed, false);
   assert.deepEqual(mock.inspected, []);
   assert.deepEqual(mock.stopped, []);
 });
@@ -203,6 +210,80 @@ test('does not confirm cleanup while the metering sidecar remains active', async
   assert.ok(mock.stopped.every((name) => name === meterName));
 });
 
+test('confirms worker and meter concurrently before their shared deadline expires', async () => {
+  let nowMs = 0;
+  let finishWorker;
+  let finishMeter;
+  const workerInspection = new Promise((resolve) => {
+    finishWorker = resolve;
+  });
+  const meterInspectedTwice = new Promise((resolve) => {
+    finishMeter = resolve;
+  });
+  const inspected = [];
+  const stopped = [];
+  let meterRunning = true;
+  const operations = {
+    async inspect(name) {
+      inspected.push(name);
+      if (name === workerName) return workerInspection;
+      if (!meterRunning) finishMeter();
+      return meterRunning ? 'running' : 'absent';
+    },
+    async stop(name) {
+      stopped.push(name);
+      if (name === meterName) meterRunning = false;
+      return true;
+    },
+  };
+  const pending = confirmAttemptCleanup({
+    workerName,
+    meterName,
+    completion: Promise.resolve({}),
+    isCompletionSettled: () => true,
+    operations,
+    deadlineAt: 4_500,
+    now: () => nowMs,
+    sleep: async () => undefined,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(inspected.slice(0, 2), [workerName, meterName]);
+  await meterInspectedTwice;
+  assert.deepEqual(stopped, [meterName]);
+  nowMs = 4_500;
+  finishWorker('absent');
+  assert.deepEqual(await pending, {
+    confirmed: true,
+    workerState: 'absent',
+    meterState: 'absent',
+  });
+});
+
+test('concurrent launcher cleanup keeps a running meter unconfirmed', async () => {
+  const mock = mockOperations({
+    states: new Map([
+      [workerName, 'absent'],
+      [meterName, 'running'],
+    ]),
+  });
+  const result = await stopAndConfirmAttemptContainers({
+    workerName,
+    meterName,
+    workerCleanup: { confirmed: true, state: 'absent' },
+    operations: mock.operations,
+    deadlineAt: Date.now() + 40,
+  });
+  assert.deepEqual(result, {
+    confirmed: false,
+    workerState: 'absent',
+    meterState: 'running',
+  });
+  assert.deepEqual(
+    mock.inspected.filter((name) => name === workerName),
+    [],
+  );
+});
+
 test('bounds cancellation when process completion remains pending', async () => {
   const mock = mockOperations({ states: new Map([[workerName, 'running']]) });
   const startedAt = Date.now();
@@ -237,7 +318,7 @@ test('does not treat removed containers as safe while the launcher can still set
     workerState: 'inconclusive',
     meterState: 'inconclusive',
   });
-  assert.deepEqual(mock.stopped, [workerName]);
+  assert.deepEqual(mock.stopped, [workerName, meterName]);
   assert.deepEqual(mock.inspected, []);
   assert.ok(Date.now() - startedAt <= 120);
 });
