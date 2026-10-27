@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolve, win32 } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   claimWorktree,
   inspectClaim,
   ownerLabel,
   releaseClaim,
+  recoverExpiredReviewClaim,
   transferClaim,
 } from './issue-worktree.mjs';
 import { validateIssue } from './validate-issue.mjs';
@@ -303,12 +304,97 @@ function fetchReviewPr(number) {
   );
 }
 
+function containsCompletePath(commandLine, target, separators) {
+  let from = 0;
+  while (true) {
+    const index = commandLine.indexOf(target, from);
+    if (index < 0) return false;
+    const after = commandLine[index + target.length] ?? '';
+    if (!after || separators.includes(after) || /\s/.test(after)) return true;
+    from = index + 1;
+  }
+}
+
+export function windowsProcessReferencesWorktree(processes, worktreePath) {
+  const target = win32
+    .resolve(worktreePath)
+    .toLowerCase()
+    .replaceAll('/', '\\');
+  return processes.some(
+    ({ Name, CommandLine }) =>
+      /^(?:codex|node|git|hermes|podman|wsl)(?:\.exe)?$/i.test(Name ?? '') &&
+      containsCompletePath(
+        (CommandLine ?? '').toLowerCase().replaceAll('/', '\\'),
+        target,
+        ['\\', '"', "'"],
+      ),
+  );
+}
+
+export function wslProcessReferencesIssueWorkspace(lines, issueNumber) {
+  const target = `/home/peon/workspaces/issue-${issueNumber}`;
+  return lines.some((line) =>
+    containsCompletePath(line, target, ['/', '"', "'"]),
+  );
+}
+
+function assertNoLiveReviewWork({ issueNumber, worktreePath }) {
+  const windows = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Get-CimInstance Win32_Process | Select-Object Name,CommandLine | ConvertTo-Json -Compress',
+    ],
+    { encoding: 'utf8', windowsHide: true, timeout: 15_000 },
+  );
+  if (windows.error || windows.status !== 0)
+    throw new Error('Trusted Windows process inspection failed.');
+  let processes;
+  try {
+    const parsed = JSON.parse(windows.stdout);
+    processes = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    throw new Error('Trusted Windows process inspection was malformed.');
+  }
+  if (windowsProcessReferencesWorktree(processes, worktreePath))
+    throw new Error('A process still references the review worktree.');
+  const wsl = (command) => {
+    const result = spawnSync(
+      'wsl.exe',
+      ['--distribution', 'Ubuntu', '--user', 'peon', '--exec', ...command],
+      { encoding: 'utf8', windowsHide: true, timeout: 15_000 },
+    );
+    if (result.error || result.status !== 0)
+      throw new Error('Trusted WSL process inspection failed.');
+    return result.stdout;
+  };
+  const containers = wsl(['podman', 'ps', '--format', '{{.Names}}']);
+  if (
+    containers
+      .split(/\r?\n/)
+      .some((name) =>
+        new RegExp(`^stellar-peon-(?:worker|meter)-${issueNumber}-`).test(name),
+      )
+  )
+    throw new Error(
+      'A worker or meter container is still running for the issue.',
+    );
+  const processesWsl = wsl(['ps', '-eo', 'args']);
+  if (
+    wslProcessReferencesIssueWorkspace(processesWsl.split(/\r?\n/), issueNumber)
+  )
+    throw new Error('A WSL process still references the review workspace.');
+}
+
 function usage() {
   throw new Error(
     [
       'Usage:',
       '  manage-issue-worktree.mjs claim <issue> --worker <codex|maintainer|profile-id> --session-id <stable-session-id>',
       '  manage-issue-worktree.mjs resume-review <issue> --worker <identity> --session-id <stable-session-id>',
+      '  manage-issue-worktree.mjs recover-expired-review <issue> --worker <identity>',
       '  manage-issue-worktree.mjs inspect <issue>',
       '  manage-issue-worktree.mjs release <issue> --worker <identity> --session-id <stable-session-id>',
       '  manage-issue-worktree.mjs handoff <issue> --from <identity> --to <identity> --reason <text> [--session-id <id>]',
@@ -335,6 +421,25 @@ export async function main(argv = process.argv.slice(2)) {
       issueNumber: number,
       worker: args.worker,
       sessionId: args['session-id'],
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result;
+  }
+  if (command === 'recover-expired-review') {
+    if (!args.worker) usage();
+    const issue = loadIssue(number);
+    const target = issueLabels(issue)
+      .find((label) => label.startsWith('target:'))
+      ?.slice(7);
+    if (!target) throw new Error('Issue target is missing.');
+    fetchTarget(repoRoot, target);
+    const result = await recoverExpiredReviewClaim({
+      repoRoot,
+      issueNumber: number,
+      worker: args.worker,
+      fetchIssue: loadIssue,
+      fetchReviewPr: loadOpenReviewPr,
+      assertNoLiveWork: assertNoLiveReviewWork,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result;
