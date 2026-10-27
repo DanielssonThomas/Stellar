@@ -838,6 +838,12 @@ test('scoped verification mounts only task source writable and keeps build outpu
       '--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777',
     ),
   );
+  assert.ok(
+    args.includes('--tmpfs=/workspace/tmp:rw,nosuid,nodev,size=512m,mode=1777'),
+  );
+  assert.ok(
+    args.includes('--env=NX_WORKSPACE_DATA_DIRECTORY=/tmp/nx-workspace-data'),
+  );
   assert.equal(
     args.some((argument) => argument.includes('dst=/workspace/.git,rw')),
     false,

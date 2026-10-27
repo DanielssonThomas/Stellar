@@ -1548,7 +1548,10 @@ export function buildRestrictedVerificationArgs({
         `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},rw`,
     ),
     ...(writablePaths
-      ? ['--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777']
+      ? [
+          '--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777',
+          '--tmpfs=/workspace/tmp:rw,nosuid,nodev,size=512m,mode=1777',
+        ]
       : []),
     ...protectedPaths.map(
       (entry) =>
@@ -1561,7 +1564,11 @@ export function buildRestrictedVerificationArgs({
     '--env=COREPACK_ENABLE_NETWORK=0',
     '--env=NX_SKIP_NATIVE_FILE_CACHE=true',
     ...(writablePaths
-      ? ['--env=NX_CACHE_DIRECTORY=/tmp/nx-cache', '--env=NX_DAEMON=false']
+      ? [
+          '--env=NX_CACHE_DIRECTORY=/tmp/nx-cache',
+          '--env=NX_WORKSPACE_DATA_DIRECTORY=/tmp/nx-workspace-data',
+          '--env=NX_DAEMON=false',
+        ]
       : []),
     '--env=HERMES_RUNTIME_DIR=/opt/hermes/tools',
     '--env=TMPDIR=/tmp',
