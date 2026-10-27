@@ -1208,11 +1208,29 @@ test('prepared context transport is interactive, read-only inspectable, and does
   );
   assert.ok(
     inspect.includes(
+      `--mount=type=bind,src=${trustedFocusSoul},dst=/tmp/.hermes/SOUL.md,ro`,
+    ),
+  );
+  assert.ok(
+    inspect.includes(
       '--mount=type=bind,src=/mnt/d/ai-repositories/stellar/tools/policy/run-hermes-system-prompt-inspection.sh,dst=/usr/local/libexec/verify-hermes-runtime.py,ro',
     ),
   );
   assert.ok(!inspect.some((argument) => argument.startsWith('--secret=')));
   assert.ok(!inspect.some((argument) => argument.includes('OPENAI_API_KEY')));
+  assert.throws(
+    () =>
+      buildHermesPromptInspectionArgs({
+        image,
+        uid: 1001,
+        gid: 1001,
+        workspace: '/home/peon/workspaces/issue-50',
+        hermesConfigSource: trustedFocusConfig,
+        inspectionScriptSource: '/tmp/inspector.py',
+        runnerScriptSource: '/tmp/runner.sh',
+      }),
+    /trusted absolute mount paths/,
+  );
   assert.throws(
     () =>
       buildHermesPromptInspectionArgs({

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { buildHermesTaskInput } from '../run-restricted-worker.mjs';
+import {
+  buildHermesPromptInspectionArgs,
+  buildHermesTaskInput,
+} from '../run-restricted-worker.mjs';
 import { buildPeonTaskContextManifest } from '../peon-task-context.mjs';
 import { loadIssue } from '../manage-issue-worktree.mjs';
 import { trustedPeonWorkerImage } from '../supervised-peon-run.mjs';
@@ -85,6 +88,17 @@ function inspectPinnedPrompt() {
       'run-hermes-system-prompt-inspection.sh',
     ),
   );
+  const soul = wslPath(
+    path.join(
+      repositoryRoot,
+      'tools',
+      'policy',
+      'engineering-org',
+      'templates',
+      'peon',
+      'soul.md',
+    ),
+  );
   const args = [
     '--distribution',
     'Ubuntu',
@@ -92,34 +106,16 @@ function inspectPinnedPrompt() {
     'peon',
     '--exec',
     'podman',
-    'run',
-    '--rm',
-    '--pull=never',
-    '--userns=keep-id',
-    '--user=1001:1001',
-    '--network=none',
-    '--http-proxy=false',
-    '--read-only',
-    '--cap-drop=all',
-    '--security-opt=no-new-privileges',
-    '--pids-limit=16',
-    '--memory=512m',
-    '--memory-swap=512m',
-    '--cpus=1',
-    '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=128m',
-    '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
-    `--mount=type=bind,src=${workspace},dst=/workspace,ro`,
-    `--mount=type=bind,src=${config},dst=/tmp/.hermes/config.yaml,ro`,
-    `--mount=type=bind,src=${inspector},dst=/usr/local/libexec/hermes-worker-git-askpass,ro`,
-    `--mount=type=bind,src=${runner},dst=/usr/local/libexec/verify-hermes-runtime.py,ro`,
-    '--workdir=/workspace',
-    '--env=HOME=/tmp',
-    '--env=HERMES_HOME=/tmp/.hermes',
-    '--env=HERMES_RUNTIME_DIR=/opt/hermes/tools',
-    '--env=HERMES_SINGLE_QUERY_SESSION=1',
-    trustedPeonWorkerImage,
-    '/bin/sh',
-    '/usr/local/libexec/verify-hermes-runtime.py',
+    ...buildHermesPromptInspectionArgs({
+      image: trustedPeonWorkerImage,
+      uid: 1001,
+      gid: 1001,
+      workspace,
+      hermesConfigSource: config,
+      hermesSoulSource: soul,
+      inspectionScriptSource: inspector,
+      runnerScriptSource: runner,
+    }),
     '--study-export',
   ];
   const output = run('wsl.exe', args, { timeout: 30_000 });

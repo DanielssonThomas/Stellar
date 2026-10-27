@@ -507,7 +507,7 @@ export function buildHermesPromptInspectionArgs({
   const mounts = [
     workspace,
     hermesConfigSource,
-    ...(hermesSoulSource ? [hermesSoulSource] : []),
+    hermesSoulSource,
     inspectionScriptSource,
     runnerScriptSource,
   ];
@@ -540,11 +540,7 @@ export function buildHermesPromptInspectionArgs({
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     `--mount=type=bind,src=${workspace},dst=/workspace,ro`,
     `--mount=type=bind,src=${hermesConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
-    ...(hermesSoulSource
-      ? [
-          `--mount=type=bind,src=${validatePeonHermesSoulSource(hermesSoulSource)},dst=/tmp/.hermes/SOUL.md,ro`,
-        ]
-      : []),
+    `--mount=type=bind,src=${validatePeonHermesSoulSource(hermesSoulSource)},dst=/tmp/.hermes/SOUL.md,ro`,
     `--mount=type=bind,src=${inspectionScriptSource},dst=/usr/local/libexec/hermes-worker-git-askpass,ro`,
     `--mount=type=bind,src=${runnerScriptSource},dst=/usr/local/libexec/verify-hermes-runtime.py,ro`,
     '--workdir=/workspace',
