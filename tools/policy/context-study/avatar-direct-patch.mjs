@@ -608,6 +608,7 @@ export function verifierContainerArgs(checkoutSource, target) {
     '--tmpfs=/workspace/tmp:rw,nosuid,nodev,size=512m,mode=1777',
     '--workdir=/workspace',
     '--env=HOME=/tmp',
+    '--env=CI=true',
     '--env=COREPACK_HOME=/opt/corepack',
     '--env=COREPACK_DEFAULT_TO_LATEST=0',
     '--env=COREPACK_ENABLE_NETWORK=0',

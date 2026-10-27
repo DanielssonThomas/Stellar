@@ -195,6 +195,7 @@ test('client and meter have no workspace, credentials, external network or tools
   );
   assert.ok(verifier.includes('--network=none'));
   assert.ok(verifier.includes('--read-only'));
+  assert.ok(verifier.includes('--env=CI=true'));
   assert.ok(verifier.some((arg) => arg.includes('dst=/workspace,ro')));
   assert.ok(
     verifier.some((arg) =>
