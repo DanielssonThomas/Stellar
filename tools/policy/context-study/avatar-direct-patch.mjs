@@ -1,7 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
-  appendFileSync,
   closeSync,
   existsSync,
   lstatSync,
@@ -514,12 +513,17 @@ export async function verifyUi(
   } = {},
 ) {
   const specPath = path.join(checkout, avatarTest);
-  const original = readFileSync(specPath, 'utf8');
+  const acceptancePath = path.join(
+    path.dirname(specPath),
+    'skeleton-atom.benchmark.spec.ts',
+  );
+  if (existsSync(acceptancePath))
+    throw new Error('scope: trusted acceptance spec already exists');
   const results = [];
   let verifierCleanupConfirmed = true;
   try {
-    appendFileSync(
-      specPath,
+    writeFileSync(
+      acceptancePath,
       `\nimport { TestBed as BenchmarkTestBed } from '@angular/core/testing';\nimport { expect as benchmarkExpect, it as benchmarkIt } from 'vitest';\nimport { SkeletonAtom as BenchmarkSkeletonAtom } from './skeleton-atom.component';\nbenchmarkIt('trusted avatar acceptance', async () => {\n  await BenchmarkTestBed.configureTestingModule({ imports: [BenchmarkSkeletonAtom] }).compileComponents();\n  const fixture = BenchmarkTestBed.createComponent(BenchmarkSkeletonAtom);\n  const span = () => fixture.nativeElement.querySelector('span');\n  fixture.componentRef.setInput('shape', 'avatar');\n  await fixture.whenStable();\n  for (const cls of ['h-10', 'w-10', 'rounded-full', 'bg-stellar-skeleton']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  benchmarkExpect(span().getAttribute('aria-hidden')).toBe('true');\n  fixture.componentRef.setInput('shape', 'text');\n  await fixture.whenStable();\n  for (const cls of ['h-4', 'w-24']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n  fixture.componentRef.setInput('shape', 'control');\n  await fixture.whenStable();\n  for (const cls of ['h-5', 'w-20']) benchmarkExpect(span().classList.contains(cls)).toBe(true);\n});\n`,
     );
     for (const target of ['lint', 'test', 'build']) {
@@ -554,7 +558,7 @@ export async function verifyUi(
     }
     await checkpoint();
   } finally {
-    if (verifierCleanupConfirmed) writeFileSync(specPath, original);
+    if (verifierCleanupConfirmed) rmSync(acceptancePath);
   }
   return results;
 }

@@ -325,12 +325,25 @@ test('disposable checkout accepts only the two intended patch paths', async () =
     );
     applyAndVerify(disposable.checkout, patch);
     assert.ok(existsSync(testFile));
-    if (process.env.STELLAR_BENCHMARK_VERIFY_UI === '1')
+    if (process.env.STELLAR_BENCHMARK_VERIFY_UI === '1') {
+      writeFileSync(
+        testFile,
+        readFileSync(testFile, 'utf8').replace(
+          "import { expect, it } from 'vitest';",
+          "import { beforeEach, expect, it } from 'vitest';\nbeforeEach(() => TestBed.createComponent(SkeletonAtom));",
+        ),
+      );
       assert.deepEqual(await verifyUi(disposable.checkout), [
         'lint:passed',
         'test:passed',
         'build:passed',
       ]);
+      assert.ok(
+        !existsSync(
+          path.join(path.dirname(testFile), 'skeleton-atom.benchmark.spec.ts'),
+        ),
+      );
+    }
     assert.throws(
       () => applyAndVerify(disposable.checkout, patch),
       /scope: focused test already exists/,
