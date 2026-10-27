@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import {
   existsSync,
   mkdtempSync,
@@ -20,6 +21,7 @@ import {
   makeDisposableCheckout,
   meterContainerArgs,
   reserveOneUseRun,
+  runBoundedPodman,
   verifyUi,
   verifierContainerArgs,
 } from './avatar-direct-patch.mjs';
@@ -239,6 +241,33 @@ test('SIGINT and SIGTERM interrupt the one-use run without exiting before cleanu
     guard.dispose();
     assert.equal(emitter.listenerCount(signal), 0);
   }
+});
+
+test('an interrupt kills an active model client without waiting for its deadline', async () => {
+  const controller = new AbortController();
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.stdin = new PassThrough();
+  let killed = false;
+  child.kill = () => {
+    killed = true;
+    child.emit('exit', null);
+  };
+  const started = Date.now();
+  const running = runBoundedPodman(
+    ['run', '--name=stellar-peon-worker-50-1001'],
+    {
+      input: '{}',
+      timeout: 5_000,
+      signal: controller.signal,
+      spawnProcess: () => child,
+    },
+  );
+  controller.abort();
+  await assert.rejects(running, /interrupted/);
+  assert.equal(killed, true);
+  assert.ok(Date.now() - started < 500);
 });
 
 test('disposable checkout accepts only the two intended patch paths', async () => {

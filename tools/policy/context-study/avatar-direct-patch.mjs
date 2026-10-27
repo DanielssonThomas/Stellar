@@ -141,6 +141,91 @@ function podman(args, options) {
   );
 }
 
+export function runBoundedPodman(
+  args,
+  {
+    input,
+    timeout,
+    maxBuffer = 32_000,
+    signal,
+    reportOutput = false,
+    spawnProcess = spawn,
+  },
+) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('interrupted: before launch'));
+    const child = spawnProcess(
+      'wsl.exe',
+      [
+        '--distribution',
+        'Ubuntu',
+        '--user',
+        'peon',
+        '--exec',
+        'podman',
+        ...args,
+      ],
+      {
+        cwd: root,
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        env: childEnv(),
+      },
+    );
+    let settled = false;
+    let stdout = '';
+    let stderr = '';
+    let stdoutBytes = 0;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve(stdout.trimEnd());
+    };
+    const onAbort = () => {
+      finish(new Error('interrupted: running container command'));
+      child.kill();
+    };
+    child.stdout?.on('data', (part) => {
+      stdoutBytes += part.length;
+      if (stdoutBytes <= maxBuffer) stdout += part.toString('utf8');
+      else {
+        finish(new Error('format: container output exceeds limit'));
+        child.kill();
+      }
+    });
+    child.stderr?.on('data', (part) => {
+      if (reportOutput) stderr = (stderr + part.toString('utf8')).slice(-2_000);
+    });
+    child.once('error', () =>
+      finish(new Error('runtime: container command failed')),
+    );
+    child.once('exit', (code) =>
+      finish(
+        code === 0
+          ? null
+          : new Error(
+              `runtime: container command exited ${code ?? 'unknown'}${reportOutput ? `: ${`${stdout}\n${stderr}`.slice(-2_000)}` : ''}`,
+            ),
+      ),
+    );
+    const timer = setTimeout(
+      () => {
+        finish(new Error('runtime: container command timed out'));
+        child.kill();
+      },
+      Math.max(1, timeout),
+    );
+    signal?.addEventListener('abort', onAbort, { once: true });
+    child.stdin?.on('error', () =>
+      finish(new Error('runtime: container input pipe failed')),
+    );
+    if (input !== undefined) child.stdin?.end(input, 'utf8');
+  });
+}
+
 function wslPath(file) {
   const resolved = path.resolve(file);
   const match = /^([A-Za-z]):\\(.+)$/.exec(resolved);
@@ -422,7 +507,11 @@ export function applyAndVerify(checkout, patch) {
 
 export async function verifyUi(
   checkout,
-  { onResult = () => undefined, checkpoint = async () => undefined } = {},
+  {
+    onResult = () => undefined,
+    checkpoint = async () => undefined,
+    signal,
+  } = {},
 ) {
   const specPath = path.join(checkout, avatarTest);
   const original = readFileSync(specPath, 'utf8');
@@ -437,11 +526,15 @@ export async function verifyUi(
       await checkpoint();
       let failure;
       try {
-        podman(verifierContainerArgs(wslPath(checkout), target), {
-          timeout: 180_000,
-          maxBuffer: 256_000,
-          reportOutput: true,
-        });
+        await runBoundedPodman(
+          verifierContainerArgs(wslPath(checkout), target),
+          {
+            timeout: 180_000,
+            maxBuffer: 256_000,
+            reportOutput: true,
+            signal,
+          },
+        );
       } catch (error) {
         failure = new Error(
           `verification: ui-atoms ${target} failed: ${error.message}`,
@@ -599,10 +692,10 @@ export async function confirmBenchmarkCleanup({
   };
 }
 
-function waitForMeter(deadlineAt) {
+async function waitForMeter(deadlineAt, signal) {
   while (Date.now() < deadlineAt) {
     try {
-      const response = podman(
+      await runBoundedPodman(
         [
           'exec',
           meterName,
@@ -610,11 +703,12 @@ function waitForMeter(deadlineAt) {
           '-e',
           'fetch("http://127.0.0.1:18436/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
         ],
-        { timeout: 5_000 },
+        { timeout: Math.min(5_000, deadlineAt - Date.now()), signal },
       );
-      if (response === '') return;
+      return;
     } catch {
-      /* startup pending */
+      if (signal?.aborted) throw new Error('interrupted: meter startup');
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
   throw new Error('runtime: meter/model health timeout');
@@ -657,16 +751,20 @@ export function reserveOneUseRun(base, parent = stateRoot) {
 
 export function installInterruptGuard(emitter = process) {
   let signal = null;
+  const controller = new AbortController();
   const onInterrupt = () => {
     signal ??= 'SIGINT';
+    controller.abort();
   };
   const onTerminate = () => {
     signal ??= 'SIGTERM';
+    controller.abort();
   };
   emitter.on('SIGINT', onInterrupt);
   emitter.on('SIGTERM', onTerminate);
   return {
     signal: () => signal,
+    abortSignal: controller.signal,
     async checkpoint() {
       await new Promise((resolve) => setImmediate(resolve));
       if (signal) throw new Error(`interrupted: ${signal}`);
@@ -718,13 +816,17 @@ export async function runAvatarBenchmark(base) {
       podman(meterContainerArgs(), { timeout: 10_000 });
       await interrupt.checkpoint();
       const deadlineAt = startedAt + 180_000;
-      waitForMeter(deadlineAt);
+      await waitForMeter(deadlineAt, interrupt.abortSignal);
       await interrupt.checkpoint();
-      const raw = podman(clientContainerArgs(wslPath(clientPath)), {
-        input: JSON.stringify({ prompt }),
-        timeout: Math.max(1, deadlineAt - Date.now()),
-        maxBuffer: 32_000,
-      });
+      const raw = await runBoundedPodman(
+        clientContainerArgs(wslPath(clientPath)),
+        {
+          input: JSON.stringify({ prompt }),
+          timeout: Math.max(1, deadlineAt - Date.now()),
+          maxBuffer: 32_000,
+          signal: interrupt.abortSignal,
+        },
+      );
       await interrupt.checkpoint();
       const reply = JSON.parse(raw);
       result.usage = validateUsage(reply.usage);
@@ -772,6 +874,7 @@ export async function runAvatarBenchmark(base) {
     await verifyUi(disposable.checkout, {
       onResult: (entry) => result.verification.push(entry),
       checkpoint: () => interrupt.checkpoint(),
+      signal: interrupt.abortSignal,
     });
   } catch (error) {
     result.category = String(error.message).split(':')[0].slice(0, 40);
