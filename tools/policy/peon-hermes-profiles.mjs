@@ -11,17 +11,21 @@ const narrowProfileLabel = `${profileLabelPrefix}narrow-coding`;
 const evidenceProfileLabel = `${profileLabelPrefix}narrow-evidence`;
 const workflowLabelPrefix = 'hermes-workflow:';
 const boundedCodingWorkflowLabel = `${workflowLabelPrefix}bounded-coding`;
+const minimalCodingWorkflowLabel = `${workflowLabelPrefix}minimal-coding`;
 const editFirstExperimentLabel = `${workflowLabelPrefix}edit-first-4`;
 export const boundedCodingMaxForwardedRequests = 2;
 export const editFirstExperimentMaxForwardedRequests = 4;
 
 export function isPreparedPeonWorkflow(workflow) {
-  return workflow === 'bounded-coding' || workflow === 'edit-first-4';
+  return ['bounded-coding', 'minimal-coding', 'edit-first-4'].includes(
+    workflow,
+  );
 }
 
 export function modelTokenLimitForWorkflow(workflow) {
   if (workflow === 'edit-first-4') return 52_000;
-  if (workflow === 'standard' || workflow === 'bounded-coding') return 32_000;
+  if (['standard', 'bounded-coding', 'minimal-coding'].includes(workflow))
+    return 32_000;
   throw new Error('Unknown trusted Peon workflow.');
 }
 
@@ -73,9 +77,11 @@ export function resolvePeonHermesWorkflow(issue) {
   if (workflowLabels.length === 0) return 'standard';
   if (
     workflowLabels.length !== 1 ||
-    ![boundedCodingWorkflowLabel, editFirstExperimentLabel].includes(
-      workflowLabels[0],
-    )
+    ![
+      boundedCodingWorkflowLabel,
+      minimalCodingWorkflowLabel,
+      editFirstExperimentLabel,
+    ].includes(workflowLabels[0])
   )
     throw new Error('Peon issue has an unknown or ambiguous workflow opt-in.');
   const labels = labelsOf(issue);
@@ -94,13 +100,15 @@ export function resolvePeonHermesWorkflow(issue) {
     );
   if (workflowLabels[0] === editFirstExperimentLabel && issue.number !== 50)
     throw new Error('The four-request experiment is restricted to issue #50.');
-  return workflowLabels[0] === editFirstExperimentLabel
-    ? 'edit-first-4'
+  if (workflowLabels[0] === editFirstExperimentLabel) return 'edit-first-4';
+  return workflowLabels[0] === minimalCodingWorkflowLabel
+    ? 'minimal-coding'
     : 'bounded-coding';
 }
 
 export function maxForwardedRequestsForWorkflow(workflow) {
-  if (workflow === 'standard') return undefined;
+  if (workflow === 'standard' || workflow === 'minimal-coding')
+    return undefined;
   if (workflow === 'bounded-coding') return boundedCodingMaxForwardedRequests;
   if (workflow === 'edit-first-4')
     return editFirstExperimentMaxForwardedRequests;

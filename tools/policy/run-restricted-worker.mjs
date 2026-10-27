@@ -365,6 +365,25 @@ function trustedHermesSoulSource() {
   return source;
 }
 
+function trustedMinimalGuidanceSource() {
+  const windowsSource = path.join(
+    repositoryRoot,
+    'tools',
+    'policy',
+    'peon-coding-agents.md',
+  );
+  const source = wslWorker('wslpath', '-a', '-u', windowsSource);
+  if (
+    wslWorker('realpath', '-e', source) !== source ||
+    wslWorker('sha256sum', '--', source).trim().split(/\s+/)[0] !==
+      createHash('sha256').update(readFileSync(windowsSource)).digest('hex')
+  )
+    throw new Error(
+      'Trusted minimal coding guidance differs across Windows and WSL.',
+    );
+  return source;
+}
+
 export function buildPodmanArgs({
   issueNumber,
   image,
@@ -378,6 +397,8 @@ export function buildPodmanArgs({
   hermesSoulSource,
   toolEvidenceSource,
   interactive = false,
+  writablePaths,
+  minimalGuidanceSource,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
@@ -422,6 +443,34 @@ export function buildPodmanArgs({
     ? validatePeonHermesSoulSource(hermesSoulSource)
     : null;
   if (
+    writablePaths !== undefined &&
+    (!Array.isArray(writablePaths) ||
+      writablePaths.length < 1 ||
+      writablePaths.some(
+        (entry) =>
+          typeof entry !== 'string' ||
+          !entry ||
+          /[\\,:=]/.test(entry) ||
+          entry
+            .split('/')
+            .some((part) => !part || part === '.' || part === '..') ||
+          protectedPaths.some(
+            (protectedPath) =>
+              entry === protectedPath || entry.startsWith(`${protectedPath}/`),
+          ) ||
+          entry === '.git' ||
+          entry.startsWith('.git/'),
+      ) ||
+      typeof minimalGuidanceSource !== 'string' ||
+      !minimalGuidanceSource.startsWith('/mnt/') ||
+      !minimalGuidanceSource.endsWith('/tools/policy/peon-coding-agents.md') ||
+      /[,:\\]/.test(minimalGuidanceSource) ||
+      minimalGuidanceSource.split('/').includes('..'))
+  )
+    throw new Error(
+      'Minimal coding mounts require trusted writable paths and guidance.',
+    );
+  if (
     hermesProfile === 'narrow-evidence' &&
     (typeof toolEvidenceSource !== 'string' ||
       !toolEvidenceSource.startsWith('/mnt/') ||
@@ -452,7 +501,16 @@ export function buildPodmanArgs({
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
-    `--mount=type=bind,src=${workspaceMountSource},dst=/workspace,rw`,
+    `--mount=type=bind,src=${workspaceMountSource},dst=/workspace,${writablePaths ? 'ro' : 'rw'}`,
+    ...(writablePaths ?? []).map(
+      (entry) =>
+        `--mount=type=bind,src=${path.posix.join(workspaceMountSource, entry)},dst=/workspace/${entry},rw`,
+    ),
+    ...(minimalGuidanceSource
+      ? [
+          `--mount=type=bind,src=${minimalGuidanceSource},dst=/workspace/AGENTS.md,ro`,
+        ]
+      : []),
     `--mount=type=bind,src=${trustedConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
     ...(trustedSoulSource
       ? [
@@ -464,10 +522,12 @@ export function buildPodmanArgs({
           `--mount=type=bind,src=${toolEvidenceSource},dst=/usr/local/libexec/record-peon-tool-event.py,ro`,
         ]
       : []),
-    ...protectedPaths.map(
-      (entry) =>
-        `--mount=type=bind,src=${path.posix.join(workspaceMountSource, entry)},dst=/workspace/${entry},ro`,
-    ),
+    ...protectedPaths
+      .filter((entry) => !(writablePaths && entry === 'AGENTS.md'))
+      .map(
+        (entry) =>
+          `--mount=type=bind,src=${path.posix.join(workspaceMountSource, entry)},dst=/workspace/${entry},ro`,
+      ),
     '--workdir=/workspace',
     '--env=HOME=/tmp',
     '--env=COREPACK_HOME=/opt/corepack',
@@ -484,7 +544,9 @@ export function buildPodmanArgs({
     '--env=https_proxy=http://peon-meter:3128',
     '--env=http_proxy=http://peon-meter:3128',
     '--env=NO_PROXY=localhost,127.0.0.1,peon-meter',
-    `--secret=source=${workerSecret},type=env,target=GH_TOKEN`,
+    ...(writablePaths
+      ? []
+      : [`--secret=source=${workerSecret},type=env,target=GH_TOKEN`]),
     image,
     ...command,
   ];
@@ -499,6 +561,7 @@ export function buildHermesPromptInspectionArgs({
   hermesSoulSource,
   inspectionScriptSource,
   runnerScriptSource,
+  minimalGuidanceSource,
 }) {
   if (typeof image !== 'string' || !imagePattern.test(image))
     throw new Error('Prompt inspection requires the trusted immutable image.');
@@ -510,6 +573,7 @@ export function buildHermesPromptInspectionArgs({
     hermesSoulSource,
     inspectionScriptSource,
     runnerScriptSource,
+    ...(minimalGuidanceSource ? [minimalGuidanceSource] : []),
   ];
   if (
     mounts.some(
@@ -539,6 +603,11 @@ export function buildHermesPromptInspectionArgs({
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=128m',
     '--tmpfs=/tmp/.hermes:rw,nosuid,nodev,noexec,size=64m,mode=0777',
     `--mount=type=bind,src=${workspace},dst=/workspace,ro`,
+    ...(minimalGuidanceSource
+      ? [
+          `--mount=type=bind,src=${minimalGuidanceSource},dst=/workspace/AGENTS.md,ro`,
+        ]
+      : []),
     `--mount=type=bind,src=${hermesConfigSource},dst=/tmp/.hermes/config.yaml,ro`,
     `--mount=type=bind,src=${validatePeonHermesSoulSource(hermesSoulSource)},dst=/tmp/.hermes/SOUL.md,ro`,
     `--mount=type=bind,src=${inspectionScriptSource},dst=/usr/local/libexec/hermes-worker-git-askpass,ro`,
@@ -559,6 +628,7 @@ export function inspectHermesSystemPromptGuidance({
   image,
   hermesProfile = 'narrow-coding',
   expectedGuidanceSha256,
+  minimalGuidance = false,
 }) {
   if (!/^[a-f0-9]{64}$/.test(expectedGuidanceSha256 ?? ''))
     throw new Error(
@@ -617,6 +687,9 @@ export function inspectHermesSystemPromptGuidance({
       'Trusted Hermes prompt inspector resolved through a symlink.',
     );
   const workspace = issueWorkspace(Number(issueNumber));
+  const minimalGuidanceSource = minimalGuidance
+    ? trustedMinimalGuidanceSource()
+    : undefined;
   let stdout;
   try {
     stdout = runWsl(
@@ -636,6 +709,7 @@ export function inspectHermesSystemPromptGuidance({
           hermesSoulSource: soulSource,
           inspectionScriptSource,
           runnerScriptSource,
+          minimalGuidanceSource,
         }),
       ],
       { timeout: 30_000 },
@@ -1450,6 +1524,7 @@ export function buildRestrictedVerificationArgs({
   gid,
   command,
   protectedPaths,
+  writablePaths,
   attemptNumber = 1,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
@@ -1485,6 +1560,28 @@ export function buildRestrictedVerificationArgs({
     throw new Error(
       'Trusted protected paths are required for verification mounts.',
     );
+  if (
+    writablePaths !== undefined &&
+    (!Array.isArray(writablePaths) ||
+      writablePaths.length === 0 ||
+      writablePaths.some(
+        (entry) =>
+          typeof entry !== 'string' ||
+          !entry ||
+          entry.startsWith('/') ||
+          /[\\,:=]/.test(entry) ||
+          entry
+            .split('/')
+            .some((part) => !part || part === '.' || part === '..') ||
+          protectedPaths.some(
+            (protectedPath) =>
+              entry === protectedPath || entry.startsWith(`${protectedPath}/`),
+          ) ||
+          entry === '.git' ||
+          entry.startsWith('.git/'),
+      ))
+  )
+    throw new Error('Scoped verification requires trusted writable paths.');
 
   const workspace = issueWorkspace(number);
   return [
@@ -1505,7 +1602,17 @@ export function buildRestrictedVerificationArgs({
     '--memory-swap=4g',
     '--cpus=2',
     '--tmpfs=/tmp:rw,nosuid,nodev,noexec,size=512m',
-    `--mount=type=bind,src=${workspace},dst=/workspace,rw`,
+    `--mount=type=bind,src=${workspace},dst=/workspace,${writablePaths ? 'ro' : 'rw'}`,
+    ...(writablePaths ?? []).map(
+      (entry) =>
+        `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},rw`,
+    ),
+    ...(writablePaths
+      ? [
+          '--tmpfs=/workspace/dist:rw,nosuid,nodev,size=512m,mode=1777',
+          '--tmpfs=/workspace/tmp:rw,nosuid,nodev,size=512m,mode=1777',
+        ]
+      : []),
     ...protectedPaths.map(
       (entry) =>
         `--mount=type=bind,src=${path.posix.join(workspace, entry)},dst=/workspace/${entry},ro`,
@@ -1516,6 +1623,13 @@ export function buildRestrictedVerificationArgs({
     '--env=COREPACK_DEFAULT_TO_LATEST=0',
     '--env=COREPACK_ENABLE_NETWORK=0',
     '--env=NX_SKIP_NATIVE_FILE_CACHE=true',
+    ...(writablePaths
+      ? [
+          '--env=NX_CACHE_DIRECTORY=/tmp/nx-cache',
+          '--env=NX_WORKSPACE_DATA_DIRECTORY=/tmp/nx-workspace-data',
+          '--env=NX_DAEMON=false',
+        ]
+      : []),
     '--env=HERMES_RUNTIME_DIR=/opt/hermes/tools',
     '--env=TMPDIR=/tmp',
     image,
@@ -1563,6 +1677,7 @@ export async function runRestrictedWorker({
   hermesProfile = defaultPeonHermesProfile,
   maxForwardedRequests,
   taskInput,
+  writablePaths,
   spawnProcess = spawn,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
@@ -1592,6 +1707,29 @@ export async function runRestrictedWorker({
   validateProtectedMountSources(issueWorkspace(number), protectedPaths);
   const hermesConfigSource = trustedHermesConfigSource(hermesProfile);
   const hermesSoulSource = trustedHermesSoulSource();
+  const minimalGuidanceSource = writablePaths
+    ? trustedMinimalGuidanceSource()
+    : undefined;
+  if (writablePaths) {
+    const workspace = issueWorkspace(number);
+    for (const entry of writablePaths) {
+      if (
+        typeof entry !== 'string' ||
+        !/^[a-zA-Z0-9._/-]+$/.test(entry) ||
+        entry.startsWith('/') ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..')
+      )
+        throw new Error('Invalid trusted writable path.');
+      const source = path.posix.join(workspace, entry);
+      if (
+        wslWorker('realpath', '-e', source) !== source ||
+        !wslWorker('stat', '-c', '%F', '--', source).includes('directory')
+      )
+        throw new Error(
+          'Writable path is not an existing non-symlink directory.',
+        );
+    }
+  }
   const toolEvidenceSource =
     hermesProfile === 'narrow-evidence'
       ? wslWorker(
@@ -1686,8 +1824,10 @@ export async function runRestrictedWorker({
   await verifyImageCompatibility({ image });
   assertAttemptNotCancelled(lifecycle);
 
-  const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
-  if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
+  if (!writablePaths) {
+    const secret = wslWorker('podman', 'secret', 'inspect', workerSecret);
+    if (!secret) throw new Error('Worker GitHub token secret is unavailable.');
+  }
   const modelNetworks = JSON.parse(
     wslWorker('podman', 'network', 'inspect', modelNetwork),
   );
@@ -1759,6 +1899,8 @@ export async function runRestrictedWorker({
       hermesSoulSource,
       toolEvidenceSource,
       interactive: taskInput !== undefined,
+      writablePaths,
+      minimalGuidanceSource,
     });
     result = await new Promise((resolve, reject) => {
       const child = spawnProcess(
@@ -1861,6 +2003,7 @@ export async function runRestrictedVerification({
   issueNumber,
   image,
   command,
+  writablePaths,
   attemptNumber = 1,
   containerOperations = createRootlessContainerOperations(),
   spawnProcess = spawn,
@@ -1878,6 +2021,25 @@ export async function runRestrictedVerification({
   );
   const protectedPaths = loadProtectedPaths();
   validateProtectedMountSources(workspace, protectedPaths);
+  if (writablePaths !== undefined) {
+    if (!Array.isArray(writablePaths) || writablePaths.length === 0)
+      throw new Error('Scoped verification requires trusted writable paths.');
+    for (const entry of writablePaths) {
+      if (
+        typeof entry !== 'string' ||
+        !/^[a-zA-Z0-9._/-]+$/.test(entry) ||
+        entry.startsWith('/') ||
+        entry.split('/').some((part) => !part || part === '.' || part === '..')
+      )
+        throw new Error('Invalid scoped verification path.');
+      const source = path.posix.join(workspace, entry);
+      if (
+        wslWorker('realpath', '-e', source) !== source ||
+        !wslWorker('stat', '-c', '%F', '--', source).includes('directory')
+      )
+        throw new Error('Scoped verification path is not a plain directory.');
+    }
+  }
 
   const args = buildRestrictedVerificationArgs({
     issueNumber: number,
@@ -1886,6 +2048,7 @@ export async function runRestrictedVerification({
     gid: workerGid,
     command,
     protectedPaths,
+    writablePaths,
     attemptNumber: attempt,
   });
   wslWorker('podman', 'image', 'exists', image);
@@ -2067,6 +2230,23 @@ export function buildHermesTaskCommand(
     positiveInteger(limits.maxRuntimeMsPerWorker, 'maxRuntimeMsPerWorker') /
       1000,
   );
+  if (task.hermesWorkflow === 'minimal-coding') {
+    if (
+      preparedContext?.manifest?.schema !== 'stellar.peon-minimal-context/v1' ||
+      preparedContext.manifest.issueNumber !== issueNumber ||
+      preparedContext.serialized !== JSON.stringify(preparedContext.manifest)
+    )
+      throw new Error(
+        'Minimal task context does not match the trusted assignment.',
+      );
+    const python = [
+      'import os,sys',
+      'prompt=sys.stdin.buffer.read().decode("utf-8", "strict")',
+      'if "\\x00" in prompt: raise SystemExit("invalid prepared task input")',
+      `os.execvp("hermes", ["hermes", "chat", "-Q", "--in", "/workspace", "--run-budget", "${runtimeSeconds}", "-q", prompt])`,
+    ].join('\n');
+    return ['python3', '-c', python];
+  }
   if (preparedContext) {
     if (
       preparedContext.manifest?.schema !== 'stellar.peon-task-context/v1' ||
@@ -2119,6 +2299,20 @@ export function buildHermesTaskCommand(
 }
 
 export function buildHermesTaskInput(task, preparedContext) {
+  if (task?.hermesWorkflow === 'minimal-coding') {
+    if (
+      preparedContext?.manifest?.schema !== 'stellar.peon-minimal-context/v1' ||
+      preparedContext.manifest.issueNumber !== task.issueNumber ||
+      preparedContext.serialized !== JSON.stringify(preparedContext.manifest)
+    )
+      throw new Error(
+        'Minimal task context does not match the trusted assignment.',
+      );
+    const input = JSON.stringify(preparedContext.manifest.worker);
+    if (Buffer.byteLength(input, 'utf8') > maxPreparedTaskInputBytes)
+      throw new Error('Minimal task input exceeds its trusted size limit.');
+    return input;
+  }
   if (
     !Number.isSafeInteger(task?.issueNumber) ||
     preparedContext?.manifest?.schema !== 'stellar.peon-task-context/v1' ||
@@ -2206,6 +2400,9 @@ export function createPeonWorkerAdapter({
           command: commandForTask(task, limits, preparedContext),
           ...(preparedContext
             ? { taskInput: buildHermesTaskInput(task, preparedContext) }
+            : {}),
+          ...(task.hermesWorkflow === 'minimal-coding'
+            ? { writablePaths: preparedContext.manifest.writablePaths }
             : {}),
           limits,
           initialUsage: budget.snapshot,

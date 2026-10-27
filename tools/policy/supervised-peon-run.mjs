@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { inspectClaim } from './issue-worktree.mjs';
 import { loadIssue } from './manage-issue-worktree.mjs';
 import {
@@ -22,8 +23,14 @@ import {
   isPreparedPeonWorkflow,
   modelTokenLimitForWorkflow,
 } from './peon-hermes-profiles.mjs';
-import { buildPeonTaskContextManifest } from './peon-task-context.mjs';
-import { reserveBoundedCodingAttempt } from './bounded-attempt-lease.mjs';
+import {
+  buildPeonTaskContextManifest,
+  buildMinimalPeonTaskContextManifest,
+} from './peon-task-context.mjs';
+import {
+  reserveBoundedCodingAttempt,
+  reserveMinimalCodingAttempt,
+} from './bounded-attempt-lease.mjs';
 
 const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
@@ -231,6 +238,7 @@ export async function runSupervisedPeonIssue({
   getProtectedPaths = getTrustedProtectedPathsForContext,
   resolveDevelopHead = resolveCurrentDevelopHead,
   reserveAttempt = reserveBoundedCodingAttempt,
+  reserveMinimalAttempt = reserveMinimalCodingAttempt,
   verifyImageCompatibility = verifyPinnedWorkerImageCompatibility,
   verifySystemPromptGuidance = inspectHermesSystemPromptGuidance,
   createWorkerAdapter = createPeonWorkerAdapter,
@@ -296,7 +304,13 @@ export async function runSupervisedPeonIssue({
 
   let preparedContext;
   if (isPreparedPeonWorkflow(task.hermesWorkflow)) {
-    const agentsContent = readWorkspaceFile(number, 'AGENTS.md');
+    const minimalCoding = task.hermesWorkflow === 'minimal-coding';
+    const agentsContent = minimalCoding
+      ? readFileSync(
+          path.join(repositoryRoot, 'tools/policy/peon-coding-agents.md'),
+          'utf8',
+        )
+      : readWorkspaceFile(number, 'AGENTS.md');
     const agentsSha256 = createHash('sha256')
       .update(agentsContent)
       .digest('hex');
@@ -305,20 +319,31 @@ export async function runSupervisedPeonIssue({
       image,
       hermesProfile: task.hermesProfile,
       expectedGuidanceSha256: agentsSha256,
+      minimalGuidance: minimalCoding,
     });
-    preparedContext = buildPeonTaskContextManifest({
-      issue,
-      task,
-      repositoryRoot,
-      worktreePath: claim.worktreePath,
-      headRevision: initialWorkspace.headRevision,
-      contextPlan,
-      workspaceIdentity: initialWorkspace.workspacePath,
-      workspaceReader: (relativePath) =>
-        readWorkspaceFile(number, relativePath),
-      protectedPaths: getProtectedPaths(),
-      systemPromptGuidanceAttestation,
-    });
+    preparedContext = minimalCoding
+      ? buildMinimalPeonTaskContextManifest({
+          issue,
+          task,
+          worktreePath: claim.worktreePath,
+          contextPlan,
+          workspaceReader: (relativePath) =>
+            readWorkspaceFile(number, relativePath),
+          protectedPaths: getProtectedPaths(),
+        })
+      : buildPeonTaskContextManifest({
+          issue,
+          task,
+          repositoryRoot,
+          worktreePath: claim.worktreePath,
+          headRevision: initialWorkspace.headRevision,
+          contextPlan,
+          workspaceIdentity: initialWorkspace.workspacePath,
+          workspaceReader: (relativePath) =>
+            readWorkspaceFile(number, relativePath),
+          protectedPaths: getProtectedPaths(),
+          systemPromptGuidanceAttestation,
+        });
     const [
       currentIssue,
       currentClaim,
@@ -354,16 +379,26 @@ export async function runSupervisedPeonIssue({
       throw new Error(
         'Trusted issue, claim, or worktree changed during context preparation.',
       );
-    reserveAttempt({
-      repositoryRoot,
-      issueNumber: number,
-      sessionId,
-      branch: task.branch,
-      worktreePath: task.worktreePath,
-      revision: initialWorkspace.headRevision,
-      requestLimit: task.maxForwardedRequests,
-      modelTokenLimit: modelTokenLimitForWorkflow(task.hermesWorkflow),
-    });
+    if (minimalCoding)
+      reserveMinimalAttempt({
+        repositoryRoot,
+        issueNumber: number,
+        sessionId,
+        branch: task.branch,
+        worktreePath: task.worktreePath,
+        revision: initialWorkspace.headRevision,
+      });
+    else
+      reserveAttempt({
+        repositoryRoot,
+        issueNumber: number,
+        sessionId,
+        branch: task.branch,
+        worktreePath: task.worktreePath,
+        revision: initialWorkspace.headRevision,
+        requestLimit: task.maxForwardedRequests,
+        modelTokenLimit: modelTokenLimitForWorkflow(task.hermesWorkflow),
+      });
   }
 
   const worker = createWorkerAdapter({
@@ -387,20 +422,30 @@ export async function runSupervisedPeonIssue({
         'Verification issue differs from the validated assignment.',
       );
     const results = [];
+    const minimalCoding = verifiedTask.hermesWorkflow === 'minimal-coding';
+    const allowedPaths = minimalCoding
+      ? preparedContext?.manifest?.writablePaths
+      : preparedContext?.manifest?.authorization?.allowedChangePaths;
+    const authorizedChanges = (workspace) =>
+      Array.isArray(allowedPaths) &&
+      workspace?.headRevision === initialWorkspace.headRevision &&
+      workspace?.baseRevision === targetRevision &&
+      Array.isArray(workspace.changes) &&
+      workspace.changes.length > 0 &&
+      workspace.changes.every((changed) =>
+        allowedPaths.some((allowed) =>
+          minimalCoding
+            ? changed.startsWith(`${allowed}/`)
+            : changed === allowed,
+        ),
+      );
     if (isPreparedPeonWorkflow(verifiedTask.hermesWorkflow)) {
       const finalWorkspace = await inspectWorktree(
         number,
         task.branch,
         targetRevision,
       );
-      const allowedPaths =
-        preparedContext?.manifest?.authorization?.allowedChangePaths;
-      const changedPaths = finalWorkspace?.changes ?? [];
-      if (
-        !Array.isArray(allowedPaths) ||
-        changedPaths.length === 0 ||
-        changedPaths.some((changed) => !allowedPaths.includes(changed))
-      )
+      if (!authorizedChanges(finalWorkspace))
         return [
           {
             name: 'authorized-source-changes',
@@ -417,6 +462,7 @@ export async function runSupervisedPeonIssue({
         image,
         command: check.command,
         attemptNumber,
+        ...(minimalCoding ? { writablePaths: allowedPaths } : {}),
       });
       results.push({
         name: check.name,
@@ -424,6 +470,21 @@ export async function runSupervisedPeonIssue({
         summary: `Isolated verification exited with code ${outcome.exitCode}.`,
       });
       activeVerification = null;
+      if (
+        minimalCoding &&
+        !authorizedChanges(
+          await inspectWorktree(number, task.branch, targetRevision),
+        )
+      )
+        return [
+          ...results,
+          {
+            name: 'authorized-source-changes-after-verification',
+            passed: false,
+            summary:
+              'Verification changed a path outside the trusted writable scope.',
+          },
+        ];
       if (outcome.exitCode !== 0) break;
     }
     return results;

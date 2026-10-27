@@ -509,6 +509,126 @@ export async function releaseClaim({
   }
 }
 
+/** Release an expired review claim after rechecking the same PR and clean worktree. */
+export async function recoverExpiredReviewClaim({
+  repoRoot,
+  issueNumber,
+  worker,
+  fetchIssue,
+  fetchReviewPr,
+  assertNoLiveWork,
+}) {
+  const root = resolve(repoRoot);
+  const commonDir = resolve(
+    root,
+    git(['rev-parse', '--git-common-dir'], root).stdout.trim(),
+  );
+  const file = join(
+    commonDir,
+    'stellar-agent',
+    'claims',
+    `${issueNumber}.json`,
+  );
+  const releaseLock = await acquireLock(`${file}.lock`);
+  try {
+    const record = await readFile(file, 'utf8').then(JSON.parse);
+    if (
+      record.state === 'released' &&
+      record.reviewRecovery?.reason === 'expired-review-claim'
+    )
+      return record;
+    if (
+      record.state !== 'active' ||
+      record.worker !== ownerLabel(worker) ||
+      !Number.isFinite(Date.parse(record.expiresAt)) ||
+      Date.parse(record.expiresAt) >= Date.now()
+    )
+      throw new Error(
+        'Only the owner of an expired active claim may recover review work.',
+      );
+    if (
+      !validIssueBranch(issueNumber, record.branch) ||
+      !isAbsolute(record.worktreePath)
+    )
+      throw new Error(
+        'Expired review claim has invalid branch or worktree identity.',
+      );
+    const issue = await fetchIssue(issueNumber);
+    const labels = (issue.labels ?? []).map((entry) =>
+      typeof entry === 'string' ? entry : entry.name,
+    );
+    if (
+      issue.number !== issueNumber ||
+      issue.state !== 'OPEN' ||
+      labels.filter((entry) => entry.startsWith('status:')).join(',') !==
+        'status:review' ||
+      !labels.includes(ownerLabel(worker)) ||
+      !labels.includes(`target:${record.target}`)
+    )
+      throw new Error(
+        'Fresh review issue no longer matches the expired claim.',
+      );
+    const validation = validateAssignment({
+      issue,
+      worker,
+      targetBranch: record.target,
+      dependencies: issue.dependencies,
+      existingBranches: [record.target],
+      allowReviewResume: true,
+    });
+    if (!validation.valid)
+      throw new Error('Fresh review issue failed assignment validation.');
+    const reviewPr = await fetchReviewPr(issueNumber, record.target);
+    const link = new RegExp(
+      `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issueNumber}\\b`,
+      'i',
+    );
+    if (
+      reviewPr?.state !== 'OPEN' ||
+      reviewPr.baseRefName !== record.target ||
+      reviewPr.headRefName !== record.branch ||
+      !/^[a-f0-9]{40}$/.test(reviewPr.headRefOid ?? '') ||
+      !link.test(reviewPr.body ?? '')
+    )
+      throw new Error('Fresh review PR does not match the expired claim.');
+    const registered = worktrees(root).find(
+      (entry) => entry.path === resolve(record.worktreePath),
+    );
+    if (
+      !registered ||
+      registered.branch !== record.branch ||
+      git(['rev-parse', 'HEAD'], registered.path).stdout.trim() !==
+        reviewPr.headRefOid ||
+      git(
+        ['status', '--porcelain=v1', '--untracked-files=all'],
+        registered.path,
+      ).stdout.trim()
+    )
+      throw new Error('Review worktree is unregistered, changed, or dirty.');
+    await assertNoLiveWork({ issueNumber, worktreePath: registered.path });
+    if (
+      JSON.stringify(JSON.parse(await readFile(file, 'utf8'))) !==
+      JSON.stringify(record)
+    )
+      throw new Error('Review claim changed during recovery.');
+    const recovered = {
+      ...record,
+      state: 'released',
+      releasedAt: new Date().toISOString(),
+      reviewRecovery: {
+        reason: 'expired-review-claim',
+        at: new Date().toISOString(),
+        prNumber: reviewPr.number,
+        head: reviewPr.headRefOid,
+      },
+    };
+    await writeRecord(file, recovered);
+    return recovered;
+  } finally {
+    await releaseLock();
+  }
+}
+
 export async function transferClaim({
   repoRoot,
   issue,

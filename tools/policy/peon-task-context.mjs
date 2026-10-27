@@ -354,3 +354,103 @@ export const peonTaskContextLimits = Object.freeze({
   maxFileBytes,
   maxManifestBytes,
 });
+
+/** Host-owned assignment metadata stays outside the model-visible coding brief. */
+export function buildMinimalPeonTaskContextManifest({
+  issue,
+  task,
+  worktreePath,
+  contextPlan,
+  workspaceReader,
+  protectedPaths = [],
+}) {
+  if (
+    issue?.number !== task?.issueNumber ||
+    issue?.state !== 'OPEN' ||
+    task?.hermesWorkflow !== 'minimal-coding' ||
+    !path.isAbsolute(worktreePath ?? '') ||
+    !Array.isArray(contextPlan?.files) ||
+    contextPlan.files.length < 1 ||
+    contextPlan.files.length > 8 ||
+    !contextPlan.files.some((item) => item.kind === 'source') ||
+    !Array.isArray(contextPlan?.authorizedChangePaths) ||
+    contextPlan.authorizedChangePaths.length < 1 ||
+    contextPlan.authorizedChangePaths.length > 8 ||
+    !Array.isArray(contextPlan?.skills) ||
+    contextPlan.skills.length > 2
+  )
+    throw new Error('Minimal coding requires a bounded trusted task plan.');
+  const writablePaths = [
+    ...new Set(
+      contextPlan.authorizedChangePaths.map((entry) =>
+        safeRelativePath(entry, 'Writable path'),
+      ),
+    ),
+  ];
+  for (const relativePath of writablePaths) {
+    if (
+      protectedPath(relativePath, protectedPaths) ||
+      relativePath === '.git' ||
+      relativePath.startsWith('.git/')
+    )
+      throw new Error('Writable path overlaps protected or Git metadata.');
+    const absolute = path.resolve(worktreePath, ...relativePath.split('/'));
+    if (
+      realpathSync(absolute) !== absolute ||
+      !statSync(absolute).isDirectory()
+    )
+      throw new Error(
+        'Writable paths must be existing, non-symlink directories.',
+      );
+  }
+  const skills = contextPlan.skills.map((entry) => {
+    const relativePath = safeRelativePath(entry, 'Coding skill path');
+    if (
+      !/^\.agents\/skills\/create-(?:application|component|service)\/SKILL\.md$/.test(
+        relativePath,
+      )
+    )
+      throw new Error('Only scoped coding skills may be loaded for Peon.');
+    const content = readContextFile(
+      worktreePath,
+      relativePath,
+      workspaceReader,
+    );
+    if (Buffer.byteLength(content, 'utf8') > maxFileBytes)
+      throw new Error('Coding skill exceeds the per-file context limit.');
+    return { path: relativePath, content };
+  });
+  const worker = {
+    objective: section(issue.body ?? '', 'Objective'),
+    acceptanceCriteria: section(issue.body ?? '', 'Acceptance criteria'),
+    sourceContext: contextPlan.files
+      .map((item) =>
+        readBoundedExcerpt(worktreePath, item, item.kind, {
+          workspaceReader,
+          protectedPaths,
+        }),
+      )
+      .map(({ kind, path: file, startLine, endLine, content }) => ({
+        kind,
+        path: file,
+        startLine,
+        endLine,
+        content,
+      })),
+    ...(skills.length ? { skills } : {}),
+  };
+  if (!worker.objective || !worker.acceptanceCriteria)
+    throw new Error(
+      'Minimal coding needs an objective and acceptance criteria.',
+    );
+  const manifest = {
+    schema: 'stellar.peon-minimal-context/v1',
+    issueNumber: issue.number,
+    writablePaths,
+    worker,
+  };
+  const serialized = JSON.stringify(manifest);
+  if (Buffer.byteLength(serialized, 'utf8') > maxManifestBytes)
+    throw new Error('Minimal task context exceeds the total byte limit.');
+  return Object.freeze({ manifest: deepFreeze(manifest), serialized });
+}
