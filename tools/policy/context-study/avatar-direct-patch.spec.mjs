@@ -270,6 +270,22 @@ test('an interrupt kills an active model client without waiting for its deadline
   assert.ok(Date.now() - started < 500);
 });
 
+test('model client output is complete when exit precedes stdout drain', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => undefined;
+  const running = runBoundedPodman(['run'], {
+    timeout: 1_000,
+    spawnProcess: () => child,
+  });
+  child.emit('exit', 0);
+  child.stdout.end('{"patch":"complete"}');
+  await new Promise((resolve) => setImmediate(resolve));
+  child.emit('close', 0);
+  assert.equal(await running, '{"patch":"complete"}');
+});
+
 test('disposable checkout accepts only the two intended patch paths', async () => {
   const parent = mkdtempSync(
     path.join(path.dirname(process.cwd()), 'avatar-patch-test-'),

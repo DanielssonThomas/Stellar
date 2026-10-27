@@ -202,7 +202,7 @@ export function runBoundedPodman(
     child.once('error', () =>
       finish(new Error('runtime: container command failed')),
     );
-    child.once('exit', (code) =>
+    child.once('close', (code) =>
       finish(
         code === 0
           ? null
@@ -297,7 +297,7 @@ function asyncContainerState(name, timeoutMs) {
       if (bytes <= 8_192) output += part.toString('utf8');
     });
     child.once('error', () => finish('inconclusive'));
-    child.once('exit', (code) => {
+    child.once('close', (code) => {
       if (code !== 0 || bytes > 8_192) return finish('inconclusive');
       try {
         finish(parseContainerState(output, name));
