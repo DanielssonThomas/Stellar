@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { performDirectPatch } from './avatar-patch-client.mjs';
 import {
@@ -220,9 +221,7 @@ test('client and meter have no workspace, credentials, external network or tools
 });
 
 test('one-use reservation survives process restarts and refuses a second run', () => {
-  const parent = mkdtempSync(
-    path.join(path.dirname(process.cwd()), 'avatar-lock-test-'),
-  );
+  const parent = mkdtempSync(path.join(tmpdir(), 'avatar-lock-test-'));
   try {
     const lock = reserveOneUseRun('a'.repeat(40), parent);
     assert.ok(existsSync(lock));
@@ -288,9 +287,10 @@ test('model client output is complete when exit precedes stdout drain', async ()
 });
 
 test('disposable checkout accepts only the two intended patch paths', async () => {
-  const parent = mkdtempSync(
-    path.join(path.dirname(process.cwd()), 'avatar-patch-test-'),
-  );
+  const containerSmoke = process.env.STELLAR_BENCHMARK_VERIFY_UI === '1';
+  const parent = containerSmoke
+    ? path.join(path.dirname(process.cwd()), '.stellar-supervisor-state')
+    : mkdtempSync(path.join(tmpdir(), 'avatar-patch-test-'));
   const base = git(process.cwd(), ['rev-parse', 'HEAD']);
   let disposable;
   try {
@@ -350,9 +350,9 @@ test('disposable checkout accepts only the two intended patch paths', async () =
     );
   } finally {
     if (disposable) disposeCheckout(disposable, parent);
-    rmSync(parent, { recursive: true, force: true });
+    if (!containerSmoke) rmSync(parent, { recursive: true, force: true });
   }
-  assert.ok(!existsSync(parent));
+  if (!containerSmoke) assert.ok(!existsSync(parent));
 });
 
 test('cleanup starts all stops and never confirms a running or unknown container', async () => {
