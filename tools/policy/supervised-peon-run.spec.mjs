@@ -45,6 +45,128 @@ test('pins both preserved #50 handoff hashes in the experimental runner', () => 
   );
 });
 
+test('minimal coding keeps governance in the host and verifies scoped changes', async () => {
+  const repositoryRoot = process.cwd();
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+  const selectedIssue = {
+    ...issue,
+    labels: [
+      ...issue.labels,
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:minimal-coding',
+    ],
+  };
+  let reserved = false;
+  let minimalReserved = false;
+  let inspectedOverlay = false;
+  let adapterOptions;
+  const options = {
+    issueNumber: 50,
+    sessionId,
+    image,
+    repositoryRoot,
+    handoffPath,
+    verificationCommands: [{ name: 'unit', command: ['node', '--test'] }],
+    contextPlan: {
+      skills: [],
+      files: [
+        {
+          kind: 'source',
+          path: 'tools/policy/supervised-peon-run.mjs',
+          startLine: 1,
+          endLine: 2,
+        },
+      ],
+      authorizedChangePaths: ['tools'],
+    },
+    loadAssignment: async () => selectedIssue,
+    readClaim: async () => claim({ worktreePath: repositoryRoot }),
+    resolveDevelopHead: async () => head,
+    inspectWorktree: async () => ({
+      fingerprint: 'stable',
+      clean: true,
+      headRevision: head,
+      baseRevision: head,
+      workspacePath: '/home/peon/workspaces/issue-50',
+      changes: ['tools/policy/supervised-peon-run.mjs'],
+    }),
+    inspectRegisteredWorktree: async () => ({
+      clean: true,
+      headRevision: head,
+    }),
+    readWorkspaceFile: (_number, file) =>
+      readFileSync(join(repositoryRoot, file), 'utf8'),
+    getProtectedPaths: () => [],
+    verifyImageCompatibility: async () => ({ compatible: true }),
+    verifySystemPromptGuidance: async ({ minimalGuidance }) => {
+      inspectedOverlay = minimalGuidance;
+      return {
+        path: 'AGENTS.md',
+        guidanceSha256: 'a'.repeat(64),
+        systemPromptSha256: 'b'.repeat(64),
+      };
+    },
+    reserveAttempt: () => {
+      reserved = true;
+    },
+    reserveMinimalAttempt: () => {
+      assert.equal(adapterOptions, undefined);
+      minimalReserved = true;
+    },
+    createWorkerAdapter: (options) => {
+      adapterOptions = options;
+      return {};
+    },
+    runVerification: async ({ writablePaths }) => {
+      assert.deepEqual(writablePaths, ['tools']);
+      return { exitCode: 0 };
+    },
+    runSupervisor: async ({ verify, task }) => verify({ task }),
+  };
+  const result = await runSupervisedPeonIssue(options);
+  assert.equal(inspectedOverlay, true);
+  assert.equal(reserved, false);
+  assert.equal(minimalReserved, true);
+  assert.deepEqual(adapterOptions.preparedContext.manifest.writablePaths, [
+    'tools',
+  ]);
+  assert.equal(adapterOptions.maxForwardedRequests, undefined);
+  assert.deepEqual(
+    result.map(({ passed }) => passed),
+    [true],
+  );
+
+  let inspections = 0;
+  const afterVerification = await runSupervisedPeonIssue({
+    ...options,
+    reserveMinimalAttempt: () => {
+      assert.equal(inspections, 2);
+    },
+    createWorkerAdapter: () => ({}),
+    inspectWorktree: async (...args) => {
+      const state = await options.inspectWorktree(...args);
+      inspections += 1;
+      return inspections === 4
+        ? {
+            ...state,
+            changes: ['tools/policy/supervised-peon-run.mjs', 'package.json'],
+          }
+        : state;
+    },
+  });
+  assert.deepEqual(
+    afterVerification.map(({ passed }) => passed),
+    [true, false],
+  );
+  assert.equal(
+    afterVerification[1].name,
+    'authorized-source-changes-after-verification',
+  );
+});
+
 const issue = {
   number: 50,
   state: 'OPEN',

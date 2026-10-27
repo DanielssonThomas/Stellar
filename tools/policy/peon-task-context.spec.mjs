@@ -5,7 +5,10 @@ import { mkdtemp, mkdir, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { buildPeonTaskContextManifest } from './peon-task-context.mjs';
+import {
+  buildPeonTaskContextManifest,
+  buildMinimalPeonTaskContextManifest,
+} from './peon-task-context.mjs';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import {
   buildHermesTaskCommand,
@@ -92,6 +95,48 @@ const actualProtectedPaths = codeowners.patterns.map(
     directory ? entry.replace(/\/+$/, '') : entry,
 );
 test.after(() => rm(root, { recursive: true, force: true }));
+
+test('minimal coding brief omits governance and permits only existing scoped directories', () => {
+  const selectedTask = { issueNumber: 50, hermesWorkflow: 'minimal-coding' };
+  const plan = {
+    skills: [],
+    files: [{ kind: 'source', path: 'src/atom.ts', startLine: 1, endLine: 1 }],
+    authorizedChangePaths: ['src', 'spec'],
+  };
+  const prepared = buildMinimalPeonTaskContextManifest({
+    issue,
+    task: selectedTask,
+    worktreePath: worktree,
+    contextPlan: plan,
+    protectedPaths: actualProtectedPaths,
+  });
+  const input = buildHermesTaskInput(selectedTask, prepared);
+  assert.match(input, /Add one small variant/);
+  assert.doesNotMatch(
+    input,
+    /owner|targetBranch|claim|issue-workflow|implement-issue/,
+  );
+  assert.deepEqual(prepared.manifest.writablePaths, ['src', 'spec']);
+  assert.throws(
+    () =>
+      buildMinimalPeonTaskContextManifest({
+        issue,
+        task: selectedTask,
+        worktreePath: worktree,
+        contextPlan: { ...plan, authorizedChangePaths: ['.agents/skills'] },
+        protectedPaths: actualProtectedPaths,
+      }),
+    /protected/,
+  );
+  assert.throws(() =>
+    buildMinimalPeonTaskContextManifest({
+      issue,
+      task: selectedTask,
+      worktreePath: worktree,
+      contextPlan: { ...plan, authorizedChangePaths: ['missing'] },
+    }),
+  );
+});
 
 const issue = {
   number: 50,
