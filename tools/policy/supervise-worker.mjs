@@ -1,5 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import {
@@ -145,6 +152,152 @@ async function persistHandoff(path, handoff) {
 
 export async function readHandoff(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+export function correctionFeedbackFromHandoff(handoff, issueNumber) {
+  if (
+    handoff?.task?.issueNumber !== issueNumber ||
+    handoff.status === 'running' ||
+    handoff.safeToResume === false
+  )
+    throw new Error('Correction handoff is mismatched or unsafe.');
+  const event = handoff.mentorFeedback?.at(-1);
+  if (
+    !event ||
+    !['diagnostic', 'conceptual'].includes(event.level) ||
+    event.issueNumber !== issueNumber ||
+    !handoff.attempts?.some(
+      (attempt) =>
+        attempt.workerId === 'peon' &&
+        attempt.attemptNumber === event.attemptNumber &&
+        attempt.afterFingerprint === event.fingerprint,
+    )
+  )
+    throw new Error('No verified Peon correction feedback is available.');
+  return {
+    issueNumber,
+    attemptNumber: event.attemptNumber,
+    fingerprint: event.fingerprint,
+    level: event.level,
+    diagnostic: event.diagnostic,
+    ...(event.guidance ? { guidance: event.guidance } : {}),
+  };
+}
+
+/** Append inert mentor evidence only after a supervised attempt has stopped. */
+export async function appendMentorFeedback({
+  handoffPath,
+  issueNumber,
+  attemptNumber,
+  expectedUpdatedAt,
+  expectedFingerprint,
+  level,
+  evidence,
+  guidance,
+  lessonProposal,
+  inspectWorktree,
+}) {
+  if (!isAbsolute(handoffPath ?? '') || typeof inspectWorktree !== 'function')
+    throw new Error(
+      'Trusted handoff path and worktree inspection are required.',
+    );
+  if (!['diagnostic', 'conceptual', 'codex-fix'].includes(level))
+    throw new Error('Unknown mentor intervention level.');
+  if (!['failure', 'verification'].includes(evidence?.kind))
+    throw new Error('Feedback must cite a recorded failure or verification.');
+  const bounded = (value, limit, label) => {
+    if (value === undefined || value === null) return null;
+    if (
+      typeof value !== 'string' ||
+      !value.trim() ||
+      Buffer.byteLength(value, 'utf8') > limit ||
+      /[\x00-\x08\x0b-\x1f]/.test(value)
+    )
+      throw new Error(`${label} must be short plain text.`);
+    return redactEvidence(value.trim().replace(/\s+/g, ' '));
+  };
+  const safeGuidance = bounded(guidance, 600, 'Guidance');
+  const safeProposal = bounded(lessonProposal, 1_000, 'Lesson proposal');
+  if (level !== 'diagnostic' && !safeGuidance)
+    throw new Error(
+      'Conceptual guidance and Codex fixes need a recorded explanation.',
+    );
+  const lockPath = `${handoffPath}.mentor.lock`;
+  const lock = await open(lockPath, 'wx');
+  try {
+    const handoff = await readHandoff(handoffPath);
+    if (
+      handoff.schemaVersion !== 1 ||
+      handoff.task?.issueNumber !== issueNumber ||
+      handoff.updatedAt !== expectedUpdatedAt ||
+      handoff.status === 'running' ||
+      handoff.safeToResume === false
+    )
+      throw new Error(
+        'Handoff is stale, active, or unsafe for mentor feedback.',
+      );
+    const attempt = handoff.attempts?.find(
+      (item) =>
+        item.workerId === 'peon' && item.attemptNumber === attemptNumber,
+    );
+    if (
+      !attempt ||
+      !attempt.afterFingerprint ||
+      attempt.afterFingerprint !== expectedFingerprint
+    )
+      throw new Error(
+        'Mentor feedback does not match a completed Peon attempt.',
+      );
+    const current = worktreeState(await inspectWorktree(handoff.task));
+    if (level === 'codex-fix') {
+      if (current.fingerprint === expectedFingerprint)
+        throw new Error('A Codex fix requires a changed worktree.');
+    } else if (current.fingerprint !== expectedFingerprint) {
+      throw new Error('Worktree changed since the Peon attempt.');
+    }
+    const cited =
+      evidence.kind === 'failure'
+        ? attempt.failure
+        : attempt.verificationResults?.[evidence.index];
+    if (!cited || (evidence.kind === 'verification' && cited.passed !== false))
+      throw new Error('Cited diagnostic is absent or did not fail.');
+    const summary = bounded(
+      evidence.kind === 'failure'
+        ? cited.message
+        : (cited.message ?? cited.name),
+      600,
+      'Diagnostic',
+    );
+    const event = {
+      issueNumber,
+      attemptNumber,
+      fingerprint: expectedFingerprint,
+      resultFingerprint: current.fingerprint,
+      level,
+      author: 'codex',
+      implementationAuthor: level === 'codex-fix' ? 'codex' : 'peon',
+      evidence: {
+        kind: evidence.kind,
+        index: evidence.kind === 'verification' ? evidence.index : null,
+      },
+      diagnostic: summary,
+      ...(safeGuidance ? { guidance: safeGuidance } : {}),
+      ...(safeProposal
+        ? { lessonProposal: { state: 'draft', text: safeProposal } }
+        : {}),
+      at: new Date().toISOString(),
+    };
+    handoff.mentorFeedback ??= [];
+    if (handoff.mentorFeedback.length >= 12)
+      throw new Error('Mentor feedback limit reached.');
+    handoff.mentorFeedback.push(event);
+    handoff.updatedAt = new Date().toISOString();
+    await persistHandoff(handoffPath, handoff);
+    return event;
+  } finally {
+    await lock.close();
+    await unlink(lockPath);
+  }
 }
 
 function createWorkerBudget(limits, previous = {}) {
@@ -769,6 +922,7 @@ export async function superviseWorker({
     attemptedSolutions: [],
     verificationResults: [],
     failures: [],
+    mentorFeedback: [],
     transfers: [],
     workerUsage: {},
   };
@@ -779,6 +933,7 @@ export async function superviseWorker({
   handoff.attemptedSolutions ??= [];
   handoff.verificationResults ??= [];
   handoff.failures ??= [];
+  handoff.mentorFeedback ??= [];
   handoff.transfers ??= [];
   handoff.workerUsage ??= {};
   for (const id of ['peon', 'mira']) {
@@ -917,6 +1072,7 @@ export async function superviseWorker({
         durationMs,
         progressed: false,
         changedFiles: before.changes,
+        baselineFingerprint: before.fingerprint,
         toolCalls: budget.snapshot.toolCalls,
         modelTokens: budget.snapshot.modelTokens,
         forwardedRequests: budget.snapshot.forwardedRequests,
@@ -976,6 +1132,7 @@ export async function superviseWorker({
 
       attempt.progressed = progressed;
       attempt.changedFiles = after.changes;
+      attempt.afterFingerprint = after.fingerprint;
       let result = null;
       let failure = null;
 

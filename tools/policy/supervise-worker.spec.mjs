@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import {
+  appendMentorFeedback,
+  correctionFeedbackFromHandoff,
   formatCapabilityBlockerComment,
   readHandoff,
   superviseWorker,
@@ -53,6 +55,100 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('records bounded, revision-bound feedback for a stopped format failure', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-format-handoff.json');
+    let fingerprint = 'unchanged';
+    const inspectWorktree = async () => ({
+      fingerprint,
+      changes: [],
+    });
+    const result = await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: {
+              code: 'FormatError',
+              message: 'The required report field is missing.',
+            },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    const before = await readHandoff(handoffPath);
+    const feedback = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: before.updatedAt,
+      expectedFingerprint: result.handoff.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      lessonProposal: 'Check the required report fields before submitting.',
+      inspectWorktree,
+    };
+    const event = await appendMentorFeedback(feedback);
+    assert.match(event.diagnostic, /required report field/);
+    assert.equal(event.implementationAuthor, 'peon');
+    assert.equal(event.lessonProposal.state, 'draft');
+    assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
+    await assert.rejects(appendMentorFeedback(feedback), /stale/);
+    const fresh = await readHandoff(handoffPath);
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        expectedFingerprint: 'wrong',
+      }),
+      /does not match/,
+    );
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        lessonProposal: 'x'.repeat(1_001),
+      }),
+      /short plain text/,
+    );
+    const conceptual = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: fresh.updatedAt,
+      level: 'conceptual',
+      guidance: 'Check the report schema against the required fields.',
+      lessonProposal: undefined,
+    });
+    assert.equal(conceptual.level, 'conceptual');
+    const afterConceptual = await readHandoff(handoffPath);
+    assert.equal(
+      correctionFeedbackFromHandoff(afterConceptual, task.issueNumber).guidance,
+      'Check the report schema against the required fields.',
+    );
+    assert.throws(
+      () => correctionFeedbackFromHandoff(afterConceptual, 999),
+      /unsafe/,
+    );
+    fingerprint = 'codex-change';
+    const assisted = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: afterConceptual.updatedAt,
+      level: 'codex-fix',
+      guidance: 'Codex authored the correction after Peon attempts.',
+      lessonProposal: undefined,
+    });
+    assert.equal(assisted.implementationAuthor, 'codex');
+    assert.notEqual(assisted.resultFingerprint, assisted.fingerprint);
+    const afterAssistance = await readHandoff(handoffPath);
+    assert.throws(
+      () => correctionFeedbackFromHandoff(afterAssistance, task.issueNumber),
+      /No verified/,
+    );
+  });
   it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
     const pre = {
       phase: 'pre',

@@ -117,6 +117,44 @@ test('minimal coding brief omits governance and permits only existing scoped dir
     /owner|targetBranch|claim|issue-workflow|implement-issue/,
   );
   assert.deepEqual(prepared.manifest.writablePaths, ['src', 'spec']);
+  const correction = buildMinimalPeonTaskContextManifest({
+    issue,
+    task: selectedTask,
+    worktreePath: worktree,
+    contextPlan: {
+      ...plan,
+      mentorFeedback: {
+        issueNumber: 50,
+        attemptNumber: 1,
+        fingerprint: 'a'.repeat(64),
+        level: 'diagnostic',
+        diagnostic: 'The required report field is missing.',
+      },
+    },
+  });
+  assert.match(
+    buildHermesTaskInput(selectedTask, correction),
+    /required report field/,
+  );
+  assert.throws(
+    () =>
+      buildMinimalPeonTaskContextManifest({
+        issue,
+        task: selectedTask,
+        worktreePath: worktree,
+        contextPlan: {
+          ...plan,
+          mentorFeedback: {
+            issueNumber: 51,
+            attemptNumber: 1,
+            fingerprint: 'a'.repeat(64),
+            level: 'diagnostic',
+            diagnostic: 'Wrong issue.',
+          },
+        },
+      }),
+    /issue-bound/,
+  );
   assert.throws(
     () =>
       buildMinimalPeonTaskContextManifest({
