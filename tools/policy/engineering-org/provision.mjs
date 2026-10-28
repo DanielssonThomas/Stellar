@@ -243,7 +243,15 @@ export async function provision({
   for (const skill of roleSkills[role])
     await stat(path.join(home, 'skills', 'stellar', skill, 'SKILL.md'));
   const details = await command(['-p', role, 'config']);
-  if (!details.includes('__SET_APPROVED_'))
+  if (role === 'foreman') {
+    if (
+      !/^model:\r?\n(?:[ ]{2}#.*\r?\n)*[ ]{2}default: Qwen3-14B-Q4_K_M\r?\n[ ]{2}provider: custom\r?\n[ ]{2}base_url: http:\/\/127\.0\.0\.1:18438\/v1\r?\n[ ]{2}context_length: 8192\r?\n/.test(
+        loadedConfig,
+      ) ||
+      !details.includes('Qwen3-14B-Q4_K_M')
+    )
+      throw new Error('Foreman local model route differs from its template.');
+  } else if (!details.includes('__SET_APPROVED_'))
     throw new Error(
       'Profile no longer has its explicit unconfigured provider sentinel.',
     );

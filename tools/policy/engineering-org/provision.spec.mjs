@@ -90,6 +90,60 @@ test('creates an isolated credential-free Hermes profile and validates loaded fi
   }
 });
 
+test('prepares Foreman with the local model while keeping only skills enabled', async () => {
+  const hermesRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'stellar-hermes-foreman-'),
+  );
+  try {
+    const result = await provision({
+      role: 'foreman',
+      hermesRoot,
+      commandRunner: async (_executable, args, env) => {
+        const home = path.join(env.HERMES_HOME, 'profiles', 'foreman');
+        if (args[0] === 'profile' && args[1] === 'list') return '';
+        if (args[0] === 'profile' && args[1] === 'create') {
+          await mkdir(home, { recursive: true });
+          await writeFile(path.join(home, 'SOUL.md'), 'generated default');
+          await writeFile(path.join(home, 'config.yaml'), 'generated default');
+          return '';
+        }
+        if (args.includes('prompt-size'))
+          return JSON.stringify({
+            toolsets_breakdown: [{ toolset: 'skills' }],
+            skills_breakdown: [
+              { name: 'technical-dispatch' },
+              { name: 'code-review' },
+              { name: 'reconciliation' },
+            ],
+          });
+        if (args.includes('tools'))
+          return '✓ enabled  skills\n✗ disabled terminal\n';
+        if (args[0] === '-p' && args[1] === 'foreman')
+          return readFile(path.join(home, 'config.yaml'), 'utf8');
+        throw new Error('Unexpected Hermes command.');
+      },
+    });
+    const config = await readFile(
+      path.join(hermesRoot, 'profiles', 'foreman', 'config.yaml'),
+      'utf8',
+    );
+    assert.equal(result.credentialsCopied, false);
+    assert.equal(result.inferenceStarted, false);
+    assert.deepEqual(result.skillsLoaded, [
+      'technical-dispatch',
+      'code-review',
+      'reconciliation',
+    ]);
+    assert.match(config, /default: Qwen3-14B-Q4_K_M/);
+    assert.match(config, /base_url: http:\/\/127\.0\.0\.1:18438\/v1/);
+    assert.match(config, /context_length: 8192/);
+    assert.match(config, /- terminal/);
+    assert.match(config, /write_approval: true/);
+  } finally {
+    await rm(hermesRoot, { recursive: true, force: true });
+  }
+});
+
 test('refuses to overwrite an existing runtime identity without explicit replacement', async () => {
   const hermesRoot = await mkdtemp(
     path.join(os.tmpdir(), 'stellar-hermes-org-'),
