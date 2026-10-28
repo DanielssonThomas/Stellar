@@ -205,7 +205,7 @@ export async function provision({
       soulFileValidated: true,
       configUnchanged: true,
       qwenModelPreserved: configAfter.includes(
-        Buffer.from('Qwen3.5-4B-Q4_K_M'),
+        Buffer.from('Qwen3.5-9B-Q5_K_S'),
       ),
       historicalSoulBackedUp: Boolean(previousSoul),
       promptSizeBytes: prompt.system_prompt.bytes,
