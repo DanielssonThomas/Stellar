@@ -8,6 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import {
   defaultPeonHermesProfile,
@@ -140,9 +141,29 @@ function validateResume(handoff, task, confirmPreviousWorkerStopped) {
     );
 }
 
-async function persistHandoff(path, handoff) {
-  if (!path) return;
+async function withHandoffLock(path, action) {
   await mkdir(dirname(path), { recursive: true });
+  const lockPath = `${path}.mentor.lock`;
+  let lock;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      lock = await open(lockPath, 'wx');
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      await delay(25);
+    }
+  }
+  if (!lock) throw new Error('Timed out waiting for the handoff writer.');
+  try {
+    return await action();
+  } finally {
+    await lock.close();
+    await unlink(lockPath);
+  }
+}
+
+async function writeHandoffUnlocked(path, handoff) {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(handoff, null, 2)}\n`, {
     flag: 'wx',
@@ -150,8 +171,71 @@ async function persistHandoff(path, handoff) {
   await rename(temporary, path);
 }
 
+async function persistHandoff(path, handoff) {
+  if (!path) return;
+  await withHandoffLock(path, async () => {
+    let current;
+    try {
+      current = await readHandoff(path);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (current) {
+      for (const key of [
+        'issueNumber',
+        'targetBranch',
+        'branch',
+        'worktreePath',
+      ]) {
+        if (current.task?.[key] !== handoff.task?.[key])
+          throw new Error('Handoff identity changed while writing.');
+      }
+      const priorAttempts = current.attempts ?? [];
+      if (
+        JSON.stringify(priorAttempts) !==
+        JSON.stringify(handoff.attempts.slice(0, priorAttempts.length))
+      )
+        throw new Error(
+          'A stale handoff attempt snapshot cannot overwrite newer work.',
+        );
+      const priorFeedback = current.mentorFeedback ?? [];
+      if (
+        JSON.stringify(
+          handoff.mentorFeedback.slice(0, priorFeedback.length),
+        ) !==
+        JSON.stringify(priorFeedback.slice(0, handoff.mentorFeedback.length))
+      )
+        throw new Error('Handoff mentor feedback changed unexpectedly.');
+      if (priorFeedback.length > handoff.mentorFeedback.length)
+        handoff.mentorFeedback = priorFeedback;
+      const priorTime = Date.parse(current.updatedAt);
+      const nextTime = Date.parse(handoff.updatedAt);
+      if (!Number.isFinite(priorTime) || !Number.isFinite(nextTime))
+        throw new Error('Handoff update time is invalid.');
+      handoff.updatedAt = new Date(
+        Math.max(nextTime, priorTime + 1),
+      ).toISOString();
+    }
+    await writeHandoffUnlocked(path, handoff);
+  });
+}
+
 export async function readHandoff(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+function diagnosticExcerpt(value) {
+  const sanitized = redactEvidence(String(value ?? ''))
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!sanitized) throw new Error('Recorded diagnostic is empty.');
+  if (Buffer.byteLength(sanitized, 'utf8') <= 600) return sanitized;
+  let excerpt = '';
+  for (const character of sanitized) {
+    if (Buffer.byteLength(excerpt + character, 'utf8') > 597) break;
+    excerpt += character;
+  }
+  return `${excerpt}…`;
 }
 
 export function correctionFeedbackFromHandoff(handoff, issueNumber) {
@@ -222,9 +306,7 @@ export async function appendMentorFeedback({
     throw new Error(
       'Conceptual guidance and Codex fixes need a recorded explanation.',
     );
-  const lockPath = `${handoffPath}.mentor.lock`;
-  const lock = await open(lockPath, 'wx');
-  try {
+  return withHandoffLock(handoffPath, async () => {
     const handoff = await readHandoff(handoffPath);
     if (
       handoff.schemaVersion !== 1 ||
@@ -261,12 +343,10 @@ export async function appendMentorFeedback({
         : attempt.verificationResults?.[evidence.index];
     if (!cited || (evidence.kind === 'verification' && cited.passed !== false))
       throw new Error('Cited diagnostic is absent or did not fail.');
-    const summary = bounded(
+    const summary = diagnosticExcerpt(
       evidence.kind === 'failure'
         ? cited.message
         : (cited.message ?? cited.name),
-      600,
-      'Diagnostic',
     );
     const event = {
       issueNumber,
@@ -279,6 +359,7 @@ export async function appendMentorFeedback({
       evidence: {
         kind: evidence.kind,
         index: evidence.kind === 'verification' ? evidence.index : null,
+        fingerprint: cited.fingerprint ?? stableFingerprint(cited),
       },
       diagnostic: summary,
       ...(safeGuidance ? { guidance: safeGuidance } : {}),
@@ -297,13 +378,15 @@ export async function appendMentorFeedback({
     if (handoff.mentorFeedback.length >= 12)
       throw new Error('Mentor feedback limit reached.');
     handoff.mentorFeedback.push(event);
-    handoff.updatedAt = new Date().toISOString();
-    await persistHandoff(handoffPath, handoff);
+    const previousTime = Date.parse(handoff.updatedAt);
+    if (!Number.isFinite(previousTime))
+      throw new Error('Handoff update time is invalid.');
+    handoff.updatedAt = new Date(
+      Math.max(Date.now(), previousTime + 1),
+    ).toISOString();
+    await writeHandoffUnlocked(handoffPath, handoff);
     return event;
-  } finally {
-    await lock.close();
-    await unlink(lockPath);
-  }
+  });
 }
 
 function createWorkerBudget(limits, previous = {}) {
@@ -1026,6 +1109,7 @@ export async function superviseWorker({
       const attemptNumber = state.attempts + 1;
       const attemptStarted = clock();
       const budget = createWorkerBudget(limits, state);
+      await save('running');
       let outcome = await runBounded(
         worker,
         {

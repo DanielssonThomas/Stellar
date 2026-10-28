@@ -158,6 +158,169 @@ describe('bounded worker supervision', () => {
       /No verified/,
     );
   });
+
+  it(
+    'preserves accepted feedback when a stale resume starts Mira',
+    { timeout: 3_000 },
+    async () => {
+      const handoffPath = join(temporaryRoot, 'mentor-resume-race.json');
+      const inspectWorktree = async () => ({
+        fingerprint: 'unchanged',
+        changes: [],
+      });
+      const first = await superviseWorker(
+        base({
+          handoffPath,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          workers: {
+            peon: worker('peon', async () => ({
+              status: 'failed',
+              failure: {
+                code: 'FormatError',
+                message: 'A report field is missing.',
+              },
+            })),
+            mira: worker('mira', async () => {
+              throw new Error('Mira must not run yet');
+            }),
+          },
+        }),
+      );
+      assert.equal(first.status, 'handoff-pending');
+      const staleResume = await readHandoff(handoffPath);
+      let releaseInspection;
+      let inspectionStarted;
+      const inspectionStartedPromise = new Promise((resolve) => {
+        inspectionStarted = resolve;
+      });
+      const inspectionGate = new Promise((resolve) => {
+        releaseInspection = resolve;
+      });
+      const appendPromise = appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: staleResume.updatedAt,
+        expectedFingerprint: staleResume.attempts[0].afterFingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'failure' },
+        inspectWorktree: async () => {
+          inspectionStarted();
+          await inspectionGate;
+          return inspectWorktree();
+        },
+      });
+      await inspectionStartedPromise;
+      let miraStarted;
+      let releaseMira;
+      let resumeAuthorized;
+      const resumeAuthorizedPromise = new Promise((resolve) => {
+        resumeAuthorized = resolve;
+      });
+      const miraStartedPromise = new Promise((resolve) => {
+        miraStarted = resolve;
+      });
+      const miraGate = new Promise((resolve) => {
+        releaseMira = resolve;
+      });
+      const resumePromise = superviseWorker(
+        base({
+          handoffPath,
+          resume: staleResume,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          authorizeHandoff: (request) => {
+            resumeAuthorized();
+            return authorizeMira(request);
+          },
+          workers: {
+            peon: worker('peon', async () => {
+              throw new Error('Peon already ran');
+            }),
+            mira: worker('mira', async () => {
+              const active = await readHandoff(handoffPath);
+              assert.equal(active.status, 'running');
+              assert.equal(active.mentorFeedback.length, 1);
+              miraStarted();
+              await miraGate;
+              return { status: 'completed' };
+            }),
+          },
+        }),
+      );
+      await resumeAuthorizedPromise;
+      releaseInspection();
+      await appendPromise;
+      await miraStartedPromise;
+      const active = await readHandoff(handoffPath);
+      await assert.rejects(
+        appendMentorFeedback({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          attemptNumber: 1,
+          expectedUpdatedAt: active.updatedAt,
+          expectedFingerprint: staleResume.attempts[0].afterFingerprint,
+          level: 'diagnostic',
+          evidence: { kind: 'failure' },
+          inspectWorktree,
+        }),
+        /active/,
+      );
+      releaseMira();
+      const resumed = await resumePromise;
+      assert.equal(resumed.status, 'complete');
+      assert.equal(resumed.handoff.mentorFeedback.length, 1);
+      assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
+    },
+  );
+
+  it('extracts UTF-8-bounded diagnostics without losing their evidence link', async () => {
+    for (const [name, message] of [
+      ['ascii', 'x'.repeat(1_200)],
+      ['multibyte', 'é'.repeat(500)],
+    ]) {
+      const handoffPath = join(temporaryRoot, `mentor-long-${name}.json`);
+      const inspectWorktree = async () => ({ fingerprint: name, changes: [] });
+      const result = await superviseWorker(
+        base({
+          handoffPath,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          workers: {
+            peon: worker('peon', async () => ({
+              status: 'failed',
+              failure: { code: 'LongDiagnostic', message },
+            })),
+            mira: worker('mira', async () => {
+              throw new Error('Mira must not run');
+            }),
+          },
+        }),
+      );
+      const handoff = await readHandoff(handoffPath);
+      assert.ok(
+        Buffer.byteLength(handoff.attempts[0].failure.message, 'utf8') > 600,
+      );
+      const event = await appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: handoff.updatedAt,
+        expectedFingerprint: result.handoff.attempts[0].afterFingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'failure' },
+        inspectWorktree,
+      });
+      assert.ok(Buffer.byteLength(event.diagnostic, 'utf8') <= 600);
+      assert.ok(event.diagnostic.endsWith('…'));
+      assert.equal(
+        event.evidence.fingerprint,
+        handoff.attempts[0].failure.fingerprint,
+      );
+      assert.equal(event.evidence.kind, 'failure');
+    }
+  });
   it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
     const pre = {
       phase: 'pre',
