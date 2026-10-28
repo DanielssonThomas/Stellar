@@ -95,7 +95,7 @@ describe('bounded worker supervision', () => {
     };
     const event = await appendMentorFeedback(feedback);
     assert.match(event.diagnostic, /required report field/);
-    assert.equal(event.implementationAuthor, 'peon');
+    assert.equal(event.implementationAuthor, null);
     assert.equal(event.lessonProposal.state, 'draft');
     assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
     await assert.rejects(appendMentorFeedback(feedback), /stale/);

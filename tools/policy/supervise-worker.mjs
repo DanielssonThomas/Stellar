@@ -275,7 +275,7 @@ export async function appendMentorFeedback({
       resultFingerprint: current.fingerprint,
       level,
       author: 'codex',
-      implementationAuthor: level === 'codex-fix' ? 'codex' : 'peon',
+      implementationAuthor: level === 'codex-fix' ? 'codex' : null,
       evidence: {
         kind: evidence.kind,
         index: evidence.kind === 'verification' ? evidence.index : null,
