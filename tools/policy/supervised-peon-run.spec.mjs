@@ -481,7 +481,7 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   assert.equal(adapterAttempt.hermesProfile, 'narrow-coding');
   assert.equal(adapterAttempt.maxForwardedRequests, 2);
   assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
-  assert.equal(workspaceInspections, 5);
+  assert.equal(workspaceInspections, 6);
   assert.equal(toolResultObserved, true);
   assert.equal(verificationCalls, 1);
 });

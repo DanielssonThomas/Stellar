@@ -171,7 +171,11 @@ async function writeHandoffUnlocked(path, handoff) {
   await rename(temporary, path);
 }
 
-async function persistHandoff(path, handoff) {
+async function persistHandoff(
+  path,
+  handoff,
+  { claiming = false, priorOwner } = {},
+) {
   if (!path) return;
   await withHandoffLock(path, async () => {
     let current;
@@ -181,6 +185,21 @@ async function persistHandoff(path, handoff) {
       if (error.code !== 'ENOENT') throw error;
     }
     if (current) {
+      if (!claiming && current.executionOwner !== handoff.executionOwner)
+        throw new Error('Another supervisor owns this handoff.');
+      if (
+        claiming &&
+        (current.executionOwner !== priorOwner ||
+          !['paused', 'handoff-pending'].includes(current.status))
+      )
+        throw new Error('A stale supervisor cannot claim this handoff.');
+      if (
+        !Number.isSafeInteger(current.supervisorRevision ?? 0) ||
+        (current.supervisorRevision ?? 0) !== handoff.supervisorRevision
+      )
+        throw new Error(
+          'A stale supervisor revision cannot overwrite this handoff.',
+        );
       for (const key of [
         'issueNumber',
         'targetBranch',
@@ -215,7 +234,10 @@ async function persistHandoff(path, handoff) {
       handoff.updatedAt = new Date(
         Math.max(nextTime, priorTime + 1),
       ).toISOString();
+    } else if (claiming || handoff.supervisorRevision !== 0) {
+      throw new Error('The handoff disappeared before supervisor claim.');
     }
+    handoff.supervisorRevision += 1;
     await writeHandoffUnlocked(path, handoff);
   });
 }
@@ -346,7 +368,9 @@ export async function appendMentorFeedback({
     const summary = diagnosticExcerpt(
       evidence.kind === 'failure'
         ? cited.message
-        : (cited.message ?? cited.name),
+        : [cited.summary, cited.message, cited.name].find(
+            (value) => typeof value === 'string' && value.trim(),
+          ),
     );
     const event = {
       issueNumber,
@@ -999,23 +1023,34 @@ export async function superviseWorker({
       throw new Error(`A ${id} worker adapter is required.`);
   }
 
-  const handoff = resume ?? {
-    schemaVersion: 1,
-    task,
-    status: 'running',
-    safeToResume: true,
-    currentWorkerId: 'peon',
-    createdAt: new Date(clock()).toISOString(),
-    updatedAt: new Date(clock()).toISOString(),
-    attempts: [],
-    attemptedSolutions: [],
-    verificationResults: [],
-    failures: [],
-    mentorFeedback: [],
-    transfers: [],
-    workerUsage: {},
-  };
+  const handoff = resume
+    ? structuredClone(resume)
+    : {
+        schemaVersion: 1,
+        task,
+        status: 'running',
+        safeToResume: true,
+        currentWorkerId: 'peon',
+        createdAt: new Date(clock()).toISOString(),
+        updatedAt: new Date(clock()).toISOString(),
+        attempts: [],
+        attemptedSolutions: [],
+        verificationResults: [],
+        failures: [],
+        mentorFeedback: [],
+        transfers: [],
+        workerUsage: {},
+      };
   if (resume) validateResume(handoff, task, confirmPreviousWorkerStopped);
+  const priorOwner = handoff.executionOwner;
+  handoff.supervisorRevision ??= 0;
+  if (
+    !Number.isSafeInteger(handoff.supervisorRevision) ||
+    handoff.supervisorRevision < 0
+  )
+    throw new Error('Handoff supervisor revision is invalid.');
+  handoff.executionOwner = randomUUID();
+  let claiming = Boolean(resume);
   if (confirmPreviousWorkerStopped) handoff.safeToResume = true;
   handoff.safeToResume ??= true;
   handoff.attempts ??= [];
@@ -1044,8 +1079,11 @@ export async function superviseWorker({
   async function save(status) {
     handoff.status = status;
     handoff.updatedAt = new Date(clock()).toISOString();
-    await persistHandoff(handoffPath, handoff);
+    await persistHandoff(handoffPath, handoff, { claiming, priorOwner });
+    claiming = false;
   }
+
+  if (resume) await save(handoff.status);
 
   let workerId = handoff.nextWorkerId ?? handoff.currentWorkerId ?? 'peon';
   if (workerId === 'mira' && handoff.status === 'handoff-pending') {
@@ -1222,6 +1260,7 @@ export async function superviseWorker({
 
       attempt.progressed = progressed;
       attempt.changedFiles = after.changes;
+      attempt.workerOutputFingerprint = after.fingerprint;
       attempt.afterFingerprint = after.fingerprint;
       let result = null;
       let failure = null;
@@ -1340,6 +1379,9 @@ export async function superviseWorker({
               await save('paused');
               return { status: 'paused', handoff, safeToResume: false };
             }
+            const stopped = worktreeState(await inspectWorktree(task));
+            attempt.changedFiles = stopped.changes;
+            attempt.afterFingerprint = stopped.fingerprint;
             if (verificationOutcome.type === 'interrupted') {
               failure = failureDetails({
                 code: 'Interrupted',
