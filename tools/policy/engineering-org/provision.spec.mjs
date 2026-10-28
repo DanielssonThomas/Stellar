@@ -95,33 +95,35 @@ test('prepares Foreman with the local model while keeping only skills enabled', 
     path.join(os.tmpdir(), 'stellar-hermes-foreman-'),
   );
   try {
+    let resolvedBaseUrl = 'http://127.0.0.1:18438/v1';
+    const commandRunner = async (_executable, args, env) => {
+      const home = path.join(env.HERMES_HOME, 'profiles', 'foreman');
+      if (args[0] === 'profile' && args[1] === 'list') return '';
+      if (args[0] === 'profile' && args[1] === 'create') {
+        await mkdir(home, { recursive: true });
+        await writeFile(path.join(home, 'SOUL.md'), 'generated default');
+        await writeFile(path.join(home, 'config.yaml'), 'generated default');
+        return '';
+      }
+      if (args.includes('prompt-size'))
+        return JSON.stringify({
+          toolsets_breakdown: [{ toolset: 'skills' }],
+          skills_breakdown: [
+            { name: 'technical-dispatch' },
+            { name: 'code-review' },
+            { name: 'reconciliation' },
+          ],
+        });
+      if (args.includes('tools'))
+        return '✓ enabled  skills\n✗ disabled terminal\n';
+      if (args[0] === '-p' && args[1] === 'foreman')
+        return `  Model: {'default': 'Qwen3-14B-Q4_K_M', 'provider': 'custom', 'base_url': '${resolvedBaseUrl}', 'context_length': 8192}`;
+      throw new Error('Unexpected Hermes command.');
+    };
     const result = await provision({
       role: 'foreman',
       hermesRoot,
-      commandRunner: async (_executable, args, env) => {
-        const home = path.join(env.HERMES_HOME, 'profiles', 'foreman');
-        if (args[0] === 'profile' && args[1] === 'list') return '';
-        if (args[0] === 'profile' && args[1] === 'create') {
-          await mkdir(home, { recursive: true });
-          await writeFile(path.join(home, 'SOUL.md'), 'generated default');
-          await writeFile(path.join(home, 'config.yaml'), 'generated default');
-          return '';
-        }
-        if (args.includes('prompt-size'))
-          return JSON.stringify({
-            toolsets_breakdown: [{ toolset: 'skills' }],
-            skills_breakdown: [
-              { name: 'technical-dispatch' },
-              { name: 'code-review' },
-              { name: 'reconciliation' },
-            ],
-          });
-        if (args.includes('tools'))
-          return '✓ enabled  skills\n✗ disabled terminal\n';
-        if (args[0] === '-p' && args[1] === 'foreman')
-          return readFile(path.join(home, 'config.yaml'), 'utf8');
-        throw new Error('Unexpected Hermes command.');
-      },
+      commandRunner,
     });
     const config = await readFile(
       path.join(hermesRoot, 'profiles', 'foreman', 'config.yaml'),
@@ -139,6 +141,11 @@ test('prepares Foreman with the local model while keeping only skills enabled', 
     assert.match(config, /context_length: 8192/);
     assert.match(config, /- terminal/);
     assert.match(config, /write_approval: true/);
+    resolvedBaseUrl = 'http://127.0.0.1:9999/v1';
+    await assert.rejects(
+      provision({ role: 'foreman', hermesRoot, commandRunner, force: true }),
+      /Foreman local model route differs/,
+    );
   } finally {
     await rm(hermesRoot, { recursive: true, force: true });
   }

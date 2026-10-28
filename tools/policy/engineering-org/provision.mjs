@@ -248,7 +248,10 @@ export async function provision({
       !/^model:\r?\n(?:[ ]{2}#.*\r?\n)*[ ]{2}default: Qwen3-14B-Q4_K_M\r?\n[ ]{2}provider: custom\r?\n[ ]{2}base_url: http:\/\/127\.0\.0\.1:18438\/v1\r?\n[ ]{2}context_length: 8192\r?\n/.test(
         loadedConfig,
       ) ||
-      !details.includes('Qwen3-14B-Q4_K_M')
+      !details.includes("'default': 'Qwen3-14B-Q4_K_M'") ||
+      !details.includes("'provider': 'custom'") ||
+      !details.includes("'base_url': 'http://127.0.0.1:18438/v1'") ||
+      !details.includes("'context_length': 8192")
     )
       throw new Error('Foreman local model route differs from its template.');
   } else if (!details.includes('__SET_APPROVED_'))
