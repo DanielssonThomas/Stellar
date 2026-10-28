@@ -96,6 +96,7 @@ test('prepares Foreman with the local model while keeping only skills enabled', 
   );
   try {
     let resolvedBaseUrl = 'http://127.0.0.1:18438/v1';
+    let resolvedReasoning = 'none';
     const commandRunner = async (_executable, args, env) => {
       const home = path.join(env.HERMES_HOME, 'profiles', 'foreman');
       if (args[0] === 'profile' && args[1] === 'list') return '';
@@ -116,6 +117,7 @@ test('prepares Foreman with the local model while keeping only skills enabled', 
         });
       if (args.includes('tools'))
         return '✓ enabled  skills\n✗ disabled terminal\n';
+      if (args.includes('get')) return `${resolvedReasoning}\n`;
       if (args[0] === '-p' && args[1] === 'foreman')
         return `  Model: {'default': 'Qwen3-14B-Q4_K_M', 'provider': 'custom', 'base_url': '${resolvedBaseUrl}', 'context_length': 8192}`;
       throw new Error('Unexpected Hermes command.');
@@ -139,12 +141,19 @@ test('prepares Foreman with the local model while keeping only skills enabled', 
     assert.match(config, /default: Qwen3-14B-Q4_K_M/);
     assert.match(config, /base_url: http:\/\/127\.0\.0\.1:18438\/v1/);
     assert.match(config, /context_length: 8192/);
+    assert.match(config, /reasoning_effort: none/);
     assert.match(config, /- terminal/);
     assert.match(config, /write_approval: true/);
     resolvedBaseUrl = 'http://127.0.0.1:9999/v1';
     await assert.rejects(
       provision({ role: 'foreman', hermesRoot, commandRunner, force: true }),
-      /Foreman local model route differs/,
+      /Foreman model route or reasoning differs/,
+    );
+    resolvedBaseUrl = 'http://127.0.0.1:18438/v1';
+    resolvedReasoning = 'high';
+    await assert.rejects(
+      provision({ role: 'foreman', hermesRoot, commandRunner, force: true }),
+      /Foreman model route or reasoning differs/,
     );
   } finally {
     await rm(hermesRoot, { recursive: true, force: true });

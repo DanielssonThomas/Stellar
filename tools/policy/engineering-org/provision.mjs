@@ -244,6 +244,14 @@ export async function provision({
     await stat(path.join(home, 'skills', 'stellar', skill, 'SKILL.md'));
   const details = await command(['-p', role, 'config']);
   if (role === 'foreman') {
+    // `config show` displays the unrelated display.show_reasoning toggle.
+    const reasoning = await command([
+      '-p',
+      role,
+      'config',
+      'get',
+      'agent.reasoning_effort',
+    ]);
     if (
       !/^model:\r?\n(?:[ ]{2}#.*\r?\n)*[ ]{2}default: Qwen3-14B-Q4_K_M\r?\n[ ]{2}provider: custom\r?\n[ ]{2}base_url: http:\/\/127\.0\.0\.1:18438\/v1\r?\n[ ]{2}context_length: 8192\r?\n/.test(
         loadedConfig,
@@ -251,9 +259,13 @@ export async function provision({
       !details.includes("'default': 'Qwen3-14B-Q4_K_M'") ||
       !details.includes("'provider': 'custom'") ||
       !details.includes("'base_url': 'http://127.0.0.1:18438/v1'") ||
-      !details.includes("'context_length': 8192")
+      !details.includes("'context_length': 8192") ||
+      !/^agent:\r?\n[ ]{2}reasoning_effort: none\r?$/m.test(loadedConfig) ||
+      reasoning.trim() !== 'none'
     )
-      throw new Error('Foreman local model route differs from its template.');
+      throw new Error(
+        'Foreman model route or reasoning differs from its template.',
+      );
   } else if (!details.includes('__SET_APPROVED_'))
     throw new Error(
       'Profile no longer has its explicit unconfigured provider sentinel.',
