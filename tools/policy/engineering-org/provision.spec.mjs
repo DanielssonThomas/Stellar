@@ -124,7 +124,7 @@ test('updates Peon identity while preserving its existing Qwen config and backin
   try {
     const profile = path.join(hermesRoot, 'profiles', 'peon');
     await mkdir(profile, { recursive: true });
-    const config = 'model:\n  default: Qwen3.5-4B-Q4_K_M\n  provider: custom\n';
+    const config = 'model:\n  default: Qwen3.5-9B-Q5_K_S\n  provider: custom\n';
     await writeFile(path.join(profile, 'config.yaml'), config);
     await writeFile(path.join(profile, 'SOUL.md'), 'historical Peon identity');
     await assert.rejects(

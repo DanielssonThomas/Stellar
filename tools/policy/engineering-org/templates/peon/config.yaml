@@ -1,5 +1,5 @@
 model:
-  default: Qwen3.5-4B-Q4_K_M
+  default: Qwen3.5-9B-Q5_K_S
   provider: custom
   base_url: http://peon-meter:18436/v1
   context_length: 65536

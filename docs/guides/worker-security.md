@@ -35,9 +35,9 @@ The trusted task-context manifest may include only its mandatory guidance and ex
 
 ## Private WSL inference service
 
-The local Peon model service runs separately from the worker in rootless Podman. NVIDIA Container Toolkit CDI was generated in Ubuntu WSL from the WSL-provided NVIDIA driver, and a CUDA sample completed on the RTX 4070 SUPER. The service uses the pinned `ghcr.io/ggml-org/llama.cpp` image digest `sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7` and the Qwen3.5-4B Q4_K_M GGUF copied onto WSL's Linux filesystem. The model file is mounted read-only; its SHA-256 is `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`.
+The local Peon model service runs separately from the worker in rootless Podman. NVIDIA Container Toolkit CDI was generated in Ubuntu WSL from the WSL-provided NVIDIA driver, and a CUDA sample completed on the RTX 4070 SUPER. The service uses the pinned `ghcr.io/ggml-org/llama.cpp` image digest `sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7`. The prepared Qwen3.5-9B Q5_K_S GGUF is a byte-verified copy of Mira's installed weights on WSL's Linux filesystem, mounted read-only for Peon; its SHA-256 is `be88613a50ba792bd5a2bc07b74bcd97c9ed9dbac028d27a44c6888e712323c3`. Mira's profile and model process remain separate. The prior 4B service is historical evidence and is not a 9B speed measurement.
 
-The service runs as UID/GID 1001 with all capabilities dropped, `no-new-privileges`, 8 GiB RAM, 6 CPUs, 128 PIDs, one inference slot, a 65,536-token context, 12 GPU layers, batch 128, micro-batch 32, and Q8 KV caches. Its root filesystem remains writable because the WSL CDI hook failed when the service root filesystem was read-only. This does not grant Peon access to the service container: the worker has no Podman socket, container namespace, model mount, or service configuration mount. Keep the service's arguments and model path in the trusted host-side start procedure.
+The service runs as UID/GID 1001 with all capabilities dropped, `no-new-privileges`, 8 GiB RAM, 6 CPUs, 128 PIDs, and one inference slot. The 9B start procedure keeps a 65,536-token context, batch 128, micro-batch 32, and Q8 KV caches. With Mira's model process absent, the tested `--n-gpu-layers 99` setting used about 7 GiB of GPU memory and produced 60.32 generation tokens/s for a 128-token noncoding probe through the existing metering proxy. The 12-layer setting produced 3.53 tokens/s. The full-offload service must not be started while Mira holds the GPU; inspect free VRAM before starting it. Its root filesystem remains writable because the WSL CDI hook failed when the service root filesystem was read-only. This does not grant Peon access to the service container: the worker has no Podman socket, container namespace, model mount, or service configuration mount. Keep the service's arguments and model path in the trusted host-side start procedure.
 
 The metered topology uses three existing/dedicated rootless Podman bridges. Qwen remains attached only to `stellar-peon-model` (`internal=true`, DNS-enabled, no host port publication). Peon attaches only to `stellar-peon-worker` (`internal=true`); it has neither a route to the model network nor direct external egress. The trusted, credential-free metering proxy attaches to the worker, model, and egress bridges. It routes model requests to Qwen, and its HTTPS CONNECT relay allows only the configured GitHub hostnames on port 443. Peon uses that relay for fork Git operations. No Windows firewall, WSL-wide networking, Docker, Hermes gateway, unrelated model server, or Windows model server setting is changed. The Windows server remains on `127.0.0.1:18434`; Qwen remains unpublished on port 18435.
 
@@ -53,29 +53,29 @@ Hermes Agent v0.22.2 is pinned to source commit `d923a5eb487a17c0a68801bba9ef0f5
 
 The previous direct model-network test and inference smoke came from the earlier topology and are historical evidence only. The new internal worker network was probed from a worker-shaped rootless container: `peon-model` did not resolve (`ENOTFOUND`) and direct access to `1.1.1.1` failed (`ENETUNREACH`). A credential-free metering proxy probe successfully passed a streaming request to the running Qwen service, returned an SSE completion ending in `[DONE]`, and recorded 29 prompt-plus-generated tokens. The existing Qwen command, 65,536-token context, 12 GPU layers, model file, and Windows inference server were unchanged. This probe does not benchmark full-context throughput or admit Peon.
 
-The trusted host operator can start the model service after creating the internal network and copying the verified model to `/home/peon/.local/share/stellar-peon-model/Qwen3.5-4B-Q4_K_M.gguf` with file mode `0444` and parent directory mode `0555`:
+The trusted host operator can start the prepared 9B service after confirming sufficient GPU capacity, the copied file at `/home/peon/.local/share/stellar-peon-model/Qwen3.5-9B-Q5_K_S.gguf` has mode `0444` and the parent directory has mode `0555`. The previous 4B container can remain stopped to preserve its logs:
 
 ```bash
 podman network create --internal stellar-peon-model
 podman network create --internal stellar-peon-worker
 podman network create stellar-peon-egress
-podman run -d --name stellar-peon-qwen --pull=never \
+podman run -d --name stellar-peon-qwen-9b --pull=never \
   --userns=keep-id --user=1001:1001 \
   --network=stellar-peon-model:alias=peon-model \
   --device=nvidia.com/gpu=all --security-opt=label=disable \
   --cap-drop=all --security-opt=no-new-privileges \
   --pids-limit=128 --memory=8g --memory-swap=8g --cpus=6 \
   --tmpfs=/tmp:rw,nosuid,nodev,noexec,size=1g \
-  --mount=type=bind,src=/home/peon/.local/share/stellar-peon-model/Qwen3.5-4B-Q4_K_M.gguf,dst=/models/Qwen3.5-4B-Q4_K_M.gguf,ro \
+  --mount=type=bind,src=/home/peon/.local/share/stellar-peon-model/Qwen3.5-9B-Q5_K_S.gguf,dst=/models/Qwen3.5-9B-Q5_K_S.gguf,ro \
   ghcr.io/ggml-org/llama.cpp@sha256:c65f01343624f55848a82a6b653880e53399377a92b371975eb3303c1d5647e7 \
-  --model /models/Qwen3.5-4B-Q4_K_M.gguf --alias Qwen3.5-4B-Q4_K_M \
-  --ctx-size 65536 --n-gpu-layers 12 --parallel 1 \
+  --model /models/Qwen3.5-9B-Q5_K_S.gguf --alias Qwen3.5-9B-Q5_K_S \
+  --ctx-size 65536 --n-gpu-layers 99 --parallel 1 \
   --batch-size 128 --ubatch-size 32 --flash-attn on \
-  --cache-type-k q8_0 --cache-type-v q8_0 --jinja \
+  --cache-type-k q8_0 --cache-type-v q8_0 --jinja --reasoning off \
   --host 0.0.0.0 --port 18435
 ```
 
-Do not add `-p`/`--publish`. Verify Qwen health from the trusted metering proxy and send a small completion through the proxy; Peon cannot access `peon-model` directly. Stop and remove the service with `podman stop stellar-peon-qwen` and `podman rm stellar-peon-qwen`; remove the model, worker, and egress networks only after proxy/worker containers exit with `podman network rm stellar-peon-model stellar-peon-worker stellar-peon-egress`. Remove only the WSL model copy when no longer needed. To roll back CDI, first stop GPU containers, then remove `/etc/cdi/nvidia.yaml`, the `nvidia-container-toolkit.list` source and its keyring, and uninstall `nvidia-container-toolkit-base` if no other WSL workload uses it. These commands do not remove the Windows NVIDIA driver or touch the Windows inference server.
+Do not add `-p`/`--publish`. Verify Qwen health from the trusted metering proxy and send a small completion through the proxy; Peon cannot access `peon-model` directly. Stop the prepared service with `podman stop stellar-peon-qwen-9b` when Mira needs GPU capacity. Remove it with `podman rm stellar-peon-qwen-9b` only when its diagnostic logs are no longer needed; remove the model, worker, and egress networks only after proxy/worker containers exit with `podman network rm stellar-peon-model stellar-peon-worker stellar-peon-egress`. Remove only the WSL model copy when no longer needed. To roll back CDI, first stop GPU containers, then remove `/etc/cdi/nvidia.yaml`, the `nvidia-container-toolkit.list` source and its keyring, and uninstall `nvidia-container-toolkit-base` if no other WSL workload uses it. These commands do not remove the Windows NVIDIA driver or touch the Windows inference server.
 
 ## Worker image
 

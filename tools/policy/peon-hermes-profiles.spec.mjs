@@ -214,7 +214,7 @@ test('requires matching well-formed Windows and WSL config digests', () => {
   );
 });
 
-test('keeps the production focus profile unchanged and narrows only the separate opt-in config', () => {
+test('keeps focus and narrow tool settings aligned on the Peon model', () => {
   const focus = readFileSync(
     new URL('./peon-hermes-config.yaml', import.meta.url),
     'utf8',
@@ -223,18 +223,26 @@ test('keeps the production focus profile unchanged and narrows only the separate
     new URL('./peon-hermes-narrow-config.yaml', import.meta.url),
     'utf8',
   );
+  const evidence = readFileSync(
+    new URL('./peon-hermes-evidence-config.yaml', import.meta.url),
+    'utf8',
+  );
+  const template = readFileSync(
+    new URL('./engineering-org/templates/peon/config.yaml', import.meta.url),
+    'utf8',
+  );
   assert.match(focus, /coding_context: focus/);
   assert.doesNotMatch(focus, /disabled_toolsets:/);
   assert.match(narrow, /coding_context: focus/);
   for (const setting of [
-    'default: Qwen3.5-4B-Q4_K_M',
+    'default: Qwen3.5-9B-Q5_K_S',
     'provider: custom',
     'base_url: http://peon-meter:18436/v1',
     'context_length: 65536',
     'max_turns: 250',
   ]) {
-    assert.ok(focus.includes(setting));
-    assert.ok(narrow.includes(setting));
+    for (const config of [focus, narrow, evidence, template])
+      assert.ok(config.includes(setting));
   }
   assert.match(narrow, /disabled_toolsets:\r?\n(?:[ ]{4}- [a-z_]+\r?\n)+$/);
   for (const toolset of [
