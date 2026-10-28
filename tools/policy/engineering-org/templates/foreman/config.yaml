@@ -5,7 +5,7 @@ model:
   base_url: http://127.0.0.1:18438/v1
   context_length: 8192
 agent:
-  reasoning_effort: high
+  reasoning_effort: none
   max_turns: 80
   disabled_toolsets:
     - browser-use
