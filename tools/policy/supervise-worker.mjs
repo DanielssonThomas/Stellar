@@ -283,7 +283,13 @@ export async function appendMentorFeedback({
       diagnostic: summary,
       ...(safeGuidance ? { guidance: safeGuidance } : {}),
       ...(safeProposal
-        ? { lessonProposal: { state: 'draft', text: safeProposal } }
+        ? {
+            lessonProposal: {
+              state: 'draft',
+              scope: 'unclassified',
+              text: safeProposal,
+            },
+          }
         : {}),
       at: new Date().toISOString(),
     };

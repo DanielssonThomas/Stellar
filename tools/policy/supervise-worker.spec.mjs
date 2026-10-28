@@ -97,6 +97,7 @@ describe('bounded worker supervision', () => {
     assert.match(event.diagnostic, /required report field/);
     assert.equal(event.implementationAuthor, null);
     assert.equal(event.lessonProposal.state, 'draft');
+    assert.equal(event.lessonProposal.scope, 'unclassified');
     assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
     await assert.rejects(appendMentorFeedback(feedback), /stale/);
     const fresh = await readHandoff(handoffPath);
@@ -113,6 +114,14 @@ describe('bounded worker supervision', () => {
         ...feedback,
         expectedUpdatedAt: fresh.updatedAt,
         lessonProposal: 'x'.repeat(1_001),
+      }),
+      /short plain text/,
+    );
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        lessonProposal: 'unsafe\u0000content',
       }),
       /short plain text/,
     );
