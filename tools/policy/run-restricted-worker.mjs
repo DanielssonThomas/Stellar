@@ -2424,7 +2424,7 @@ export function inspectRestrictedWorkspace(
   };
 }
 
-function runWorkspaceInspection(args, { input, timeout, maxBuffer }) {
+export function runWorkspaceInspection(args, { input, timeout, maxBuffer }) {
   const result = spawnSync(
     'wsl.exe',
     [
