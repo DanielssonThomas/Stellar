@@ -66,7 +66,7 @@ async function fixture(t) {
       assert.equal(run(['realpath', '--', privateRoot]).trim(), privateRoot);
       run(['rm', '-rf', '--', privateRoot]);
     });
-  } else await mkdir(privateRoot);
+  } else await mkdir(privateRoot, { mode: 0o700 });
   const privateHost =
     process.platform === 'win32'
       ? `\\\\wsl.localhost\\Ubuntu${privateRoot.replaceAll('/', '\\')}`
@@ -116,7 +116,7 @@ async function fixture(t) {
       privateRoot,
       expectedBranch: branch,
       expectedRevision: revision,
-      expectedFingerprint: fingerprint(),
+      expectedFingerprint: extra.expectedFingerprint ?? fingerprint(),
       authorizedChangePaths: ['src'],
       protectedPaths: ['AGENTS.md', 'tools/policy'],
       runCommand: run,
@@ -321,6 +321,20 @@ test('rejects active Git filters before status can execute them and requires pri
   assert.equal(existsSync(marker), false);
   assert.equal(existsSync(path.join(f.privateHost, 'filter-1')), false);
   f.git('config', '--unset', 'filter.probe.clean');
+  await writeFile(
+    path.join(f.sourceHost, 'src', '.gitattributes'),
+    'main.ts filter=\n',
+  );
+  const emptyFingerprint = f.fingerprint();
+  f.git('config', 'filter..clean', `sh -c 'touch ${linuxPath(marker)}; cat'`);
+  assert.throws(
+    () =>
+      f.prepare('empty-filter-1', { expectedFingerprint: emptyFingerprint }),
+    /External Git filters/,
+  );
+  assert.equal(existsSync(marker), false);
+  assert.equal(existsSync(path.join(f.privateHost, 'empty-filter-1')), false);
+  f.git('config', '--unset', 'filter..clean');
   await rm(path.join(f.sourceHost, 'src', '.gitattributes'));
   await writeFile(
     path.join(f.sourceHost, 'src', 'main.ts'),

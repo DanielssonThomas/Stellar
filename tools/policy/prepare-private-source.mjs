@@ -119,7 +119,7 @@ export function preparePrivateSourceCopy({
   );
   if (
     config.some((entry) =>
-      /^filter\..+\.(?:clean|process|smudge)(?:\n|$)/i.test(entry),
+      /^filter\..*\.(?:clean|process|smudge)(?:\n|$)/i.test(entry),
     )
   )
     throw new Error('External Git filters are not allowed during capture.');
