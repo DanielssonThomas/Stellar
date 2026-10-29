@@ -213,10 +213,7 @@ function runGit(workspace, args, runCommand) {
   ).trim();
 }
 
-export function prepareDisposableGit(
-  workspace,
-  runCommand = runWorkspaceInspection,
-) {
+function prepareDisposableGit(workspace, runCommand = runWorkspaceInspection) {
   if (!safeRoot(workspace)) throw new Error('Unsafe disposable Git workspace.');
   runGit(
     workspace,
@@ -249,8 +246,18 @@ export function prepareDisposableGit(
 }
 
 export function buildCandidateTestArgs(options, candidate, testPath, command) {
+  const roots = [
+    options.privateRoot,
+    options.candidateRoot,
+    candidate.privatePath,
+    options.trustedProtectedRoot,
+    options.cacheRoot,
+    '/home/peon/workspaces',
+  ];
   if (
+    !safeRoot(options.testRoot) ||
     !safeRoot(testPath) ||
+    roots.some((root) => !safeRoot(root) || overlaps(options.testRoot, root)) ||
     testPath !==
       path.posix.join(options.testRoot, candidate.attemptId, 'workspace') ||
     !Array.isArray(command) ||
@@ -386,7 +393,7 @@ async function launchPodman(args, { signal, timeoutMs = 90_000 } = {}) {
   });
 }
 
-export async function runNamedCandidateCheck(
+async function runNamedCandidateCheck(
   options,
   candidate,
   testPath,
@@ -439,8 +446,10 @@ export async function runPrivateCandidateChecks(
       cacheRoot,
       options.privateRoot,
       options.candidateRoot,
+      candidate.privatePath,
+      options.trustedProtectedRoot,
       '/home/peon/workspaces',
-    ].some((root) => overlaps(testRoot, root)) ||
+    ].some((root) => !safeRoot(root) || overlaps(testRoot, root)) ||
     !Array.isArray(checkNames) ||
     !checkNames.length ||
     checkNames.length > 4 ||

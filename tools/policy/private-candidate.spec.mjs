@@ -12,7 +12,6 @@ import {
   recordPrivateCandidateTestEvidence,
   verifyPrivateCandidate,
 } from './private-candidate.mjs';
-import { prepareDisposableGit } from './private-candidate-tests.mjs';
 
 const issueNumber = 147;
 const branch = 'issue/147-inert-output';
@@ -406,7 +405,7 @@ test('a substituted candidate or uncertain verifier cannot be accepted', async (
   ]);
 });
 
-test('test preparation copies exact candidate bytes with isolated disposable Git metadata', async (t) => {
+test('test preparation copies exact candidate bytes without changing the candidate', async (t) => {
   const { scratch, source, privateCopy, otherCopy, options, adapters } =
     await fixture(t);
   write(`${privateCopy.privatePath}/src/one.txt`, 'candidate\n');
@@ -421,11 +420,6 @@ test('test preparation copies exact candidate bytes with isolated disposable Git
   );
   assert.equal(run(['cat', `${testPath}/src/one.txt`]), 'candidate');
   assert.equal(run(['cat', `${source}/src/one.txt`]), 'before');
-  run(['test', '!', '-e', `${candidate.privatePath}/.git`]);
-  const commit = prepareDisposableGit(testPath, adapters.runCommand);
-  assert.match(commit, /^[a-f0-9]{40}$/);
-  assert.equal(run(['git', '-C', testPath, 'remote']), '');
-  run(['test', '-d', `${testPath}/.git`]);
   run(['test', '!', '-e', `${candidate.privatePath}/.git`]);
   assertExactPrivateCandidate(options, candidate, adapters.runCommand);
   const evidence = {

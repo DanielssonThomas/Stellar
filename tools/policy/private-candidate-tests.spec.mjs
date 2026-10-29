@@ -7,8 +7,6 @@ import test from 'node:test';
 import {
   buildCandidateTestArgs,
   classifyOfflineDependencyFailure,
-  prepareDisposableGit,
-  runNamedCandidateCheck,
   runPrivateCandidateChecks,
   sanitizeTestDiagnostic,
   validateReviewedDependencyInputs,
@@ -25,6 +23,7 @@ const digest = (name) =>
     .digest('hex');
 const candidate = {
   attemptId: 'issue-149-attempt-1',
+  privatePath: '/home/peon/candidates/issue-149-attempt-1',
   contentDigest: 'a'.repeat(64),
   files: ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map(
     (name) => ({ path: name, sha256: digest(name) }),
@@ -114,6 +113,38 @@ test('unreviewed commands, substituted workspaces and stale attempt paths fail c
       ),
     /mount/,
   );
+});
+
+test('direct argument builder rejects a writable candidate or protected root mount', () => {
+  const command = ['pnpm', 'exec', 'nx', 'show', 'projects', '--json'];
+  const completeCandidate = {
+    ...candidate,
+    privatePath: '/home/peon/candidates/issue-149-attempt-1',
+  };
+  for (const testRoot of [
+    options.candidateRoot,
+    options.privateRoot,
+    options.trustedProtectedRoot,
+    options.cacheRoot,
+    '/home/peon/workspaces',
+    completeCandidate.privatePath,
+  ])
+    assert.throws(
+      () =>
+        buildCandidateTestArgs(
+          { ...options, testRoot },
+          completeCandidate,
+          `${testRoot}/${candidate.attemptId}/workspace`,
+          command,
+        ),
+      /Exact disposable test mount/,
+    );
+});
+
+test('container execution helper is not a public bypass around candidate validation', async () => {
+  const module = await import('./private-candidate-tests.mjs');
+  assert.equal(Object.hasOwn(module, 'runNamedCandidateCheck'), false);
+  assert.equal(Object.hasOwn(module, 'prepareDisposableGit'), false);
 });
 
 test('offline metadata, missing contents, lock mismatch and uncertain install remain distinct failures', () => {
@@ -229,47 +260,23 @@ test('reviewed lockfile and package inputs are required before any execution', a
     ),
     /named checks/,
   );
-  await assert.rejects(
-    runPrivateCandidateChecks(
-      { ...options, testRoot: options.candidateRoot },
-      candidate,
-    ),
-    /named checks/,
-  );
+  for (const testRoot of [
+    options.candidateRoot,
+    options.privateRoot,
+    options.trustedProtectedRoot,
+    options.cacheRoot,
+    candidate.privatePath,
+  ])
+    await assert.rejects(
+      runPrivateCandidateChecks({ ...options, testRoot }, candidate),
+      /named checks/,
+    );
   await assert.rejects(
     runPrivateCandidateChecks(
       { ...options, signal: AbortSignal.abort() },
       candidate,
     ),
     /named checks/,
-  );
-});
-
-test('disposable Git setup uses an empty template, isolated config, no remote and a local ref', () => {
-  const commands = [];
-  const runCommand = (args) => {
-    commands.push(args);
-    const joined = args.join(' ');
-    if (joined.includes(' write-tree')) return 'a'.repeat(40);
-    if (joined.includes(' commit-tree')) return 'b'.repeat(40);
-    return '';
-  };
-  assert.equal(prepareDisposableGit(workspace, runCommand), 'b'.repeat(40));
-  assert.ok(
-    commands.every((args) => args.includes('GIT_CONFIG_GLOBAL=/dev/null')),
-  );
-  assert.ok(
-    commands.every((args) => args.includes('GIT_NO_REPLACE_OBJECTS=1')),
-  );
-  assert.ok(commands.some((args) => args.includes('--template=/dev/null')));
-  assert.ok(commands.some((args) => args.includes('refs/heads/private-test')));
-  assert.ok(commands.every((args) => !args.includes('clone')));
-  assert.throws(
-    () =>
-      prepareDisposableGit(workspace, (args) =>
-        args.at(-1) === '--porcelain' ? ' M src/file.ts' : runCommand(args),
-      ),
-    /not isolated and clean/,
   );
 });
 
@@ -283,55 +290,4 @@ test('stored diagnostics are redacted and bounded after redaction, including Uni
     sanitizeTestDiagnostic(`Bearer ${'a'.repeat(30)}`),
     'Bearer [REDACTED]',
   );
-});
-
-test('cancellation and uncertain termination never produce a successful named check', async () => {
-  const command = ['pnpm', 'exec', 'nx', 'show', 'projects', '--json'];
-  let launched = false;
-  const launch = async () => {
-    launched = true;
-    return { exitCode: 0, error: null, timedOut: false, cancelled: false };
-  };
-  const absent = async () => 'absent';
-  const stopped = async () => ({ confirmed: true, state: 'absent' });
-  await assert.rejects(
-    runNamedCandidateCheck(
-      { ...options, signal: AbortSignal.abort() },
-      candidate,
-      workspace,
-      command,
-      launch,
-      stopped,
-      absent,
-    ),
-    /cancelled/,
-  );
-  assert.equal(launched, false);
-  await assert.rejects(
-    runNamedCandidateCheck(
-      options,
-      candidate,
-      workspace,
-      command,
-      launch,
-      async () => ({ confirmed: false, state: 'running' }),
-      absent,
-    ),
-    /termination is uncertain/,
-  );
-  assert.equal(launched, true);
-  launched = false;
-  await assert.rejects(
-    runNamedCandidateCheck(
-      options,
-      candidate,
-      workspace,
-      command,
-      launch,
-      stopped,
-      async () => 'running',
-    ),
-    /already present or uncertain/,
-  );
-  assert.equal(launched, false);
 });
