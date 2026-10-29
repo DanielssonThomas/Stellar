@@ -5,8 +5,11 @@ import { preparePrivateSourceCopy } from './prepare-private-source.mjs';
 import { inspectRestrictedWorkspace } from './run-restricted-worker.mjs';
 import { trustedPeonWorkerImage } from './supervised-peon-run.mjs';
 import {
+  assertExactPrivateCandidate,
   buildPrivateVerificationArgs,
   collectPrivateCandidate,
+  preparePrivateCandidateTestCopy,
+  recordPrivateCandidateTestEvidence,
   verifyPrivateCandidate,
 } from './private-candidate.mjs';
 
@@ -400,4 +403,91 @@ test('a substituted candidate or uncertain verifier cannot be accepted', async (
     '-e',
     `${options.candidateRoot}/${candidate.attemptId}/verification.json`,
   ]);
+});
+
+test('test preparation copies exact candidate bytes without changing the candidate', async (t) => {
+  const { scratch, source, privateCopy, otherCopy, options, adapters } =
+    await fixture(t);
+  write(`${privateCopy.privatePath}/src/one.txt`, 'candidate\n');
+  const candidate = await collectPrivateCandidate(options, adapters);
+  const testRoot = `${scratch}/tests`;
+  run(['mkdir', '-m', '700', '--', testRoot]);
+  const { testPath } = preparePrivateCandidateTestCopy(
+    options,
+    candidate,
+    testRoot,
+    adapters.runCommand,
+  );
+  assert.equal(run(['cat', `${testPath}/src/one.txt`]), 'candidate');
+  assert.equal(run(['cat', `${source}/src/one.txt`]), 'before');
+  run(['test', '!', '-e', `${candidate.privatePath}/.git`]);
+  assertExactPrivateCandidate(options, candidate, adapters.runCommand);
+  const evidence = {
+    schema: 'stellar.private-repository-tests/v1',
+    attemptId: candidate.attemptId,
+    candidateDigest: candidate.contentDigest,
+    integrity: 'verified',
+    dependencyStatus: 'available',
+    status: 'tests-failed',
+    checks: [{ name: 'ui-atoms-test', exitCode: 1 }],
+  };
+  recordPrivateCandidateTestEvidence(
+    options,
+    candidate,
+    testRoot,
+    evidence,
+    adapters.runCommand,
+  );
+  assert.deepEqual(
+    JSON.parse(
+      run(['cat', `${testRoot}/${candidate.attemptId}/evidence.json`]),
+    ),
+    evidence,
+  );
+  assert.throws(
+    () =>
+      recordPrivateCandidateTestEvidence(
+        options,
+        candidate,
+        testRoot,
+        evidence,
+        adapters.runCommand,
+      ),
+    /failed/i,
+  );
+  assert.throws(
+    () =>
+      preparePrivateCandidateTestCopy(
+        options,
+        candidate,
+        testRoot,
+        adapters.runCommand,
+      ),
+    /failed/i,
+  );
+  write(`${otherCopy.privatePath}/src/one.txt`, 'other attempt\n');
+  const otherOptions = {
+    ...options,
+    attemptNumber: options.attemptNumber + 1,
+    privateCopy: otherCopy,
+    expectedBaselineDigest: otherCopy.contentDigest,
+  };
+  const otherCandidate = await collectPrivateCandidate(otherOptions, adapters);
+  const otherTest = preparePrivateCandidateTestCopy(
+    otherOptions,
+    otherCandidate,
+    testRoot,
+    adapters.runCommand,
+  );
+  assert.notEqual(otherTest.testPath, testPath);
+  assert.equal(
+    run(['cat', `${otherTest.testPath}/src/one.txt`]),
+    'other attempt',
+  );
+  assert.equal(run(['cat', `${testPath}/src/one.txt`]), 'candidate');
+  write(`${candidate.privatePath}/src/one.txt`, 'mutated after copy\n');
+  assert.throws(
+    () => assertExactPrivateCandidate(options, candidate, adapters.runCommand),
+    /failed|changed/i,
+  );
 });

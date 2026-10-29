@@ -398,6 +398,18 @@ def inspect_candidate(candidate_root, attempt, revision, fingerprint,
             if (info.st_uid != os.geteuid() or info.st_mode & 0o077
                     or entries != expected):
                 raise ValueError('Candidate is not quarantined')
+            if 'verification.json' in entries:
+                (record_size, _, _), record_chunks = read_file(
+                    attempt_fd, 'verification.json')
+                if record_size > 4096:
+                    raise ValueError('Candidate verification record exceeds limit')
+                record = json.loads(b''.join(record_chunks))
+                if (record.get('schema') != 'stellar.private-verification/v1'
+                        or record.get('attemptId') != attempt
+                        or record.get('candidateDigest') != aggregate
+                        or record.get('exitCode') != 0
+                        or record.get('terminationConfirmed') is not True):
+                    raise ValueError('Candidate verification record changed')
             marker = os.stat('.quarantined', dir_fd=attempt_fd,
                              follow_symlinks=False)
             if not stat.S_ISREG(marker.st_mode) or marker.st_nlink != 1:
@@ -479,6 +491,95 @@ def accept_candidate(candidate_root, attempt, revision, fingerprint,
         os.close(root_fd)
     return {'attemptId': attempt, 'candidateDigest': aggregate,
             'verificationRecorded': True}
+
+
+def prepare_test_copy(candidate_root, test_root, attempt, revision,
+                      fingerprint, baseline, aggregate):
+    """Copy only sealed candidate files into a fresh disposable test tree."""
+    if os.path.commonpath((candidate_root, test_root)) in (candidate_root, test_root):
+        raise ValueError('Candidate and test storage overlap')
+    manifest = inspect_candidate(candidate_root, attempt, revision, fingerprint,
+                                 baseline, aggregate, allow_verified=True)
+    candidate_fd = open_root(candidate_root, private=True)
+    test_fd = open_root(test_root, private=True)
+    try:
+        source_attempt = os.open(attempt, OPEN_DIRECTORY, dir_fd=candidate_fd)
+        try:
+            source_fd = os.open('workspace', OPEN_DIRECTORY, dir_fd=source_attempt)
+            try:
+                os.mkdir(attempt, 0o700, dir_fd=test_fd)
+                attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=test_fd)
+                try:
+                    write_file(attempt_fd, '.incomplete', [b''])
+                    os.mkdir('workspace', 0o700, dir_fd=attempt_fd)
+                    workspace_fd = os.open('workspace', OPEN_DIRECTORY,
+                                           dir_fd=attempt_fd)
+                    try:
+                        for entry in manifest['files']:
+                            name = entry['path']
+                            (size, digest, _), chunks = read_file(source_fd, name)
+                            if size != entry['bytes'] or digest != entry['sha256']:
+                                raise ValueError('Candidate changed while copying')
+                            write_file(workspace_fd, name, chunks,
+                                       mode=int(entry['mode'], 8))
+                        actual, _ = file_snapshot(workspace_fd)
+                        if actual != manifest['files']:
+                            raise ValueError('Disposable test copy differs')
+                        os.fsync(workspace_fd)
+                    finally:
+                        os.close(workspace_fd)
+                    inspect_candidate(candidate_root, attempt, revision,
+                                      fingerprint, baseline, aggregate,
+                                      allow_verified=True)
+                    os.unlink('.incomplete', dir_fd=attempt_fd)
+                    os.fsync(attempt_fd)
+                finally:
+                    os.close(attempt_fd)
+            finally:
+                os.close(source_fd)
+        finally:
+            os.close(source_attempt)
+    finally:
+        os.close(test_fd)
+        os.close(candidate_fd)
+    return {'attemptId': attempt, 'candidateDigest': aggregate,
+            'files': len(manifest['files'])}
+
+
+def record_test_evidence(test_root, attempt, aggregate, evidence):
+    if (not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', attempt)
+            or not re.fullmatch(r'[a-f0-9]{64}', aggregate)
+            or not isinstance(evidence, dict)
+            or evidence.get('schema') != 'stellar.private-repository-tests/v1'
+            or evidence.get('attemptId') != attempt
+            or evidence.get('candidateDigest') != aggregate
+            or evidence.get('integrity') != 'verified'
+            or evidence.get('dependencyStatus') not in ('available', 'unavailable')
+            or evidence.get('status') not in
+            ('tests-passed', 'tests-failed', 'dependencies-unavailable', 'inconclusive')
+            or not isinstance(evidence.get('checks'), list)
+            or len(evidence['checks']) > 4):
+        raise ValueError('Invalid repository test evidence')
+    encoded = json.dumps(evidence, ensure_ascii=True,
+                         separators=(',', ':')).encode('utf-8')
+    if len(encoded) > 32 * 1024:
+        raise ValueError('Repository test evidence exceeds limit')
+    root_fd = open_root(test_root, private=True)
+    try:
+        attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=root_fd)
+        try:
+            info = os.fstat(attempt_fd)
+            if (info.st_uid != os.geteuid() or info.st_mode & 0o077
+                    or '.incomplete' in os.listdir(attempt_fd)):
+                raise ValueError('Disposable attempt is incomplete')
+            write_file(attempt_fd, 'evidence.json', [encoded])
+            os.fsync(attempt_fd)
+        finally:
+            os.close(attempt_fd)
+    finally:
+        os.close(root_fd)
+    return {'attemptId': attempt, 'candidateDigest': aggregate,
+            'recorded': True}
 
 
 def prepare(source, private_root, attempt, revision, fingerprint, paths, ignored):
@@ -629,8 +730,16 @@ if __name__ == '__main__':
                              request.get('allowed'), request.get('protected'))
         elif action == 'verify-candidate' and len(sys.argv) == 8:
             result = inspect_candidate(*sys.argv[2:8])
+        elif action == 'verify-candidate-recorded' and len(sys.argv) == 8:
+            result = inspect_candidate(*sys.argv[2:8], allow_verified=True)
         elif action == 'accept-candidate' and len(sys.argv) == 9:
             result = accept_candidate(*sys.argv[2:8], json.loads(sys.argv[8]))
+        elif action == 'prepare-test-copy' and len(sys.argv) == 9:
+            result = prepare_test_copy(*sys.argv[2:9])
+        elif action == 'record-test-evidence' and len(sys.argv) == 5:
+            request = globals().get('REQUEST')
+            result = record_test_evidence(sys.argv[2], sys.argv[3],
+                                          sys.argv[4], request)
         else:
             raise ValueError('Invalid operation')
         print(json.dumps(result, ensure_ascii=True, separators=(',', ':')))
