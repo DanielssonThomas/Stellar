@@ -229,6 +229,28 @@ async function main() {
     assert.deepEqual(recorded, evidence);
     peon(['test', '!', '-e', `${candidate.privatePath}/.git`]);
     peon(['test', '-d', `${testRoot}/${attemptId}/workspace/.git`]);
+    assert.equal(
+      peon(['git', '-C', `${testRoot}/${attemptId}/workspace`, 'remote']),
+      '',
+    );
+    peon([
+      'test',
+      '!',
+      '-e',
+      `${testRoot}/${attemptId}/workspace/.git/objects/info/alternates`,
+    ]);
+    assert.equal(
+      peon([
+        'find',
+        `${testRoot}/${attemptId}/workspace/.git`,
+        '-path',
+        '*/hooks/*',
+        '-type',
+        'f',
+        '-print',
+      ]),
+      '',
+    );
     assert.equal(peon(['git', '-C', source, 'status', '--porcelain']), '');
     peon(['test', '!', '-e', `${source}/libs/inert-probe.txt`], {
       maxBuffer: 1024,
