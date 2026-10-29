@@ -261,7 +261,8 @@ def prepare(source, private_root, attempt, revision, fingerprint, paths, ignored
         os.close(source_fd)
 
 
-def finalize(private_root, attempt, revision, fingerprint, aggregate):
+def inspect_private(private_root, attempt, revision, fingerprint, aggregate,
+                    finalized):
     validate_identity(attempt, revision, fingerprint)
     if not re.fullmatch(r'[a-f0-9]{64}', aggregate):
         raise ValueError('Invalid content digest')
@@ -272,9 +273,16 @@ def finalize(private_root, attempt, revision, fingerprint, aggregate):
             attempt_info = os.fstat(attempt_fd)
             if attempt_info.st_uid != os.geteuid() or attempt_info.st_mode & 0o077:
                 raise ValueError('Unsafe private attempt directory')
-            marker = os.stat('.incomplete', dir_fd=attempt_fd, follow_symlinks=False)
-            if not stat.S_ISREG(marker.st_mode):
-                raise ValueError('Attempt is not quarantined')
+            expected_entries = {'manifest.json', 'workspace'}
+            if not finalized:
+                expected_entries.add('.incomplete')
+            if set(os.listdir(attempt_fd)) != expected_entries:
+                raise ValueError('Private attempt has unexpected entries')
+            if not finalized:
+                marker = os.stat('.incomplete', dir_fd=attempt_fd,
+                                 follow_symlinks=False)
+                if not stat.S_ISREG(marker.st_mode) or marker.st_nlink != 1:
+                    raise ValueError('Attempt is not quarantined')
             (size, _, _), chunks = read_file(attempt_fd, 'manifest.json')
             if size > 1024 * 1024:
                 raise ValueError('Manifest exceeds limit')
@@ -292,6 +300,10 @@ def finalize(private_root, attempt, revision, fingerprint, aggregate):
                 raise ValueError('Duplicate private file paths')
             workspace_fd = os.open('workspace', OPEN_DIRECTORY, dir_fd=attempt_fd)
             try:
+                workspace_info = os.fstat(workspace_fd)
+                if (workspace_info.st_uid != os.geteuid()
+                        or workspace_info.st_mode & 0o077):
+                    raise ValueError('Unsafe private workspace directory')
                 if list_private_files(workspace_fd) != sorted(entry['path'] for entry in files):
                     raise ValueError('Private workspace has unexpected files')
                 for entry in files:
@@ -308,6 +320,8 @@ def finalize(private_root, attempt, revision, fingerprint, aggregate):
                         raise ValueError('Private copy changed before finalization')
             finally:
                 os.close(workspace_fd)
+            if finalized:
+                return manifest
             os.unlink('.incomplete', dir_fd=attempt_fd)
             os.fsync(attempt_fd)
             return {'attemptId': attempt, 'contentDigest': aggregate}
@@ -324,7 +338,9 @@ if __name__ == '__main__':
             result = prepare(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5],
                              sys.argv[6], json.loads(sys.argv[7]), json.loads(sys.argv[8]))
         elif action == 'finalize' and len(sys.argv) == 7:
-            result = finalize(*sys.argv[2:7])
+            result = inspect_private(*sys.argv[2:7], False)
+        elif action == 'verify' and len(sys.argv) == 7:
+            result = inspect_private(*sys.argv[2:7], True)
         else:
             raise ValueError('Invalid operation')
         print(json.dumps(result, ensure_ascii=True, separators=(',', ':')))

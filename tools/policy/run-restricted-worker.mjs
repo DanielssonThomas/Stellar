@@ -49,6 +49,10 @@ const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 const diagnosticStreamLimitBytes = 8 * 1024;
 const maxPreparedTaskInputBytes = 52_000;
+const privateCopyHelper = readFileSync(
+  new URL('./copy-private-source.py', import.meta.url),
+  'utf8',
+);
 
 export function inspectPinnedWorkerImageProxy(image) {
   const result = spawnSync(
@@ -388,22 +392,25 @@ function trustedMinimalGuidanceSource() {
   return source;
 }
 
-export function buildPodmanArgs({
-  issueNumber,
-  image,
-  uid,
-  gid,
-  command,
-  protectedPaths,
-  attemptNumber = 1,
-  hermesProfile = defaultPeonHermesProfile,
-  hermesConfigSource,
-  hermesSoulSource,
-  toolEvidenceSource,
-  interactive = false,
-  writablePaths,
-  minimalGuidanceSource,
-}) {
+function buildPodmanArgsWithSources(
+  {
+    issueNumber,
+    image,
+    uid,
+    gid,
+    command,
+    protectedPaths,
+    attemptNumber = 1,
+    hermesProfile = defaultPeonHermesProfile,
+    hermesConfigSource,
+    hermesSoulSource,
+    toolEvidenceSource,
+    interactive = false,
+    writablePaths,
+    minimalGuidanceSource,
+  },
+  { workspaceMountSource, protectedMountRoot },
+) {
   const number = positiveInteger(issueNumber, 'issueNumber');
   if (typeof image !== 'string' || !imagePattern.test(image))
     throw new Error(
@@ -424,8 +431,6 @@ export function buildPodmanArgs({
   )
     throw new Error('A nonempty command argument list is required.');
 
-  const workspace = issueWorkspace(number);
-  const workspaceMountSource = workspace;
   if (
     !Array.isArray(protectedPaths) ||
     protectedPaths.length === 0 ||
@@ -530,7 +535,7 @@ export function buildPodmanArgs({
       .filter((entry) => !(writablePaths && entry === 'AGENTS.md'))
       .map(
         (entry) =>
-          `--mount=type=bind,src=${path.posix.join(workspaceMountSource, entry)},dst=/workspace/${entry},ro`,
+          `--mount=type=bind,src=${path.posix.join(protectedMountRoot, entry)},dst=/workspace/${entry},ro`,
       ),
     '--workdir=/workspace',
     '--env=HOME=/tmp',
@@ -554,6 +559,122 @@ export function buildPodmanArgs({
     image,
     ...command,
   ];
+}
+
+export function buildPodmanArgs(options) {
+  const workspace = issueWorkspace(
+    positiveInteger(options.issueNumber, 'issueNumber'),
+  );
+  return buildPodmanArgsWithSources(options, {
+    workspaceMountSource: workspace,
+    protectedMountRoot: workspace,
+  });
+}
+
+/** Inert private-copy mount preparation; no production launcher calls this. */
+export function buildPrivatePodmanArgs(
+  {
+    privateCopy,
+    privateRoot,
+    expectedRevision,
+    expectedFingerprint,
+    expectedDigest,
+    trustedProtectedRoot,
+    ...workerOptions
+  },
+  { runCommand = runWorkspaceInspection } = {},
+) {
+  const number = positiveInteger(workerOptions.issueNumber, 'issueNumber');
+  const attempt = positiveInteger(workerOptions.attemptNumber, 'attemptNumber');
+  const attemptId = `issue-${number}-attempt-${attempt}`;
+  const safeMountPath = (value) =>
+    typeof value === 'string' &&
+    path.posix.isAbsolute(value) &&
+    path.posix.normalize(value) === value &&
+    value !== '/' &&
+    !/[\\,:=\x00-\x1f\x7f]/.test(value);
+  const overlaps = (left, right) =>
+    left === right ||
+    left.startsWith(`${right}/`) ||
+    right.startsWith(`${left}/`);
+  if (
+    !safeMountPath(privateRoot) ||
+    !safeMountPath(trustedProtectedRoot) ||
+    overlaps(privateRoot, workspaceRoot) ||
+    overlaps(privateRoot, trustedProtectedRoot) ||
+    overlaps(trustedProtectedRoot, workspaceRoot) ||
+    !/^[a-f0-9]{40,64}$/.test(expectedRevision ?? '') ||
+    !/^[a-f0-9]{64}$/.test(expectedFingerprint ?? '') ||
+    !/^[a-f0-9]{64}$/.test(expectedDigest ?? '') ||
+    privateCopy?.schema !== 'stellar.private-source/v1' ||
+    privateCopy.attemptId !== attemptId ||
+    privateCopy.sourceRevision !== expectedRevision ||
+    privateCopy.sourceFingerprint !== expectedFingerprint ||
+    privateCopy.contentDigest !== expectedDigest ||
+    privateCopy.privatePath !==
+      path.posix.join(privateRoot, attemptId, 'workspace') ||
+    !Array.isArray(privateCopy.files) ||
+    workerOptions.hermesProfile !== 'narrow-coding' ||
+    !Array.isArray(workerOptions.writablePaths) ||
+    workerOptions.writablePaths.length === 0 ||
+    typeof runCommand !== 'function'
+  )
+    throw new Error('Finalized private attempt identity is required.');
+  const expectedManifest = { ...privateCopy };
+  delete expectedManifest.privatePath;
+  let current;
+  try {
+    current = JSON.parse(
+      runCommand(
+        [
+          'python3',
+          '-I',
+          '-',
+          'verify',
+          privateRoot,
+          attemptId,
+          expectedRevision,
+          expectedFingerprint,
+          expectedDigest,
+        ],
+        {
+          input: privateCopyHelper,
+          timeout: 15_000,
+          maxBuffer: 2 * 1024 * 1024,
+        },
+      ),
+    );
+  } catch {
+    throw new Error('Private source copy is missing, incomplete, or changed.');
+  }
+  if (JSON.stringify(current) !== JSON.stringify(expectedManifest))
+    throw new Error('Private source manifest no longer matches the attempt.');
+  const protectedPaths = workerOptions.protectedPaths;
+  const args = buildPodmanArgsWithSources(workerOptions, {
+    workspaceMountSource: privateCopy.privatePath,
+    protectedMountRoot: trustedProtectedRoot,
+  });
+  for (const source of [
+    trustedProtectedRoot,
+    ...protectedPaths.map((entry) =>
+      path.posix.join(trustedProtectedRoot, entry),
+    ),
+  ]) {
+    if (
+      runCommand(['realpath', '-e', source], {
+        timeout: 5_000,
+        maxBuffer: 1024,
+      }).trim() !== source
+    )
+      throw new Error('Trusted protected mount source changed.');
+  }
+  return Object.freeze({
+    attemptId,
+    sourceRevision: expectedRevision,
+    contentDigest: expectedDigest,
+    workspace: privateCopy.privatePath,
+    args: Object.freeze(args),
+  });
 }
 
 export function buildHermesPromptInspectionArgs({
