@@ -153,11 +153,16 @@ function exactCandidate(candidate, options) {
   return attemptId;
 }
 
-function verifyCandidateFiles(candidate, options, runCommand) {
+function verifyCandidateFiles(
+  candidate,
+  options,
+  runCommand,
+  allowRecorded = false,
+) {
   const attemptId = exactCandidate(candidate, options);
   const persisted = callHelper(
     [
-      'verify-candidate',
+      allowRecorded ? 'verify-candidate-recorded' : 'verify-candidate',
       options.candidateRoot,
       attemptId,
       options.expectedRevision,
@@ -172,6 +177,86 @@ function verifyCandidateFiles(candidate, options, runCommand) {
   if (JSON.stringify(persisted) !== JSON.stringify(expected))
     throw new Error('Candidate manifest changed.');
   return persisted;
+}
+
+/** Recheck the persisted quarantine and every candidate byte. */
+export function assertExactPrivateCandidate(
+  options,
+  candidate,
+  runCommand = runWorkspaceInspection,
+  { allowRecorded = false } = {},
+) {
+  return verifyCandidateFiles(candidate, options, runCommand, allowRecorded);
+}
+
+/** Create an exclusive disposable copy; its metadata stays outside workspace/. */
+export function preparePrivateCandidateTestCopy(
+  options,
+  candidate,
+  testRoot,
+  runCommand = runWorkspaceInspection,
+) {
+  const attemptId = exactCandidate(candidate, options);
+  if (
+    !safeRoot(testRoot) ||
+    [options.privateRoot, options.candidateRoot, authoritativeRoot].some(
+      (root) => overlaps(testRoot, root),
+    )
+  )
+    throw new Error('Disposable test storage must be separate.');
+  verifyCandidateFiles(candidate, options, runCommand, true);
+  const result = callHelper(
+    [
+      'prepare-test-copy',
+      options.candidateRoot,
+      testRoot,
+      attemptId,
+      options.expectedRevision,
+      options.expectedFingerprint,
+      options.expectedBaselineDigest,
+      candidate.contentDigest,
+    ],
+    { runCommand, timeout: 45_000, maxBuffer: 1024 },
+  );
+  if (
+    result.attemptId !== attemptId ||
+    result.candidateDigest !== candidate.contentDigest ||
+    result.files !== candidate.files.length
+  )
+    throw new Error('Disposable test copy identity changed.');
+  verifyCandidateFiles(candidate, options, runCommand, true);
+  return Object.freeze({
+    attemptId,
+    testPath: path.posix.join(testRoot, attemptId, 'workspace'),
+  });
+}
+
+export function recordPrivateCandidateTestEvidence(
+  options,
+  candidate,
+  testRoot,
+  evidence,
+  runCommand = runWorkspaceInspection,
+) {
+  const attemptId = exactCandidate(candidate, options);
+  if (
+    !safeRoot(testRoot) ||
+    evidence?.attemptId !== attemptId ||
+    evidence?.candidateDigest !== candidate.contentDigest
+  )
+    throw new Error('Exact attempt test evidence is required.');
+  verifyCandidateFiles(candidate, options, runCommand, true);
+  const result = callHelper(
+    ['record-test-evidence', testRoot, attemptId, candidate.contentDigest],
+    { request: evidence, runCommand, timeout: 15_000, maxBuffer: 1024 },
+  );
+  if (
+    result.attemptId !== attemptId ||
+    result.candidateDigest !== candidate.contentDigest ||
+    result.recorded !== true
+  )
+    throw new Error('Test evidence was not recorded.');
+  return Object.freeze(result);
 }
 
 /** Caller supplies the trusted launcher-completion promise, never a worker claim. */
