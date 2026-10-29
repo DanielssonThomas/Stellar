@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  unlink,
+  rename,
+  symlink,
+  rm,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
@@ -22,7 +33,13 @@ import {
   redactWorkerDiagnostics,
   runRestrictedWorker,
   waitForMeter,
+  inspectRestrictedWorkspace,
 } from './run-restricted-worker.mjs';
+import {
+  appendMentorFeedback,
+  readHandoff,
+  superviseWorker,
+} from './supervise-worker.mjs';
 import {
   defaultPeonHermesProfile,
   peonHermesConfigFilename,
@@ -55,6 +72,218 @@ const protectedPaths = [
   'tools/generators',
   'tools/policy',
 ];
+
+// Exercise the production inspector, replacing only WSL command transport.
+function localInspectionCommand(args, options) {
+  let command = args[0];
+  let parameters = args.slice(1);
+  if (command === 'python3' && process.platform === 'win32') {
+    parameters[2] = parameters[2]
+      .replace(/^([A-Za-z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`)
+      .replaceAll('\\', '/');
+    command = 'wsl.exe';
+    parameters = [
+      '--distribution',
+      'Ubuntu',
+      '--exec',
+      'python3',
+      ...parameters,
+    ];
+  }
+  const result = spawnSync(command, parameters, {
+    ...options,
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0)
+    throw new Error('Test workspace inspection failed.');
+  return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
+}
+
+async function inspectionFixture(t) {
+  const directory = await mkdtemp(path.join(tmpdir(), 'stellar-inspection-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const workspace = directory.replaceAll('\\', '/');
+  const git = (...args) =>
+    localInspectionCommand(['git', '-C', workspace, ...args], {
+      timeout: 10_000,
+      maxBuffer: 1024 * 1024,
+    });
+  git('init', '--quiet');
+  git(
+    '-c',
+    'user.name=Stellar Tests',
+    '-c',
+    'user.email=stellar-tests@example.invalid',
+    'commit',
+    '--quiet',
+    '--allow-empty',
+    '-m',
+    'fixture',
+  );
+  git('checkout', '--quiet', '-b', 'issue/222-inspection');
+  await mkdir(path.join(directory, 'src'));
+  const inspect = (runCommand = localInspectionCommand) =>
+    inspectRestrictedWorkspace(222, 'issue/222-inspection', undefined, {
+      workspace,
+      runCommand,
+    });
+  return { directory, workspace, git, inspect };
+}
+
+test('production fingerprint tracks untracked contents and rejects stale mentor feedback', async (t) => {
+  const { directory, inspect } = await inspectionFixture(t);
+  const empty = inspect().fingerprint;
+  const file = path.join(directory, 'src', 'new file.ts');
+  await writeFile(file, 'export const value = 1;\n');
+  const added = inspect().fingerprint;
+  assert.notEqual(added, empty);
+  assert.equal(inspect().fingerprint, added);
+  const handoffDirectory = await mkdtemp(
+    path.join(tmpdir(), 'stellar-inspection-handoff-'),
+  );
+  t.after(() => rm(handoffDirectory, { recursive: true, force: true }));
+  const handoffPath = path.join(handoffDirectory, 'handoff.json');
+  const inspectWorktree = async () => inspect();
+  await superviseWorker({
+    task: {
+      issueNumber: 222,
+      owner: 'owner:codex',
+      targetBranch: 'develop',
+      branch: 'issue/222-inspection',
+      worktreePath: directory,
+    },
+    handoffPath,
+    inspectWorktree,
+    limits: { maxAttemptsPerWorker: 1 },
+    workers: {
+      peon: {
+        id: 'peon',
+        run: async () => ({
+          status: 'failed',
+          failure: { message: 'Missing required field.' },
+        }),
+      },
+      mira: {
+        id: 'mira',
+        run: async () => {
+          throw new Error('No Mira');
+        },
+      },
+    },
+    verify: async () => [{ passed: true }],
+  });
+  const stopped = await readHandoff(handoffPath);
+  await writeFile(file, 'export const value = 999;\n');
+  const modified = inspect().fingerprint;
+  assert.notEqual(modified, added);
+  assert.equal(inspect().fingerprint, modified);
+  const feedback = {
+    handoffPath,
+    issueNumber: 222,
+    attemptNumber: 1,
+    expectedUpdatedAt: stopped.updatedAt,
+    expectedFingerprint: stopped.attempts[0].afterFingerprint,
+    evidence: { kind: 'failure' },
+    inspectWorktree,
+  };
+  for (const level of ['diagnostic', 'conceptual'])
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        level,
+        guidance: 'Inspect the field.',
+      }),
+      /Worktree changed/,
+    );
+  const attributed = await appendMentorFeedback({
+    ...feedback,
+    level: 'codex-fix',
+    guidance: 'Codex changed the source.',
+  });
+  assert.equal(attributed.implementationAuthor, 'codex');
+  assert.notEqual(attributed.resultFingerprint, attributed.fingerprint);
+  await unlink(file);
+  assert.notEqual(inspect().fingerprint, modified);
+  await writeFile(file, 'replacement');
+  assert.notEqual(inspect().fingerprint, modified);
+  assert.match(inspect().fingerprint, /^[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(inspect()).includes('replacement'));
+});
+
+test('production inspection handles tracked changes, renames and unusual path delimiters', async (t) => {
+  const { directory, git, inspect } = await inspectionFixture(t);
+  const name =
+    process.platform === 'win32' ? 'spaced é.ts' : 'space\nquote"\\é.ts';
+  const original = path.join(directory, 'src', name);
+  await writeFile(original, 'original');
+  assert.deepEqual(inspect().changes, [`src/${name}`]);
+  git('add', '--', `src/${name}`);
+  git(
+    '-c',
+    'user.name=Stellar Tests',
+    '-c',
+    'user.email=stellar-tests@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'tracked',
+  );
+  const clean = inspect().fingerprint;
+  await writeFile(original, 'modified');
+  assert.notEqual(inspect().fingerprint, clean);
+  await rename(original, path.join(directory, 'src', 'renamed.ts'));
+  git('add', '-A');
+  const renamed = inspect();
+  assert.ok(renamed.changes.includes(`src/${name}`));
+  assert.ok(renamed.changes.includes('src/renamed.ts'));
+  await unlink(path.join(directory, 'src', 'renamed.ts'));
+  assert.notEqual(inspect().fingerprint, renamed.fingerprint);
+});
+
+test('production inspection fails closed on mutation, failures and oversized files', async (t) => {
+  const { directory, inspect } = await inspectionFixture(t);
+  const file = path.join(directory, 'src', 'new.ts');
+  await writeFile(file, 'one');
+  let hashes = 0;
+  assert.throws(
+    () =>
+      inspect((args, options) => {
+        const result = localInspectionCommand(args, options);
+        if (args[0] === 'python3' && ++hashes === 1)
+          // A real filesystem mutation between the two production snapshots.
+          spawnSync(process.execPath, [
+            '-e',
+            'require("fs").writeFileSync(process.argv[1], "two")',
+            file,
+          ]);
+        return result;
+      }),
+    /changed during/,
+  );
+  assert.throws(
+    () =>
+      inspect(() => {
+        throw new Error('inspection unavailable');
+      }),
+    /unavailable/,
+  );
+  await writeFile(file, Buffer.alloc(8 * 1024 * 1024 + 1));
+  assert.throws(() => inspect(), /inspection failed/);
+});
+
+test('production inspection rejects symlinks and special files', async (t) => {
+  if (process.platform === 'win32')
+    return t.skip('POSIX symlink/FIFO semantics are tested on Linux CI.');
+  const { directory, inspect } = await inspectionFixture(t);
+  const target = path.join(directory, 'target');
+  await writeFile(target, 'private content');
+  await symlink(target, path.join(directory, 'src', 'link'));
+  assert.throws(() => inspect(), /inspection failed/);
+  await unlink(path.join(directory, 'src', 'link'));
+  const fifo = path.join(directory, 'src', 'pipe');
+  assert.equal(spawnSync('mkfifo', [fifo]).status, 0);
+  assert.throws(() => inspect(), /inspection failed/);
+});
 
 test('minimal coding mounts only selected writable directories over a read-only workspace', () => {
   const workspace = '/home/peon/workspaces/issue-50';

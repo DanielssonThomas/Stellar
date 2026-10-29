@@ -9,6 +9,7 @@ import {
   formatCapabilityBlockerComment,
   readHandoff,
   superviseWorker,
+  withCurrentCorrectionFeedback,
 } from './supervise-worker.mjs';
 import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
@@ -55,6 +56,308 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('rejects feedback after a newer Peon attempt even with identical output', async () => {
+    for (const changed of [false, true]) {
+      for (const completed of [false, true]) {
+        const handoffPath = join(
+          temporaryRoot,
+          `superseded-${changed}-${completed}.json`,
+        );
+        let fingerprint = 'first';
+        let inspections = 0;
+        const pause = new AbortController();
+        const inspectWorktree = async () => {
+          if (++inspections === 2) pause.abort();
+          return { fingerprint, changes: [] };
+        };
+        const failed = worker('peon', async () => ({
+          status: 'failed',
+          failure: { message: 'Missing field.' },
+        }));
+        await superviseWorker(
+          base({
+            handoffPath,
+            inspectWorktree,
+            signal: pause.signal,
+            workers: {
+              peon: failed,
+              mira: worker('mira', async () => {
+                throw new Error('No Mira');
+              }),
+            },
+          }),
+        );
+        const stopped = await readHandoff(handoffPath);
+        await appendMentorFeedback({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          attemptNumber: 1,
+          expectedUpdatedAt: stopped.updatedAt,
+          expectedFingerprint: stopped.attempts[0].afterFingerprint,
+          level: 'diagnostic',
+          evidence: { kind: 'failure' },
+          inspectWorktree,
+        });
+        const source = {
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        };
+        const handle = await correctionFeedbackFromHandoff(source);
+        const pauseAgain = new AbortController();
+        let nextInspections = 0;
+        await superviseWorker(
+          base({
+            handoffPath,
+            resume: await readHandoff(handoffPath),
+            signal: pauseAgain.signal,
+            limits: {
+              maxAttemptsPerWorker: 3,
+              maxNoProgressAttempts: 3,
+              maxRepeatedFailures: 3,
+            },
+            inspectWorktree: async () => {
+              if (!completed && ++nextInspections === 2) pauseAgain.abort();
+              return { fingerprint, changes: [] };
+            },
+            workers: {
+              peon: worker('peon', async () => {
+                if (changed) fingerprint = 'second';
+                return completed
+                  ? { status: 'completed' }
+                  : {
+                      status: 'failed',
+                      failure: { message: 'Still missing.' },
+                    };
+              }),
+              mira: worker('mira', async () => {
+                throw new Error('No Mira');
+              }),
+            },
+          }),
+        );
+        const latest = await readHandoff(handoffPath);
+        assert.equal(latest.attempts.length, 2);
+        assert.equal(latest.mentorFeedback.length, 1);
+        assert.equal(latest.status, completed ? 'complete' : 'paused');
+        await assert.rejects(
+          correctionFeedbackFromHandoff(source),
+          /superseded|unsafe/,
+        );
+        let prepared = false;
+        await assert.rejects(
+          withCurrentCorrectionFeedback(
+            handle,
+            { issueNumber: task.issueNumber },
+            () => {
+              prepared = true;
+            },
+          ),
+          /superseded|unsafe/,
+        );
+        assert.equal(prepared, false);
+      }
+    }
+  });
+
+  it('rechecks source contents and handoff provenance at the correction use boundary', async () => {
+    const handoffPath = join(temporaryRoot, 'correction-use.json');
+    let fingerprint = 'current';
+    const inspectWorktree = async () => ({ fingerprint, changes: [] });
+    await superviseWorker(
+      base({
+        handoffPath,
+        inspectWorktree,
+        limits: { maxAttemptsPerWorker: 1 },
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { message: 'Missing field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('No Mira');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    await appendMentorFeedback({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    });
+    const source = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    };
+    const handle = await correctionFeedbackFromHandoff(source);
+    assert.equal(
+      await withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        async (assertCurrent) => {
+          await assertCurrent(task);
+          return 'prepared';
+        },
+      ),
+      'prepared',
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        (assertCurrent) => assertCurrent({ ...task, owner: 'worker:mira' }),
+      ),
+      /assignment differs/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber, destinationHandoffPath: handoffPath },
+        () => {},
+      ),
+      /distinct destination/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        structuredClone(handle),
+        { issueNumber: task.issueNumber },
+        () => {},
+      ),
+      /fresh trusted/,
+    );
+    fingerprint = 'edited-after-append';
+    await assert.rejects(
+      correctionFeedbackFromHandoff(source),
+      /source changed/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        () => {},
+      ),
+      /source changed/,
+    );
+    fingerprint = 'current';
+    let consumed = false;
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        () => {
+          fingerprint = 'edited-during-preparation';
+          return 'packet';
+        },
+        () => {
+          consumed = true;
+        },
+      ),
+      /source changed/,
+    );
+    assert.equal(consumed, false);
+    fingerprint = 'current';
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        async () => {
+          const changed = await readHandoff(handoffPath);
+          changed.executionOwner = 'changed-outside-cooperating-lock';
+          await writeFile(handoffPath, JSON.stringify(changed));
+        },
+        () => {
+          consumed = true;
+        },
+      ),
+      /superseded|unsafe/,
+    );
+    assert.equal(consumed, false);
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        ...source,
+        handoffPath: `${handoffPath}.missing`,
+      }),
+      /ENOENT/,
+    );
+  });
+
+  it('holds source execution ownership through trusted correction consumption', async () => {
+    const handoffPath = join(temporaryRoot, 'correction-source-lock.json');
+    const inspectWorktree = async () => ({
+      fingerprint: 'current',
+      changes: [],
+    });
+    await superviseWorker(
+      base({
+        handoffPath,
+        inspectWorktree,
+        limits: { maxAttemptsPerWorker: 1 },
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { message: 'Missing field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('No Mira yet');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    await appendMentorFeedback({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    });
+    const snapshot = await readHandoff(handoffPath);
+    const handle = await correctionFeedbackFromHandoff({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    });
+    let resume;
+    let authorized = false;
+    await withCurrentCorrectionFeedback(
+      handle,
+      { issueNumber: task.issueNumber },
+      () => {
+        resume = superviseWorker(
+          base({
+            handoffPath,
+            resume: snapshot,
+            inspectWorktree,
+            authorizeHandoff: (request) => {
+              authorized = true;
+              return authorizeMira(request);
+            },
+          }),
+        );
+        return 'packet';
+      },
+      async () => {
+        assert.equal(authorized, false);
+        assert.equal(
+          (await readHandoff(handoffPath)).supervisorRevision,
+          snapshot.supervisorRevision,
+        );
+      },
+    );
+    assert.equal((await resume).status, 'complete');
+    assert.equal(authorized, true);
+  });
+
   it('records bounded, revision-bound feedback for a stopped format failure', async () => {
     const handoffPath = join(temporaryRoot, 'mentor-format-handoff.json');
     let fingerprint = 'unchanged';
@@ -135,11 +438,21 @@ describe('bounded worker supervision', () => {
     assert.equal(conceptual.level, 'conceptual');
     const afterConceptual = await readHandoff(handoffPath);
     assert.equal(
-      correctionFeedbackFromHandoff(afterConceptual, task.issueNumber).guidance,
+      (
+        await correctionFeedbackFromHandoff({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        })
+      ).guidance,
       'Check the report schema against the required fields.',
     );
-    assert.throws(
-      () => correctionFeedbackFromHandoff(afterConceptual, 999),
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: 999,
+        inspectWorktree,
+      }),
       /unsafe/,
     );
     fingerprint = 'codex-change';
@@ -152,10 +465,13 @@ describe('bounded worker supervision', () => {
     });
     assert.equal(assisted.implementationAuthor, 'codex');
     assert.notEqual(assisted.resultFingerprint, assisted.fingerprint);
-    const afterAssistance = await readHandoff(handoffPath);
-    assert.throws(
-      () => correctionFeedbackFromHandoff(afterAssistance, task.issueNumber),
-      /No verified/,
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        inspectWorktree,
+      }),
+      /No current verified/,
     );
   });
 
@@ -452,10 +768,11 @@ describe('bounded worker supervision', () => {
       assert.equal(event.evidence.kind, 'verification');
       assert.equal(event.evidence.index, 0);
       assert.match(event.evidence.fingerprint, /^[a-f0-9]{64}$/);
-      const packet = correctionFeedbackFromHandoff(
-        await readHandoff(handoffPath),
-        task.issueNumber,
-      );
+      const packet = await correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        inspectWorktree,
+      });
       assert.equal(packet.diagnostic, event.diagnostic);
       assert.ok(Buffer.byteLength(packet.diagnostic, 'utf8') <= 600);
     }
@@ -500,9 +817,12 @@ describe('bounded worker supervision', () => {
       inspectWorktree,
     });
     assert.match(
-      correctionFeedbackFromHandoff(
-        await readHandoff(handoffPath),
-        task.issueNumber,
+      (
+        await correctionFeedbackFromHandoff({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        })
       ).diagnostic,
       /Vitest failed/,
     );

@@ -5,7 +5,12 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readHandoff, superviseWorker } from './supervise-worker.mjs';
+import {
+  readHandoff,
+  superviseWorker,
+  appendMentorFeedback,
+  correctionFeedbackFromHandoff,
+} from './supervise-worker.mjs';
 import {
   runSupervisedPeonIssue,
   trustedPeonWorkerImage,
@@ -165,6 +170,198 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
     afterVerification[1].name,
     'authorized-source-changes-after-verification',
   );
+
+  // Real persisted source provenance through the production entry point. All
+  // external assignment/worker operations remain offline fixtures.
+  const sourcePath = join(root, 'correction-source.json');
+  let sourceFingerprint = 'stable';
+  const inspectSource = async () => ({
+    fingerprint: sourceFingerprint,
+    changes: [],
+  });
+  const sourceTask = validateLivePeonAssignment({
+    issue: selectedIssue,
+    claim: claim({ worktreePath: repositoryRoot }),
+    sessionId,
+    image,
+  });
+  await superviseWorker({
+    task: sourceTask,
+    handoffPath: sourcePath,
+    inspectWorktree: inspectSource,
+    verify: async () => [{ passed: true }],
+    limits: { maxAttemptsPerWorker: 1 },
+    workers: {
+      peon: {
+        id: 'peon',
+        run: async () => ({
+          status: 'failed',
+          failure: { message: 'Required field missing.' },
+        }),
+      },
+      mira: {
+        id: 'mira',
+        run: async () => {
+          throw new Error('No Mira');
+        },
+      },
+    },
+  });
+  const stopped = await readHandoff(sourcePath);
+  await appendMentorFeedback({
+    handoffPath: sourcePath,
+    issueNumber: 50,
+    attemptNumber: 1,
+    expectedUpdatedAt: stopped.updatedAt,
+    expectedFingerprint: stopped.attempts[0].afterFingerprint,
+    level: 'diagnostic',
+    evidence: { kind: 'failure' },
+    inspectWorktree: inspectSource,
+  });
+  const feedback = await correctionFeedbackFromHandoff({
+    handoffPath: sourcePath,
+    issueNumber: 50,
+    inspectWorktree: inspectSource,
+  });
+  let launched = 0;
+  const correctionOptions = {
+    ...options,
+    contextPlan: { ...options.contextPlan, mentorFeedback: feedback },
+    reserveMinimalAttempt: () => {},
+    createWorkerAdapter: ({ preparedContext }) => {
+      assert.match(
+        preparedContext.manifest.worker.mentorFeedback.diagnostic,
+        /Required field/,
+      );
+      return {
+        id: 'peon',
+        run: async () => {
+          launched++;
+          return 'simulated launch';
+        },
+      };
+    },
+    runSupervisor: async ({ workers, task }) => workers.peon.run({ task }),
+  };
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      ...correctionOptions,
+      createWorkerAdapter: (input) => {
+        const adapter = correctionOptions.createWorkerAdapter(input);
+        sourceFingerprint = 'changed-during-preparation';
+        return adapter;
+      },
+    }),
+    /source changed/,
+  );
+  assert.equal(launched, 0);
+  sourceFingerprint = 'stable';
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      ...correctionOptions,
+      runSupervisor: async ({ workers, task }) => {
+        sourceFingerprint = 'changed-before-adapter-run';
+        return workers.peon.run({ task });
+      },
+    }),
+    /source changed/,
+  );
+  assert.equal(launched, 0);
+  sourceFingerprint = 'stable';
+  let assignmentReads = 0;
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      ...correctionOptions,
+      loadAssignment: async () =>
+        ++assignmentReads < 3
+          ? selectedIssue
+          : { ...selectedIssue, state: 'CLOSED' },
+    }),
+    /must be open/,
+  );
+  assert.equal(launched, 0);
+  await assert.rejects(
+    runSupervisedPeonIssue({
+      ...correctionOptions,
+      contextPlan: {
+        ...options.contextPlan,
+        mentorFeedback: structuredClone(feedback),
+      },
+    }),
+    /fresh trusted/,
+  );
+  let releaseAssignment;
+  let assignmentStarted;
+  const assignmentGate = new Promise((resolve) => {
+    releaseAssignment = resolve;
+  });
+  const assignmentPending = new Promise((resolve) => {
+    assignmentStarted = resolve;
+  });
+  assignmentReads = 0;
+  assert.equal(
+    await runSupervisedPeonIssue({
+      ...correctionOptions,
+      loadAssignment: async () => {
+        if (++assignmentReads === 3) {
+          assignmentStarted();
+          await assignmentGate;
+        }
+        return selectedIssue;
+      },
+      runSupervisor: async ({ workers, task }) => {
+        const abort = new AbortController();
+        const run = workers.peon.run({ task, signal: abort.signal });
+        await assignmentPending;
+        abort.abort();
+        const cancellation = workers.peon.cancel('interrupted');
+        releaseAssignment();
+        await assert.rejects(run, /cancelled/);
+        assert.equal(await cancellation, true);
+        return 'cancelled before dispatch';
+      },
+    }),
+    'cancelled before dispatch',
+  );
+  assert.equal(launched, 0);
+  assert.equal((await readHandoff(sourcePath)).status, 'handoff-pending');
+
+  let workerStarted = false;
+  const destination = join(root, 'correction-destination.json');
+  const final = await runSupervisedPeonIssue({
+    ...correctionOptions,
+    handoffPath: destination,
+    runSupervisor: superviseWorker,
+    createWorkerAdapter: () => ({
+      id: 'peon',
+      run: async () => {
+        workerStarted = true;
+        launched++;
+        return { status: 'completed', usage: { toolCalls: 0, modelTokens: 0 } };
+      },
+      waitForUsageReady: async () => {
+        assert.equal(workerStarted, true);
+      },
+      usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
+      cancel: async () => true,
+    }),
+  });
+  assert.equal(final.status, 'complete');
+  assert.equal(launched, 1);
+  const consumed = await readHandoff(sourcePath);
+  assert.equal(consumed.status, 'superseded');
+  assert.equal(consumed.mentorFeedback.length, 1);
+  assert.equal(consumed.correctionUse.destinationHandoffPath, destination);
+  await assert.rejects(runSupervisedPeonIssue(correctionOptions), /superseded/);
+  await assert.rejects(
+    correctionFeedbackFromHandoff({
+      handoffPath: sourcePath,
+      issueNumber: 50,
+      inspectWorktree: inspectSource,
+    }),
+    /superseded/,
+  );
+  assert.equal(launched, 1);
 });
 
 const issue = {

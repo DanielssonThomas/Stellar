@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { assertCorrectionFeedbackInUse } from './supervise-worker.mjs';
 import {
   isPreparedPeonWorkflow,
   maxForwardedRequestsForWorkflow,
@@ -464,6 +465,7 @@ export function buildMinimalPeonTaskContextManifest({
 }
 
 function minimalMentorFeedback(value, issueNumber) {
+  assertCorrectionFeedbackInUse(value, issueNumber);
   const short = (text) =>
     typeof text === 'string' &&
     text.trim().length > 0 &&

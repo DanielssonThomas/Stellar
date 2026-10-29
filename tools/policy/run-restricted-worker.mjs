@@ -2202,77 +2202,165 @@ export function inspectRestrictedWorkspace(
   issueNumber,
   expectedBranch,
   expectedDevelopHead,
+  {
+    workspace = issueWorkspace(issueNumber),
+    runCommand = runWorkspaceInspection,
+  } = {},
 ) {
-  const number = positiveInteger(issueNumber, 'issueNumber');
-  const workspace = issueWorkspace(number);
-  const root = wslWorker(
-    'git',
-    '-C',
-    workspace,
-    'rev-parse',
-    '--show-toplevel',
-  );
-  if (root !== workspace)
-    throw new Error('Restricted worker workspace changed its repository root.');
-  const branch = wslWorker('git', '-C', workspace, 'branch', '--show-current');
-  if (branch !== expectedBranch)
-    throw new Error('Restricted worker workspace branch changed unexpectedly.');
-  if (expectedDevelopHead !== undefined) {
-    if (!/^[a-f0-9]{40,64}$/.test(expectedDevelopHead))
-      throw new Error('Trusted develop revision is invalid.');
-    wslWorker(
-      'git',
-      '-C',
-      workspace,
-      'merge-base',
-      '--is-ancestor',
-      expectedDevelopHead,
+  positiveInteger(issueNumber, 'issueNumber');
+  if (
+    expectedDevelopHead !== undefined &&
+    !/^[a-f0-9]{40,64}$/.test(expectedDevelopHead)
+  )
+    throw new Error('Trusted develop revision is invalid.');
+  const deadline = Date.now() + 15_000;
+  const run = (args, options = {}) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0)
+      throw new Error('Trusted workspace inspection timed out.');
+    return runCommand(args, {
+      timeout: remaining,
+      maxBuffer: 8 * 1024 * 1024,
+      ...options,
+    });
+  };
+  const git = (...args) =>
+    run(['git', '-c', 'core.fsmonitor=false', '-C', workspace, ...args]);
+  const nulPaths = (value) => {
+    if (!value) return [];
+    if (!value.endsWith('\0'))
+      throw new Error('Incomplete workspace path evidence.');
+    return value.slice(0, -1).split('\0');
+  };
+  const snapshot = () => {
+    const root = git('rev-parse', '--show-toplevel').trimEnd();
+    const branch = git('branch', '--show-current').trimEnd();
+    const headRevision = git('rev-parse', 'HEAD').trimEnd();
+    if (
+      root !== workspace ||
+      branch !== expectedBranch ||
+      !/^[a-f0-9]{40,64}$/.test(headRevision)
+    )
+      throw new Error('Restricted worker workspace identity changed.');
+    if (expectedDevelopHead)
+      git('merge-base', '--is-ancestor', expectedDevelopHead, headRevision);
+    const status = git(
+      'status',
+      '--porcelain=v1',
+      '-z',
+      '--untracked-files=all',
+    );
+    const entries = nulPaths(status);
+    const changed = [];
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      if (entry.length < 4 || entry[2] !== ' ')
+        throw new Error('Malformed workspace status evidence.');
+      changed.push(entry.slice(3));
+      if (/[RC]/.test(entry.slice(0, 2))) {
+        if (!entries[index + 1])
+          throw new Error('Incomplete workspace rename evidence.');
+        changed.push(entries[++index]);
+      }
+    }
+    if (expectedDevelopHead)
+      changed.push(
+        ...nulPaths(
+          git(
+            'diff',
+            '--no-ext-diff',
+            '--no-textconv',
+            '--name-only',
+            '-z',
+            `${expectedDevelopHead}...${headRevision}`,
+          ),
+        ),
+      );
+    const changes = [...new Set(changed)].sort();
+    if (changes.length > 100)
+      throw new Error(
+        'Restricted worker changed-path evidence exceeds the trusted inspection limit.',
+      );
+    // Index evidence is immutable Git data. Working-file bytes are hashed by
+    // the no-follow reader below, without invoking Git clean/textconv filters.
+    const diff = git(
+      'diff',
+      '--cached',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--binary',
       'HEAD',
     );
-  }
-  const status = wslWorker(
-    'git',
-    '-C',
-    workspace,
-    'status',
-    '--porcelain=v1',
-    '--untracked-files=all',
-  );
-  const headRevision = wslWorker('git', '-C', workspace, 'rev-parse', 'HEAD');
-  if (!/^[a-f0-9]{40,64}$/.test(headRevision))
-    throw new Error('Restricted worker workspace revision is invalid.');
-  const diff = wslWorker('git', '-C', workspace, 'diff', '--binary', 'HEAD');
-  const changes = status
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => line.slice(3))
-    .concat(
-      expectedDevelopHead
-        ? wslWorker(
-            'git',
-            '-C',
-            workspace,
-            'diff',
-            '--name-only',
-            `${expectedDevelopHead}...HEAD`,
-          )
-            .split(/\r?\n/)
-            .filter(Boolean)
-        : [],
-    )
-    .filter((entry, index, entries) => entries.indexOf(entry) === index);
-  if (changes.length > 100)
-    throw new Error(
-      'Restricted worker changed-path evidence exceeds the trusted inspection limit.',
+    const files = JSON.parse(
+      run(['python3', '-I', '-', workspace, JSON.stringify(changes)], {
+        input: readFileSync(
+          new URL('./inspect-workspace-files.py', import.meta.url),
+          'utf8',
+        ),
+        maxBuffer: 128 * 1024,
+      }),
     );
+    if (
+      !Array.isArray(files) ||
+      files.length !== changes.length ||
+      new Set(files.map((entry) => entry?.[0])).size !== changes.length ||
+      files.some(
+        (entry) =>
+          !Array.isArray(entry) ||
+          !changes.includes(entry[0]) ||
+          !(
+            (entry[1] === 'missing' && entry.length === 2) ||
+            (entry[1] === 'regular' &&
+              entry.length === 4 &&
+              Array.isArray(entry[2]) &&
+              entry[2].length === 6 &&
+              entry[2].every(
+                (value) => typeof value === 'string' && /^-?\d+$/.test(value),
+              ) &&
+              /^[a-f0-9]{64}$/.test(entry[3]))
+          ),
+      )
+    )
+      throw new Error('Malformed workspace file evidence.');
+    return { branch, headRevision, status, diff, files, changes };
+  };
+  const first = snapshot();
+  const second = snapshot();
+  if (JSON.stringify(first) !== JSON.stringify(second))
+    throw new Error('Workspace changed during trusted inspection.');
+  const { headRevision, status, changes } = second;
   return {
-    fingerprint: `${branch}\n${headRevision}\n${status}\n${diff}`,
+    fingerprint: createHash('sha256')
+      .update(JSON.stringify(['workspace-v2', second]))
+      .digest('hex'),
     headRevision,
     clean: status.length === 0,
     workspacePath: workspace,
     ...(expectedDevelopHead ? { baseRevision: expectedDevelopHead } : {}),
     changes,
   };
+}
+
+function runWorkspaceInspection(args, { input, timeout, maxBuffer }) {
+  const result = spawnSync(
+    'wsl.exe',
+    [
+      '--distribution',
+      distribution,
+      '--user',
+      workerAccount,
+      '--exec',
+      ...args,
+    ],
+    { cwd: repositoryRoot, windowsHide: true, input, timeout, maxBuffer },
+  );
+  if (result.error || result.status !== 0)
+    throw new Error('Trusted workspace inspection failed.');
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
+  } catch {
+    throw new Error('Workspace inspection returned invalid UTF-8.');
+  }
 }
 
 export function buildHermesTaskCommand(

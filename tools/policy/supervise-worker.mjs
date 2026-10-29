@@ -7,7 +7,7 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { dirname, isAbsolute } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import {
@@ -260,34 +260,182 @@ function diagnosticExcerpt(value) {
   return `${excerpt}…`;
 }
 
-export function correctionFeedbackFromHandoff(handoff, issueNumber) {
+const correctionSources = new WeakMap();
+const activeCorrectionFeedback = new WeakSet();
+
+function currentCorrectionEvent(handoff, issueNumber) {
+  const attempt = handoff?.attempts?.at(-1);
+  const event = handoff?.mentorFeedback?.at(-1);
   if (
+    handoff?.schemaVersion !== 1 ||
     handoff?.task?.issueNumber !== issueNumber ||
-    handoff.status === 'running' ||
-    handoff.safeToResume === false
-  )
-    throw new Error('Correction handoff is mismatched or unsafe.');
-  const event = handoff.mentorFeedback?.at(-1);
-  if (
+    !['paused', 'handoff-pending'].includes(handoff.status) ||
+    handoff.safeToResume !== true ||
     !event ||
     !['diagnostic', 'conceptual'].includes(event.level) ||
     event.issueNumber !== issueNumber ||
-    !handoff.attempts?.some(
-      (attempt) =>
-        attempt.workerId === 'peon' &&
-        attempt.attemptNumber === event.attemptNumber &&
-        attempt.afterFingerprint === event.fingerprint,
-    )
+    attempt?.workerId !== 'peon' ||
+    attempt.attemptNumber !== event.attemptNumber ||
+    attempt.afterFingerprint !== event.fingerprint ||
+    event.resultFingerprint !== event.fingerprint ||
+    event.supervisorRevision !== handoff.supervisorRevision ||
+    event.executionOwner !== handoff.executionOwner ||
+    event.taskOwner !== handoff.task.owner ||
+    event.attemptCount !== handoff.attempts.length ||
+    !Number.isSafeInteger(event.supervisorRevision) ||
+    typeof event.executionOwner !== 'string'
   )
-    throw new Error('No verified Peon correction feedback is available.');
-  return {
-    issueNumber,
-    attemptNumber: event.attemptNumber,
-    fingerprint: event.fingerprint,
-    level: event.level,
-    diagnostic: event.diagnostic,
-    ...(event.guidance ? { guidance: event.guidance } : {}),
-  };
+    throw new Error(
+      'No current verified Peon correction feedback is available; handoff is superseded or unsafe.',
+    );
+  const cited =
+    event.evidence?.kind === 'failure'
+      ? attempt.failure
+      : event.evidence?.kind === 'verification'
+        ? attempt.verificationResults?.[event.evidence.index]
+        : null;
+  if (
+    !cited ||
+    (event.evidence.kind === 'verification' && cited.passed !== false) ||
+    (cited.fingerprint ?? stableFingerprint(cited)) !==
+      event.evidence.fingerprint
+  )
+    throw new Error('Correction feedback evidence is no longer valid.');
+  return event;
+}
+
+/** Extract a process-local handle, never authorize use from a serialized snapshot. */
+export async function correctionFeedbackFromHandoff({
+  handoffPath,
+  issueNumber,
+  inspectWorktree,
+}) {
+  if (!isAbsolute(handoffPath ?? '') || typeof inspectWorktree !== 'function')
+    throw new Error(
+      'Trusted handoff path and worktree inspection are required.',
+    );
+  return withHandoffLock(handoffPath, async () => {
+    const handoff = await readHandoff(handoffPath);
+    const event = currentCorrectionEvent(handoff, issueNumber);
+    const expectedHandoff = stableFingerprint(handoff);
+    const current = worktreeState(await inspectWorktree(handoff.task));
+    if (
+      current.fingerprint !== event.fingerprint ||
+      stableFingerprint(await readHandoff(handoffPath)) !== expectedHandoff
+    )
+      throw new Error('Correction source changed during feedback extraction.');
+    const feedback = Object.freeze({
+      issueNumber,
+      attemptNumber: event.attemptNumber,
+      fingerprint: event.fingerprint,
+      level: event.level,
+      diagnostic: event.diagnostic,
+      ...(event.guidance ? { guidance: event.guidance } : {}),
+    });
+    correctionSources.set(feedback, {
+      handoffPath,
+      inspectWorktree,
+      expectedHandoff,
+    });
+    return feedback;
+  });
+}
+
+export function assertCorrectionFeedbackInUse(feedback, issueNumber) {
+  if (
+    !activeCorrectionFeedback.has(feedback) ||
+    feedback.issueNumber !== issueNumber
+  )
+    throw new Error(
+      'Correction feedback requires current trusted preparation.',
+    );
+}
+
+/** Hold the source lock through preparation and trusted consumption/launch.
+ * The caller's workspace/claim isolation remains required; this lock coordinates
+ * supervisors, not arbitrary external filesystem writers.
+ */
+export async function withCurrentCorrectionFeedback(
+  feedback,
+  { issueNumber, destinationHandoffPath },
+  prepare,
+  consume = (packet) => packet,
+) {
+  const source = correctionSources.get(feedback);
+  if (
+    !source ||
+    feedback.issueNumber !== issueNumber ||
+    (destinationHandoffPath &&
+      resolve(destinationHandoffPath) === resolve(source.handoffPath))
+  )
+    throw new Error(
+      'Correction requires a fresh trusted source and a distinct destination handoff.',
+    );
+  return withHandoffLock(source.handoffPath, async () => {
+    let active = true;
+    const assertCurrent = async (task, authorizedWorkspace) => {
+      if (!active) throw new Error('Correction preparation has ended.');
+      const handoff = await readHandoff(source.handoffPath);
+      const event = currentCorrectionEvent(handoff, issueNumber);
+      if (stableFingerprint(handoff) !== source.expectedHandoff)
+        throw new Error('Correction handoff changed since extraction.');
+      if (
+        task &&
+        ['issueNumber', 'owner', 'targetBranch', 'branch', 'worktreePath'].some(
+          (key) => task[key] !== handoff.task[key],
+        )
+      )
+        throw new Error(
+          'Correction assignment differs from its source handoff.',
+        );
+      const current = worktreeState(await source.inspectWorktree(handoff.task));
+      if (
+        current.fingerprint !== event.fingerprint ||
+        (authorizedWorkspace &&
+          worktreeState(authorizedWorkspace).fingerprint !==
+            event.fingerprint) ||
+        stableFingerprint(await readHandoff(source.handoffPath)) !==
+          source.expectedHandoff
+      )
+        throw new Error('Correction source changed before trusted use.');
+    };
+    const consumeExecution = async (task, authorizedWorkspace) => {
+      if (!destinationHandoffPath || !isAbsolute(destinationHandoffPath))
+        throw new Error(
+          'Correction execution requires a distinct absolute destination handoff.',
+        );
+      await assertCurrent(task, authorizedWorkspace);
+      const handoff = await readHandoff(source.handoffPath);
+      if (
+        stableFingerprint(handoff) !== source.expectedHandoff ||
+        handoff.supervisorRevision >= Number.MAX_SAFE_INTEGER
+      )
+        throw new Error('Correction source changed before consumption.');
+      handoff.correctionUse = {
+        feedbackFingerprint: stableFingerprint(handoff.mentorFeedback.at(-1)),
+        destinationHandoffPath,
+        at: new Date().toISOString(),
+      };
+      // No rollback on failed dispatch: an uncertain execution cannot reuse its source.
+      handoff.status = 'superseded';
+      handoff.supervisorRevision += 1;
+      handoff.updatedAt = new Date(
+        Math.max(Date.now(), Date.parse(handoff.updatedAt) + 1),
+      ).toISOString();
+      await writeHandoffUnlocked(source.handoffPath, handoff);
+      activeCorrectionFeedback.delete(feedback);
+    };
+    try {
+      await assertCurrent();
+      activeCorrectionFeedback.add(feedback);
+      const packet = await prepare(assertCurrent, consumeExecution);
+      await assertCurrent();
+      return await consume(packet);
+    } finally {
+      active = false;
+      activeCorrectionFeedback.delete(feedback);
+    }
+  });
 }
 
 /** Append inert mentor evidence only after a supervised attempt has stopped. */
@@ -334,7 +482,7 @@ export async function appendMentorFeedback({
       handoff.schemaVersion !== 1 ||
       handoff.task?.issueNumber !== issueNumber ||
       handoff.updatedAt !== expectedUpdatedAt ||
-      handoff.status === 'running' ||
+      !['paused', 'handoff-pending'].includes(handoff.status) ||
       handoff.safeToResume === false
     )
       throw new Error(
@@ -346,6 +494,7 @@ export async function appendMentorFeedback({
     );
     if (
       !attempt ||
+      attempt !== handoff.attempts.at(-1) ||
       !attempt.afterFingerprint ||
       attempt.afterFingerprint !== expectedFingerprint
     )
@@ -377,6 +526,10 @@ export async function appendMentorFeedback({
       attemptNumber,
       fingerprint: expectedFingerprint,
       resultFingerprint: current.fingerprint,
+      supervisorRevision: handoff.supervisorRevision,
+      executionOwner: handoff.executionOwner,
+      taskOwner: handoff.task.owner,
+      attemptCount: handoff.attempts.length,
       level,
       author: 'codex',
       implementationAuthor: level === 'codex-fix' ? 'codex' : null,
