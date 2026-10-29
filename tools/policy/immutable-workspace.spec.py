@@ -116,6 +116,32 @@ class ImmutableWorkspaceTests(unittest.TestCase):
             WORKSPACE.command('git', 'ls-tree', '-r', '-z', self.revision,
                               cwd=str(self.repo), limit=4)
 
+    def test_fsmonitor_hook_is_not_executed_during_capture(self):
+        marker = self.root / 'hook-ran'
+        hook = self.repo / '.git' / 'hooks' / 'fsmonitor'
+        hook.write_text('#!/bin/sh\nprintf invoked > "{}"\n'.format(marker))
+        hook.chmod(0o755)
+        self.git('config', 'core.fsmonitor', str(hook))
+        captured = WORKSPACE.git_source(str(self.repo), self.revision)
+        self.assertIn('src/file.txt', [name for name, _, _ in captured])
+        self.assertFalse(marker.exists())
+
+    def test_replacement_ref_cannot_substitute_pinned_commit(self):
+        blob = subprocess.check_output(
+            ['git', '-C', str(self.repo), 'hash-object', '-w', '--stdin'],
+            input=b'injected', stderr=subprocess.DEVNULL).decode().strip()
+        tree = subprocess.check_output(
+            ['git', '-C', str(self.repo), 'mktree'],
+            input=('100644 blob {}\tinjected.txt\n'.format(blob)).encode(),
+            stderr=subprocess.DEVNULL).decode().strip()
+        replacement = self.git('commit-tree', tree).strip()
+        self.git('replace', self.revision, replacement)
+        # Ordinary Git sees the substituted tree; hardened capture must see the original.
+        self.assertIn('injected.txt', self.git('ls-tree', '-r', '--name-only', self.revision))
+        captured = WORKSPACE.git_source(str(self.repo), self.revision)
+        self.assertEqual({name for name, _, _ in captured},
+                         {'AGENTS.md', 'src/file.txt'})
+
     def test_empty_directories_and_source_blobs_obey_aggregate_limits(self):
         volume = self.root / 'many-directories'
         volume.mkdir()

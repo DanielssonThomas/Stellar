@@ -1,6 +1,9 @@
 import path from 'node:path';
 import { attemptSchema } from './immutable-attempt.mjs';
 
+// Historical inert plan only. The proposed same-WSL account fails the host
+// checkout boundary; see docs/decisions/0002-immutable-executor-isolation.md.
+// No production launcher imports this module.
 export const proposedExecutor = Object.freeze({
   account: 'stellar_exec',
   uid: 1100,

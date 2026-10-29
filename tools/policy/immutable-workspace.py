@@ -60,6 +60,7 @@ def command(*args, cwd=None, limit=MAX_FILE + 1, run_uid=None, run_gid=None):
         'GIT_CONFIG_NOSYSTEM': '1',
         'GIT_CONFIG_GLOBAL': '/dev/null',
         'GIT_OPTIONAL_LOCKS': '0',
+        'GIT_NO_REPLACE_OBJECTS': '1',
         'GIT_TERMINAL_PROMPT': '0',
         'GIT_PAGER': 'cat',
     }
