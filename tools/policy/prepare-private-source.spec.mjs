@@ -300,6 +300,38 @@ test('rejects stale or duplicate attempt identity without source changes', async
   );
 });
 
+test('rejects active Git filters before status can execute them and requires private storage', async (t) => {
+  const f = await fixture(t);
+  const marker = path.join(f.root, 'filter-ran');
+  await writeFile(
+    path.join(f.sourceHost, 'src', '.gitattributes'),
+    'main.ts filter=probe\n',
+  );
+  await writeFile(path.join(f.sourceHost, 'src', 'main.ts'), 'changed\n');
+  const fingerprint = f.fingerprint();
+  f.git(
+    'config',
+    'filter.probe.clean',
+    `sh -c 'touch ${linuxPath(marker)}; cat'`,
+  );
+  assert.throws(
+    () => f.prepare('filter-1', { expectedFingerprint: fingerprint }),
+    /External Git filters/,
+  );
+  assert.equal(existsSync(marker), false);
+  assert.equal(existsSync(path.join(f.privateHost, 'filter-1')), false);
+  f.git('config', '--unset', 'filter.probe.clean');
+  await rm(path.join(f.sourceHost, 'src', '.gitattributes'));
+  await writeFile(
+    path.join(f.sourceHost, 'src', 'main.ts'),
+    'export const value = 1;\n',
+  );
+  run(['chmod', '777', f.privateRoot]);
+  assert.throws(() => f.prepare('public-1'), /capture failed/);
+  assert.equal(existsSync(path.join(f.privateHost, 'public-1')), false);
+  run(['chmod', '700', f.privateRoot]);
+});
+
 test('rejects symlinks, special files, unexpected Git metadata, and oversized files', async (t) => {
   const f = await fixture(t);
   const outside = path.join(f.root, 'outside.txt');

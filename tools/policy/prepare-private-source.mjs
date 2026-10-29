@@ -16,6 +16,8 @@ const gitEnvironment = [
   'GIT_NO_REPLACE_OBJECTS=1',
   'GIT_CONFIG_NOSYSTEM=1',
   'GIT_CONFIG_GLOBAL=/dev/null',
+  'GIT_CONFIG_COUNT=0',
+  'GIT_ATTR_NOSYSTEM=1',
   'GIT_OPTIONAL_LOCKS=0',
 ];
 
@@ -110,6 +112,17 @@ export function preparePrivateSourceCopy({
     state?.headRevision === expectedRevision &&
     state.fingerprint === expectedFingerprint &&
     state.workspacePath === workspace;
+  // Git status can invoke clean/process filters from repository-local config.
+  // Read config first: this command does not inspect working-file contents.
+  const config = nulPaths(
+    run(['git', '-C', workspace, 'config', '--includes', '--null', '--list']),
+  );
+  if (
+    config.some((entry) =>
+      /^filter\..+\.(?:clean|process|smudge)(?:\n|$)/i.test(entry),
+    )
+  )
+    throw new Error('External Git filters are not allowed during capture.');
   const before = inspect();
   if (!matches(before)) throw new Error('Private source identity is stale.');
   if (

@@ -107,13 +107,14 @@ def write_file(root, name, chunks, mode=0o600):
         os.close(parent)
 
 
-def open_root(name):
+def open_root(name, private=False):
     if (not isinstance(name, str) or not os.path.isabs(name)
             or os.path.realpath(name) != name):
         raise ValueError('Unsafe root')
     descriptor = os.open(name, OPEN_DIRECTORY)
     info = os.fstat(descriptor)
-    if not stat.S_ISDIR(info.st_mode):
+    if (not stat.S_ISDIR(info.st_mode)
+            or (private and (info.st_uid != os.geteuid() or info.st_mode & 0o077))):
         os.close(descriptor)
         raise ValueError('Unsafe root')
     return descriptor
@@ -212,7 +213,7 @@ def prepare(source, private_root, attempt, revision, fingerprint, paths, ignored
     if os.path.commonpath((source, private_root)) in (source, private_root):
         raise ValueError('Source and private storage overlap')
     source_fd = open_root(source)
-    private_fd = open_root(private_root)
+    private_fd = open_root(private_root, private=True)
     try:
         scan_metadata(source_fd, set(ignored))
         os.mkdir(attempt, 0o700, dir_fd=private_fd)
@@ -264,10 +265,13 @@ def finalize(private_root, attempt, revision, fingerprint, aggregate):
     validate_identity(attempt, revision, fingerprint)
     if not re.fullmatch(r'[a-f0-9]{64}', aggregate):
         raise ValueError('Invalid content digest')
-    private_fd = open_root(private_root)
+    private_fd = open_root(private_root, private=True)
     try:
         attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=private_fd)
         try:
+            attempt_info = os.fstat(attempt_fd)
+            if attempt_info.st_uid != os.geteuid() or attempt_info.st_mode & 0o077:
+                raise ValueError('Unsafe private attempt directory')
             marker = os.stat('.incomplete', dir_fd=attempt_fd, follow_symlinks=False)
             if not stat.S_ISREG(marker.st_mode):
                 raise ValueError('Attempt is not quarantined')
