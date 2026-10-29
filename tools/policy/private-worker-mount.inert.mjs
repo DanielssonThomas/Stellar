@@ -92,6 +92,21 @@ function assertMounts(mounts, first, second, source, protectedRoot) {
   );
 }
 
+export async function runTrackedInertContainer(name, launch, tracked, stop) {
+  tracked.add(name);
+  let termination;
+  let output;
+  try {
+    output = await launch();
+  } finally {
+    termination = await stop(name);
+    if (termination.confirmed) tracked.delete(name);
+  }
+  if (!termination.confirmed)
+    throw new Error(`Inert container termination was not confirmed: ${name}`);
+  return { output, termination };
+}
+
 async function main() {
   if (process.platform !== 'win32')
     throw new Error(
@@ -106,7 +121,7 @@ async function main() {
   const source = `${scratch}/source`;
   const privateRoot = `${scratch}/private`;
   const trustedProtectedRoot = `${scratch}/protected`;
-  let activeName;
+  const activeNames = new Set();
   let safeToRemove = true;
   try {
     for (const directory of [source, privateRoot, trustedProtectedRoot])
@@ -183,7 +198,7 @@ async function main() {
     const secondMount = buildPrivatePodmanArgs(
       options(second, attemptNumber + 1),
     );
-    activeName = `stellar-peon-worker-${issueNumber}-${attemptNumber}`;
+    const firstName = `stellar-peon-worker-${issueNumber}-${attemptNumber}`;
     const existing = spawnSync(
       'wsl.exe',
       [
@@ -195,7 +210,7 @@ async function main() {
         'podman',
         'container',
         'exists',
-        activeName,
+        firstName,
       ],
       { windowsHide: true, timeout: 5_000 },
     );
@@ -203,14 +218,15 @@ async function main() {
       throw new Error('Inert container name already exists.');
     if (existing.status !== 1)
       throw new Error('Could not check inert container name.');
+    activeNames.add(firstName);
     podman(inertArgs(firstMount, 'sleep 60', true));
     const mounts = JSON.parse(
-      podman(['inspect', '--format', '{{json .Mounts}}', activeName]),
+      podman(['inspect', '--format', '{{json .Mounts}}', firstName]),
     );
     assertMounts(mounts, first, second, source, trustedProtectedRoot);
     podman([
       'exec',
-      activeName,
+      firstName,
       '/bin/sh',
       '-c',
       'set -eu; test "$(cat /workspace/src/main.ts)" = "export const value = 1;"; ' +
@@ -237,40 +253,57 @@ async function main() {
       peon(['test', '!', '-e', `${second.privatePath}/src/output.txt`]),
       '',
     );
-    const stopped = await stopAndConfirmContainer(activeName);
+    const stopped = await stopAndConfirmContainer(firstName);
     if (!stopped.confirmed) {
       safeToRemove = false;
       throw new Error('Inert container cancellation was not confirmed.');
     }
-    activeName = undefined;
+    activeNames.delete(firstName);
     const naturalName = `stellar-peon-worker-${issueNumber}-${attemptNumber + 1}`;
-    podman(inertArgs(secondMount, 'test -f /workspace/src/main.ts'));
-    const natural = await stopAndConfirmContainer(naturalName);
-    assert.equal(natural.confirmed, true);
+    const { termination: natural } = await runTrackedInertContainer(
+      naturalName,
+      () => podman(inertArgs(secondMount, 'test -f /workspace/src/main.ts')),
+      activeNames,
+      stopAndConfirmContainer,
+    );
     assert.equal(natural.state, 'absent');
-    podman(
-      inertArgs(
-        secondMount,
-        'command -v git >/dev/null; command -v node >/dev/null; command -v pnpm >/dev/null',
-      ),
-    );
-    const gitProbe = spawnSync(
-      'wsl.exe',
-      [
-        '--distribution',
-        'Ubuntu',
-        '--user',
-        'peon',
-        '--exec',
-        'podman',
-        ...inertArgs(
-          secondMount,
-          'git -C /workspace rev-parse --is-inside-work-tree >/dev/null 2>&1',
+    await runTrackedInertContainer(
+      naturalName,
+      () =>
+        podman(
+          inertArgs(
+            secondMount,
+            'command -v git >/dev/null; command -v node >/dev/null; command -v pnpm >/dev/null',
+          ),
         ),
-      ],
-      { cwd: repositoryRoot, windowsHide: true, timeout: 30_000 },
+      activeNames,
+      stopAndConfirmContainer,
     );
-    assert.notEqual(gitProbe.status, 0);
+    const { output: gitProbe } = await runTrackedInertContainer(
+      naturalName,
+      () =>
+        spawnSync(
+          'wsl.exe',
+          [
+            '--distribution',
+            'Ubuntu',
+            '--user',
+            'peon',
+            '--exec',
+            'podman',
+            ...inertArgs(
+              secondMount,
+              'git -C /workspace rev-parse --is-inside-work-tree >/dev/null 2>&1',
+            ),
+          ],
+          { cwd: repositoryRoot, windowsHide: true, timeout: 30_000 },
+        ),
+      activeNames,
+      stopAndConfirmContainer,
+    );
+    assert.equal(gitProbe.error, undefined);
+    assert.equal(gitProbe.signal, null);
+    assert.equal(gitProbe.status, 128);
     assert.equal(
       peon(['test', '!', '-e', `${second.privatePath}/node_modules`]),
       '',
@@ -297,8 +330,8 @@ async function main() {
       ) + '\n',
     );
   } finally {
-    if (activeName) {
-      const stopped = await stopAndConfirmContainer(activeName);
+    for (const name of activeNames) {
+      const stopped = await stopAndConfirmContainer(name);
       if (!stopped.confirmed) safeToRemove = false;
     }
     if (safeToRemove) {
@@ -312,7 +345,8 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.message}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] === fileURLToPath(import.meta.url))
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  });

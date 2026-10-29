@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { preparePrivateSourceCopy } from './prepare-private-source.mjs';
+import { runTrackedInertContainer } from './private-worker-mount.inert.mjs';
 import {
   buildPodmanArgs,
   buildPrivatePodmanArgs,
@@ -15,6 +16,41 @@ import { trustedPeonWorkerImage } from './supervised-peon-run.mjs';
 
 const issueNumber = 145;
 const branch = 'issue/145-inert-mount';
+
+test('inert launches retain uncertain containers for outer cleanup', async () => {
+  const tracked = new Set();
+  const timeout = new Error('launcher timeout');
+  await assert.rejects(
+    runTrackedInertContainer(
+      'test-container',
+      () => {
+        throw timeout;
+      },
+      tracked,
+      async () => ({ confirmed: false }),
+    ),
+    timeout,
+  );
+  assert.deepEqual([...tracked], ['test-container']);
+  await assert.rejects(
+    runTrackedInertContainer(
+      'second-container',
+      () => undefined,
+      tracked,
+      async () => ({ confirmed: false }),
+    ),
+    /termination was not confirmed/,
+  );
+  assert.ok(tracked.has('second-container'));
+  const complete = await runTrackedInertContainer(
+    'third-container',
+    () => 'finished',
+    tracked,
+    async () => ({ confirmed: true, state: 'absent' }),
+  );
+  assert.equal(complete.output, 'finished');
+  assert.equal(tracked.has('third-container'), false);
+});
 
 function linuxPath(value) {
   if (process.platform !== 'win32') return value;
