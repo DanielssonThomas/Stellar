@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { assertCorrectionFeedbackInUse } from './supervise-worker.mjs';
 import {
   isPreparedPeonWorkflow,
   maxForwardedRequestsForWorkflow,
@@ -423,6 +424,14 @@ export function buildMinimalPeonTaskContextManifest({
   const worker = {
     objective: section(issue.body ?? '', 'Objective'),
     acceptanceCriteria: section(issue.body ?? '', 'Acceptance criteria'),
+    ...(contextPlan.mentorFeedback
+      ? {
+          mentorFeedback: minimalMentorFeedback(
+            contextPlan.mentorFeedback,
+            issue.number,
+          ),
+        }
+      : {}),
     sourceContext: contextPlan.files
       .map((item) =>
         readBoundedExcerpt(worktreePath, item, item.kind, {
@@ -453,4 +462,29 @@ export function buildMinimalPeonTaskContextManifest({
   if (Buffer.byteLength(serialized, 'utf8') > maxManifestBytes)
     throw new Error('Minimal task context exceeds the total byte limit.');
   return Object.freeze({ manifest: deepFreeze(manifest), serialized });
+}
+
+function minimalMentorFeedback(value, issueNumber) {
+  assertCorrectionFeedbackInUse(value, issueNumber);
+  const short = (text) =>
+    typeof text === 'string' &&
+    text.trim().length > 0 &&
+    Buffer.byteLength(text, 'utf8') <= 600 &&
+    !/[\x00-\x1f]/.test(text);
+  if (
+    value.issueNumber !== issueNumber ||
+    !Number.isSafeInteger(value.attemptNumber) ||
+    value.attemptNumber < 1 ||
+    !/^[a-f0-9]{64}$/.test(value.fingerprint ?? '') ||
+    !['diagnostic', 'conceptual'].includes(value.level) ||
+    !short(value.diagnostic) ||
+    (value.guidance !== undefined && !short(value.guidance))
+  )
+    throw new Error('Correction feedback must be bounded and issue-bound.');
+  return {
+    attemptNumber: value.attemptNumber,
+    level: value.level,
+    diagnostic: value.diagnostic,
+    ...(value.guidance ? { guidance: value.guidance } : {}),
+  };
 }

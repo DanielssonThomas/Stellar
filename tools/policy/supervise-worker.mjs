@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute } from 'node:path';
+import {
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import {
   defaultPeonHermesProfile,
@@ -133,9 +141,29 @@ function validateResume(handoff, task, confirmPreviousWorkerStopped) {
     );
 }
 
-async function persistHandoff(path, handoff) {
-  if (!path) return;
+async function withHandoffLock(path, action) {
   await mkdir(dirname(path), { recursive: true });
+  const lockPath = `${path}.mentor.lock`;
+  let lock;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      lock = await open(lockPath, 'wx');
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      await delay(25);
+    }
+  }
+  if (!lock) throw new Error('Timed out waiting for the handoff writer.');
+  try {
+    return await action();
+  } finally {
+    await lock.close();
+    await unlink(lockPath);
+  }
+}
+
+async function writeHandoffUnlocked(path, handoff) {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(handoff, null, 2)}\n`, {
     flag: 'wx',
@@ -143,8 +171,393 @@ async function persistHandoff(path, handoff) {
   await rename(temporary, path);
 }
 
+async function persistHandoff(
+  path,
+  handoff,
+  { claiming = false, priorOwner } = {},
+) {
+  if (!path) return;
+  await withHandoffLock(path, async () => {
+    let current;
+    try {
+      current = await readHandoff(path);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (current) {
+      if (!claiming && current.executionOwner !== handoff.executionOwner)
+        throw new Error('Another supervisor owns this handoff.');
+      if (
+        claiming &&
+        (current.executionOwner !== priorOwner ||
+          !['paused', 'handoff-pending'].includes(current.status))
+      )
+        throw new Error('A stale supervisor cannot claim this handoff.');
+      if (
+        !Number.isSafeInteger(current.supervisorRevision ?? 0) ||
+        (current.supervisorRevision ?? 0) !== handoff.supervisorRevision
+      )
+        throw new Error(
+          'A stale supervisor revision cannot overwrite this handoff.',
+        );
+      for (const key of [
+        'issueNumber',
+        'targetBranch',
+        'branch',
+        'worktreePath',
+      ]) {
+        if (current.task?.[key] !== handoff.task?.[key])
+          throw new Error('Handoff identity changed while writing.');
+      }
+      const priorAttempts = current.attempts ?? [];
+      if (
+        JSON.stringify(priorAttempts) !==
+        JSON.stringify(handoff.attempts.slice(0, priorAttempts.length))
+      )
+        throw new Error(
+          'A stale handoff attempt snapshot cannot overwrite newer work.',
+        );
+      const priorFeedback = current.mentorFeedback ?? [];
+      if (
+        JSON.stringify(
+          handoff.mentorFeedback.slice(0, priorFeedback.length),
+        ) !==
+        JSON.stringify(priorFeedback.slice(0, handoff.mentorFeedback.length))
+      )
+        throw new Error('Handoff mentor feedback changed unexpectedly.');
+      if (priorFeedback.length > handoff.mentorFeedback.length)
+        handoff.mentorFeedback = priorFeedback;
+      const priorTime = Date.parse(current.updatedAt);
+      const nextTime = Date.parse(handoff.updatedAt);
+      if (!Number.isFinite(priorTime) || !Number.isFinite(nextTime))
+        throw new Error('Handoff update time is invalid.');
+      handoff.updatedAt = new Date(
+        Math.max(nextTime, priorTime + 1),
+      ).toISOString();
+    } else if (claiming || handoff.supervisorRevision !== 0) {
+      throw new Error('The handoff disappeared before supervisor claim.');
+    }
+    handoff.supervisorRevision += 1;
+    await writeHandoffUnlocked(path, handoff);
+  });
+}
+
 export async function readHandoff(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+function diagnosticExcerpt(value) {
+  const sanitized = redactEvidence(String(value ?? ''))
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!sanitized) throw new Error('Recorded diagnostic is empty.');
+  if (Buffer.byteLength(sanitized, 'utf8') <= 600) return sanitized;
+  let excerpt = '';
+  for (const character of sanitized) {
+    if (Buffer.byteLength(excerpt + character, 'utf8') > 597) break;
+    excerpt += character;
+  }
+  return `${excerpt}…`;
+}
+
+const correctionSources = new WeakMap();
+const activeCorrectionFeedback = new WeakSet();
+
+function currentCorrectionEvent(handoff, issueNumber) {
+  const attempt = handoff?.attempts?.at(-1);
+  const event = handoff?.mentorFeedback?.at(-1);
+  if (
+    handoff?.schemaVersion !== 1 ||
+    handoff?.task?.issueNumber !== issueNumber ||
+    !['paused', 'handoff-pending'].includes(handoff.status) ||
+    handoff.safeToResume !== true ||
+    !event ||
+    !['diagnostic', 'conceptual'].includes(event.level) ||
+    event.issueNumber !== issueNumber ||
+    attempt?.workerId !== 'peon' ||
+    attempt.attemptNumber !== event.attemptNumber ||
+    attempt.afterFingerprint !== event.fingerprint ||
+    event.resultFingerprint !== event.fingerprint ||
+    event.supervisorRevision !== handoff.supervisorRevision ||
+    event.executionOwner !== handoff.executionOwner ||
+    event.taskOwner !== handoff.task.owner ||
+    event.attemptCount !== handoff.attempts.length ||
+    !Number.isSafeInteger(event.supervisorRevision) ||
+    typeof event.executionOwner !== 'string'
+  )
+    throw new Error(
+      'No current verified Peon correction feedback is available; handoff is superseded or unsafe.',
+    );
+  const cited =
+    event.evidence?.kind === 'failure'
+      ? attempt.failure
+      : event.evidence?.kind === 'verification'
+        ? attempt.verificationResults?.[event.evidence.index]
+        : null;
+  if (
+    !cited ||
+    (event.evidence.kind === 'verification' && cited.passed !== false) ||
+    (cited.fingerprint ?? stableFingerprint(cited)) !==
+      event.evidence.fingerprint
+  )
+    throw new Error('Correction feedback evidence is no longer valid.');
+  return event;
+}
+
+/** Extract a process-local handle, never authorize use from a serialized snapshot. */
+export async function correctionFeedbackFromHandoff({
+  handoffPath,
+  issueNumber,
+  inspectWorktree,
+}) {
+  if (!isAbsolute(handoffPath ?? '') || typeof inspectWorktree !== 'function')
+    throw new Error(
+      'Trusted handoff path and worktree inspection are required.',
+    );
+  return withHandoffLock(handoffPath, async () => {
+    const handoff = await readHandoff(handoffPath);
+    const event = currentCorrectionEvent(handoff, issueNumber);
+    const expectedHandoff = stableFingerprint(handoff);
+    const current = worktreeState(await inspectWorktree(handoff.task));
+    if (
+      current.fingerprint !== event.fingerprint ||
+      stableFingerprint(await readHandoff(handoffPath)) !== expectedHandoff
+    )
+      throw new Error('Correction source changed during feedback extraction.');
+    const feedback = Object.freeze({
+      issueNumber,
+      attemptNumber: event.attemptNumber,
+      fingerprint: event.fingerprint,
+      level: event.level,
+      diagnostic: event.diagnostic,
+      ...(event.guidance ? { guidance: event.guidance } : {}),
+    });
+    correctionSources.set(feedback, {
+      handoffPath,
+      inspectWorktree,
+      expectedHandoff,
+    });
+    return feedback;
+  });
+}
+
+export function assertCorrectionFeedbackInUse(feedback, issueNumber) {
+  if (
+    !activeCorrectionFeedback.has(feedback) ||
+    feedback.issueNumber !== issueNumber
+  )
+    throw new Error(
+      'Correction feedback requires current trusted preparation.',
+    );
+}
+
+// Explicit capability denial, not a configurable advisory lock or attestation.
+// The current launcher bind-mounts mutable Peon-owned source. Re-enabling
+// execution requires an implemented and reviewed immutable/exclusive boundary.
+export function rejectMutableCorrectionExecution() {
+  throw new Error(
+    'Mentor-backed correction execution is unavailable: the launcher does not enforce immutable or exclusive workspace consumption. Feedback is preview-only.',
+  );
+}
+
+/** Hold the source lock through preview preparation and inspection.
+ * This lock coordinates supervisors, not filesystem writers. It grants no
+ * execution authority; consumeExecution deliberately fails closed.
+ */
+export async function withCurrentCorrectionFeedback(
+  feedback,
+  { issueNumber, destinationHandoffPath },
+  prepare,
+  consume = (packet) => packet,
+) {
+  const source = correctionSources.get(feedback);
+  if (
+    !source ||
+    feedback.issueNumber !== issueNumber ||
+    (destinationHandoffPath &&
+      resolve(destinationHandoffPath) === resolve(source.handoffPath))
+  )
+    throw new Error(
+      'Correction requires a fresh trusted source and a distinct destination handoff.',
+    );
+  return withHandoffLock(source.handoffPath, async () => {
+    let active = true;
+    const assertCurrent = async (task, authorizedWorkspace) => {
+      if (!active) throw new Error('Correction preparation has ended.');
+      const handoff = await readHandoff(source.handoffPath);
+      const event = currentCorrectionEvent(handoff, issueNumber);
+      if (stableFingerprint(handoff) !== source.expectedHandoff)
+        throw new Error('Correction handoff changed since extraction.');
+      if (
+        task &&
+        ['issueNumber', 'owner', 'targetBranch', 'branch', 'worktreePath'].some(
+          (key) => task[key] !== handoff.task[key],
+        )
+      )
+        throw new Error(
+          'Correction assignment differs from its source handoff.',
+        );
+      const current = worktreeState(await source.inspectWorktree(handoff.task));
+      if (
+        current.fingerprint !== event.fingerprint ||
+        (authorizedWorkspace &&
+          worktreeState(authorizedWorkspace).fingerprint !==
+            event.fingerprint) ||
+        stableFingerprint(await readHandoff(source.handoffPath)) !==
+          source.expectedHandoff
+      )
+        throw new Error('Correction source changed before trusted use.');
+    };
+    const consumeExecution = async (task, authorizedWorkspace) => {
+      if (!destinationHandoffPath || !isAbsolute(destinationHandoffPath))
+        throw new Error(
+          'Correction execution requires a distinct absolute destination handoff.',
+        );
+      await assertCurrent(task, authorizedWorkspace);
+      rejectMutableCorrectionExecution();
+    };
+    try {
+      await assertCurrent();
+      activeCorrectionFeedback.add(feedback);
+      const packet = await prepare(assertCurrent, consumeExecution);
+      await assertCurrent();
+      return await consume(packet);
+    } finally {
+      active = false;
+      activeCorrectionFeedback.delete(feedback);
+    }
+  });
+}
+
+/** Append inert mentor evidence only after a supervised attempt has stopped. */
+export async function appendMentorFeedback({
+  handoffPath,
+  issueNumber,
+  attemptNumber,
+  expectedUpdatedAt,
+  expectedFingerprint,
+  level,
+  evidence,
+  guidance,
+  lessonProposal,
+  inspectWorktree,
+}) {
+  if (!isAbsolute(handoffPath ?? '') || typeof inspectWorktree !== 'function')
+    throw new Error(
+      'Trusted handoff path and worktree inspection are required.',
+    );
+  if (!['diagnostic', 'conceptual', 'codex-fix'].includes(level))
+    throw new Error('Unknown mentor intervention level.');
+  if (!['failure', 'verification'].includes(evidence?.kind))
+    throw new Error('Feedback must cite a recorded failure or verification.');
+  const bounded = (value, limit, label) => {
+    if (value === undefined || value === null) return null;
+    if (
+      typeof value !== 'string' ||
+      !value.trim() ||
+      Buffer.byteLength(value, 'utf8') > limit ||
+      /[\x00-\x08\x0b-\x1f]/.test(value)
+    )
+      throw new Error(`${label} must be short plain text.`);
+    const sanitized = redactEvidence(value.trim().replace(/\s+/g, ' '));
+    if (!sanitized || Buffer.byteLength(sanitized, 'utf8') > limit)
+      throw new Error(`${label} must be short plain text.`);
+    return sanitized;
+  };
+  const safeGuidance = bounded(guidance, 600, 'Guidance');
+  const safeProposal = bounded(lessonProposal, 1_000, 'Lesson proposal');
+  if (level !== 'diagnostic' && !safeGuidance)
+    throw new Error(
+      'Conceptual guidance and Codex fixes need a recorded explanation.',
+    );
+  return withHandoffLock(handoffPath, async () => {
+    const handoff = await readHandoff(handoffPath);
+    if (
+      handoff.schemaVersion !== 1 ||
+      handoff.task?.issueNumber !== issueNumber ||
+      handoff.updatedAt !== expectedUpdatedAt ||
+      !['paused', 'handoff-pending'].includes(handoff.status) ||
+      handoff.safeToResume === false
+    )
+      throw new Error(
+        'Handoff is stale, active, or unsafe for mentor feedback.',
+      );
+    const attempt = handoff.attempts?.find(
+      (item) =>
+        item.workerId === 'peon' && item.attemptNumber === attemptNumber,
+    );
+    if (
+      !attempt ||
+      attempt !== handoff.attempts.at(-1) ||
+      !attempt.afterFingerprint ||
+      attempt.afterFingerprint !== expectedFingerprint
+    )
+      throw new Error(
+        'Mentor feedback does not match a completed Peon attempt.',
+      );
+    const current = worktreeState(await inspectWorktree(handoff.task));
+    if (level === 'codex-fix') {
+      if (current.fingerprint === expectedFingerprint)
+        throw new Error('A Codex fix requires a changed worktree.');
+    } else if (current.fingerprint !== expectedFingerprint) {
+      throw new Error('Worktree changed since the Peon attempt.');
+    }
+    const cited =
+      evidence.kind === 'failure'
+        ? attempt.failure
+        : attempt.verificationResults?.[evidence.index];
+    if (!cited || (evidence.kind === 'verification' && cited.passed !== false))
+      throw new Error('Cited diagnostic is absent or did not fail.');
+    const summary = diagnosticExcerpt(
+      evidence.kind === 'failure'
+        ? cited.message
+        : [cited.summary, cited.message, cited.name].find(
+            (value) => typeof value === 'string' && value.trim(),
+          ),
+    );
+    const event = {
+      issueNumber,
+      attemptNumber,
+      fingerprint: expectedFingerprint,
+      resultFingerprint: current.fingerprint,
+      supervisorRevision: handoff.supervisorRevision,
+      executionOwner: handoff.executionOwner,
+      taskOwner: handoff.task.owner,
+      attemptCount: handoff.attempts.length,
+      level,
+      author: 'codex',
+      implementationAuthor: level === 'codex-fix' ? 'codex' : null,
+      evidence: {
+        kind: evidence.kind,
+        index: evidence.kind === 'verification' ? evidence.index : null,
+        fingerprint: cited.fingerprint ?? stableFingerprint(cited),
+      },
+      diagnostic: summary,
+      ...(safeGuidance ? { guidance: safeGuidance } : {}),
+      ...(safeProposal
+        ? {
+            lessonProposal: {
+              state: 'draft',
+              scope: 'unclassified',
+              text: safeProposal,
+            },
+          }
+        : {}),
+      at: new Date().toISOString(),
+    };
+    handoff.mentorFeedback ??= [];
+    if (handoff.mentorFeedback.length >= 12)
+      throw new Error('Mentor feedback limit reached.');
+    handoff.mentorFeedback.push(event);
+    const previousTime = Date.parse(handoff.updatedAt);
+    if (!Number.isFinite(previousTime))
+      throw new Error('Handoff update time is invalid.');
+    handoff.updatedAt = new Date(
+      Math.max(Date.now(), previousTime + 1),
+    ).toISOString();
+    await writeHandoffUnlocked(handoffPath, handoff);
+    return event;
+  });
 }
 
 function createWorkerBudget(limits, previous = {}) {
@@ -757,28 +1170,41 @@ export async function superviseWorker({
       throw new Error(`A ${id} worker adapter is required.`);
   }
 
-  const handoff = resume ?? {
-    schemaVersion: 1,
-    task,
-    status: 'running',
-    safeToResume: true,
-    currentWorkerId: 'peon',
-    createdAt: new Date(clock()).toISOString(),
-    updatedAt: new Date(clock()).toISOString(),
-    attempts: [],
-    attemptedSolutions: [],
-    verificationResults: [],
-    failures: [],
-    transfers: [],
-    workerUsage: {},
-  };
+  const handoff = resume
+    ? structuredClone(resume)
+    : {
+        schemaVersion: 1,
+        task,
+        status: 'running',
+        safeToResume: true,
+        currentWorkerId: 'peon',
+        createdAt: new Date(clock()).toISOString(),
+        updatedAt: new Date(clock()).toISOString(),
+        attempts: [],
+        attemptedSolutions: [],
+        verificationResults: [],
+        failures: [],
+        mentorFeedback: [],
+        transfers: [],
+        workerUsage: {},
+      };
   if (resume) validateResume(handoff, task, confirmPreviousWorkerStopped);
+  const priorOwner = handoff.executionOwner;
+  handoff.supervisorRevision ??= 0;
+  if (
+    !Number.isSafeInteger(handoff.supervisorRevision) ||
+    handoff.supervisorRevision < 0
+  )
+    throw new Error('Handoff supervisor revision is invalid.');
+  handoff.executionOwner = randomUUID();
+  let claiming = Boolean(resume);
   if (confirmPreviousWorkerStopped) handoff.safeToResume = true;
   handoff.safeToResume ??= true;
   handoff.attempts ??= [];
   handoff.attemptedSolutions ??= [];
   handoff.verificationResults ??= [];
   handoff.failures ??= [];
+  handoff.mentorFeedback ??= [];
   handoff.transfers ??= [];
   handoff.workerUsage ??= {};
   for (const id of ['peon', 'mira']) {
@@ -800,8 +1226,11 @@ export async function superviseWorker({
   async function save(status) {
     handoff.status = status;
     handoff.updatedAt = new Date(clock()).toISOString();
-    await persistHandoff(handoffPath, handoff);
+    await persistHandoff(handoffPath, handoff, { claiming, priorOwner });
+    claiming = false;
   }
+
+  if (resume) await save(handoff.status);
 
   let workerId = handoff.nextWorkerId ?? handoff.currentWorkerId ?? 'peon';
   if (workerId === 'mira' && handoff.status === 'handoff-pending') {
@@ -865,6 +1294,7 @@ export async function superviseWorker({
       const attemptNumber = state.attempts + 1;
       const attemptStarted = clock();
       const budget = createWorkerBudget(limits, state);
+      await save('running');
       let outcome = await runBounded(
         worker,
         {
@@ -917,6 +1347,7 @@ export async function superviseWorker({
         durationMs,
         progressed: false,
         changedFiles: before.changes,
+        baselineFingerprint: before.fingerprint,
         toolCalls: budget.snapshot.toolCalls,
         modelTokens: budget.snapshot.modelTokens,
         forwardedRequests: budget.snapshot.forwardedRequests,
@@ -976,6 +1407,8 @@ export async function superviseWorker({
 
       attempt.progressed = progressed;
       attempt.changedFiles = after.changes;
+      attempt.workerOutputFingerprint = after.fingerprint;
+      attempt.afterFingerprint = after.fingerprint;
       let result = null;
       let failure = null;
 
@@ -1093,6 +1526,9 @@ export async function superviseWorker({
               await save('paused');
               return { status: 'paused', handoff, safeToResume: false };
             }
+            const stopped = worktreeState(await inspectWorktree(task));
+            attempt.changedFiles = stopped.changes;
+            attempt.afterFingerprint = stopped.fingerprint;
             if (verificationOutcome.type === 'interrupted') {
               failure = failureDetails({
                 code: 'Interrupted',

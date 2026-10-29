@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import {
+  appendMentorFeedback,
+  correctionFeedbackFromHandoff,
   formatCapabilityBlockerComment,
   readHandoff,
   superviseWorker,
+  withCurrentCorrectionFeedback,
 } from './supervise-worker.mjs';
 import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
 
@@ -53,6 +56,934 @@ function base(overrides = {}) {
 }
 
 describe('bounded worker supervision', () => {
+  it('rejects feedback after a newer Peon attempt even with identical output', async () => {
+    for (const changed of [false, true]) {
+      for (const completed of [false, true]) {
+        const handoffPath = join(
+          temporaryRoot,
+          `superseded-${changed}-${completed}.json`,
+        );
+        let fingerprint = 'first';
+        let inspections = 0;
+        const pause = new AbortController();
+        const inspectWorktree = async () => {
+          if (++inspections === 2) pause.abort();
+          return { fingerprint, changes: [] };
+        };
+        const failed = worker('peon', async () => ({
+          status: 'failed',
+          failure: { message: 'Missing field.' },
+        }));
+        await superviseWorker(
+          base({
+            handoffPath,
+            inspectWorktree,
+            signal: pause.signal,
+            workers: {
+              peon: failed,
+              mira: worker('mira', async () => {
+                throw new Error('No Mira');
+              }),
+            },
+          }),
+        );
+        const stopped = await readHandoff(handoffPath);
+        await appendMentorFeedback({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          attemptNumber: 1,
+          expectedUpdatedAt: stopped.updatedAt,
+          expectedFingerprint: stopped.attempts[0].afterFingerprint,
+          level: 'diagnostic',
+          evidence: { kind: 'failure' },
+          inspectWorktree,
+        });
+        const source = {
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        };
+        const handle = await correctionFeedbackFromHandoff(source);
+        const pauseAgain = new AbortController();
+        let nextInspections = 0;
+        await superviseWorker(
+          base({
+            handoffPath,
+            resume: await readHandoff(handoffPath),
+            signal: pauseAgain.signal,
+            limits: {
+              maxAttemptsPerWorker: 3,
+              maxNoProgressAttempts: 3,
+              maxRepeatedFailures: 3,
+            },
+            inspectWorktree: async () => {
+              if (!completed && ++nextInspections === 2) pauseAgain.abort();
+              return { fingerprint, changes: [] };
+            },
+            workers: {
+              peon: worker('peon', async () => {
+                if (changed) fingerprint = 'second';
+                return completed
+                  ? { status: 'completed' }
+                  : {
+                      status: 'failed',
+                      failure: { message: 'Still missing.' },
+                    };
+              }),
+              mira: worker('mira', async () => {
+                throw new Error('No Mira');
+              }),
+            },
+          }),
+        );
+        const latest = await readHandoff(handoffPath);
+        assert.equal(latest.attempts.length, 2);
+        assert.equal(latest.mentorFeedback.length, 1);
+        assert.equal(latest.status, completed ? 'complete' : 'paused');
+        await assert.rejects(
+          correctionFeedbackFromHandoff(source),
+          /superseded|unsafe/,
+        );
+        let prepared = false;
+        await assert.rejects(
+          withCurrentCorrectionFeedback(
+            handle,
+            { issueNumber: task.issueNumber },
+            () => {
+              prepared = true;
+            },
+          ),
+          /superseded|unsafe/,
+        );
+        assert.equal(prepared, false);
+      }
+    }
+  });
+
+  it('rechecks source contents and handoff provenance at the correction use boundary', async () => {
+    const handoffPath = join(temporaryRoot, 'correction-use.json');
+    let fingerprint = 'current';
+    const inspectWorktree = async () => ({ fingerprint, changes: [] });
+    await superviseWorker(
+      base({
+        handoffPath,
+        inspectWorktree,
+        limits: { maxAttemptsPerWorker: 1 },
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { message: 'Missing field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('No Mira');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    await appendMentorFeedback({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    });
+    const source = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    };
+    const handle = await correctionFeedbackFromHandoff(source);
+    assert.equal(
+      await withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        async (assertCurrent) => {
+          await assertCurrent(task);
+          return 'prepared';
+        },
+      ),
+      'prepared',
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        (assertCurrent) => assertCurrent({ ...task, owner: 'worker:mira' }),
+      ),
+      /assignment differs/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber, destinationHandoffPath: handoffPath },
+        () => {},
+      ),
+      /distinct destination/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        structuredClone(handle),
+        { issueNumber: task.issueNumber },
+        () => {},
+      ),
+      /fresh trusted/,
+    );
+    fingerprint = 'edited-after-append';
+    await assert.rejects(
+      correctionFeedbackFromHandoff(source),
+      /source changed/,
+    );
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        () => {},
+      ),
+      /source changed/,
+    );
+    fingerprint = 'current';
+    let consumed = false;
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        () => {
+          fingerprint = 'edited-during-preparation';
+          return 'packet';
+        },
+        () => {
+          consumed = true;
+        },
+      ),
+      /source changed/,
+    );
+    assert.equal(consumed, false);
+    fingerprint = 'current';
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        handle,
+        { issueNumber: task.issueNumber },
+        async () => {
+          const changed = await readHandoff(handoffPath);
+          changed.executionOwner = 'changed-outside-cooperating-lock';
+          await writeFile(handoffPath, JSON.stringify(changed));
+        },
+        () => {
+          consumed = true;
+        },
+      ),
+      /superseded|unsafe/,
+    );
+    assert.equal(consumed, false);
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        ...source,
+        handoffPath: `${handoffPath}.missing`,
+      }),
+      /ENOENT/,
+    );
+  });
+
+  it('holds source execution ownership through trusted correction consumption', async () => {
+    const handoffPath = join(temporaryRoot, 'correction-source-lock.json');
+    const inspectWorktree = async () => ({
+      fingerprint: 'current',
+      changes: [],
+    });
+    await superviseWorker(
+      base({
+        handoffPath,
+        inspectWorktree,
+        limits: { maxAttemptsPerWorker: 1 },
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { message: 'Missing field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('No Mira yet');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    await appendMentorFeedback({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    });
+    const snapshot = await readHandoff(handoffPath);
+    const handle = await correctionFeedbackFromHandoff({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    });
+    let resume;
+    let authorized = false;
+    await withCurrentCorrectionFeedback(
+      handle,
+      { issueNumber: task.issueNumber },
+      () => {
+        resume = superviseWorker(
+          base({
+            handoffPath,
+            resume: snapshot,
+            inspectWorktree,
+            authorizeHandoff: (request) => {
+              authorized = true;
+              return authorizeMira(request);
+            },
+          }),
+        );
+        return 'packet';
+      },
+      async () => {
+        assert.equal(authorized, false);
+        assert.equal(
+          (await readHandoff(handoffPath)).supervisorRevision,
+          snapshot.supervisorRevision,
+        );
+      },
+    );
+    assert.equal((await resume).status, 'complete');
+    assert.equal(authorized, true);
+  });
+
+  it('records bounded, revision-bound feedback for a stopped format failure', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-format-handoff.json');
+    let fingerprint = 'unchanged';
+    const inspectWorktree = async () => ({
+      fingerprint,
+      changes: [],
+    });
+    const result = await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: {
+              code: 'FormatError',
+              message: 'The required report field is missing.',
+            },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    const before = await readHandoff(handoffPath);
+    const feedback = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: before.updatedAt,
+      expectedFingerprint: result.handoff.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      lessonProposal: 'Check the required report fields before submitting.',
+      inspectWorktree,
+    };
+    const event = await appendMentorFeedback(feedback);
+    assert.match(event.diagnostic, /required report field/);
+    assert.equal(event.implementationAuthor, null);
+    assert.equal(event.lessonProposal.state, 'draft');
+    assert.equal(event.lessonProposal.scope, 'unclassified');
+    assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
+    await assert.rejects(appendMentorFeedback(feedback), /stale/);
+    const fresh = await readHandoff(handoffPath);
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        expectedFingerprint: 'wrong',
+      }),
+      /does not match/,
+    );
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        lessonProposal: 'x'.repeat(1_001),
+      }),
+      /short plain text/,
+    );
+    await assert.rejects(
+      appendMentorFeedback({
+        ...feedback,
+        expectedUpdatedAt: fresh.updatedAt,
+        lessonProposal: 'unsafe\u0000content',
+      }),
+      /short plain text/,
+    );
+    const conceptual = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: fresh.updatedAt,
+      level: 'conceptual',
+      guidance: 'Check the report schema against the required fields.',
+      lessonProposal: undefined,
+    });
+    assert.equal(conceptual.level, 'conceptual');
+    const afterConceptual = await readHandoff(handoffPath);
+    assert.equal(
+      (
+        await correctionFeedbackFromHandoff({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        })
+      ).guidance,
+      'Check the report schema against the required fields.',
+    );
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: 999,
+        inspectWorktree,
+      }),
+      /unsafe/,
+    );
+    fingerprint = 'codex-change';
+    const assisted = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: afterConceptual.updatedAt,
+      level: 'codex-fix',
+      guidance: 'Codex authored the correction after Peon attempts.',
+      lessonProposal: undefined,
+    });
+    assert.equal(assisted.implementationAuthor, 'codex');
+    assert.notEqual(assisted.resultFingerprint, assisted.fingerprint);
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        inspectWorktree,
+      }),
+      /No current verified/,
+    );
+  });
+
+  it('bounds redacted mentor text by its persisted UTF-8 bytes', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-redacted-bounds.json');
+    const inspectWorktree = async () => ({
+      fingerprint: 'unchanged',
+      changes: [],
+    });
+    await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { code: 'FormatError', message: 'Missing report field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    const feedback = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'conceptual',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    };
+    const before = await readFile(handoffPath, 'utf8');
+    for (const values of [
+      { guidance: 'token=a '.repeat(70) },
+      { guidance: 'Use the schema.', lessonProposal: 'token=a '.repeat(70) },
+      { guidance: 'é'.repeat(301) },
+      { guidance: 'Use the schema.', lessonProposal: 'é'.repeat(501) },
+    ]) {
+      await assert.rejects(
+        appendMentorFeedback({ ...feedback, ...values }),
+        /short plain text/,
+      );
+      assert.equal(await readFile(handoffPath, 'utf8'), before);
+    }
+
+    const guidance = `${'token=a '.repeat(30)}${'é'.repeat(45)}`;
+    const proposal = `${'token=a '.repeat(50)}${'é'.repeat(75)}`;
+    const expectedGuidance = `${'token=[REDACTED] '.repeat(30)}${'é'.repeat(45)}`;
+    const expectedProposal = `${'token=[REDACTED] '.repeat(50)}${'é'.repeat(75)}`;
+    assert.equal(Buffer.byteLength(expectedGuidance, 'utf8'), 600);
+    assert.equal(Buffer.byteLength(expectedProposal, 'utf8'), 1_000);
+    for (const values of [
+      { guidance: `${guidance}x` },
+      { guidance, lessonProposal: `${proposal}x` },
+    ]) {
+      await assert.rejects(
+        appendMentorFeedback({ ...feedback, ...values }),
+        /short plain text/,
+      );
+      assert.equal(await readFile(handoffPath, 'utf8'), before);
+    }
+
+    const event = await appendMentorFeedback({
+      ...feedback,
+      guidance,
+      lessonProposal: proposal,
+    });
+    assert.equal(event.guidance, expectedGuidance);
+    assert.equal(event.lessonProposal.text, expectedProposal);
+    const persisted = await readHandoff(handoffPath);
+    assert.equal(persisted.mentorFeedback[0].guidance, expectedGuidance);
+    assert.equal(
+      persisted.mentorFeedback[0].lessonProposal.text,
+      expectedProposal,
+    );
+    const preview = await correctionFeedbackFromHandoff({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    });
+    assert.equal(preview.guidance, expectedGuidance);
+    assert.ok(Buffer.byteLength(preview.guidance, 'utf8') <= 600);
+
+    const ordinary = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: persisted.updatedAt,
+      guidance: '  Check   the report schema.  ',
+      lessonProposal: '  Check  required fields.  ',
+    });
+    assert.equal(ordinary.guidance, 'Check the report schema.');
+    assert.equal(ordinary.lessonProposal.text, 'Check required fields.');
+  });
+
+  it(
+    'preserves accepted feedback when a stale resume starts Mira',
+    { timeout: 3_000 },
+    async () => {
+      const handoffPath = join(temporaryRoot, 'mentor-resume-race.json');
+      const inspectWorktree = async () => ({
+        fingerprint: 'unchanged',
+        changes: [],
+      });
+      const first = await superviseWorker(
+        base({
+          handoffPath,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          workers: {
+            peon: worker('peon', async () => ({
+              status: 'failed',
+              failure: {
+                code: 'FormatError',
+                message: 'A report field is missing.',
+              },
+            })),
+            mira: worker('mira', async () => {
+              throw new Error('Mira must not run yet');
+            }),
+          },
+        }),
+      );
+      assert.equal(first.status, 'handoff-pending');
+      const staleResume = await readHandoff(handoffPath);
+      let releaseInspection;
+      let inspectionStarted;
+      const inspectionStartedPromise = new Promise((resolve) => {
+        inspectionStarted = resolve;
+      });
+      const inspectionGate = new Promise((resolve) => {
+        releaseInspection = resolve;
+      });
+      const appendPromise = appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: staleResume.updatedAt,
+        expectedFingerprint: staleResume.attempts[0].afterFingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'failure' },
+        inspectWorktree: async () => {
+          inspectionStarted();
+          await inspectionGate;
+          return inspectWorktree();
+        },
+      });
+      await inspectionStartedPromise;
+      let miraStarted;
+      let releaseMira;
+      const miraStartedPromise = new Promise((resolve) => {
+        miraStarted = resolve;
+      });
+      const miraGate = new Promise((resolve) => {
+        releaseMira = resolve;
+      });
+      const resumePromise = superviseWorker(
+        base({
+          handoffPath,
+          resume: staleResume,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          authorizeHandoff: authorizeMira,
+          workers: {
+            peon: worker('peon', async () => {
+              throw new Error('Peon already ran');
+            }),
+            mira: worker('mira', async () => {
+              const active = await readHandoff(handoffPath);
+              assert.equal(active.status, 'running');
+              assert.equal(active.mentorFeedback.length, 1);
+              miraStarted();
+              await miraGate;
+              return { status: 'completed' };
+            }),
+          },
+        }),
+      );
+      releaseInspection();
+      await appendPromise;
+      await miraStartedPromise;
+      const active = await readHandoff(handoffPath);
+      await assert.rejects(
+        appendMentorFeedback({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          attemptNumber: 1,
+          expectedUpdatedAt: active.updatedAt,
+          expectedFingerprint: staleResume.attempts[0].afterFingerprint,
+          level: 'diagnostic',
+          evidence: { kind: 'failure' },
+          inspectWorktree,
+        }),
+        /active/,
+      );
+      releaseMira();
+      const resumed = await resumePromise;
+      assert.equal(resumed.status, 'complete');
+      assert.equal(resumed.handoff.mentorFeedback.length, 1);
+      assert.equal((await readHandoff(handoffPath)).mentorFeedback.length, 1);
+    },
+  );
+
+  it('rejects a stale aborted supervisor while another resume owns the run', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-owner-race.json');
+    const inspectWorktree = async () => ({
+      fingerprint: 'unchanged',
+      changes: [],
+    });
+    await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { code: 'FormatError', message: 'Missing field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run yet');
+          }),
+        },
+      }),
+    );
+    const paused = await readHandoff(handoffPath);
+    let releaseMira;
+    let startedMira;
+    const started = new Promise((resolve) => {
+      startedMira = resolve;
+    });
+    const gate = new Promise((resolve) => {
+      releaseMira = resolve;
+    });
+    const workers = {
+      peon: worker('peon', async () => {
+        throw new Error('Peon already ran');
+      }),
+      mira: worker('mira', async () => {
+        startedMira();
+        await gate;
+        return { status: 'completed' };
+      }),
+    };
+    const activeRun = superviseWorker(
+      base({
+        handoffPath,
+        resume: structuredClone(paused),
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        authorizeHandoff: authorizeMira,
+        workers,
+      }),
+    );
+    await started;
+    try {
+      const active = await readHandoff(handoffPath);
+      assert.equal(active.status, 'running');
+      const controller = new AbortController();
+      controller.abort();
+      await assert.rejects(
+        superviseWorker(
+          base({
+            handoffPath,
+            resume: structuredClone(paused),
+            limits: { maxAttemptsPerWorker: 1 },
+            inspectWorktree,
+            authorizeHandoff: authorizeMira,
+            workers,
+            signal: controller.signal,
+          }),
+        ),
+        /stale supervisor|Another supervisor/,
+      );
+      assert.deepEqual(await readHandoff(handoffPath), active);
+      await assert.rejects(
+        appendMentorFeedback({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          attemptNumber: 1,
+          expectedUpdatedAt: active.updatedAt,
+          expectedFingerprint: paused.attempts[0].afterFingerprint,
+          level: 'diagnostic',
+          evidence: { kind: 'failure' },
+          inspectWorktree,
+        }),
+        /active/,
+      );
+    } finally {
+      releaseMira();
+    }
+    assert.equal((await activeRun).status, 'complete');
+  });
+
+  it('claims a legacy stopped handoff once before resuming', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-legacy-claim.json');
+    await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        workers: {
+          peon: worker('peon', async () => ({ status: 'failed' })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run yet');
+          }),
+        },
+      }),
+    );
+    const legacy = await readHandoff(handoffPath);
+    delete legacy.supervisorRevision;
+    delete legacy.executionOwner;
+    await writeFile(handoffPath, JSON.stringify(legacy));
+    const resumed = await superviseWorker(
+      base({
+        handoffPath,
+        resume: structuredClone(legacy),
+        limits: { maxAttemptsPerWorker: 1 },
+        authorizeHandoff: authorizeMira,
+        workers: {
+          peon: worker('peon', async () => {
+            throw new Error('Peon already ran');
+          }),
+          mira: worker('mira', async () => ({ status: 'completed' })),
+        },
+      }),
+    );
+    assert.equal(resumed.status, 'complete');
+    const persisted = await readHandoff(handoffPath);
+    assert.ok(persisted.supervisorRevision > 0);
+    assert.match(persisted.executionOwner, /^[a-f0-9-]{36}$/);
+    await assert.rejects(
+      superviseWorker(
+        base({
+          handoffPath,
+          resume: legacy,
+          limits: { maxAttemptsPerWorker: 1 },
+        }),
+      ),
+      /stale supervisor|not resumable/,
+    );
+  });
+
+  it('keeps production verification summaries in bounded correction feedback', async () => {
+    for (const [name, summary, expected] of [
+      [
+        'ordinary',
+        'Vitest found a missing loading state.',
+        /missing loading state/,
+      ],
+      [
+        'sensitive',
+        'Bearer top-secret-value failed checks.',
+        /Bearer \[REDACTED\]/,
+      ],
+      ['long', `Lint: ${'x'.repeat(1_000)}`, /Lint:/],
+      ['multibyte', `Vitest: ${'é'.repeat(500)}`, /Vitest:/],
+    ]) {
+      const handoffPath = join(temporaryRoot, `mentor-summary-${name}.json`);
+      const inspectWorktree = async () => ({ fingerprint: name, changes: [] });
+      const verify = async () => [
+        { name: 'ui-molecules', passed: false, summary },
+      ];
+      verify.cancel = async () => true;
+      await superviseWorker(
+        base({
+          handoffPath,
+          inspectWorktree,
+          verify,
+          limits: { maxAttemptsPerWorker: 1 },
+        }),
+      );
+      const handoff = await readHandoff(handoffPath);
+      const event = await appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: handoff.updatedAt,
+        expectedFingerprint: handoff.attempts[0].afterFingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'verification', index: 0 },
+        inspectWorktree,
+      });
+      assert.match(event.diagnostic, expected);
+      assert.ok(Buffer.byteLength(event.diagnostic, 'utf8') <= 600);
+      assert.ok(!event.diagnostic.includes('top-secret-value'));
+      assert.equal(event.evidence.kind, 'verification');
+      assert.equal(event.evidence.index, 0);
+      assert.match(event.evidence.fingerprint, /^[a-f0-9]{64}$/);
+      const packet = await correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        inspectWorktree,
+      });
+      assert.equal(packet.diagnostic, event.diagnostic);
+      assert.ok(Buffer.byteLength(packet.diagnostic, 'utf8') <= 600);
+    }
+  });
+
+  it('records the stopped fingerprint after verification changes the worktree', async () => {
+    const handoffPath = join(
+      temporaryRoot,
+      'mentor-verification-fingerprint.json',
+    );
+    let fingerprint = 'worker-output';
+    const inspectWorktree = async () => ({
+      fingerprint,
+      changes: ['libs/ui/molecules/agent-status.ts'],
+    });
+    const verify = async () => {
+      fingerprint = 'verification-output';
+      return [
+        { name: 'ui-molecules', passed: false, summary: 'Vitest failed.' },
+      ];
+    };
+    verify.cancel = async () => true;
+    await superviseWorker(
+      base({
+        handoffPath,
+        inspectWorktree,
+        verify,
+        limits: { maxAttemptsPerWorker: 1 },
+      }),
+    );
+    const handoff = await readHandoff(handoffPath);
+    const attempt = handoff.attempts[0];
+    assert.notEqual(attempt.afterFingerprint, attempt.workerOutputFingerprint);
+    const event = await appendMentorFeedback({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: handoff.updatedAt,
+      expectedFingerprint: attempt.afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'verification', index: 0 },
+      inspectWorktree,
+    });
+    assert.match(
+      (
+        await correctionFeedbackFromHandoff({
+          handoffPath,
+          issueNumber: task.issueNumber,
+          inspectWorktree,
+        })
+      ).diagnostic,
+      /Vitest failed/,
+    );
+    fingerprint = 'unauthorized-change';
+    const updated = await readHandoff(handoffPath);
+    await assert.rejects(
+      appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: updated.updatedAt,
+        expectedFingerprint: event.fingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'verification', index: 0 },
+        inspectWorktree,
+      }),
+      /Worktree changed/,
+    );
+  });
+
+  it('extracts UTF-8-bounded diagnostics without losing their evidence link', async () => {
+    for (const [name, message] of [
+      ['ascii', 'x'.repeat(1_200)],
+      ['multibyte', 'é'.repeat(500)],
+    ]) {
+      const handoffPath = join(temporaryRoot, `mentor-long-${name}.json`);
+      const inspectWorktree = async () => ({ fingerprint: name, changes: [] });
+      const result = await superviseWorker(
+        base({
+          handoffPath,
+          limits: { maxAttemptsPerWorker: 1 },
+          inspectWorktree,
+          workers: {
+            peon: worker('peon', async () => ({
+              status: 'failed',
+              failure: { code: 'LongDiagnostic', message },
+            })),
+            mira: worker('mira', async () => {
+              throw new Error('Mira must not run');
+            }),
+          },
+        }),
+      );
+      const handoff = await readHandoff(handoffPath);
+      assert.ok(
+        Buffer.byteLength(handoff.attempts[0].failure.message, 'utf8') > 600,
+      );
+      const event = await appendMentorFeedback({
+        handoffPath,
+        issueNumber: task.issueNumber,
+        attemptNumber: 1,
+        expectedUpdatedAt: handoff.updatedAt,
+        expectedFingerprint: result.handoff.attempts[0].afterFingerprint,
+        level: 'diagnostic',
+        evidence: { kind: 'failure' },
+        inspectWorktree,
+      });
+      assert.ok(Buffer.byteLength(event.diagnostic, 'utf8') <= 600);
+      assert.ok(event.diagnostic.endsWith('…'));
+      assert.equal(
+        event.evidence.fingerprint,
+        handoff.attempts[0].failure.fingerprint,
+      );
+      assert.equal(event.evidence.kind, 'failure');
+    }
+  });
   it('persists sanitized tool outcomes under the four-request supervisor ceiling', async () => {
     const pre = {
       phase: 'pre',

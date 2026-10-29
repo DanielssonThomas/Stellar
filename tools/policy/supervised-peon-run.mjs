@@ -10,12 +10,17 @@ import {
   getTrustedProtectedPathsForContext,
   inspectHermesSystemPromptGuidance,
   inspectRestrictedWorkspace,
+  trustedIndexRecords,
   readRestrictedWorkspaceFile,
   runRestrictedVerification,
   verifyPinnedWorkerImageCompatibility,
 } from './run-restricted-worker.mjs';
 import { validateFreshIssue } from './update-issue.mjs';
-import { defaultLimits, superviseWorker } from './supervise-worker.mjs';
+import {
+  defaultLimits,
+  superviseWorker,
+  rejectMutableCorrectionExecution,
+} from './supervise-worker.mjs';
 import {
   resolvePeonHermesProfile,
   resolvePeonHermesWorkflow,
@@ -81,19 +86,50 @@ function inspectClaimedWorktree(repositoryRoot, claim) {
   if (!registered)
     throw new Error('Issue claim does not identify its registered worktree.');
   const read = (args) => {
-    const result = spawnSync('git', ['-C', claim.worktreePath, ...args], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
+    const result = spawnSync(
+      'git',
+      [
+        '--no-optional-locks',
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'core.untrackedCache=false',
+        '-c',
+        'core.ignorestat=false',
+        '-c',
+        'core.trustctime=true',
+        '-c',
+        'core.checkstat=default',
+        '-C',
+        claim.worktreePath,
+        ...args,
+      ],
+      {
+        cwd: repositoryRoot,
+        windowsHide: true,
+        timeout: 10_000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
     if (result.error || result.status !== 0)
       throw new Error('Could not inspect the claimed issue worktree.');
-    return (result.stdout ?? '').trim();
+    return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
   };
-  const root = read(['rev-parse', '--show-toplevel']);
-  const branch = read(['branch', '--show-current']);
-  const headRevision = read(['rev-parse', 'HEAD']);
+  const root = read(['rev-parse', '--show-toplevel']).trim();
+  const branch = read(['branch', '--show-current']).trim();
+  const headRevision = read(['rev-parse', 'HEAD']).trim();
+  const index = trustedIndexRecords(
+    read(['ls-files', '--cached', '--stage', '-v', '-z']),
+  );
   const status = read(['status', '--porcelain=v1', '--untracked-files=all']);
+  if (
+    JSON.stringify(
+      trustedIndexRecords(
+        read(['ls-files', '--cached', '--stage', '-v', '-z']),
+      ),
+    ) !== JSON.stringify(index)
+  )
+    throw new Error('Claimed worktree index changed during admission.');
   if (
     path.resolve(root).toLowerCase() !==
       path.resolve(claim.worktreePath).toLowerCase() ||
@@ -221,7 +257,14 @@ function validateVerificationCommands(commands) {
     );
 }
 
-export async function runSupervisedPeonIssue({
+export async function runSupervisedPeonIssue(options) {
+  const feedback = options.contextPlan?.mentorFeedback;
+  if (feedback !== undefined && feedback !== null)
+    rejectMutableCorrectionExecution();
+  return (await prepareSupervisedPeonIssue(options))();
+}
+
+async function prepareSupervisedPeonIssue({
   issueNumber,
   sessionId,
   image = trustedPeonWorkerImage,
@@ -494,27 +537,31 @@ export async function runSupervisedPeonIssue({
     return cancelVerification(activeVerification);
   };
 
-  return runSupervisor({
-    task,
-    workers: { peon: worker, mira },
-    inspectWorktree: async (currentTask) => {
-      if (
-        currentTask.issueNumber !== task.issueNumber ||
-        currentTask.branch !== task.branch ||
-        currentTask.worktreePath !== task.worktreePath
-      )
-        throw new Error(
-          'Supervisor task differs from the validated issue claim.',
-        );
-      return inspectWorktree(number, task.branch, targetRevision);
-    },
-    verify,
-    handoffPath,
-    limits: {
-      ...defaultLimits,
-      maxAttemptsPerWorker: 1,
-      maxModelTokensPerWorker: modelTokenLimitForWorkflow(task.hermesWorkflow),
-    },
-    signal,
-  });
+  return async () => {
+    return runSupervisor({
+      task,
+      workers: { peon: worker, mira },
+      inspectWorktree: async (currentTask) => {
+        if (
+          currentTask.issueNumber !== task.issueNumber ||
+          currentTask.branch !== task.branch ||
+          currentTask.worktreePath !== task.worktreePath
+        )
+          throw new Error(
+            'Supervisor task differs from the validated issue claim.',
+          );
+        return inspectWorktree(number, task.branch, targetRevision);
+      },
+      verify,
+      handoffPath,
+      limits: {
+        ...defaultLimits,
+        maxAttemptsPerWorker: 1,
+        maxModelTokensPerWorker: modelTokenLimitForWorkflow(
+          task.hermesWorkflow,
+        ),
+      },
+      signal,
+    });
+  };
 }

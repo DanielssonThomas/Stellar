@@ -5,13 +5,23 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readHandoff, superviseWorker } from './supervise-worker.mjs';
+import {
+  readHandoff,
+  superviseWorker,
+  appendMentorFeedback,
+  correctionFeedbackFromHandoff,
+  withCurrentCorrectionFeedback,
+} from './supervise-worker.mjs';
 import {
   runSupervisedPeonIssue,
   trustedPeonWorkerImage,
   validateLivePeonAssignment,
 } from './supervised-peon-run.mjs';
-import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
+import {
+  createPeonWorkerAdapter,
+  buildHermesTaskInput,
+} from './run-restricted-worker.mjs';
+import { buildMinimalPeonTaskContextManifest } from './peon-task-context.mjs';
 
 const image = trustedPeonWorkerImage;
 const sessionId = 'peon-issue-50-controlled-trial';
@@ -164,6 +174,155 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
   assert.equal(
     afterVerification[1].name,
     'authorized-source-changes-after-verification',
+  );
+
+  // Real persisted source provenance through the production entry point. All
+  // external assignment/worker operations remain offline fixtures.
+  const sourcePath = join(root, 'correction-source.json');
+  let sourceFingerprint = 'stable';
+  const inspectSource = async () => ({
+    fingerprint: sourceFingerprint,
+    changes: [],
+  });
+  const sourceTask = validateLivePeonAssignment({
+    issue: selectedIssue,
+    claim: claim({ worktreePath: repositoryRoot }),
+    sessionId,
+    image,
+  });
+  await superviseWorker({
+    task: sourceTask,
+    handoffPath: sourcePath,
+    inspectWorktree: inspectSource,
+    verify: async () => [{ passed: true }],
+    limits: { maxAttemptsPerWorker: 1 },
+    workers: {
+      peon: {
+        id: 'peon',
+        run: async () => ({
+          status: 'failed',
+          failure: { message: 'Required field missing.' },
+        }),
+      },
+      mira: {
+        id: 'mira',
+        run: async () => {
+          throw new Error('No Mira');
+        },
+      },
+    },
+  });
+  const stopped = await readHandoff(sourcePath);
+  await appendMentorFeedback({
+    handoffPath: sourcePath,
+    issueNumber: 50,
+    attemptNumber: 1,
+    expectedUpdatedAt: stopped.updatedAt,
+    expectedFingerprint: stopped.attempts[0].afterFingerprint,
+    level: 'diagnostic',
+    evidence: { kind: 'failure' },
+    inspectWorktree: inspectSource,
+  });
+  const feedback = await correctionFeedbackFromHandoff({
+    handoffPath: sourcePath,
+    issueNumber: 50,
+    inspectWorktree: inspectSource,
+  });
+  // Corrections are now intentionally preview-only. Ordinary minimal coding
+  // above still reaches its authorized adapter and verifier.
+  const before = await readFile(sourcePath, 'utf8');
+  const forbidden = () => {
+    throw new Error('Execution side effect must not occur');
+  };
+  const correctionOptions = {
+    ...options,
+    contextPlan: { ...options.contextPlan, mentorFeedback: feedback },
+    loadAssignment: forbidden,
+    reserveMinimalAttempt: forbidden,
+    createWorkerAdapter: forbidden,
+    runSupervisor: forbidden,
+    runVerification: forbidden,
+  };
+  for (const value of [feedback, structuredClone(feedback), {}, false]) {
+    const abort = new AbortController();
+    for (const cancelled of [false, true]) {
+      if (cancelled) abort.abort();
+      await assert.rejects(
+        runSupervisedPeonIssue({
+          ...correctionOptions,
+          signal: abort.signal,
+          contextPlan: { ...options.contextPlan, mentorFeedback: value },
+        }),
+        /correction execution is unavailable/,
+      );
+    }
+  }
+  const destination = join(root, 'correction-destination.json');
+  const competing = await Promise.allSettled(
+    Array.from({ length: 3 }, () => runSupervisedPeonIssue(correctionOptions)),
+  );
+  assert.ok(
+    competing.every(
+      (outcome) =>
+        outcome.status === 'rejected' &&
+        /correction execution is unavailable/.test(outcome.reason.message),
+    ),
+  );
+  for (let retry = 0; retry < 2; retry++) {
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        feedback,
+        { issueNumber: 50, destinationHandoffPath: destination },
+        async (assertCurrent, consumeExecution) => {
+          await assertCurrent(sourceTask);
+          await consumeExecution(sourceTask, await inspectSource());
+        },
+      ),
+      /correction execution is unavailable/,
+    );
+  }
+  assert.equal(await readFile(sourcePath, 'utf8'), before);
+  await assert.rejects(readFile(destination), /ENOENT/);
+  const preview = await withCurrentCorrectionFeedback(
+    feedback,
+    { issueNumber: 50 },
+    () =>
+      buildMinimalPeonTaskContextManifest({
+        issue: selectedIssue,
+        task: sourceTask,
+        worktreePath: repositoryRoot,
+        contextPlan: { ...options.contextPlan, mentorFeedback: feedback },
+        workspaceReader: (file) => options.readWorkspaceFile(50, file),
+        protectedPaths: [],
+      }),
+  );
+  assert.match(
+    preview.manifest.worker.mentorFeedback.diagnostic,
+    /Required field/,
+  );
+  assert.throws(
+    () => buildHermesTaskInput(sourceTask, preview),
+    /correction execution is unavailable/,
+  );
+  let invoked = false;
+  const adapter = createPeonWorkerAdapter({
+    image,
+    hermesProfile: sourceTask.hermesProfile,
+    preparedContext: structuredClone(preview),
+    runAttempt: async () => {
+      invoked = true;
+    },
+  });
+  await assert.rejects(
+    adapter.run({ task: sourceTask, attemptNumber: 1, limits: {}, budget: {} }),
+    /correction execution is unavailable/,
+  );
+  assert.equal(invoked, false);
+  assert.equal(await adapter.cancel('interrupted'), true);
+  sourceFingerprint = 'changed-after-preview';
+  await assert.rejects(
+    withCurrentCorrectionFeedback(feedback, { issueNumber: 50 }, () => preview),
+    /source changed/,
   );
 });
 
@@ -481,7 +640,7 @@ test('preflights a selected assignment twice and passes only an in-memory bounde
   assert.equal(adapterAttempt.hermesProfile, 'narrow-coding');
   assert.equal(adapterAttempt.maxForwardedRequests, 2);
   assert.match(adapterAttempt.taskInput, /TRUSTED_TASK_CONTEXT_JSON/);
-  assert.equal(workspaceInspections, 5);
+  assert.equal(workspaceInspections, 6);
   assert.equal(toolResultObserved, true);
   assert.equal(verificationCalls, 1);
 });

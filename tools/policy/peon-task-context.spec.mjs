@@ -6,6 +6,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
+  appendMentorFeedback,
+  correctionFeedbackFromHandoff,
+  readHandoff,
+  superviseWorker,
+  withCurrentCorrectionFeedback,
+} from './supervise-worker.mjs';
+import {
   buildPeonTaskContextManifest,
   buildMinimalPeonTaskContextManifest,
 } from './peon-task-context.mjs';
@@ -96,7 +103,7 @@ const actualProtectedPaths = codeowners.patterns.map(
 );
 test.after(() => rm(root, { recursive: true, force: true }));
 
-test('minimal coding brief omits governance and permits only existing scoped directories', () => {
+test('minimal coding brief omits governance and permits only existing scoped directories', async () => {
   const selectedTask = { issueNumber: 50, hermesWorkflow: 'minimal-coding' };
   const plan = {
     skills: [],
@@ -117,6 +124,118 @@ test('minimal coding brief omits governance and permits only existing scoped dir
     /owner|targetBranch|claim|issue-workflow|implement-issue/,
   );
   assert.deepEqual(prepared.manifest.writablePaths, ['src', 'spec']);
+  const handoffPath = path.join(root, 'context-feedback.json');
+  const inspectWorktree = async () => ({
+    fingerprint: 'context-source',
+    changes: [],
+  });
+  await superviseWorker({
+    task: {
+      ...selectedTask,
+      owner: 'worker:peon',
+      targetBranch: 'develop',
+      branch: 'issue/50-context',
+      worktreePath: worktree,
+      hermesProfile: 'narrow-coding',
+    },
+    handoffPath,
+    inspectWorktree,
+    limits: { maxAttemptsPerWorker: 1 },
+    workers: {
+      peon: {
+        id: 'peon',
+        run: async () => ({
+          status: 'failed',
+          failure: { message: 'The required report field is missing.' },
+        }),
+      },
+      mira: {
+        id: 'mira',
+        run: async () => {
+          throw new Error('No Mira');
+        },
+      },
+    },
+    verify: async () => [{ passed: true }],
+  });
+  const stopped = await readHandoff(handoffPath);
+  const guidance = `${'token=a '.repeat(30)}${'é'.repeat(45)}`;
+  const stored = await appendMentorFeedback({
+    handoffPath,
+    issueNumber: 50,
+    attemptNumber: 1,
+    expectedUpdatedAt: stopped.updatedAt,
+    expectedFingerprint: stopped.attempts[0].afterFingerprint,
+    level: 'conceptual',
+    evidence: { kind: 'failure' },
+    guidance,
+    inspectWorktree,
+  });
+  assert.equal(Buffer.byteLength(stored.guidance, 'utf8'), 600);
+  assert.doesNotMatch(stored.guidance, /token=a/);
+  assert.equal(
+    (await readHandoff(handoffPath)).mentorFeedback[0].guidance,
+    stored.guidance,
+  );
+  const mentorFeedback = await correctionFeedbackFromHandoff({
+    handoffPath,
+    issueNumber: 50,
+    inspectWorktree,
+  });
+  const buildCorrection = () =>
+    buildMinimalPeonTaskContextManifest({
+      issue,
+      task: selectedTask,
+      worktreePath: worktree,
+      contextPlan: {
+        ...plan,
+        mentorFeedback,
+      },
+    });
+  assert.throws(buildCorrection, /current trusted preparation/);
+  const correction = await withCurrentCorrectionFeedback(
+    mentorFeedback,
+    { issueNumber: 50 },
+    buildCorrection,
+  );
+  assert.match(
+    correction.manifest.worker.mentorFeedback.diagnostic,
+    /required report field/,
+  );
+  assert.equal(
+    correction.manifest.worker.mentorFeedback.guidance,
+    stored.guidance,
+  );
+  assert.equal(
+    Buffer.byteLength(
+      correction.manifest.worker.mentorFeedback.guidance,
+      'utf8',
+    ),
+    600,
+  );
+  assert.throws(
+    () => buildHermesTaskInput(selectedTask, correction),
+    /correction execution is unavailable/,
+  );
+  assert.throws(
+    () =>
+      buildMinimalPeonTaskContextManifest({
+        issue,
+        task: selectedTask,
+        worktreePath: worktree,
+        contextPlan: {
+          ...plan,
+          mentorFeedback: {
+            issueNumber: 51,
+            attemptNumber: 1,
+            fingerprint: 'a'.repeat(64),
+            level: 'diagnostic',
+            diagnostic: 'Wrong issue.',
+          },
+        },
+      }),
+    /current trusted preparation/,
+  );
   assert.throws(
     () =>
       buildMinimalPeonTaskContextManifest({
