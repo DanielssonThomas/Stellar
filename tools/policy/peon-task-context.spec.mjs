@@ -159,16 +159,24 @@ test('minimal coding brief omits governance and permits only existing scoped dir
     verify: async () => [{ passed: true }],
   });
   const stopped = await readHandoff(handoffPath);
-  await appendMentorFeedback({
+  const guidance = `${'token=a '.repeat(30)}${'é'.repeat(45)}`;
+  const stored = await appendMentorFeedback({
     handoffPath,
     issueNumber: 50,
     attemptNumber: 1,
     expectedUpdatedAt: stopped.updatedAt,
     expectedFingerprint: stopped.attempts[0].afterFingerprint,
-    level: 'diagnostic',
+    level: 'conceptual',
     evidence: { kind: 'failure' },
+    guidance,
     inspectWorktree,
   });
+  assert.equal(Buffer.byteLength(stored.guidance, 'utf8'), 600);
+  assert.doesNotMatch(stored.guidance, /token=a/);
+  assert.equal(
+    (await readHandoff(handoffPath)).mentorFeedback[0].guidance,
+    stored.guidance,
+  );
   const mentorFeedback = await correctionFeedbackFromHandoff({
     handoffPath,
     issueNumber: 50,
@@ -193,6 +201,17 @@ test('minimal coding brief omits governance and permits only existing scoped dir
   assert.match(
     correction.manifest.worker.mentorFeedback.diagnostic,
     /required report field/,
+  );
+  assert.equal(
+    correction.manifest.worker.mentorFeedback.guidance,
+    stored.guidance,
+  );
+  assert.equal(
+    Buffer.byteLength(
+      correction.manifest.worker.mentorFeedback.guidance,
+      'utf8',
+    ),
+    600,
   );
   assert.throws(
     () => buildHermesTaskInput(selectedTask, correction),

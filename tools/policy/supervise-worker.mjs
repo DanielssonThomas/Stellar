@@ -459,7 +459,10 @@ export async function appendMentorFeedback({
       /[\x00-\x08\x0b-\x1f]/.test(value)
     )
       throw new Error(`${label} must be short plain text.`);
-    return redactEvidence(value.trim().replace(/\s+/g, ' '));
+    const sanitized = redactEvidence(value.trim().replace(/\s+/g, ' '));
+    if (!sanitized || Buffer.byteLength(sanitized, 'utf8') > limit)
+      throw new Error(`${label} must be short plain text.`);
+    return sanitized;
   };
   const safeGuidance = bounded(guidance, 600, 'Guidance');
   const safeProposal = bounded(lessonProposal, 1_000, 'Lesson proposal');

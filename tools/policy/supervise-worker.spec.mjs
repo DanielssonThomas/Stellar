@@ -475,6 +475,101 @@ describe('bounded worker supervision', () => {
     );
   });
 
+  it('bounds redacted mentor text by its persisted UTF-8 bytes', async () => {
+    const handoffPath = join(temporaryRoot, 'mentor-redacted-bounds.json');
+    const inspectWorktree = async () => ({
+      fingerprint: 'unchanged',
+      changes: [],
+    });
+    await superviseWorker(
+      base({
+        handoffPath,
+        limits: { maxAttemptsPerWorker: 1 },
+        inspectWorktree,
+        workers: {
+          peon: worker('peon', async () => ({
+            status: 'failed',
+            failure: { code: 'FormatError', message: 'Missing report field.' },
+          })),
+          mira: worker('mira', async () => {
+            throw new Error('Mira must not run');
+          }),
+        },
+      }),
+    );
+    const stopped = await readHandoff(handoffPath);
+    const feedback = {
+      handoffPath,
+      issueNumber: task.issueNumber,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'conceptual',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    };
+    const before = await readFile(handoffPath, 'utf8');
+    for (const values of [
+      { guidance: 'token=a '.repeat(70) },
+      { guidance: 'Use the schema.', lessonProposal: 'token=a '.repeat(70) },
+      { guidance: 'é'.repeat(301) },
+      { guidance: 'Use the schema.', lessonProposal: 'é'.repeat(501) },
+    ]) {
+      await assert.rejects(
+        appendMentorFeedback({ ...feedback, ...values }),
+        /short plain text/,
+      );
+      assert.equal(await readFile(handoffPath, 'utf8'), before);
+    }
+
+    const guidance = `${'token=a '.repeat(30)}${'é'.repeat(45)}`;
+    const proposal = `${'token=a '.repeat(50)}${'é'.repeat(75)}`;
+    const expectedGuidance = `${'token=[REDACTED] '.repeat(30)}${'é'.repeat(45)}`;
+    const expectedProposal = `${'token=[REDACTED] '.repeat(50)}${'é'.repeat(75)}`;
+    assert.equal(Buffer.byteLength(expectedGuidance, 'utf8'), 600);
+    assert.equal(Buffer.byteLength(expectedProposal, 'utf8'), 1_000);
+    for (const values of [
+      { guidance: `${guidance}x` },
+      { guidance, lessonProposal: `${proposal}x` },
+    ]) {
+      await assert.rejects(
+        appendMentorFeedback({ ...feedback, ...values }),
+        /short plain text/,
+      );
+      assert.equal(await readFile(handoffPath, 'utf8'), before);
+    }
+
+    const event = await appendMentorFeedback({
+      ...feedback,
+      guidance,
+      lessonProposal: proposal,
+    });
+    assert.equal(event.guidance, expectedGuidance);
+    assert.equal(event.lessonProposal.text, expectedProposal);
+    const persisted = await readHandoff(handoffPath);
+    assert.equal(persisted.mentorFeedback[0].guidance, expectedGuidance);
+    assert.equal(
+      persisted.mentorFeedback[0].lessonProposal.text,
+      expectedProposal,
+    );
+    const preview = await correctionFeedbackFromHandoff({
+      handoffPath,
+      issueNumber: task.issueNumber,
+      inspectWorktree,
+    });
+    assert.equal(preview.guidance, expectedGuidance);
+    assert.ok(Buffer.byteLength(preview.guidance, 'utf8') <= 600);
+
+    const ordinary = await appendMentorFeedback({
+      ...feedback,
+      expectedUpdatedAt: persisted.updatedAt,
+      guidance: '  Check   the report schema.  ',
+      lessonProposal: '  Check  required fields.  ',
+    });
+    assert.equal(ordinary.guidance, 'Check the report schema.');
+    assert.equal(ordinary.lessonProposal.text, 'Check required fields.');
+  });
+
   it(
     'preserves accepted feedback when a stale resume starts Mira',
     { timeout: 3_000 },
