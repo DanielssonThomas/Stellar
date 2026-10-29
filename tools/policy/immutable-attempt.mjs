@@ -84,29 +84,84 @@ export function newImmutableAttempt({
     protectedPaths: paths,
     volumeName: `stellar-immutable-${issueNumber}-${id}`,
     status: 'prepared',
+    volumeIdentity: null,
+    workerContainerId: null,
+    meterContainerId: null,
+    verifierContainerId: null,
     candidateDigest: null,
+    candidatePath: null,
   });
 }
 
-export function advanceImmutableAttempt(
-  record,
-  next,
-  { candidateDigest } = {},
-) {
+export function advanceImmutableAttempt(record, next, options = {}) {
   if (
     record?.schema !== attemptSchema ||
     !transitions[record.status] ||
     !transitions[record.status].includes(next)
   )
     reject('Invalid immutable attempt transition.');
-  if (next === 'collected' && !sha256.test(candidateDigest ?? ''))
-    reject('Collection requires a verified candidate digest.');
-  if (candidateDigest !== undefined && next !== 'collected')
-    reject('Candidate digest can only be set during collection.');
+  if (
+    next === 'volume-initialized' &&
+    !/^[1-9][0-9]*:[1-9][0-9]*$/.test(options.volumeIdentity ?? '')
+  )
+    reject('Volume initialization requires trusted device and inode identity.');
+  if (
+    next === 'running' &&
+    (!sha256.test(options.workerContainerId ?? '') ||
+      !sha256.test(options.meterContainerId ?? ''))
+  )
+    reject('Execution requires exact worker and meter container IDs.');
+  if (next === 'stopped' && options.terminationConfirmed !== true)
+    reject('Stopped state requires confirmed container termination.');
+  if (
+    next === 'collected' &&
+    (!sha256.test(options.candidateDigest ?? '') ||
+      !/^\/var\/lib\/stellar-immutable\/[a-zA-Z0-9_-]+$/.test(
+        options.candidatePath ?? '',
+      ))
+  )
+    reject('Collection requires a sealed candidate digest and path.');
+  if (
+    next === 'verified' &&
+    (!sha256.test(options.verifierContainerId ?? '') ||
+      options.verificationPassed !== true ||
+      options.candidateDigest !== record.candidateDigest)
+  )
+    reject(
+      'Verification requires a confirmed exact candidate and verifier ID.',
+    );
+  const allowedOptions = {
+    'volume-initialized': ['volumeIdentity'],
+    running: ['workerContainerId', 'meterContainerId'],
+    stopped: ['terminationConfirmed'],
+    collected: ['candidateDigest', 'candidatePath'],
+    verified: ['verifierContainerId', 'verificationPassed', 'candidateDigest'],
+    quarantined: [],
+    cleaned: [],
+  }[next];
+  if (Object.keys(options).some((key) => !allowedOptions.includes(key)))
+    reject('Attempt transition contains unexpected identity metadata.');
   return Object.freeze({
     ...record,
     status: next,
-    ...(next === 'collected' ? { candidateDigest } : {}),
+    ...(next === 'volume-initialized'
+      ? { volumeIdentity: options.volumeIdentity }
+      : {}),
+    ...(next === 'running'
+      ? {
+          workerContainerId: options.workerContainerId,
+          meterContainerId: options.meterContainerId,
+        }
+      : {}),
+    ...(next === 'collected'
+      ? {
+          candidateDigest: options.candidateDigest,
+          candidatePath: options.candidatePath,
+        }
+      : {}),
+    ...(next === 'verified'
+      ? { verifierContainerId: options.verifierContainerId }
+      : {}),
   });
 }
 

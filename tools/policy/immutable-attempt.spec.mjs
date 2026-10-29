@@ -23,7 +23,9 @@ const identity = {
 
 test('private mounts bind only sealed source and attempt volume', () => {
   const prepared = newImmutableAttempt(identity);
-  const initialized = advanceImmutableAttempt(prepared, 'volume-initialized');
+  const initialized = advanceImmutableAttempt(prepared, 'volume-initialized', {
+    volumeIdentity: '1:2',
+  });
   const mounts = buildPrivateWorkspaceMounts(initialized);
   assert.equal(mounts.length, 4);
   assert.ok(mounts.every((item) => !item.includes('/home/peon/workspaces')));
@@ -65,13 +67,26 @@ test('attempt identity rejects Peon, traversal, malformed source and duplicate t
 
 test('collection requires digest and failure remains quarantined without publication', () => {
   let record = newImmutableAttempt(identity);
-  for (const state of ['volume-initialized', 'running', 'stopped'])
-    record = advanceImmutableAttempt(record, state);
+  record = advanceImmutableAttempt(record, 'volume-initialized', {
+    volumeIdentity: '1:2',
+  });
+  record = advanceImmutableAttempt(record, 'running', {
+    workerContainerId: 'c'.repeat(64),
+    meterContainerId: 'e'.repeat(64),
+  });
+  record = advanceImmutableAttempt(record, 'stopped', {
+    terminationConfirmed: true,
+  });
   assert.throws(() => advanceImmutableAttempt(record, 'collected'));
   record = advanceImmutableAttempt(record, 'collected', {
     candidateDigest: 'c'.repeat(64),
+    candidatePath: '/var/lib/stellar-immutable/candidate-140',
   });
-  record = advanceImmutableAttempt(record, 'verified');
+  record = advanceImmutableAttempt(record, 'verified', {
+    verifierContainerId: 'f'.repeat(64),
+    verificationPassed: true,
+    candidateDigest: 'c'.repeat(64),
+  });
   assert.throws(rejectImmutablePublication, /disabled/);
   record = advanceImmutableAttempt(record, 'quarantined');
   assert.equal(advanceImmutableAttempt(record, 'cleaned').status, 'cleaned');

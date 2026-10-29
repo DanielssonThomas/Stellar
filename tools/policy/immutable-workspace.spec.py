@@ -84,6 +84,50 @@ class ImmutableWorkspaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             WORKSPACE.git_source(str(self.repo), self.revision)
 
+    def test_explicit_dirty_untracked_and_ignored_inputs_are_digest_bound(self):
+        source = self.repo / 'src' / 'file.txt'
+        source.write_text('dirty')
+        extra = self.repo / 'src' / 'new.txt'
+        extra.write_text('new')
+        (self.repo / '.gitignore').write_text('cache/\n')
+        # The ignore rule itself is a dirty untracked input.
+        ignored = self.repo / 'cache' / 'needed.txt'
+        ignored.parent.mkdir()
+        ignored.write_text('dependency')
+        changes = [
+            {'path': 'src/file.txt', 'sha256': WORKSPACE.digest(b'dirty'),
+             'executable': False, 'ignored': False},
+            {'path': 'src/new.txt', 'sha256': WORKSPACE.digest(b'new'),
+             'executable': False, 'ignored': False},
+            {'path': '.gitignore', 'sha256': WORKSPACE.digest(b'cache/\n'),
+             'executable': False, 'ignored': False},
+            {'path': 'cache/needed.txt', 'sha256': WORKSPACE.digest(b'dependency'),
+             'executable': False, 'ignored': True},
+        ]
+        captured = WORKSPACE.git_source(str(self.repo), self.revision, changes)
+        self.assertEqual({name for name, _, _ in captured},
+                         {'AGENTS.md', '.gitignore', 'src/file.txt', 'src/new.txt', 'cache/needed.txt'})
+        extra.write_text('changed after authorization')
+        with self.assertRaises(ValueError):
+            WORKSPACE.git_source(str(self.repo), self.revision, changes)
+
+    def test_git_output_limit_is_enforced_while_running(self):
+        with self.assertRaises(ValueError):
+            WORKSPACE.command('git', 'ls-tree', '-r', '-z', self.revision,
+                              cwd=str(self.repo), limit=4)
+
+    def test_empty_directories_and_source_blobs_obey_aggregate_limits(self):
+        volume = self.root / 'many-directories'
+        volume.mkdir()
+        for number in range(3):
+            (volume / str(number)).mkdir()
+        with mock.patch.object(WORKSPACE, 'MAX_FILES', 2):
+            with self.assertRaises(ValueError):
+                WORKSPACE.read_tree(str(volume))
+        with mock.patch.object(WORKSPACE, 'MAX_TOTAL', 3):
+            with self.assertRaises(ValueError):
+                WORKSPACE.git_source(str(self.repo), self.revision)
+
     def test_symlink_hardlink_and_protected_output_rejected(self):
         self.source()
         volume = self.output()
@@ -117,6 +161,19 @@ class ImmutableWorkspaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             WORKSPACE.collect(str(volume), str(self.root / 'source.json'),
                               str(self.root / 'candidate'), ['AGENTS.md'], ['AGENTS.md'])
+
+    def test_interrupted_snapshot_publication_is_quarantined(self):
+        destination = self.root / 'interrupted'
+        destination.mkdir()
+        state = WORKSPACE.inspect_publication(str(destination))
+        self.assertTrue(state['tree'])
+        self.assertFalse(state['manifest'])
+        self.assertFalse(state['safeToConsume'])
+        with self.assertRaises(ValueError):
+            WORKSPACE.write_tree(str(destination), [], {'kind': 'test'})
+        pending = self.root / 'pending.pending'
+        pending.mkdir()
+        self.assertTrue(WORKSPACE.inspect_publication(str(self.root / 'pending'))['pendingTree'])
 
 
 if __name__ == '__main__':

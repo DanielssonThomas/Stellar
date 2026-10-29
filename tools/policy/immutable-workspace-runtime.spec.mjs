@@ -35,5 +35,5 @@ test('offline immutable capture and collection reject unsafe source and output',
     return;
   }
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stderr, /Ran 5 tests/);
+  assert.match(result.stderr, /Ran 9 tests/);
 });
