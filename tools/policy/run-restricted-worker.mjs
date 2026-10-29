@@ -2291,14 +2291,36 @@ export function inspectRestrictedWorkspace(
       '--binary',
       'HEAD',
     );
+    // Git omits special untracked files. The helper independently checks tree
+    // entry types, pruning only directories Git identifies as ignored.
+    const ignoredDirectories = nulPaths(
+      git(
+        'ls-files',
+        '--others',
+        '--ignored',
+        '--exclude-standard',
+        '--directory',
+        '-z',
+      ),
+    ).filter((name) => name.endsWith('/'));
     const files = JSON.parse(
-      run(['python3', '-I', '-', workspace, JSON.stringify(changes)], {
-        input: readFileSync(
-          new URL('./inspect-workspace-files.py', import.meta.url),
-          'utf8',
-        ),
-        maxBuffer: 128 * 1024,
-      }),
+      run(
+        [
+          'python3',
+          '-I',
+          '-',
+          workspace,
+          JSON.stringify(changes),
+          JSON.stringify(ignoredDirectories),
+        ],
+        {
+          input: readFileSync(
+            new URL('./inspect-workspace-files.py', import.meta.url),
+            'utf8',
+          ),
+          maxBuffer: 128 * 1024,
+        },
+      ),
     );
     if (
       !Array.isArray(files) ||

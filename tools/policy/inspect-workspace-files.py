@@ -12,6 +12,46 @@ import sys
 
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024
+MAX_TREE_ENTRIES = 100_000
+
+
+def check_tree_types(root, ignored_directories):
+    # Git silently omits untracked FIFOs/sockets/devices. Inspect directory
+    # entries independently, without reading their contents or following links.
+    count = 0
+
+    def visit(directory, prefix, depth):
+        nonlocal count
+        if depth > 64:
+            raise ValueError("Workspace tree exceeds inspection depth")
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                count += 1
+                if count > MAX_TREE_ENTRIES:
+                    raise ValueError("Workspace tree exceeds inspection limit")
+                name = prefix + entry.name
+                if name == '.git':
+                    continue
+                before = entry.stat(follow_symlinks=False)
+                if stat.S_ISDIR(before.st_mode):
+                    if name + '/' in ignored_directories:
+                        continue
+                    child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY |
+                                    os.O_NOFOLLOW, dir_fd=directory)
+                    try:
+                        opened = os.fstat(child)
+                        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+                            raise ValueError("Workspace directory changed during inspection")
+                        visit(child, name + '/', depth + 1)
+                        after = os.stat(entry.name, dir_fd=directory, follow_symlinks=False)
+                        if identity(before) != identity(after):
+                            raise ValueError("Workspace directory changed during inspection")
+                    finally:
+                        os.close(child)
+                elif not stat.S_ISREG(before.st_mode):
+                    raise ValueError("Workspace contains an unsafe file type")
+
+    visit(root, '', 0)
 
 
 def identity(info):
@@ -20,7 +60,7 @@ def identity(info):
                                     info.st_size, info.st_mtime_ns, info.st_ctime_ns)]
 
 
-def inspect_files(workspace, paths):
+def inspect_files(workspace, paths, ignored_directories):
     if (not os.path.isabs(workspace) or os.path.realpath(workspace) != workspace
             or len(paths) > 100 or len(set(paths)) != len(paths)):
         raise ValueError("Invalid workspace inspection scope")
@@ -28,6 +68,7 @@ def inspect_files(workspace, paths):
     records = []
     total = 0
     try:
+        check_tree_types(root, set(ignored_directories))
         for name in sorted(paths):
             parts = name.split('/')
             if (not name or any(part in ('', '.', '..') for part in parts)
@@ -104,7 +145,8 @@ def inspect_files(workspace, paths):
 
 if __name__ == '__main__':
     try:
-        print(json.dumps(inspect_files(sys.argv[1], json.loads(sys.argv[2])),
+        print(json.dumps(inspect_files(sys.argv[1], json.loads(sys.argv[2]),
+                                      json.loads(sys.argv[3])),
                          ensure_ascii=True, separators=(',', ':')))
     except Exception:
         # Neither paths nor file/process output belong in public diagnostics.

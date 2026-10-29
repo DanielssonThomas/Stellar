@@ -283,6 +283,16 @@ test('production inspection rejects symlinks and special files', async (t) => {
   const fifo = path.join(directory, 'src', 'pipe');
   assert.equal(spawnSync('mkfifo', [fifo]).status, 0);
   assert.throws(() => inspect(), /inspection failed/);
+  await unlink(fifo);
+  await mkdir(path.join(directory, 'src', 'nested'));
+  const nestedFifo = path.join(directory, 'src', 'nested', 'pipe');
+  assert.equal(spawnSync('mkfifo', [nestedFifo]).status, 0);
+  assert.throws(() => inspect(), /inspection failed/);
+  await unlink(nestedFifo);
+  await writeFile(path.join(directory, '.gitignore'), 'dependencies/\n');
+  await mkdir(path.join(directory, 'dependencies'));
+  await symlink(target, path.join(directory, 'dependencies', 'ignored-link'));
+  assert.match(inspect().fingerprint, /^[a-f0-9]{64}$/);
 });
 
 test('minimal coding mounts only selected writable directories over a read-only workspace', () => {
