@@ -54,7 +54,7 @@ function write(name, content) {
   ]);
 }
 
-async function fixture(t) {
+async function fixture(t, extraFiles = 0) {
   const scratch = run([
     'mktemp',
     '-d',
@@ -87,6 +87,15 @@ async function fixture(t) {
   write(`${source}/src/remove.txt`, 'remove\n');
   write(`${source}/docs/stable.txt`, 'stable\n');
   write(`${source}/AGENTS.md`, 'protected\n');
+  if (extraFiles)
+    run([
+      'python3',
+      '-I',
+      '-c',
+      'import pathlib,sys; root=pathlib.Path(sys.argv[1]); count=int(sys.argv[2]); [(root/("long-"+"x"*60+f"{i:04d}.txt")).write_text("bounded\\n") for i in range(count)]',
+      `${source}/src`,
+      String(extraFiles),
+    ]);
   write(`${trustedProtectedRoot}/AGENTS.md`, 'trusted guidance\n');
   run(['git', 'init', '--quiet', '-b', branch, source]);
   run(['git', '-C', source, 'add', '.']);
@@ -304,13 +313,26 @@ test('rejects mutation during collection and leaves the candidate incomplete', a
   const { privateCopy, options, adapters } = await fixture(t);
   write(`${privateCopy.privatePath}/src/one.txt`, 'changed\n');
   const injected = (args, call) => {
-    if (args[3] !== 'collect') return runCommand(args, call);
+    if (args[4] !== 'collect') return runCommand(args, call);
     const needle = "write_file(output_fd, name, chunks, int(entry['mode'], 8))";
-    assert.ok(call.input.includes(needle));
+    const separator = call.input.indexOf(10);
+    const sourceLength = Number(
+      call.input.subarray(0, separator).toString('ascii'),
+    );
+    const source = call.input
+      .subarray(separator + 1, separator + 1 + sourceLength)
+      .toString('utf8');
+    assert.ok(source.includes(needle));
     const replacement = `${needle}\n                            if name == 'src/one.txt':\n                                with open(${JSON.stringify(`${privateCopy.privatePath}/src/one.txt`)}, 'wb') as changed:\n                                    changed.write(b'mutated\\n')`;
+    const modified = Buffer.from(source.replace(needle, replacement), 'utf8');
+    const payload = call.input.subarray(separator + 1 + sourceLength);
     return runCommand(args, {
       ...call,
-      input: call.input.replace(needle, replacement),
+      input: Buffer.concat([
+        Buffer.from(`${modified.length}\n`),
+        modified,
+        payload,
+      ]),
     });
   };
   await assert.rejects(
@@ -328,6 +350,18 @@ test('rejects mutation during collection and leaves the candidate incomplete', a
     '-e',
     `${options.candidateRoot}/${privateCopy.attemptId}/verification.json`,
   ]);
+});
+
+test('frames a valid large baseline manifest through stdin instead of Windows argv', async (t) => {
+  const { options, adapters } = await fixture(t, 280);
+  const baselineBytes = Buffer.byteLength(
+    JSON.stringify(options.privateCopy),
+    'utf8',
+  );
+  assert.ok(baselineBytes > 32_000);
+  const candidate = await collectPrivateCandidate(options, adapters);
+  assert.equal(candidate.files.length, 283);
+  assert.deepEqual(candidate.changes, []);
 });
 
 test('a substituted candidate or uncertain verifier cannot be accepted', async (t) => {

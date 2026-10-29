@@ -621,9 +621,12 @@ if __name__ == '__main__':
             result = inspect_private(*sys.argv[2:7], False)
         elif action == 'verify' and len(sys.argv) == 7:
             result = inspect_private(*sys.argv[2:7], True)
-        elif action == 'collect' and len(sys.argv) == 11:
-            result = collect(*sys.argv[2:8], json.loads(sys.argv[8]),
-                             json.loads(sys.argv[9]), json.loads(sys.argv[10]))
+        elif action == 'collect' and len(sys.argv) == 8:
+            request = globals().get('REQUEST')
+            if not isinstance(request, dict):
+                raise ValueError('Missing framed candidate request')
+            result = collect(*sys.argv[2:8], request.get('baseline'),
+                             request.get('allowed'), request.get('protected'))
         elif action == 'verify-candidate' and len(sys.argv) == 8:
             result = inspect_candidate(*sys.argv[2:8])
         elif action == 'accept-candidate' and len(sys.argv) == 9:

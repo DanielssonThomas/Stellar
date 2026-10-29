@@ -17,6 +17,18 @@ const hex = /^[a-f0-9]{64}$/;
 const revision = /^[a-f0-9]{40,64}$/;
 const authoritativeRoot = '/home/peon/workspaces';
 const image = trustedPeonWorkerImage;
+const helperInputLimit = 2 * 1024 * 1024;
+const framedHelperBootstrap = `import json,sys
+size_line=sys.stdin.buffer.readline(16)
+if not size_line.endswith(b'\\n') or not size_line[:-1].isdigit(): raise SystemExit(1)
+size=int(size_line)
+if size > 65536: raise SystemExit(1)
+source=sys.stdin.buffer.read(size)
+if len(source) != size: raise SystemExit(1)
+payload=sys.stdin.buffer.read(${helperInputLimit + 1})
+if len(payload) > ${helperInputLimit}: raise SystemExit(1)
+REQUEST=json.loads(payload)
+exec(compile(source,'<trusted-private-helper>','exec'),{'__name__':'__main__','REQUEST':REQUEST})`;
 
 function positive(value) {
   return Number.isSafeInteger(value) && value > 0;
@@ -100,11 +112,23 @@ function callHelper(
     runCommand = runWorkspaceInspection,
     timeout = 45_000,
     maxBuffer = 2 * 1024 * 1024,
+    request,
   } = {},
 ) {
+  const source = Buffer.from(helper, 'utf8');
+  const payload =
+    request === undefined ? null : Buffer.from(JSON.stringify(request), 'utf8');
+  if (payload && source.length + payload.length > helperInputLimit)
+    throw new Error('Candidate request exceeds the trusted input limit.');
+  const command = payload
+    ? ['python3', '-I', '-c', framedHelperBootstrap, ...args]
+    : ['python3', '-I', '-', ...args];
+  const input = payload
+    ? Buffer.concat([Buffer.from(`${source.length}\n`), source, payload])
+    : helper;
   return JSON.parse(
-    runCommand(['python3', '-I', '-', ...args], {
-      input: helper,
+    runCommand(command, {
+      input,
       timeout,
       maxBuffer,
     }),
@@ -216,11 +240,15 @@ export async function collectPrivateCandidate(
       expectedRevision,
       expectedFingerprint,
       expectedBaselineDigest,
-      JSON.stringify(baseline),
-      JSON.stringify(authorizedChangePaths),
-      JSON.stringify(protectedPaths),
     ],
-    { runCommand },
+    {
+      runCommand,
+      request: {
+        baseline,
+        allowed: authorizedChangePaths,
+        protected: protectedPaths,
+      },
+    },
   );
   if (signal?.aborted)
     throw new Error(
