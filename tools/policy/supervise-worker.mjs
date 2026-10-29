@@ -351,9 +351,18 @@ export function assertCorrectionFeedbackInUse(feedback, issueNumber) {
     );
 }
 
-/** Hold the source lock through preparation and trusted consumption/launch.
- * The caller's workspace/claim isolation remains required; this lock coordinates
- * supervisors, not arbitrary external filesystem writers.
+// Explicit capability denial, not a configurable advisory lock or attestation.
+// The current launcher bind-mounts mutable Peon-owned source. Re-enabling
+// execution requires an implemented and reviewed immutable/exclusive boundary.
+export function rejectMutableCorrectionExecution() {
+  throw new Error(
+    'Mentor-backed correction execution is unavailable: the launcher does not enforce immutable or exclusive workspace consumption. Feedback is preview-only.',
+  );
+}
+
+/** Hold the source lock through preview preparation and inspection.
+ * This lock coordinates supervisors, not filesystem writers. It grants no
+ * execution authority; consumeExecution deliberately fails closed.
  */
 export async function withCurrentCorrectionFeedback(
   feedback,
@@ -405,25 +414,7 @@ export async function withCurrentCorrectionFeedback(
           'Correction execution requires a distinct absolute destination handoff.',
         );
       await assertCurrent(task, authorizedWorkspace);
-      const handoff = await readHandoff(source.handoffPath);
-      if (
-        stableFingerprint(handoff) !== source.expectedHandoff ||
-        handoff.supervisorRevision >= Number.MAX_SAFE_INTEGER
-      )
-        throw new Error('Correction source changed before consumption.');
-      handoff.correctionUse = {
-        feedbackFingerprint: stableFingerprint(handoff.mentorFeedback.at(-1)),
-        destinationHandoffPath,
-        at: new Date().toISOString(),
-      };
-      // No rollback on failed dispatch: an uncertain execution cannot reuse its source.
-      handoff.status = 'superseded';
-      handoff.supervisorRevision += 1;
-      handoff.updatedAt = new Date(
-        Math.max(Date.now(), Date.parse(handoff.updatedAt) + 1),
-      ).toISOString();
-      await writeHandoffUnlocked(source.handoffPath, handoff);
-      activeCorrectionFeedback.delete(feedback);
+      rejectMutableCorrectionExecution();
     };
     try {
       await assertCurrent();

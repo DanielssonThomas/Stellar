@@ -10,6 +10,7 @@ import {
   getTrustedProtectedPathsForContext,
   inspectHermesSystemPromptGuidance,
   inspectRestrictedWorkspace,
+  trustedIndexRecords,
   readRestrictedWorkspaceFile,
   runRestrictedVerification,
   verifyPinnedWorkerImageCompatibility,
@@ -18,7 +19,7 @@ import { validateFreshIssue } from './update-issue.mjs';
 import {
   defaultLimits,
   superviseWorker,
-  withCurrentCorrectionFeedback,
+  rejectMutableCorrectionExecution,
 } from './supervise-worker.mjs';
 import {
   resolvePeonHermesProfile,
@@ -85,19 +86,50 @@ function inspectClaimedWorktree(repositoryRoot, claim) {
   if (!registered)
     throw new Error('Issue claim does not identify its registered worktree.');
   const read = (args) => {
-    const result = spawnSync('git', ['-C', claim.worktreePath, ...args], {
-      cwd: repositoryRoot,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
+    const result = spawnSync(
+      'git',
+      [
+        '--no-optional-locks',
+        '-c',
+        'core.fsmonitor=false',
+        '-c',
+        'core.untrackedCache=false',
+        '-c',
+        'core.ignorestat=false',
+        '-c',
+        'core.trustctime=true',
+        '-c',
+        'core.checkstat=default',
+        '-C',
+        claim.worktreePath,
+        ...args,
+      ],
+      {
+        cwd: repositoryRoot,
+        windowsHide: true,
+        timeout: 10_000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
     if (result.error || result.status !== 0)
       throw new Error('Could not inspect the claimed issue worktree.');
-    return (result.stdout ?? '').trim();
+    return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
   };
-  const root = read(['rev-parse', '--show-toplevel']);
-  const branch = read(['branch', '--show-current']);
-  const headRevision = read(['rev-parse', 'HEAD']);
+  const root = read(['rev-parse', '--show-toplevel']).trim();
+  const branch = read(['branch', '--show-current']).trim();
+  const headRevision = read(['rev-parse', 'HEAD']).trim();
+  const index = trustedIndexRecords(
+    read(['ls-files', '--cached', '--stage', '-v', '-z']),
+  );
   const status = read(['status', '--porcelain=v1', '--untracked-files=all']);
+  if (
+    JSON.stringify(
+      trustedIndexRecords(
+        read(['ls-files', '--cached', '--stage', '-v', '-z']),
+      ),
+    ) !== JSON.stringify(index)
+  )
+    throw new Error('Claimed worktree index changed during admission.');
   if (
     path.resolve(root).toLowerCase() !==
       path.resolve(claim.worktreePath).toLowerCase() ||
@@ -227,21 +259,9 @@ function validateVerificationCommands(commands) {
 
 export async function runSupervisedPeonIssue(options) {
   const feedback = options.contextPlan?.mentorFeedback;
-  if (!feedback) return (await prepareSupervisedPeonIssue(options))();
-  return withCurrentCorrectionFeedback(
-    feedback,
-    {
-      issueNumber: Number(options.issueNumber),
-      destinationHandoffPath: options.handoffPath,
-    },
-    (assertFeedbackCurrent, consumeFeedback) =>
-      prepareSupervisedPeonIssue({
-        ...options,
-        assertFeedbackCurrent,
-        consumeFeedback,
-      }),
-    (launch) => launch(),
-  );
+  if (feedback !== undefined && feedback !== null)
+    rejectMutableCorrectionExecution();
+  return (await prepareSupervisedPeonIssue(options))();
 }
 
 async function prepareSupervisedPeonIssue({
@@ -268,8 +288,6 @@ async function prepareSupervisedPeonIssue({
   runVerification = runRestrictedVerification,
   cancelVerification = cancelRestrictedVerification,
   runSupervisor = superviseWorker,
-  assertFeedbackCurrent,
-  consumeFeedback,
 }) {
   const number = Number(issueNumber);
   if (!Number.isSafeInteger(number) || number < 1)
@@ -294,13 +312,6 @@ async function prepareSupervisedPeonIssue({
     sessionId,
     image,
   });
-  if (assertFeedbackCurrent) {
-    if (task.hermesWorkflow !== 'minimal-coding')
-      throw new Error(
-        'Correction feedback requires the minimal-coding workflow.',
-      );
-    await assertFeedbackCurrent(task);
-  }
   const targetRevision = isPreparedPeonWorkflow(task.hermesWorkflow)
     ? await resolveDevelopHead(repositoryRoot)
     : undefined;
@@ -311,8 +322,6 @@ async function prepareSupervisedPeonIssue({
   );
   if (!initialWorkspace || typeof initialWorkspace.fingerprint !== 'string')
     throw new Error('Trusted restricted workspace inspection failed.');
-  if (assertFeedbackCurrent)
-    await assertFeedbackCurrent(task, initialWorkspace);
   if (isPreparedPeonWorkflow(task.hermesWorkflow)) {
     const claimedWorkspace = await inspectRegisteredWorktree(
       repositoryRoot,
@@ -355,7 +364,6 @@ async function prepareSupervisedPeonIssue({
       expectedGuidanceSha256: agentsSha256,
       minimalGuidance: minimalCoding,
     });
-    if (assertFeedbackCurrent) await assertFeedbackCurrent(task);
     preparedContext = minimalCoding
       ? buildMinimalPeonTaskContextManifest({
           issue,
@@ -414,7 +422,6 @@ async function prepareSupervisedPeonIssue({
       throw new Error(
         'Trusted issue, claim, or worktree changed during context preparation.',
       );
-    if (assertFeedbackCurrent) await assertFeedbackCurrent(task);
     if (minimalCoding)
       reserveMinimalAttempt({
         repositoryRoot,
@@ -445,64 +452,6 @@ async function prepareSupervisedPeonIssue({
       ? {}
       : { maxForwardedRequests: task.maxForwardedRequests }),
   });
-  let dispatchPreparation;
-  if (assertFeedbackCurrent) {
-    const run = worker.run.bind(worker);
-    const cancel = worker.cancel?.bind(worker);
-    const waitForUsageReady = worker.waitForUsageReady?.bind(worker);
-    let cancelled = false;
-    let dispatched = false;
-    worker.run = (context) => {
-      const checkCancellation = () => {
-        if (cancelled || context.signal?.aborted)
-          throw new Error('Correction dispatch was cancelled.');
-      };
-      dispatchPreparation = Promise.resolve().then(async () => {
-        checkCancellation();
-        const [currentIssue, currentClaim] = await Promise.all([
-          loadAssignment(number),
-          readClaim(repositoryRoot, number),
-        ]);
-        const currentTask = validateLivePeonAssignment({
-          issue: currentIssue,
-          claim: currentClaim,
-          sessionId,
-          image,
-        });
-        if (
-          freshIssueFingerprint(currentIssue) !==
-            freshIssueFingerprint(issue) ||
-          JSON.stringify(currentTask) !== JSON.stringify(task)
-        )
-          throw new Error(
-            'Correction authorization changed before worker launch.',
-          );
-        const currentWorkspace = await inspectWorktree(
-          number,
-          task.branch,
-          targetRevision,
-        );
-        checkCancellation();
-        await consumeFeedback(context.task, currentWorkspace);
-        checkCancellation();
-      });
-      return dispatchPreparation.then(() => {
-        checkCancellation();
-        dispatched = true;
-        return run(context);
-      });
-    };
-    worker.cancel = async (reason) => {
-      cancelled = true;
-      await dispatchPreparation?.catch(() => {});
-      return dispatched ? (cancel?.(reason) ?? false) : true;
-    };
-    if (waitForUsageReady)
-      worker.waitForUsageReady = async (...args) => {
-        await dispatchPreparation;
-        return waitForUsageReady(...args);
-      };
-  }
   const mira = {
     id: 'mira',
     async run() {
@@ -589,35 +538,30 @@ async function prepareSupervisedPeonIssue({
   };
 
   return async () => {
-    try {
-      return await runSupervisor({
-        task,
-        workers: { peon: worker, mira },
-        inspectWorktree: async (currentTask) => {
-          if (
-            currentTask.issueNumber !== task.issueNumber ||
-            currentTask.branch !== task.branch ||
-            currentTask.worktreePath !== task.worktreePath
-          )
-            throw new Error(
-              'Supervisor task differs from the validated issue claim.',
-            );
-          return inspectWorktree(number, task.branch, targetRevision);
-        },
-        verify,
-        handoffPath,
-        limits: {
-          ...defaultLimits,
-          maxAttemptsPerWorker: 1,
-          maxModelTokensPerWorker: modelTokenLimitForWorkflow(
-            task.hermesWorkflow,
-          ),
-        },
-        signal,
-      });
-    } finally {
-      // Never release the source lock while a pre-dispatch persistence is pending.
-      await dispatchPreparation?.catch(() => {});
-    }
+    return runSupervisor({
+      task,
+      workers: { peon: worker, mira },
+      inspectWorktree: async (currentTask) => {
+        if (
+          currentTask.issueNumber !== task.issueNumber ||
+          currentTask.branch !== task.branch ||
+          currentTask.worktreePath !== task.worktreePath
+        )
+          throw new Error(
+            'Supervisor task differs from the validated issue claim.',
+          );
+        return inspectWorktree(number, task.branch, targetRevision);
+      },
+      verify,
+      handoffPath,
+      limits: {
+        ...defaultLimits,
+        maxAttemptsPerWorker: 1,
+        maxModelTokensPerWorker: modelTokenLimitForWorkflow(
+          task.hermesWorkflow,
+        ),
+      },
+      signal,
+    });
   };
 }

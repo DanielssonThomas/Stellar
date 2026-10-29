@@ -10,13 +10,18 @@ import {
   superviseWorker,
   appendMentorFeedback,
   correctionFeedbackFromHandoff,
+  withCurrentCorrectionFeedback,
 } from './supervise-worker.mjs';
 import {
   runSupervisedPeonIssue,
   trustedPeonWorkerImage,
   validateLivePeonAssignment,
 } from './supervised-peon-run.mjs';
-import { createPeonWorkerAdapter } from './run-restricted-worker.mjs';
+import {
+  createPeonWorkerAdapter,
+  buildHermesTaskInput,
+} from './run-restricted-worker.mjs';
+import { buildMinimalPeonTaskContextManifest } from './peon-task-context.mjs';
 
 const image = trustedPeonWorkerImage;
 const sessionId = 'peon-issue-50-controlled-trial';
@@ -223,145 +228,102 @@ test('minimal coding keeps governance in the host and verifies scoped changes', 
     issueNumber: 50,
     inspectWorktree: inspectSource,
   });
-  let launched = 0;
+  // Corrections are now intentionally preview-only. Ordinary minimal coding
+  // above still reaches its authorized adapter and verifier.
+  const before = await readFile(sourcePath, 'utf8');
+  const forbidden = () => {
+    throw new Error('Execution side effect must not occur');
+  };
   const correctionOptions = {
     ...options,
     contextPlan: { ...options.contextPlan, mentorFeedback: feedback },
-    reserveMinimalAttempt: () => {},
-    createWorkerAdapter: ({ preparedContext }) => {
-      assert.match(
-        preparedContext.manifest.worker.mentorFeedback.diagnostic,
-        /Required field/,
-      );
-      return {
-        id: 'peon',
-        run: async () => {
-          launched++;
-          return 'simulated launch';
-        },
-      };
-    },
-    runSupervisor: async ({ workers, task }) => workers.peon.run({ task }),
+    loadAssignment: forbidden,
+    reserveMinimalAttempt: forbidden,
+    createWorkerAdapter: forbidden,
+    runSupervisor: forbidden,
+    runVerification: forbidden,
   };
-  await assert.rejects(
-    runSupervisedPeonIssue({
-      ...correctionOptions,
-      createWorkerAdapter: (input) => {
-        const adapter = correctionOptions.createWorkerAdapter(input);
-        sourceFingerprint = 'changed-during-preparation';
-        return adapter;
-      },
-    }),
-    /source changed/,
-  );
-  assert.equal(launched, 0);
-  sourceFingerprint = 'stable';
-  await assert.rejects(
-    runSupervisedPeonIssue({
-      ...correctionOptions,
-      runSupervisor: async ({ workers, task }) => {
-        sourceFingerprint = 'changed-before-adapter-run';
-        return workers.peon.run({ task });
-      },
-    }),
-    /source changed/,
-  );
-  assert.equal(launched, 0);
-  sourceFingerprint = 'stable';
-  let assignmentReads = 0;
-  await assert.rejects(
-    runSupervisedPeonIssue({
-      ...correctionOptions,
-      loadAssignment: async () =>
-        ++assignmentReads < 3
-          ? selectedIssue
-          : { ...selectedIssue, state: 'CLOSED' },
-    }),
-    /must be open/,
-  );
-  assert.equal(launched, 0);
-  await assert.rejects(
-    runSupervisedPeonIssue({
-      ...correctionOptions,
-      contextPlan: {
-        ...options.contextPlan,
-        mentorFeedback: structuredClone(feedback),
-      },
-    }),
-    /fresh trusted/,
-  );
-  let releaseAssignment;
-  let assignmentStarted;
-  const assignmentGate = new Promise((resolve) => {
-    releaseAssignment = resolve;
-  });
-  const assignmentPending = new Promise((resolve) => {
-    assignmentStarted = resolve;
-  });
-  assignmentReads = 0;
-  assert.equal(
-    await runSupervisedPeonIssue({
-      ...correctionOptions,
-      loadAssignment: async () => {
-        if (++assignmentReads === 3) {
-          assignmentStarted();
-          await assignmentGate;
-        }
-        return selectedIssue;
-      },
-      runSupervisor: async ({ workers, task }) => {
-        const abort = new AbortController();
-        const run = workers.peon.run({ task, signal: abort.signal });
-        await assignmentPending;
-        abort.abort();
-        const cancellation = workers.peon.cancel('interrupted');
-        releaseAssignment();
-        await assert.rejects(run, /cancelled/);
-        assert.equal(await cancellation, true);
-        return 'cancelled before dispatch';
-      },
-    }),
-    'cancelled before dispatch',
-  );
-  assert.equal(launched, 0);
-  assert.equal((await readHandoff(sourcePath)).status, 'handoff-pending');
-
-  let workerStarted = false;
+  for (const value of [feedback, structuredClone(feedback), {}, false]) {
+    const abort = new AbortController();
+    for (const cancelled of [false, true]) {
+      if (cancelled) abort.abort();
+      await assert.rejects(
+        runSupervisedPeonIssue({
+          ...correctionOptions,
+          signal: abort.signal,
+          contextPlan: { ...options.contextPlan, mentorFeedback: value },
+        }),
+        /correction execution is unavailable/,
+      );
+    }
+  }
   const destination = join(root, 'correction-destination.json');
-  const final = await runSupervisedPeonIssue({
-    ...correctionOptions,
-    handoffPath: destination,
-    runSupervisor: superviseWorker,
-    createWorkerAdapter: () => ({
-      id: 'peon',
-      run: async () => {
-        workerStarted = true;
-        launched++;
-        return { status: 'completed', usage: { toolCalls: 0, modelTokens: 0 } };
-      },
-      waitForUsageReady: async () => {
-        assert.equal(workerStarted, true);
-      },
-      usage: async () => ({ toolCalls: 0, modelTokens: 0 }),
-      cancel: async () => true,
-    }),
-  });
-  assert.equal(final.status, 'complete');
-  assert.equal(launched, 1);
-  const consumed = await readHandoff(sourcePath);
-  assert.equal(consumed.status, 'superseded');
-  assert.equal(consumed.mentorFeedback.length, 1);
-  assert.equal(consumed.correctionUse.destinationHandoffPath, destination);
-  await assert.rejects(runSupervisedPeonIssue(correctionOptions), /superseded/);
-  await assert.rejects(
-    correctionFeedbackFromHandoff({
-      handoffPath: sourcePath,
-      issueNumber: 50,
-      inspectWorktree: inspectSource,
-    }),
-    /superseded/,
+  const competing = await Promise.allSettled(
+    Array.from({ length: 3 }, () => runSupervisedPeonIssue(correctionOptions)),
   );
-  assert.equal(launched, 1);
+  assert.ok(
+    competing.every(
+      (outcome) =>
+        outcome.status === 'rejected' &&
+        /correction execution is unavailable/.test(outcome.reason.message),
+    ),
+  );
+  for (let retry = 0; retry < 2; retry++) {
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        feedback,
+        { issueNumber: 50, destinationHandoffPath: destination },
+        async (assertCurrent, consumeExecution) => {
+          await assertCurrent(sourceTask);
+          await consumeExecution(sourceTask, await inspectSource());
+        },
+      ),
+      /correction execution is unavailable/,
+    );
+  }
+  assert.equal(await readFile(sourcePath, 'utf8'), before);
+  await assert.rejects(readFile(destination), /ENOENT/);
+  const preview = await withCurrentCorrectionFeedback(
+    feedback,
+    { issueNumber: 50 },
+    () =>
+      buildMinimalPeonTaskContextManifest({
+        issue: selectedIssue,
+        task: sourceTask,
+        worktreePath: repositoryRoot,
+        contextPlan: { ...options.contextPlan, mentorFeedback: feedback },
+        workspaceReader: (file) => options.readWorkspaceFile(50, file),
+        protectedPaths: [],
+      }),
+  );
+  assert.match(
+    preview.manifest.worker.mentorFeedback.diagnostic,
+    /Required field/,
+  );
+  assert.throws(
+    () => buildHermesTaskInput(sourceTask, preview),
+    /correction execution is unavailable/,
+  );
+  let invoked = false;
+  const adapter = createPeonWorkerAdapter({
+    image,
+    hermesProfile: sourceTask.hermesProfile,
+    preparedContext: structuredClone(preview),
+    runAttempt: async () => {
+      invoked = true;
+    },
+  });
+  await assert.rejects(
+    adapter.run({ task: sourceTask, attemptNumber: 1, limits: {}, budget: {} }),
+    /correction execution is unavailable/,
+  );
+  assert.equal(invoked, false);
+  assert.equal(await adapter.cancel('interrupted'), true);
+  sourceFingerprint = 'changed-after-preview';
+  await assert.rejects(
+    withCurrentCorrectionFeedback(feedback, { issueNumber: 50 }, () => preview),
+    /source changed/,
+  );
 });
 
 const issue = {

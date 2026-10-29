@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
-import { defaultLimits } from './supervise-worker.mjs';
+import {
+  defaultLimits,
+  rejectMutableCorrectionExecution,
+} from './supervise-worker.mjs';
 import {
   buildWorkerImageInspectionArgs,
   verifyWorkerImageCompatibility,
@@ -1562,6 +1565,9 @@ function validateWorkspace(issueNumber, expectedBranchPrefix) {
   if (!branch.startsWith(expectedBranchPrefix))
     throw new Error(`Worker branch must begin with ${expectedBranchPrefix}.`);
 
+  // Direct worker and verifier callers must pass the same complete index and
+  // filesystem admission checks as the supervised entry point.
+  inspectRestrictedWorkspace(issueNumber, branch);
   return { workspace, workerUid, workerGid };
 }
 
@@ -2198,6 +2204,40 @@ export async function cancelRestrictedVerification({
   return result.confirmed;
 }
 
+export function trustedIndexRecords(evidence) {
+  if (
+    typeof evidence !== 'string' ||
+    (evidence && !evidence.endsWith('\0')) ||
+    Buffer.byteLength(evidence, 'utf8') > 8 * 1024 * 1024
+  )
+    throw new Error('Malformed or oversized workspace index evidence.');
+  const records = evidence ? evidence.slice(0, -1).split('\0') : [];
+  if (records.length > 100_000)
+    throw new Error('Workspace index exceeds the trusted inspection limit.');
+  const paths = new Set();
+  for (const record of records) {
+    // -v lowercases assume-unchanged entries; S/s marks skip-worktree.
+    // Require ordinary stage-zero entries over the COMPLETE index, not
+    // only the paths status happens to report. Sparse/split indexes are
+    // decoded by Git; unmerged entries and gitlinks fail closed as well.
+    const match =
+      /^H (?:100644|100755|120000) ([a-f0-9]{40}|[a-f0-9]{64}) 0\t([^\0]+)$/.exec(
+        record,
+      );
+    if (!match || paths.has(match[2]))
+      throw new Error('Unsafe or malformed workspace index evidence.');
+    const name = match[2];
+    if (
+      name.startsWith('/') ||
+      name.split('/').some((part) => !part || part === '.' || part === '..') ||
+      name.split('/')[0] === '.git'
+    )
+      throw new Error('Unsafe workspace index path.');
+    paths.add(name);
+  }
+  return records.sort();
+}
+
 export function inspectRestrictedWorkspace(
   issueNumber,
   expectedBranch,
@@ -2225,7 +2265,23 @@ export function inspectRestrictedWorkspace(
     });
   };
   const git = (...args) =>
-    run(['git', '-c', 'core.fsmonitor=false', '-C', workspace, ...args]);
+    run([
+      'git',
+      '--no-optional-locks',
+      '-c',
+      'core.fsmonitor=false',
+      '-c',
+      'core.untrackedCache=false',
+      '-c',
+      'core.ignorestat=false',
+      '-c',
+      'core.trustctime=true',
+      '-c',
+      'core.checkstat=default',
+      '-C',
+      workspace,
+      ...args,
+    ]);
   const nulPaths = (value) => {
     if (!value) return [];
     if (!value.endsWith('\0'))
@@ -2244,6 +2300,9 @@ export function inspectRestrictedWorkspace(
       throw new Error('Restricted worker workspace identity changed.');
     if (expectedDevelopHead)
       git('merge-base', '--is-ancestor', expectedDevelopHead, headRevision);
+    const inspectIndex = () =>
+      trustedIndexRecords(git('ls-files', '--cached', '--stage', '-v', '-z'));
+    const index = inspectIndex();
     const status = git(
       'status',
       '--porcelain=v1',
@@ -2344,7 +2403,9 @@ export function inspectRestrictedWorkspace(
       )
     )
       throw new Error('Malformed workspace file evidence.');
-    return { branch, headRevision, status, diff, files, changes };
+    if (JSON.stringify(inspectIndex()) !== JSON.stringify(index))
+      throw new Error('Workspace index changed during trusted inspection.');
+    return { branch, headRevision, index, status, diff, files, changes };
   };
   const first = snapshot();
   const second = snapshot();
@@ -2353,7 +2414,7 @@ export function inspectRestrictedWorkspace(
   const { headRevision, status, changes } = second;
   return {
     fingerprint: createHash('sha256')
-      .update(JSON.stringify(['workspace-v2', second]))
+      .update(JSON.stringify(['workspace-v3', second]))
       .digest('hex'),
     headRevision,
     clean: status.length === 0,
@@ -2464,6 +2525,8 @@ export function buildHermesTaskCommand(
 }
 
 export function buildHermesTaskInput(task, preparedContext) {
+  if (preparedContext?.manifest?.worker?.mentorFeedback !== undefined)
+    rejectMutableCorrectionExecution();
   if (task?.hermesWorkflow === 'minimal-coding') {
     if (
       preparedContext?.manifest?.schema !== 'stellar.peon-minimal-context/v1' ||
@@ -2526,6 +2589,8 @@ export function createPeonWorkerAdapter({
   return {
     id: 'peon',
     async run({ task, attemptNumber, limits, budget }) {
+      if (preparedContext?.manifest?.worker?.mentorFeedback !== undefined)
+        rejectMutableCorrectionExecution();
       if ((task.hermesProfile ?? defaultPeonHermesProfile) !== hermesProfile)
         throw new Error(
           'Worker adapter profile differs from the validated issue.',

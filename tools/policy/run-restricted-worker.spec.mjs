@@ -13,6 +13,8 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
+import filesystem from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import test from 'node:test';
 import {
   buildWorkerImageInspectionArgs,
@@ -37,9 +39,15 @@ import {
 } from './run-restricted-worker.mjs';
 import {
   appendMentorFeedback,
+  correctionFeedbackFromHandoff,
+  withCurrentCorrectionFeedback,
   readHandoff,
   superviseWorker,
 } from './supervise-worker.mjs';
+import {
+  runSupervisedPeonIssue,
+  validateLivePeonAssignment,
+} from './supervised-peon-run.mjs';
 import {
   defaultPeonHermesProfile,
   peonHermesConfigFilename,
@@ -99,7 +107,7 @@ function localInspectionCommand(args, options) {
   return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
 }
 
-async function inspectionFixture(t) {
+async function inspectionFixture(t, number = 222) {
   const directory = await mkdtemp(path.join(tmpdir(), 'stellar-inspection-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const workspace = directory.replaceAll('\\', '/');
@@ -120,13 +128,18 @@ async function inspectionFixture(t) {
     '-m',
     'fixture',
   );
-  git('checkout', '--quiet', '-b', 'issue/222-inspection');
+  git('checkout', '--quiet', '-b', `issue/${number}-inspection`);
   await mkdir(path.join(directory, 'src'));
   const inspect = (runCommand = localInspectionCommand) =>
-    inspectRestrictedWorkspace(222, 'issue/222-inspection', undefined, {
-      workspace,
-      runCommand,
-    });
+    inspectRestrictedWorkspace(
+      number,
+      `issue/${number}-inspection`,
+      undefined,
+      {
+        workspace,
+        runCommand,
+      },
+    );
   return { directory, workspace, git, inspect };
 }
 
@@ -210,6 +223,204 @@ test('production fingerprint tracks untracked contents and rejects stale mentor 
   assert.ok(!JSON.stringify(inspect()).includes('replacement'));
 });
 
+test('contains the real persistence-write race by denying correction before reservation or launch', async (t) => {
+  const { directory, git, inspect } = await inspectionFixture(t, 50);
+  const file = path.join(directory, 'src', 'tracked.ts');
+  await writeFile(file, 'packet version\n');
+  await mkdir(path.join(directory, 'tools', 'policy'), { recursive: true });
+  await writeFile(
+    path.join(directory, 'tools', 'policy', 'peon-coding-agents.md'),
+    'Offline guidance.\n',
+  );
+  git('add', '.');
+  git(
+    '-c',
+    'user.name=Tests',
+    '-c',
+    'user.email=tests@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  );
+  const revision = git('rev-parse', 'HEAD').trim();
+  const evidence = await mkdtemp(
+    path.join(tmpdir(), 'stellar-dispatch-denial-'),
+  );
+  t.after(() => rm(evidence, { recursive: true, force: true }));
+  const source = path.join(evidence, 'source.json');
+  const destination = path.join(evidence, 'destination.json');
+  const host = path.join(evidence, 'host');
+  await mkdir(path.join(host, 'tools', 'policy'), { recursive: true });
+  await writeFile(
+    path.join(host, 'tools', 'policy', 'peon-coding-agents.md'),
+    'Offline guidance.\n',
+  );
+  const issue = {
+    number: 50,
+    state: 'OPEN',
+    body: '## Objective\nCorrect source.\n## Expected outcome\nOne fix.\n## Acceptance criteria\n- [ ] Fix source.\n## Constraints\nOnly src.\n## Dependencies\nNone\n## Verification expectations\nOffline checks.',
+    labels: [
+      'priority:low',
+      'target:develop',
+      'type:feature',
+      'status:in-progress',
+      'worker:peon',
+      'hermes-profile:narrow-coding',
+      'hermes-workflow:minimal-coding',
+    ],
+    dependencies: [],
+  };
+  const sessionId = 'offline-dispatch-denial';
+  const claim = {
+    state: 'active',
+    worker: 'worker:peon',
+    sessionId,
+    target: 'develop',
+    branch: 'issue/50-inspection',
+    worktreePath: directory,
+    expiresAt: new Date(Date.now() + 600_000).toISOString(),
+  };
+  const task = validateLivePeonAssignment({ issue, claim, sessionId });
+  const inspectWorktree = async () => ({
+    ...inspect(),
+    baseRevision: revision,
+  });
+  await superviseWorker({
+    task,
+    handoffPath: source,
+    inspectWorktree,
+    verify: async () => [],
+    limits: { maxAttemptsPerWorker: 1 },
+    workers: {
+      peon: {
+        id: 'peon',
+        run: async () => ({
+          status: 'failed',
+          failure: { message: 'Missing field.' },
+        }),
+      },
+      mira: {
+        id: 'mira',
+        run: async () => {
+          throw new Error('No Mira');
+        },
+      },
+    },
+  });
+  const stopped = await readHandoff(source);
+  await appendMentorFeedback({
+    handoffPath: source,
+    issueNumber: 50,
+    attemptNumber: 1,
+    expectedUpdatedAt: stopped.updatedAt,
+    expectedFingerprint: stopped.attempts[0].afterFingerprint,
+    level: 'diagnostic',
+    evidence: { kind: 'failure' },
+    inspectWorktree,
+  });
+  const feedback = await correctionFeedbackFromHandoff({
+    handoffPath: source,
+    issueNumber: 50,
+    inspectWorktree,
+  });
+  const before = await filesystem.readFile(source, 'utf8');
+  let mutation = false;
+  let launched = false;
+  const originalRename = filesystem.rename;
+  filesystem.rename = async (from, to) => {
+    // Same scheduling boundary as the independent review: a genuine write
+    // after validation, while source consumption is being persisted.
+    if (
+      to === source &&
+      JSON.parse(await filesystem.readFile(from, 'utf8')).status ===
+        'superseded'
+    ) {
+      await writeFile(file, 'changed during consumption\n');
+      mutation = true;
+    }
+    return originalRename(from, to);
+  };
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(
+      runSupervisedPeonIssue({
+        issueNumber: 50,
+        sessionId,
+        repositoryRoot: host,
+        handoffPath: destination,
+        verificationCommands: [
+          { name: 'offline', command: ['node', '--test'] },
+        ],
+        contextPlan: {
+          skills: [],
+          files: [
+            {
+              kind: 'source',
+              path: 'src/tracked.ts',
+              startLine: 1,
+              endLine: 1,
+            },
+          ],
+          authorizedChangePaths: ['src'],
+          mentorFeedback: feedback,
+        },
+        loadAssignment: async () => issue,
+        readClaim: async () => claim,
+        inspectWorktree,
+        inspectRegisteredWorktree: async () => ({
+          clean: true,
+          headRevision: revision,
+        }),
+        resolveDevelopHead: async () => revision,
+        readWorkspaceFile: (_number, name) =>
+          readFileSync(path.join(directory, name), 'utf8'),
+        getProtectedPaths: () => [],
+        verifyImageCompatibility: async () => ({}),
+        verifySystemPromptGuidance: async () => ({}),
+        runVerification: async () => ({ exitCode: 0 }),
+        createWorkerAdapter: (options) =>
+          createPeonWorkerAdapter({
+            ...options,
+            runAttempt: async (input) => {
+              launched = true;
+              assert.equal(mutation, true);
+              assert.match(input.taskInput, /packet version/);
+              assert.equal(
+                readFileSync(file, 'utf8'),
+                'changed during consumption\n',
+              );
+              input.onUsageReady({ meterIdentity: {} });
+              return { exitCode: 0, usage: { toolCalls: 0, modelTokens: 0 } };
+            },
+          }),
+      }),
+      /correction execution is unavailable/,
+    );
+  } finally {
+    filesystem.rename = originalRename;
+    syncBuiltinESMExports();
+  }
+  assert.equal(launched, false);
+  assert.equal(mutation, false);
+  assert.equal(await filesystem.readFile(source, 'utf8'), before);
+  await assert.rejects(filesystem.readFile(destination), /ENOENT/);
+  await assert.rejects(
+    filesystem.stat(path.join(evidence, '.stellar-supervisor-state')),
+    /ENOENT/,
+  );
+  // Ordinary filesystem writers still can write: do not call this isolation.
+  await writeFile(file, 'independent writer\n');
+  await assert.rejects(
+    correctionFeedbackFromHandoff({
+      handoffPath: source,
+      issueNumber: 50,
+      inspectWorktree,
+    }),
+    /source changed/,
+  );
+});
+
 test('production inspection handles tracked changes, renames and unusual path delimiters', async (t) => {
   const { directory, git, inspect } = await inspectionFixture(t);
   const name =
@@ -238,6 +449,226 @@ test('production inspection handles tracked changes, renames and unusual path de
   assert.ok(renamed.changes.includes('src/renamed.ts'));
   await unlink(path.join(directory, 'src', 'renamed.ts'));
   assert.notEqual(inspect().fingerprint, renamed.fingerprint);
+});
+
+test('production discovery overrides Git stat/cache shortcuts without clearing index flags', async (t) => {
+  const { directory, git, inspect } = await inspectionFixture(t);
+  const file = path.join(directory, 'src', 'tracked.ts');
+  await writeFile(file, 'before');
+  git('add', '.');
+  git(
+    '-c',
+    'user.name=Tests',
+    '-c',
+    'user.email=tests@example.invalid',
+    'commit',
+    '--quiet',
+    '-m',
+    'fixture',
+  );
+  const before = inspect().fingerprint;
+  for (const [key, value] of [
+    ['core.ignorestat', 'true'],
+    ['core.trustctime', 'false'],
+    ['core.checkstat', 'minimal'],
+    ['core.untrackedCache', 'true'],
+    ['core.fsmonitor', 'nonexistent-monitor-must-not-run'],
+  ])
+    git('config', key, value);
+  await writeFile(file, 'after!');
+  const changed = inspect();
+  assert.notEqual(changed.fingerprint, before);
+  assert.equal(changed.clean, false);
+  assert.deepEqual(changed.changes, ['src/tracked.ts']);
+  assert.match(
+    git('-c', 'core.fsmonitor=false', 'ls-files', '-v', '-z'),
+    /^H /,
+  );
+});
+
+test('production index admission rejects hidden tracked edits and stale feedback for both flags', async (t) => {
+  for (const flag of ['assume-unchanged', 'skip-worktree']) {
+    const { directory, git, inspect } = await inspectionFixture(t);
+    const name =
+      process.platform === 'win32' ? 'src/tracked é.ts' : 'src/tracked\n"é.ts';
+    const file = path.join(directory, name);
+    await writeFile(file, 'export const value = 1;\n');
+    git('add', '--', name);
+    git(
+      '-c',
+      'user.name=Tests',
+      '-c',
+      'user.email=tests@example.invalid',
+      'commit',
+      '--quiet',
+      '-m',
+      'tracked',
+    );
+    assert.equal(inspect().clean, true);
+    const before = inspect().fingerprint;
+    git('update-index', `--${flag}`, '--', name);
+    assert.throws(() => inspect(), /Unsafe.*index/);
+    await writeFile(file, 'export const value = 999;\n');
+    assert.equal(git('status', '--porcelain=v1', '-z'), '');
+    assert.throws(() => inspect(), /Unsafe.*index/);
+    // Detection never silently clears the unsafe flag.
+    assert.match(
+      git('ls-files', '-v', '-z'),
+      flag === 'assume-unchanged' ? /^h / : /^S /,
+    );
+    git('update-index', `--no-${flag}`, '--', name);
+    assert.notEqual(inspect().fingerprint, before);
+    await writeFile(file, 'export const value = 1;\n');
+    const handoffs = await mkdtemp(
+      path.join(tmpdir(), 'stellar-index-feedback-'),
+    );
+    t.after(() => rm(handoffs, { recursive: true, force: true }));
+    const handoffPath = path.join(handoffs, 'source.json');
+    const task = {
+      issueNumber: 222,
+      owner: 'owner:codex',
+      targetBranch: 'develop',
+      branch: 'issue/222-inspection',
+      worktreePath: directory,
+    };
+    const inspectWorktree = async () => inspect();
+    await superviseWorker({
+      task,
+      handoffPath,
+      inspectWorktree,
+      limits: { maxAttemptsPerWorker: 1 },
+      verify: async () => [],
+      workers: {
+        peon: {
+          id: 'peon',
+          run: async () => ({
+            status: 'failed',
+            failure: { message: 'Missing field.' },
+          }),
+        },
+        mira: {
+          id: 'mira',
+          run: async () => {
+            throw new Error('No Mira');
+          },
+        },
+      },
+    });
+    const stopped = await readHandoff(handoffPath);
+    await appendMentorFeedback({
+      handoffPath,
+      issueNumber: 222,
+      attemptNumber: 1,
+      expectedUpdatedAt: stopped.updatedAt,
+      expectedFingerprint: stopped.attempts[0].afterFingerprint,
+      level: 'diagnostic',
+      evidence: { kind: 'failure' },
+      inspectWorktree,
+    });
+    const feedback = await correctionFeedbackFromHandoff({
+      handoffPath,
+      issueNumber: 222,
+      inspectWorktree,
+    });
+    git('update-index', `--${flag}`, '--', name);
+    await writeFile(file, 'export const value = 999;\n');
+    await assert.rejects(
+      correctionFeedbackFromHandoff({
+        handoffPath,
+        issueNumber: 222,
+        inspectWorktree,
+      }),
+      /Unsafe.*index/,
+    );
+    let admitted = false;
+    await assert.rejects(
+      withCurrentCorrectionFeedback(
+        feedback,
+        {
+          issueNumber: 222,
+          destinationHandoffPath: path.join(handoffs, 'destination.json'),
+        },
+        async (_assert, consume) => {
+          admitted = true;
+          await consume(task, inspect());
+        },
+      ),
+      /Unsafe.*index/,
+    );
+    assert.equal(admitted, false);
+    assert.equal((await readHandoff(handoffPath)).status, 'handoff-pending');
+  }
+});
+
+test('production index inspection fails closed on malformed, unavailable and changing evidence', async (t) => {
+  const { directory, git, inspect } = await inspectionFixture(t);
+  const file = path.join(directory, 'src', 'tracked.ts');
+  await writeFile(file, 'one');
+  git('add', '--', 'src/tracked.ts');
+  const isIndex = (args) =>
+    args.includes('ls-files') && args.includes('--stage');
+  for (const evidence of [
+    'H broken\0',
+    'h 100644 ' + 'a'.repeat(40) + ' 0\tsrc/tracked.ts\0',
+    'H 100644 ' + 'a'.repeat(40) + ' 0\t../escape\0',
+    'unterminated',
+    'x'.repeat(8 * 1024 * 1024 + 1) + '\0',
+    ('H 100644 ' + 'a'.repeat(40) + ' 0\tx\0').repeat(100_001),
+  ])
+    assert.throws(
+      () =>
+        inspect((args, options) =>
+          isIndex(args) ? evidence : localInspectionCommand(args, options),
+        ),
+      /index|path evidence/,
+    );
+  assert.throws(
+    () =>
+      inspect((args, options) => {
+        if (isIndex(args)) throw new Error('index unavailable');
+        return localInspectionCommand(args, options);
+      }),
+    /index unavailable/,
+  );
+  let read = false;
+  assert.throws(
+    () =>
+      inspect((args, options) => {
+        const result = localInspectionCommand(args, options);
+        if (args[0] === 'python3' && !read) {
+          read = true;
+          git('update-index', '--skip-worktree', '--', 'src/tracked.ts');
+        }
+        return result;
+      }),
+    /Unsafe.*index/,
+  );
+  git('update-index', '--no-skip-worktree', '--', 'src/tracked.ts');
+  read = false;
+  assert.throws(
+    () =>
+      inspect((args, options) => {
+        const result = localInspectionCommand(args, options);
+        if (args[0] === 'python3' && !read) {
+          read = true;
+          assert.equal(
+            spawnSync(process.execPath, [
+              '-e',
+              'require("fs").writeFileSync(process.argv[1], "new index blob")',
+              file,
+            ]).status,
+            0,
+          );
+          git('add', '--', 'src/tracked.ts');
+        }
+        return result;
+      }),
+    /index changed during/,
+  );
+  // Git itself expands split indexes; flags must not disappear in that format.
+  git('update-index', '--split-index');
+  git('update-index', '--assume-unchanged', '--', 'src/tracked.ts');
+  assert.throws(() => inspect(), /Unsafe.*index/);
 });
 
 test('production inspection fails closed on mutation, failures and oversized files', async (t) => {

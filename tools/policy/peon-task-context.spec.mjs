@@ -191,8 +191,12 @@ test('minimal coding brief omits governance and permits only existing scoped dir
     buildCorrection,
   );
   assert.match(
-    buildHermesTaskInput(selectedTask, correction),
+    correction.manifest.worker.mentorFeedback.diagnostic,
     /required report field/,
+  );
+  assert.throws(
+    () => buildHermesTaskInput(selectedTask, correction),
+    /correction execution is unavailable/,
   );
   assert.throws(
     () =>
