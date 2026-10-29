@@ -176,11 +176,16 @@ def scan_metadata(root, ignored):
 
 def list_private_files(root):
     names = []
+    entries_seen = 0
     def visit(directory, prefix, depth):
+        nonlocal entries_seen
         if depth > 64 or len(names) > MAX_FILES:
             raise ValueError('Private tree exceeds limit')
         with os.scandir(directory) as entries:
             for entry in entries:
+                entries_seen += 1
+                if entries_seen > 100_000:
+                    raise ValueError('Private tree exceeds entry limit')
                 name = prefix + entry.name
                 if not valid_path(name):
                     raise ValueError('Unsafe private path')
@@ -199,6 +204,281 @@ def list_private_files(root):
     if len(names) > MAX_FILES:
         raise ValueError('Private tree exceeds limit')
     return sorted(names)
+
+
+def file_snapshot(root, protected=()):
+    files = []
+    identities = []
+    total = 0
+    for name in list_private_files(root):
+        if scoped(name, protected):
+            info = os.stat(name, dir_fd=root, follow_symlinks=False)
+            # Podman creates an unreadable, empty user-namespace-owned bind
+            # target for a protected file absent from the copied source.
+            # Admit only that exact mount placeholder, never protected output.
+            if (name not in protected or not stat.S_ISREG(info.st_mode)
+                    or info.st_size != 0 or info.st_nlink != 1
+                    or info.st_uid == os.geteuid()
+                    or info.st_mode & 0o077):
+                raise ValueError('Protected path changed in worker output')
+            identities.append((name, identity(info)))
+            continue
+        (size, digest, file_identity), _ = read_file(root, name)
+        total += size
+        if total > MAX_TOTAL_BYTES:
+            raise ValueError('Private tree exceeds total limit')
+        source_mode = os.stat(name, dir_fd=root, follow_symlinks=False).st_mode
+        mode = 0o700 if source_mode & 0o111 else 0o600
+        files.append({'path': name, 'bytes': size, 'sha256': digest,
+                      'mode': format(mode, '03o')})
+        identities.append((name, file_identity))
+    return files, identities
+
+
+def candidate_digest(attempt, revision, fingerprint, baseline, files, changes):
+    material = json.dumps(['private-candidate-v1', attempt, revision, fingerprint,
+                           baseline, files, changes], ensure_ascii=True,
+                          separators=(',', ':')).encode('utf-8')
+    return hashlib.sha256(material).hexdigest()
+
+
+def scoped(name, scopes):
+    return any(name == scope or name.startswith(scope + '/') for scope in scopes)
+
+
+def validate_scopes(scopes):
+    if (not isinstance(scopes, list) or len(scopes) > MAX_FILES
+            or len(set(scopes)) != len(scopes)
+            or any(not valid_path(name) for name in scopes)):
+        raise ValueError('Invalid candidate scope')
+
+
+def collect(private_root, candidate_root, attempt, revision, fingerprint,
+            baseline, expected_manifest, allowed, protected):
+    validate_identity(attempt, revision, fingerprint)
+    if not re.fullmatch(r'[a-f0-9]{64}', baseline):
+        raise ValueError('Invalid baseline digest')
+    validate_scopes(allowed)
+    validate_scopes(protected)
+    if (not allowed or not protected or
+            os.path.commonpath((private_root, candidate_root)) in
+            (private_root, candidate_root)):
+        raise ValueError('Private and candidate storage overlap')
+    if (not isinstance(expected_manifest, dict)
+            or expected_manifest.get('schema') != 'stellar.private-source/v1'
+            or expected_manifest.get('attemptId') != attempt
+            or expected_manifest.get('sourceRevision') != revision
+            or expected_manifest.get('sourceFingerprint') != fingerprint
+            or expected_manifest.get('contentDigest') != baseline):
+        raise ValueError('Baseline identity changed')
+    baseline_files = expected_manifest.get('files')
+    if (not isinstance(baseline_files, list) or len(baseline_files) > MAX_FILES
+            or any(not isinstance(entry, dict) or not valid_path(entry.get('path'))
+                   or not isinstance(entry.get('bytes'), int)
+                   or entry['bytes'] < 0 or entry['bytes'] > MAX_FILE_BYTES
+                   or not re.fullmatch(r'[a-f0-9]{64}', entry.get('sha256', ''))
+                   or entry.get('mode') not in ('600', '700')
+                   for entry in baseline_files)
+            or [entry['path'] for entry in baseline_files] !=
+            sorted({entry['path'] for entry in baseline_files})
+            or manifest_digest(attempt, revision, fingerprint, baseline_files)
+            != baseline):
+        raise ValueError('Invalid baseline manifest')
+    private_fd = open_root(private_root, private=True)
+    candidate_fd = open_root(candidate_root, private=True)
+    try:
+        attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=private_fd)
+        try:
+            attempt_info = os.fstat(attempt_fd)
+            if (attempt_info.st_uid != os.geteuid()
+                    or attempt_info.st_mode & 0o077
+                    or set(os.listdir(attempt_fd)) != {'manifest.json', 'workspace'}):
+                raise ValueError('Private attempt is not finalized')
+            (size, _, _), chunks = read_file(attempt_fd, 'manifest.json')
+            if size > 1024 * 1024 or json.loads(b''.join(chunks)) != expected_manifest:
+                raise ValueError('Persisted baseline manifest changed')
+            workspace_fd = os.open('workspace', OPEN_DIRECTORY, dir_fd=attempt_fd)
+            try:
+                workspace_info = os.fstat(workspace_fd)
+                if (workspace_info.st_uid != os.geteuid()
+                        or workspace_info.st_mode & 0o077):
+                    raise ValueError('Unsafe private workspace')
+                before, identities = file_snapshot(workspace_fd, protected)
+                baseline_map = {entry['path']: entry for entry in baseline_files}
+                current_map = {entry['path']: entry for entry in before}
+                if any(scoped(name, protected) for name in current_map):
+                    raise ValueError('Protected path appeared in worker output')
+                changes = []
+                for name in sorted(set(baseline_map) | set(current_map)):
+                    original = baseline_map.get(name)
+                    current = current_map.get(name)
+                    if original == current:
+                        continue
+                    if not scoped(name, allowed) or scoped(name, protected):
+                        raise ValueError('Worker output exceeds authorized scope')
+                    changes.append({'path': name, 'status':
+                                    'added' if original is None else
+                                    'deleted' if current is None else 'modified'})
+                if len(changes) > 100:
+                    raise ValueError('Worker output exceeds change limit')
+                os.mkdir(attempt, 0o700, dir_fd=candidate_fd)
+                result_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=candidate_fd)
+                try:
+                    marker = os.open('.incomplete', os.O_WRONLY | os.O_CREAT |
+                                     os.O_EXCL, 0o600, dir_fd=result_fd)
+                    os.close(marker)
+                    os.mkdir('workspace', 0o700, dir_fd=result_fd)
+                    output_fd = os.open('workspace', OPEN_DIRECTORY, dir_fd=result_fd)
+                    try:
+                        for entry in before:
+                            name = entry['path']
+                            result, chunks = read_file(workspace_fd, name)
+                            if result[2] != dict(identities)[name]:
+                                raise ValueError('Worker output changed during copy')
+                            write_file(output_fd, name, chunks, int(entry['mode'], 8))
+                        os.fsync(output_fd)
+                        copied, _ = file_snapshot(output_fd)
+                        if copied != before:
+                            raise ValueError('Candidate changed during copy')
+                    finally:
+                        os.close(output_fd)
+                    after, after_identities = file_snapshot(workspace_fd, protected)
+                    if before != after or identities != after_identities:
+                        raise ValueError('Worker output changed during collection')
+                    if (identity(workspace_info) != identity(os.fstat(workspace_fd))
+                            or identity(workspace_info) != identity(os.stat(
+                                'workspace', dir_fd=attempt_fd,
+                                follow_symlinks=False))):
+                        raise ValueError('Worker workspace changed during collection')
+                    (manifest_size, _, _), manifest_chunks = read_file(
+                        attempt_fd, 'manifest.json')
+                    if (manifest_size > 1024 * 1024 or
+                            json.loads(b''.join(manifest_chunks)) != expected_manifest):
+                        raise ValueError('Baseline manifest changed during collection')
+                    aggregate = candidate_digest(attempt, revision, fingerprint,
+                                                 baseline, before, changes)
+                    manifest = {'schema': 'stellar.private-candidate/v1',
+                                'attemptId': attempt, 'sourceRevision': revision,
+                                'sourceFingerprint': fingerprint,
+                                'baselineDigest': baseline, 'files': before,
+                                'changes': changes, 'contentDigest': aggregate}
+                    encoded = json.dumps(manifest, ensure_ascii=True,
+                                         separators=(',', ':')).encode('utf-8')
+                    write_file(result_fd, 'manifest.json', [encoded])
+                    os.rename('.incomplete', '.quarantined', src_dir_fd=result_fd,
+                              dst_dir_fd=result_fd)
+                    os.fsync(result_fd)
+                    return manifest
+                finally:
+                    os.close(result_fd)
+            finally:
+                os.close(workspace_fd)
+        finally:
+            os.close(attempt_fd)
+    finally:
+        os.close(candidate_fd)
+        os.close(private_fd)
+
+
+def inspect_candidate(candidate_root, attempt, revision, fingerprint,
+                      baseline, aggregate, allow_verified=False):
+    validate_identity(attempt, revision, fingerprint)
+    if (not re.fullmatch(r'[a-f0-9]{64}', baseline)
+            or not re.fullmatch(r'[a-f0-9]{64}', aggregate)):
+        raise ValueError('Invalid candidate digest')
+    root_fd = open_root(candidate_root, private=True)
+    try:
+        attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=root_fd)
+        try:
+            info = os.fstat(attempt_fd)
+            entries = set(os.listdir(attempt_fd))
+            expected = {'manifest.json', 'workspace', '.quarantined'}
+            if allow_verified and 'verification.json' in entries:
+                expected.add('verification.json')
+            if (info.st_uid != os.geteuid() or info.st_mode & 0o077
+                    or entries != expected):
+                raise ValueError('Candidate is not quarantined')
+            marker = os.stat('.quarantined', dir_fd=attempt_fd,
+                             follow_symlinks=False)
+            if not stat.S_ISREG(marker.st_mode) or marker.st_nlink != 1:
+                raise ValueError('Invalid quarantine marker')
+            (size, _, _), chunks = read_file(attempt_fd, 'manifest.json')
+            if size > 1024 * 1024:
+                raise ValueError('Candidate manifest exceeds limit')
+            manifest = json.loads(b''.join(chunks))
+            files = manifest.get('files')
+            changes = manifest.get('changes')
+            if (manifest.get('schema') != 'stellar.private-candidate/v1'
+                    or manifest.get('attemptId') != attempt
+                    or manifest.get('sourceRevision') != revision
+                    or manifest.get('sourceFingerprint') != fingerprint
+                    or manifest.get('baselineDigest') != baseline
+                    or manifest.get('contentDigest') != aggregate
+                    or not isinstance(files, list) or len(files) > MAX_FILES
+                    or not isinstance(changes, list) or len(changes) > 100
+                    or any(not isinstance(entry, dict)
+                           or not valid_path(entry.get('path'))
+                           or not isinstance(entry.get('bytes'), int)
+                           or entry['bytes'] < 0 or entry['bytes'] > MAX_FILE_BYTES
+                           or not re.fullmatch(r'[a-f0-9]{64}', entry.get('sha256', ''))
+                           or entry.get('mode') not in ('600', '700')
+                           for entry in files)
+                    or [entry['path'] for entry in files] !=
+                    sorted({entry['path'] for entry in files})
+                    or any(not isinstance(entry, dict)
+                           or not valid_path(entry.get('path'))
+                           or entry.get('status') not in
+                           ('added', 'modified', 'deleted') for entry in changes)
+                    or [entry['path'] for entry in changes] !=
+                    sorted({entry['path'] for entry in changes})
+                    or candidate_digest(attempt, revision, fingerprint,
+                                        baseline, files, changes) != aggregate):
+                raise ValueError('Candidate manifest identity changed')
+            workspace_fd = os.open('workspace', OPEN_DIRECTORY, dir_fd=attempt_fd)
+            try:
+                workspace_info = os.fstat(workspace_fd)
+                if (workspace_info.st_uid != os.geteuid()
+                        or workspace_info.st_mode & 0o077):
+                    raise ValueError('Unsafe candidate workspace')
+                actual, _ = file_snapshot(workspace_fd)
+                if actual != files:
+                    raise ValueError('Candidate workspace changed')
+            finally:
+                os.close(workspace_fd)
+            return manifest
+        finally:
+            os.close(attempt_fd)
+    finally:
+        os.close(root_fd)
+
+
+def accept_candidate(candidate_root, attempt, revision, fingerprint,
+                     baseline, aggregate, evidence):
+    inspect_candidate(candidate_root, attempt, revision, fingerprint,
+                      baseline, aggregate)
+    if (not isinstance(evidence, dict)
+            or evidence.get('schema') != 'stellar.private-verification/v1'
+            or evidence.get('attemptId') != attempt
+            or evidence.get('candidateDigest') != aggregate
+            or evidence.get('exitCode') != 0
+            or evidence.get('terminationConfirmed') is not True
+            or not isinstance(evidence.get('diagnostic'), str)
+            or len(evidence['diagnostic'].encode('utf-8')) > 4096):
+        raise ValueError('Invalid verification evidence')
+    encoded = json.dumps(evidence, ensure_ascii=True,
+                         separators=(',', ':')).encode('utf-8')
+    root_fd = open_root(candidate_root, private=True)
+    try:
+        attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=root_fd)
+        try:
+            write_file(attempt_fd, 'verification.json', [encoded])
+            os.fsync(attempt_fd)
+        finally:
+            os.close(attempt_fd)
+    finally:
+        os.close(root_fd)
+    return {'attemptId': attempt, 'candidateDigest': aggregate,
+            'verificationRecorded': True}
 
 
 def prepare(source, private_root, attempt, revision, fingerprint, paths, ignored):
@@ -341,6 +621,13 @@ if __name__ == '__main__':
             result = inspect_private(*sys.argv[2:7], False)
         elif action == 'verify' and len(sys.argv) == 7:
             result = inspect_private(*sys.argv[2:7], True)
+        elif action == 'collect' and len(sys.argv) == 11:
+            result = collect(*sys.argv[2:8], json.loads(sys.argv[8]),
+                             json.loads(sys.argv[9]), json.loads(sys.argv[10]))
+        elif action == 'verify-candidate' and len(sys.argv) == 8:
+            result = inspect_candidate(*sys.argv[2:8])
+        elif action == 'accept-candidate' and len(sys.argv) == 9:
+            result = accept_candidate(*sys.argv[2:8], json.loads(sys.argv[8]))
         else:
             raise ValueError('Invalid operation')
         print(json.dumps(result, ensure_ascii=True, separators=(',', ':')))
