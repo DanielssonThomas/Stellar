@@ -284,6 +284,10 @@ async function runAttempt(
   signal,
 ) {
   const runCommand = adapters.runCommand ?? runWorkspaceInspection;
+  const trackDiskPath = (location) => {
+    if (!knownDiskPaths.includes(location)) knownDiskPaths.push(location);
+    measureDisk(runCommand, knownDiskPaths);
+  };
   const current = await assertCurrent(options, adapters, authorization);
   const attemptId = `issue-138-attempt-${attemptNumber}`;
   const protectedPaths = (
@@ -304,8 +308,7 @@ async function runAttempt(
     inspectWorkspace: adapters.inspectWorkspace ?? inspectRestrictedWorkspace,
   });
   const privatePath = path.posix.join(roots.privateRoot, attemptId);
-  knownDiskPaths.push(privatePath);
-  measureDisk(runCommand, knownDiskPaths);
+  trackDiskPath(privatePath);
   const uid = Number(
     runCommand(['id', '-u'], { timeout: 5_000, maxBuffer: 128 }),
   );
@@ -339,8 +342,7 @@ async function runAttempt(
     });
   }
   await assertCurrent(options, adapters, authorization);
-  knownDiskPaths.push(protectedRoot);
-  measureDisk(runCommand, knownDiskPaths);
+  trackDiskPath(protectedRoot);
   const dependencyOptions = {
     issueNumber,
     attemptNumber,
@@ -353,12 +355,16 @@ async function runAttempt(
     uid,
     gid,
     signal,
+    onPhase: async (phase) => {
+      if (phase === 'workspace-copied')
+        trackDiskPath(path.posix.join(roots.dependencyRoot, attemptId));
+      else measureDisk(runCommand, knownDiskPaths);
+    },
   };
   const dependency = await (
     adapters.prepareDependencies ?? preparePrivatePilotDependencies
   )(dependencyOptions, copy);
-  knownDiskPaths.push(path.posix.join(roots.dependencyRoot, attemptId));
-  measureDisk(runCommand, knownDiskPaths);
+  trackDiskPath(path.posix.join(roots.dependencyRoot, attemptId));
   await assertCurrent(options, adapters, authorization);
   const preparedContext = (
     adapters.buildContext ?? buildMinimalPeonTaskContextManifest
@@ -421,6 +427,7 @@ async function runAttempt(
     gid,
     cacheRoot,
     checkNames: [...checkNames],
+    requireExactTestSource: true,
     signal,
   };
   let candidate;
@@ -465,14 +472,19 @@ async function runAttempt(
       throw new Error(
         'Candidate output is missing or belongs to another attempt.',
       );
-    knownDiskPaths.push(path.posix.join(roots.candidateRoot, attemptId));
-    measureDisk(runCommand, knownDiskPaths);
+    trackDiskPath(path.posix.join(roots.candidateRoot, attemptId));
     checks = await (adapters.runChecks ?? runPrivateCandidateChecks)(
       { ...candidateOptions, signal: verificationCombined },
       candidate,
+      {
+        onPhase: async (phase) => {
+          if (phase === 'git-prepared')
+            trackDiskPath(path.posix.join(roots.testRoot, attemptId));
+          else measureDisk(runCommand, knownDiskPaths);
+        },
+      },
     );
-    knownDiskPaths.push(path.posix.join(roots.testRoot, attemptId));
-    measureDisk(runCommand, knownDiskPaths);
+    trackDiskPath(path.posix.join(roots.testRoot, attemptId));
     await assertCurrent(options, adapters, authorization);
     if (
       checks?.candidateDigest !== candidate.contentDigest ||
@@ -671,6 +683,12 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
   await rename(paths.authorized, paths.consumed);
   const knownDiskPaths = [];
   const runCommand = adapters.runCommand ?? runWorkspaceInspection;
+  const pilotAbort = new AbortController();
+  const pilotSignal = options.signal
+    ? AbortSignal.any([options.signal, pilotAbort.signal])
+    : pilotAbort.signal;
+  let pilotDiskFailure = null;
+  let pilotMonitor;
   try {
     for (const root of Object.values(roots)) {
       runCommand(['mkdir', '-p', '-m', '700', '--', root], {
@@ -691,6 +709,14 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
         throw new Error('Pilot root changed.');
     }
     measureDisk(runCommand, knownDiskPaths);
+    pilotMonitor = setInterval(() => {
+      try {
+        measureDisk(runCommand, knownDiskPaths);
+      } catch (error) {
+        pilotDiskFailure = error;
+        pilotAbort.abort();
+      }
+    }, 750);
     const independent = await runAttempt(
       options,
       adapters,
@@ -699,8 +725,9 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
       null,
       defaultLimits,
       knownDiskPaths,
-      options.signal,
+      pilotSignal,
     );
+    if (pilotDiskFailure) throw pilotDiskFailure;
     if (independent.supervised.status === 'complete') {
       releaseDisposableInputs(runCommand, independent, 1, knownDiskPaths);
       await assertCurrent(options, adapters, authorization);
@@ -791,7 +818,7 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
           feedback,
           remaining,
           knownDiskPaths,
-          options.signal,
+          pilotSignal,
         );
         await assertFeedbackCurrent(current.task, current.source);
         return result;
@@ -802,6 +829,7 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
       correction.supervised.handoff.safeToResume !== true
     )
       throw new Error('Correction termination or verification is uncertain.');
+    if (pilotDiskFailure) throw pilotDiskFailure;
     releaseDisposableInputs(runCommand, correction, 2, knownDiskPaths);
     await assertCurrent(options, adapters, authorization);
     return finish(
@@ -816,6 +844,8 @@ export async function runSingleUsePeonPilot(options, adapters = {}) {
   } catch (error) {
     // active.json and consumed.json deliberately survive ambiguous outcomes.
     throw error;
+  } finally {
+    if (pilotMonitor) clearInterval(pilotMonitor);
   }
 }
 

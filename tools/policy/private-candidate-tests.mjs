@@ -8,6 +8,7 @@ import {
   preparePrivateCandidateTestCopy,
   recordPrivateCandidateTestEvidence,
   verifyPrivateCandidate,
+  verifyPrivateCandidateTestCopy,
 } from './private-candidate.mjs';
 import {
   buildRestrictedVerificationArgs,
@@ -289,6 +290,9 @@ export async function preparePrivatePilotDependencies(
       createRootlessContainerOperations().inspect(name, 1500),
   } = {},
 ) {
+  const onPhase = options.onPhase ?? (() => {});
+  if (typeof onPhase !== 'function')
+    throw new Error('Trusted pilot dependency phase observer is required.');
   const attemptId = `issue-138-attempt-${options.attemptNumber}`;
   const testRoot = '/home/peon/stellar-private-pilot-deps';
   const testPath = path.posix.join(testRoot, attemptId, 'workspace');
@@ -369,6 +373,7 @@ export async function preparePrivatePilotDependencies(
     timeout: 45_000,
     maxBuffer: 1024,
   });
+  await onPhase('workspace-copied');
   const gitCommit = prepareDisposableGit(testPath, runCommand);
   runCommand(
     [
@@ -381,6 +386,7 @@ export async function preparePrivatePilotDependencies(
     ],
     { timeout: 60_000, maxBuffer: 1024 },
   );
+  await onPhase('cache-copied');
   const candidate = {
     attemptId,
     privatePath: privateCopy.privatePath,
@@ -396,6 +402,7 @@ export async function preparePrivatePilotDependencies(
   );
   if (classifyOfflineDependencyFailure(install) !== null)
     throw new Error('Attempt-local offline dependency installation failed.');
+  await onPhase('dependencies-installed');
   const store = await runNamedCandidateCheck(
     options,
     candidate,
@@ -407,6 +414,7 @@ export async function preparePrivatePilotDependencies(
   );
   if (classifyOfflineDependencyFailure(store) !== null)
     throw new Error('Attempt-local dependency store integrity failed.');
+  await onPhase('store-verified');
   if (
     runCommand(['realpath', '-e', `${testPath}/node_modules`], {
       timeout: 5_000,
@@ -420,6 +428,9 @@ export async function preparePrivatePilotDependencies(
 }
 
 export function buildCandidateTestArgs(options, candidate, testPath, command) {
+  const toolingPhase = [installCommand, storeStatusCommand].some(
+    (allowed) => JSON.stringify(command) === JSON.stringify(allowed),
+  );
   const roots = [
     options.privateRoot,
     options.candidateRoot,
@@ -460,8 +471,19 @@ export function buildCandidateTestArgs(options, candidate, testPath, command) {
   args.splice(
     root + 1,
     0,
-    `--mount=type=bind,src=${path.posix.join(options.testRoot, candidate.attemptId, 'store')},dst=/store,rw`,
+    `--mount=type=bind,src=${path.posix.join(options.testRoot, candidate.attemptId, 'store')},dst=/store,${options.requireExactTestSource && !toolingPhase ? 'ro' : 'rw'}`,
   );
+  if (options.requireExactTestSource && !toolingPhase)
+    args.splice(
+      root + 2,
+      0,
+      `--mount=type=bind,src=${testPath}/node_modules,dst=/workspace/node_modules,ro`,
+      ...['libs/ui/atoms/node_modules', 'libs/ui/molecules/node_modules'].map(
+        (name) =>
+          `--mount=type=bind,src=${testPath}/${name},dst=/workspace/${name},ro`,
+      ),
+      `--mount=type=bind,src=${testPath}/.git,dst=/workspace/.git,ro`,
+    );
   for (const protectedPath of options.protectedPaths) {
     const suffix = `,dst=/workspace/${protectedPath},ro`;
     const index = args.findIndex(
@@ -659,6 +681,16 @@ export async function runPrivateCandidateChecks(
       runCommand,
     );
     const gitCommit = prepareDisposableGit(testPath, runCommand);
+    const verifyInputs = () => {
+      if (options.requireExactTestSource)
+        verifyPrivateCandidateTestCopy(
+          options,
+          candidate,
+          testRoot,
+          runCommand,
+        );
+    };
+    verifyInputs();
     await onPhase('git-prepared');
     const cacheStore = `${cacheRoot}/store`;
     const cacheSize = Number(
@@ -728,6 +760,7 @@ export async function runPrivateCandidateChecks(
       confirmTermination,
       inspectContainer,
     );
+    verifyInputs();
     await onPhase('dependencies-installed');
     const installPassed =
       install.exitCode === 0 &&
@@ -746,7 +779,10 @@ export async function runPrivateCandidateChecks(
           inspectContainer,
         )
       : null;
-    if (storeStatus) await onPhase('store-checked');
+    if (storeStatus) {
+      verifyInputs();
+      await onPhase('store-checked');
+    }
     const storePassed =
       storeStatus?.exitCode === 0 &&
       !storeStatus.error &&
@@ -767,6 +803,20 @@ export async function runPrivateCandidateChecks(
     const results = [];
     let state = 'dependencies-unavailable';
     if (installPassed && storePassed) {
+      if (options.requireExactTestSource)
+        for (const name of [
+          'node_modules',
+          'libs/ui/atoms/node_modules',
+          'libs/ui/molecules/node_modules',
+          '.git',
+        ])
+          if (
+            runCommand(['realpath', '-e', `${testPath}/${name}`], {
+              timeout: 5_000,
+              maxBuffer: 1024,
+            }).trim() !== `${testPath}/${name}`
+          )
+            throw new Error('Disposable test tooling path was substituted.');
       state = 'tests-passed';
       for (const name of checkNames) {
         if (options.signal?.aborted) {
@@ -782,6 +832,7 @@ export async function runPrivateCandidateChecks(
           confirmTermination,
           inspectContainer,
         );
+        verifyInputs();
         results.push({
           name,
           exitCode: result.exitCode,
@@ -808,6 +859,7 @@ export async function runPrivateCandidateChecks(
       state = 'inconclusive';
     }
     if (options.signal?.aborted) state = 'inconclusive';
+    verifyInputs();
     assertExactPrivateCandidate(options, candidate, runCommand, {
       allowRecorded: true,
     });

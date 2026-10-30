@@ -546,6 +546,85 @@ def prepare_test_copy(candidate_root, test_root, attempt, revision,
             'files': len(manifest['files'])}
 
 
+def verify_test_copy(candidate_root, test_root, attempt, revision,
+                     fingerprint, baseline, aggregate, protected):
+    """Check every executable input in a disposable test tree after commands."""
+    manifest = inspect_candidate(candidate_root, attempt, revision, fingerprint,
+                                 baseline, aggregate, allow_verified=True)
+    validate_scopes(protected)
+    test_fd = open_root(test_root, private=True)
+    excluded = {'.git', 'node_modules', '.nx', '.angular', 'dist', 'coverage'}
+    dependency_dirs = {'node_modules', 'libs/ui/atoms/node_modules',
+                       'libs/ui/molecules/node_modules'}
+    try:
+        attempt_fd = os.open(attempt, OPEN_DIRECTORY, dir_fd=test_fd)
+        try:
+            workspace_fd = os.open('workspace', OPEN_DIRECTORY,
+                                   dir_fd=attempt_fd)
+            try:
+                found = []
+                seen = 0
+
+                def visit(directory, prefix, depth):
+                    nonlocal seen
+                    if depth > 64:
+                        raise ValueError('Test source exceeds depth limit')
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            seen += 1
+                            if seen > 100_000:
+                                raise ValueError('Test source exceeds entry limit')
+                            name = prefix + entry.name
+                            if (name in dependency_dirs
+                                    or not prefix and entry.name in excluded):
+                                info = entry.stat(follow_symlinks=False)
+                                if not stat.S_ISDIR(info.st_mode):
+                                    raise ValueError('Unsafe generated directory')
+                                continue
+                            if not valid_path(name):
+                                raise ValueError('Unsafe test source path')
+                            info = entry.stat(follow_symlinks=False)
+                            if scoped(name, protected):
+                                if (name not in protected or not stat.S_ISREG(info.st_mode)
+                                        or info.st_size != 0 or info.st_nlink != 1
+                                        or info.st_uid == os.geteuid()
+                                        or info.st_mode & 0o077):
+                                    raise ValueError('Protected test placeholder changed')
+                                continue
+                            if stat.S_ISDIR(info.st_mode):
+                                child = os.open(entry.name, OPEN_DIRECTORY,
+                                                dir_fd=directory)
+                                try:
+                                    visit(child, name + '/', depth + 1)
+                                finally:
+                                    os.close(child)
+                            elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+                                found.append(name)
+                            else:
+                                raise ValueError('Unsafe test source type')
+
+                visit(workspace_fd, '', 0)
+                expected = sorted(entry['path'] for entry in manifest['files'])
+                if sorted(found) != expected:
+                    raise ValueError('Disposable test source set changed')
+                for entry in manifest['files']:
+                    (size, digest, _), _ = read_file(workspace_fd,
+                                                     entry['path'])
+                    mode = os.stat(entry['path'], dir_fd=workspace_fd,
+                                   follow_symlinks=False).st_mode & 0o777
+                    if (size != entry['bytes'] or digest != entry['sha256']
+                            or format(mode, '03o') != entry['mode']):
+                        raise ValueError('Disposable test source changed')
+            finally:
+                os.close(workspace_fd)
+        finally:
+            os.close(attempt_fd)
+    finally:
+        os.close(test_fd)
+    return {'attemptId': attempt, 'candidateDigest': aggregate,
+            'files': len(manifest['files'])}
+
+
 def record_test_evidence(test_root, attempt, aggregate, evidence):
     if (not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', attempt)
             or not re.fullmatch(r'[a-f0-9]{64}', aggregate)
@@ -736,6 +815,11 @@ if __name__ == '__main__':
             result = accept_candidate(*sys.argv[2:8], json.loads(sys.argv[8]))
         elif action == 'prepare-test-copy' and len(sys.argv) == 9:
             result = prepare_test_copy(*sys.argv[2:9])
+        elif action == 'verify-test-copy' and len(sys.argv) == 9:
+            request = globals().get('REQUEST')
+            if not isinstance(request, dict):
+                raise ValueError('Missing protected test paths')
+            result = verify_test_copy(*sys.argv[2:9], request.get('protected'))
         elif action == 'record-test-evidence' and len(sys.argv) == 5:
             request = globals().get('REQUEST')
             result = record_test_evidence(sys.argv[2], sys.argv[3],

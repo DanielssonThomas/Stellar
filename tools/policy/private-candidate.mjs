@@ -231,6 +231,48 @@ export function preparePrivateCandidateTestCopy(
   });
 }
 
+/** Recheck all disposable executable inputs against the sealed candidate. */
+export function verifyPrivateCandidateTestCopy(
+  options,
+  candidate,
+  testRoot,
+  runCommand = runWorkspaceInspection,
+) {
+  const attemptId = exactCandidate(candidate, options);
+  if (
+    !safeRoot(testRoot) ||
+    [options.privateRoot, options.candidateRoot, authoritativeRoot].some(
+      (root) => overlaps(testRoot, root),
+    )
+  )
+    throw new Error('Disposable test storage must be separate.');
+  const result = callHelper(
+    [
+      'verify-test-copy',
+      options.candidateRoot,
+      testRoot,
+      attemptId,
+      options.expectedRevision,
+      options.expectedFingerprint,
+      options.expectedBaselineDigest,
+      candidate.contentDigest,
+    ],
+    {
+      runCommand,
+      timeout: 20_000,
+      maxBuffer: 1024,
+      request: { protected: options.protectedPaths },
+    },
+  );
+  if (
+    result.attemptId !== attemptId ||
+    result.candidateDigest !== candidate.contentDigest ||
+    result.files !== candidate.files.length
+  )
+    throw new Error('Disposable test source identity changed.');
+  return result;
+}
+
 export function recordPrivateCandidateTestEvidence(
   options,
   candidate,

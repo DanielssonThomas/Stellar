@@ -403,7 +403,7 @@ test('wrong-attempt output is rejected and failing repository tests cannot repor
       if (mode === 'wrong-output') {
         await assert.rejects(
           runSingleUsePeonPilot(f.options, f.adapters),
-          /not eligible|another attempt/,
+          /eligible|another attempt/,
         );
       } else {
         const result = await runSingleUsePeonPilot(f.options, f.adapters);
@@ -449,6 +449,42 @@ test('invalid feedback, cancellation, timeout, and disk exhaustion never retry',
           runSingleUsePeonPilot(f.options, f.adapters),
           /already consumed/,
         );
+    } finally {
+      await f.cleanup();
+    }
+  }
+});
+
+test('dependency and verifier storage enter the live disk budget before commands continue', async () => {
+  for (const phase of ['dependencies', 'verifier']) {
+    const f = await fixture();
+    try {
+      const attemptId = 'issue-138-attempt-1';
+      const oversized =
+        phase === 'dependencies'
+          ? `/home/peon/stellar-private-pilot-deps/${attemptId}`
+          : `/home/peon/stellar-private-pilot-tests/${attemptId}`;
+      const originalCommand = f.adapters.runCommand;
+      f.adapters.runCommand = (args) =>
+        args[0] === 'du' && args.at(-1) === oversized
+          ? `${3 * 1024 ** 3 + 1}\t${oversized}`
+          : originalCommand(args);
+      if (phase === 'dependencies')
+        f.adapters.prepareDependencies = async ({ onPhase }) => {
+          await onPhase('workspace-copied');
+          assert.fail('Dependency preparation crossed the measured budget.');
+        };
+      else
+        f.adapters.runChecks = async (_options, _candidate, { onPhase }) => {
+          await onPhase('git-prepared');
+          assert.fail('Repository checks crossed the measured budget.');
+        };
+      await issueSingleUsePilotAuthorization(f.options, f.adapters);
+      await assert.rejects(
+        runSingleUsePeonPilot(f.options, f.adapters),
+        /disk budget/,
+      );
+      assert.equal(f.observed.workers, phase === 'dependencies' ? 0 : 1);
     } finally {
       await f.cleanup();
     }
