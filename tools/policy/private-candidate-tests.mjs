@@ -28,8 +28,8 @@ const trustedFiles = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
 // A lockfile or manifest content change needs a reviewed update to these pins.
 const reviewedTextDigests = Object.freeze({
   'package.json': Object.freeze([
-    'e9a613990ecce6b8a1e2a6c4503f42b7ed16f637f89b6178b09d7301e89f96d9',
-    'd4857d1c8a47e9b983c04bd6f9b08d25bf25c7b7afc25d2bcb224a28dad8135e',
+    '05ca6e62999c20680a9f730b18cf74c7c2221483028e2d690950328e5b541f14',
+    'c962e36cdf3d26b5c876a633db6c7a5e4a6e403aa4a6ed9233c58aeaf970d687',
   ]),
   'pnpm-lock.yaml': Object.freeze([
     'a1414eb54757d4d2121bcce054e2f2581de851ae3f0399a3c89272254f251eb6',
@@ -436,8 +436,11 @@ export async function runPrivateCandidateChecks(
     confirmTermination = stopAndConfirmContainer,
     inspectContainer = (name) =>
       createRootlessContainerOperations().inspect(name, 1500),
+    onPhase = () => {},
   } = {},
 ) {
+  if (typeof onPhase !== 'function')
+    throw new Error('Trusted candidate test phase check is required.');
   const { testRoot, cacheRoot, checkNames } = options;
   if (
     !safeRoot(testRoot) ||
@@ -482,6 +485,7 @@ export async function runPrivateCandidateChecks(
       runCommand,
     );
     const gitCommit = prepareDisposableGit(testPath, runCommand);
+    await onPhase('git-prepared');
     const cacheStore = `${cacheRoot}/store`;
     const cacheSize = Number(
       runCommand(['du', '-sb', cacheStore], {
@@ -528,6 +532,7 @@ export async function runPrivateCandidateChecks(
       cacheSize > 2 * 1024 * 1024 * 1024
     )
       throw new Error('Trusted dependency cache is missing or unsafe.');
+    await onPhase('cache-preflight', { cacheSize });
     runCommand(
       [
         'cp',
@@ -539,6 +544,7 @@ export async function runPrivateCandidateChecks(
       ],
       { timeout: 60_000, maxBuffer: 1024 },
     );
+    await onPhase('cache-copied');
     const install = await runNamedCandidateCheck(
       options,
       candidate,
@@ -548,6 +554,7 @@ export async function runPrivateCandidateChecks(
       confirmTermination,
       inspectContainer,
     );
+    await onPhase('dependencies-installed');
     const installPassed =
       install.exitCode === 0 &&
       !install.error &&
@@ -565,6 +572,7 @@ export async function runPrivateCandidateChecks(
           inspectContainer,
         )
       : null;
+    if (storeStatus) await onPhase('store-checked');
     const storePassed =
       storeStatus?.exitCode === 0 &&
       !storeStatus.error &&
@@ -606,6 +614,7 @@ export async function runPrivateCandidateChecks(
           diagnostic: result.diagnostic,
           truncated: result.truncated,
         });
+        await onPhase(`check:${name}`);
         if (
           result.error ||
           result.timedOut ||

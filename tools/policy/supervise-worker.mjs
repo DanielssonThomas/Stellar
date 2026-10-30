@@ -227,6 +227,15 @@ async function persistHandoff(
         throw new Error('Handoff mentor feedback changed unexpectedly.');
       if (priorFeedback.length > handoff.mentorFeedback.length)
         handoff.mentorFeedback = priorFeedback;
+      const priorInert = current.inertCorrectionResults ?? [];
+      const nextInert = handoff.inertCorrectionResults ?? [];
+      if (
+        JSON.stringify(priorInert.slice(0, nextInert.length)) !==
+        JSON.stringify(nextInert.slice(0, priorInert.length))
+      )
+        throw new Error('Inert correction history changed unexpectedly.');
+      if (priorInert.length > nextInert.length)
+        handoff.inertCorrectionResults = priorInert;
       const priorTime = Date.parse(current.updatedAt);
       const nextTime = Date.parse(handoff.updatedAt);
       if (!Number.isFinite(priorTime) || !Number.isFinite(nextTime))
@@ -244,6 +253,67 @@ async function persistHandoff(
 
 export async function readHandoff(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+/** Record a simulation separately from Peon attempts and mentor learning. */
+export async function recordInertCorrectionResult({
+  handoffPath,
+  issueNumber,
+  expectedFingerprint,
+  result,
+  inspectWorktree,
+}) {
+  if (
+    !isAbsolute(handoffPath ?? '') ||
+    !Number.isSafeInteger(issueNumber) ||
+    issueNumber < 1 ||
+    typeof inspectWorktree !== 'function' ||
+    result?.schema !== 'stellar.inert-correction-result/v1' ||
+    result.issueNumber !== issueNumber ||
+    result.attribution !== 'inert-simulation' ||
+    !/^issue-[1-9][0-9]*-attempt-[1-9][0-9]*$/.test(result.attemptId ?? '') ||
+    typeof result.status !== 'string' ||
+    ![
+      'tests-passed',
+      'tests-failed',
+      'dependencies-unavailable',
+      'inconclusive',
+      'worker-failed',
+      'unchanged',
+      'cancelled',
+      'timeout',
+      'failed',
+      'quarantined',
+    ].includes(result.status) ||
+    typeof result.candidateDigest !== 'string' ||
+    !/^(?:[a-f0-9]{64}|none)$/.test(result.candidateDigest) ||
+    Buffer.byteLength(JSON.stringify(result), 'utf8') > 2048
+  )
+    throw new Error('Bounded inert correction result is required.');
+  return withHandoffLock(handoffPath, async () => {
+    const handoff = await readHandoff(handoffPath);
+    const event = currentCorrectionEvent(handoff, issueNumber);
+    if (
+      result.attemptId !==
+        `issue-${issueNumber}-attempt-${event.attemptNumber + 1}` ||
+      event.fingerprint !== expectedFingerprint ||
+      worktreeState(await inspectWorktree(handoff.task)).fingerprint !==
+        expectedFingerprint ||
+      handoff.inertCorrectionResults?.some(
+        (item) => item.attemptId === result.attemptId,
+      ) ||
+      (handoff.inertCorrectionResults?.length ?? 0) >= 12
+    )
+      throw new Error('Inert correction source or attempt changed.');
+    handoff.inertCorrectionResults ??= [];
+    handoff.inertCorrectionResults.push(result);
+    handoff.supervisorRevision += 1;
+    handoff.updatedAt = new Date(
+      Math.max(Date.now(), Date.parse(handoff.updatedAt) + 1),
+    ).toISOString();
+    await writeHandoffUnlocked(handoffPath, handoff);
+    return result;
+  });
 }
 
 function diagnosticExcerpt(value) {
