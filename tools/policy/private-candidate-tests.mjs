@@ -108,6 +108,16 @@ const checks = Object.freeze({
     'ui-molecules:build',
   ]),
 });
+export function trustedMoleculeCheckCommands() {
+  return Object.fromEntries(
+    [
+      'ui-molecules-discovery',
+      'ui-molecules-lint',
+      'ui-molecules-test',
+      'ui-molecules-build',
+    ].map((name) => [name, [...checks[name]]]),
+  );
+}
 const installCommand = Object.freeze([
   'pnpm',
   'install',

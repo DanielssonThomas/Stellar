@@ -65,7 +65,7 @@ export function resolveCurrentDevelopHead(repositoryRoot) {
   return match[1];
 }
 
-function inspectClaimedWorktree(repositoryRoot, claim) {
+export function inspectClaimedWorktree(repositoryRoot, claim) {
   const listed = spawnSync('git', ['worktree', 'list', '--porcelain'], {
     cwd: repositoryRoot,
     encoding: 'utf8',

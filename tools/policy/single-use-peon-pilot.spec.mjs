@@ -10,6 +10,7 @@ import {
   runSingleUsePeonPilot,
 } from './single-use-peon-pilot.mjs';
 import { readHandoff, superviseWorker } from './supervise-worker.mjs';
+import './run-issue-138-pilot.spec.mjs';
 
 const revision = 'a'.repeat(40);
 const sourceDigest = 'b'.repeat(64);
