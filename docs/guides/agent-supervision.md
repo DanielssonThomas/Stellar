@@ -87,3 +87,5 @@ When Peon reaches a deterministic stop condition, the supervisor calls `authoriz
 If Mira reaches a stop condition, the returned escalation request asks to mark the issue `blocked` for `agent-capability`, includes the handoff evidence, and sets `invoked: false`. The host may provide `recordEscalationRequest` to use the existing `update-issue` workflow with `formatCapabilityBlockerComment`; the callback must only write the issue update and return `true` after confirmation. Without that callback, the request stays in the handoff with `recorded: false`. Neither path launches Codex or consumes paid usage.
 
 These callbacks are integration boundaries, not security controls. The caller must validate current issue ownership and use separately enforced worker permissions and OS isolation before starting a live adapter.
+
+The inert private-correction orchestrator rejects source, protected, private, candidate or disposable test roots that overlap the shared dependency cache before admitting an attempt.

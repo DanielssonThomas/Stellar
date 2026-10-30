@@ -455,6 +455,14 @@ export async function runInertPrivateCorrection(options, adapters = {}) {
     !Array.isArray(checkNames) ||
     !checkNames.length ||
     !safeRoot(cacheRoot) ||
+    overlaps(cacheRoot, '/home/peon/workspaces') ||
+    [
+      sourceWorkspace,
+      privateRoot,
+      candidateRoot,
+      testRoot,
+      trustedProtectedRoot,
+    ].some((root) => overlaps(cacheRoot, root)) ||
     ![
       'success',
       'worker-failure',

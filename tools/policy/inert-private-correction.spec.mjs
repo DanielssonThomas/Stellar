@@ -276,6 +276,39 @@ test('disk policy rejects unsafe roots, exhaustion and low free space', () => {
   );
 });
 
+test('dependency cache is disjoint from every source, artifact and protected root', async (t) => {
+  const f = await fixture(t);
+  let launches = 0;
+  f.adapters.launchWorker = async () => {
+    launches += 1;
+    return { exitCode: 0 };
+  };
+  for (const name of [
+    'sourceWorkspace',
+    'privateRoot',
+    'candidateRoot',
+    'testRoot',
+    'trustedProtectedRoot',
+  ]) {
+    await assert.rejects(
+      runInertPrivateCorrection(
+        { ...f.options, [name]: f.options.cacheRoot },
+        f.adapters,
+      ),
+      /Trusted inert correction options/,
+      name,
+    );
+  }
+  await assert.rejects(
+    runInertPrivateCorrection(
+      { ...f.options, privateRoot: `${f.options.cacheRoot}/nested` },
+      f.adapters,
+    ),
+    /Trusted inert correction options/,
+  );
+  assert.equal(launches, 0);
+});
+
 test('inert lifecycle records a separate result and never credits a Peon attempt', async (t) => {
   const f = await fixture(t);
   const result = await runInertPrivateCorrection(f.options, f.adapters);
