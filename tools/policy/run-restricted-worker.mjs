@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { validSanitizedToolEvent } from './peon-metering-proxy-evidence.mjs';
 import { parseProtectedCodeowners } from './worker-integration-gate.mjs';
 import {
+  assertCorrectionFeedbackInUse,
   defaultLimits,
   rejectMutableCorrectionExecution,
 } from './supervise-worker.mjs';
@@ -49,6 +50,7 @@ const imagePattern =
   /^ghcr\.io\/stellar-ai-corp\/hermes-worker@sha256:[a-f0-9]{64}$/;
 const diagnosticStreamLimitBytes = 8 * 1024;
 const maxPreparedTaskInputBytes = 52_000;
+const trustedPrivatePilotResults = new WeakSet();
 const privateCopyHelper = readFileSync(
   new URL('./copy-private-source.py', import.meta.url),
   'utf8',
@@ -571,7 +573,7 @@ export function buildPodmanArgs(options) {
   });
 }
 
-/** Inert private-copy mount preparation; no production launcher calls this. */
+/** Validate an exact private source before the trusted launcher mounts it. */
 export function buildPrivatePodmanArgs(
   {
     privateCopy,
@@ -580,6 +582,7 @@ export function buildPrivatePodmanArgs(
     expectedFingerprint,
     expectedDigest,
     trustedProtectedRoot,
+    dependencyRoot,
     ...workerOptions
   },
   { runCommand = runWorkspaceInspection } = {},
@@ -654,6 +657,37 @@ export function buildPrivatePodmanArgs(
     workspaceMountSource: privateCopy.privatePath,
     protectedMountRoot: trustedProtectedRoot,
   });
+  if (dependencyRoot !== undefined) {
+    const expected = path.posix.join(
+      '/home/peon/stellar-private-pilot-deps',
+      attemptId,
+      'workspace',
+    );
+    if (
+      dependencyRoot !== expected ||
+      overlaps(dependencyRoot, privateRoot) ||
+      overlaps(dependencyRoot, trustedProtectedRoot) ||
+      runCommand(['realpath', '-e', `${dependencyRoot}/node_modules`], {
+        timeout: 5_000,
+        maxBuffer: 1024,
+      }).trim() !== `${dependencyRoot}/node_modules` ||
+      runCommand(['realpath', '-e', `${dependencyRoot}/.git`], {
+        timeout: 5_000,
+        maxBuffer: 1024,
+      }).trim() !== `${dependencyRoot}/.git`
+    )
+      throw new Error('Exact disposable dependency workspace is required.');
+    const mountIndex = args.findIndex((arg) =>
+      arg.includes(`src=${privateCopy.privatePath},dst=/workspace,ro`),
+    );
+    if (mountIndex < 0) throw new Error('Private source mount changed.');
+    args.splice(
+      mountIndex + 1,
+      0,
+      `--mount=type=bind,src=${dependencyRoot}/node_modules,dst=/workspace/node_modules,ro`,
+      `--mount=type=bind,src=${dependencyRoot}/.git,dst=/workspace/.git,ro`,
+    );
+  }
   for (const source of [
     trustedProtectedRoot,
     ...protectedPaths.map((entry) =>
@@ -1853,6 +1887,7 @@ export async function runRestrictedWorker({
   maxForwardedRequests,
   taskInput,
   writablePaths,
+  privateSource,
   spawnProcess = spawn,
 }) {
   const number = positiveInteger(issueNumber, 'issueNumber');
@@ -1874,6 +1909,16 @@ export async function runRestrictedWorker({
       'Experimental profile, request count, and token ceiling must match.',
     );
   const expectedBranchPrefix = `issue/${number}-`;
+  if (
+    privateSource !== undefined &&
+    (number !== 138 ||
+      hermesProfile !== 'narrow-coding' ||
+      JSON.stringify(writablePaths) !==
+        JSON.stringify(['libs/ui/molecules/src']))
+  )
+    throw new Error(
+      'Private pilot mount requires the exact #138 narrow scope.',
+    );
   const { workerUid, workerGid } = validateWorkspace(
     number,
     expectedBranchPrefix,
@@ -2061,7 +2106,7 @@ export async function runRestrictedWorker({
         throw new Error('Usage readiness callback must be callable.');
       onUsageReady({ meterIdentity });
     }
-    const workerArgs = buildPodmanArgs({
+    const workerOptions = {
       issueNumber: number,
       image,
       uid: workerUid,
@@ -2076,7 +2121,10 @@ export async function runRestrictedWorker({
       interactive: taskInput !== undefined,
       writablePaths,
       minimalGuidanceSource,
-    });
+    };
+    const workerArgs = privateSource
+      ? buildPrivatePodmanArgs({ ...privateSource, ...workerOptions }).args
+      : buildPodmanArgs(workerOptions);
     result = await new Promise((resolve, reject) => {
       const child = spawnProcess(
         'wsl.exe',
@@ -2692,6 +2740,46 @@ export function buildHermesTaskInput(task, preparedContext) {
   return input;
 }
 
+function buildPrivatePilotTaskInput(task, preparedContext, feedback) {
+  if (!feedback) return buildHermesTaskInput(task, preparedContext);
+  if (
+    task?.issueNumber !== 138 ||
+    task.hermesWorkflow !== 'minimal-coding' ||
+    preparedContext?.manifest?.schema !== 'stellar.peon-minimal-context/v1' ||
+    preparedContext.manifest.issueNumber !== 138 ||
+    preparedContext.manifest.worker?.mentorFeedback?.diagnostic !==
+      feedback.diagnostic ||
+    JSON.stringify(preparedContext.manifest.writablePaths) !==
+      JSON.stringify(['libs/ui/molecules/src']) ||
+    preparedContext.serialized !== JSON.stringify(preparedContext.manifest)
+  )
+    rejectMutableCorrectionExecution();
+  assertCorrectionFeedbackInUse(feedback, 138);
+  const input = JSON.stringify(preparedContext.manifest.worker);
+  if (Buffer.byteLength(input, 'utf8') > maxPreparedTaskInputBytes)
+    throw new Error('Private pilot task input exceeds its trusted byte bound.');
+  return input;
+}
+
+/** Only a real restricted launcher can attest a metered private pilot result. */
+export function assertTrustedPrivatePilotResult(
+  result,
+  attemptId,
+  sourceDigest,
+) {
+  if (
+    !trustedPrivatePilotResults.has(result) ||
+    result?.pilotEvidence?.schema !== 'stellar.metered-private-peon/v1' ||
+    result.pilotEvidence.attemptId !== attemptId ||
+    result.pilotEvidence.sourceDigest !== sourceDigest ||
+    !['absent', 'stopped'].includes(result.pilotEvidence.workerState) ||
+    !['absent', 'stopped'].includes(result.pilotEvidence.meterState)
+  )
+    throw new Error(
+      'Inert or unmetered worker output cannot count as Peon success.',
+    );
+}
+
 export function createPeonWorkerAdapter({
   image,
   hermesProfile = defaultPeonHermesProfile,
@@ -2703,6 +2791,7 @@ export function createPeonWorkerAdapter({
   readUsage = readLiveMeterUsage,
   maxForwardedRequests,
   preparedContext = null,
+  privatePilot = null,
 }) {
   peonHermesConfigFilename(hermesProfile);
   let active = null;
@@ -2710,23 +2799,54 @@ export function createPeonWorkerAdapter({
   return {
     id: 'peon',
     async run({ task, attemptNumber, limits, budget }) {
-      if (preparedContext?.manifest?.worker?.mentorFeedback !== undefined)
+      const correction = preparedContext?.manifest?.worker?.mentorFeedback;
+      if (correction !== undefined && !privatePilot?.feedback)
         rejectMutableCorrectionExecution();
+      if (privatePilot) {
+        if (
+          task.issueNumber !== 138 ||
+          task.hermesWorkflow !== 'minimal-coding' ||
+          privatePilot.attemptNumber !== (correction ? 2 : 1) ||
+          privatePilot.privateSource?.privateCopy?.attemptId !==
+            `issue-138-attempt-${privatePilot.attemptNumber}`
+        )
+          throw new Error('Exact #138 private pilot attempt is required.');
+        if (correction)
+          assertCorrectionFeedbackInUse(privatePilot.feedback, 138);
+      }
       if ((task.hermesProfile ?? defaultPeonHermesProfile) !== hermesProfile)
         throw new Error(
           'Worker adapter profile differs from the validated issue.',
         );
-      const currentAttempt = positiveInteger(attemptNumber, 'attemptNumber');
+      const currentAttempt =
+        privatePilot?.attemptNumber ??
+        positiveInteger(attemptNumber, 'attemptNumber');
       if (
         isPreparedPeonWorkflow(task.hermesWorkflow) &&
         (!preparedContext ||
           maxForwardedRequests !==
             maxForwardedRequestsForWorkflow(task.hermesWorkflow) ||
-          limits.maxModelTokensPerWorker !==
-            modelTokenLimitForWorkflow(task.hermesWorkflow))
+          (privatePilot?.attemptNumber === 2
+            ? limits.maxModelTokensPerWorker < 1 ||
+              limits.maxModelTokensPerWorker >
+                modelTokenLimitForWorkflow(task.hermesWorkflow)
+            : limits.maxModelTokensPerWorker !==
+              modelTokenLimitForWorkflow(task.hermesWorkflow)))
       )
         throw new Error(
           'Bounded coding requires trusted prepared context and its exact meter ceilings.',
+        );
+      if (
+        privatePilot &&
+        (limits.maxModelTokensPerWorker !==
+          privatePilot.limits?.maxModelTokensPerWorker ||
+          limits.maxToolCallsPerWorker !==
+            privatePilot.limits?.maxToolCallsPerWorker ||
+          limits.maxRuntimeMsPerWorker !==
+            privatePilot.limits?.maxRuntimeMsPerWorker)
+      )
+        throw new Error(
+          'Private pilot limits differ from their trusted reservation.',
         );
       const current = {
         meterName: `stellar-peon-meter-${task.issueNumber}-${currentAttempt}`,
@@ -2750,7 +2870,16 @@ export function createPeonWorkerAdapter({
             : { maxForwardedRequests }),
           command: commandForTask(task, limits, preparedContext),
           ...(preparedContext
-            ? { taskInput: buildHermesTaskInput(task, preparedContext) }
+            ? {
+                taskInput: buildPrivatePilotTaskInput(
+                  task,
+                  preparedContext,
+                  privatePilot?.feedback,
+                ),
+              }
+            : {}),
+          ...(privatePilot
+            ? { privateSource: privatePilot.privateSource }
             : {}),
           ...(task.hermesWorkflow === 'minimal-coding'
             ? { writablePaths: preparedContext.manifest.writablePaths }
@@ -2804,16 +2933,34 @@ export function createPeonWorkerAdapter({
               },
             };
         }
-        return result.exitCode === 0
-          ? { status: 'completed', usage: result.usage }
-          : {
-              status: 'failed',
-              usage: result.usage,
-              failure: {
-                code: 'WorkerExit',
-                message: formatWorkerFailure(result),
-              },
-            };
+        const pilotEvidence = privatePilot
+          ? {
+              schema: 'stellar.metered-private-peon/v1',
+              attemptId: `issue-138-attempt-${currentAttempt}`,
+              sourceDigest: privatePilot.privateSource.expectedDigest,
+              workerState: result.cleanup?.workerState,
+              meterState: result.cleanup?.meterState,
+            }
+          : undefined;
+        const outcome =
+          result.exitCode === 0
+            ? {
+                status: 'completed',
+                usage: result.usage,
+                ...(pilotEvidence ? { pilotEvidence } : {}),
+              }
+            : {
+                status: 'failed',
+                usage: result.usage,
+                ...(pilotEvidence ? { pilotEvidence } : {}),
+                failure: {
+                  code: 'WorkerExit',
+                  message: formatWorkerFailure(result),
+                },
+              };
+        if (privatePilot && runAttempt === runRestrictedWorker)
+          trustedPrivatePilotResults.add(outcome);
+        return outcome;
       } finally {
         if (active === current) active = null;
       }

@@ -30,6 +30,8 @@ const reviewedTextDigests = Object.freeze({
   'package.json': Object.freeze([
     '5638695381ffdc62b5d4aa1e83f99853c82e66db4d4c5fd86b009ce5b127bcb6',
     'ccea48e999b785ee50ab325e8080ae38d38a41ec2c8fea5b6ea7befc14cb437a',
+    '956dc7c4f7f9f16f2c32f5d3ed9cde80c2f85284a9039fdcc112b06488201b16',
+    'c6f05ef970e4cb589ba5487b77913d4c73c651d47045643e9125377343d0c087',
   ]),
   'pnpm-lock.yaml': Object.freeze([
     '4428c08045dd973b66f15a16f0bb5e977f199d43e800671c16a03ca8137d5f7f',
@@ -273,6 +275,148 @@ function prepareDisposableGit(workspace, runCommand = runWorkspaceInspection) {
   )
     throw new Error('Disposable Git metadata is not isolated and clean.');
   return commit;
+}
+
+/** Prepare only attempt-local tooling for the #138 worker, never shared source. */
+export async function preparePrivatePilotDependencies(
+  options,
+  privateCopy,
+  {
+    runCommand = runWorkspaceInspection,
+    launch = launchPodman,
+    confirmTermination = stopAndConfirmContainer,
+    inspectContainer = (name) =>
+      createRootlessContainerOperations().inspect(name, 1500),
+  } = {},
+) {
+  const attemptId = `issue-138-attempt-${options.attemptNumber}`;
+  const testRoot = '/home/peon/stellar-private-pilot-deps';
+  const testPath = path.posix.join(testRoot, attemptId, 'workspace');
+  if (
+    options.issueNumber !== 138 ||
+    privateCopy?.schema !== 'stellar.private-source/v1' ||
+    privateCopy.attemptId !== attemptId ||
+    privateCopy.privatePath !==
+      path.posix.join(options.privateRoot, attemptId, 'workspace') ||
+    options.testRoot !== testRoot ||
+    !safeRoot(options.privateRoot) ||
+    !safeRoot(options.candidateRoot) ||
+    !safeRoot(options.trustedProtectedRoot) ||
+    [
+      options.privateRoot,
+      options.candidateRoot,
+      options.trustedProtectedRoot,
+    ].some((root) => overlaps(root, testRoot)) ||
+    options.signal?.aborted
+  )
+    throw new Error(
+      'Exact #138 private pilot dependency identity is required.',
+    );
+  const lockDigest = validateReviewedDependencyInputs(privateCopy);
+  if (options.cacheRoot !== `/home/peon/stellar-dependency-cache/${lockDigest}`)
+    throw new Error('Pilot dependency cache is not pinned to the lockfile.');
+  const cacheStore = `${options.cacheRoot}/store`;
+  const cacheSize = Number(
+    runCommand(['du', '-sb', '--', cacheStore], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).split(/\s+/)[0],
+  );
+  if (
+    runCommand(['stat', '-c', '%u:%a', '--', options.cacheRoot], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).trim() !== `${options.uid}:700` ||
+    runCommand(['realpath', '-e', cacheStore], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).trim() !== cacheStore ||
+    runCommand(['sha256sum', `${options.cacheRoot}/pnpm-lock.yaml`], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).split(' ')[0] !== lockDigest ||
+    runCommand(['find', cacheStore, '-type', 'l', '-print', '-quit'], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).trim() ||
+    runCommand(
+      [
+        'find',
+        cacheStore,
+        '!',
+        '-type',
+        'f',
+        '!',
+        '-type',
+        'd',
+        '-print',
+        '-quit',
+      ],
+      { timeout: 5_000, maxBuffer: 1024 },
+    ).trim() ||
+    !Number.isSafeInteger(cacheSize) ||
+    cacheSize > 2 * 1024 ** 3
+  )
+    throw new Error('Trusted offline pilot cache is missing or unsafe.');
+  runCommand(
+    ['mkdir', '-m', '700', '--', path.posix.join(testRoot, attemptId)],
+    {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    },
+  );
+  runCommand(['cp', '-a', '--', privateCopy.privatePath, testPath], {
+    timeout: 45_000,
+    maxBuffer: 1024,
+  });
+  const gitCommit = prepareDisposableGit(testPath, runCommand);
+  runCommand(
+    [
+      'cp',
+      '-a',
+      '--reflink=auto',
+      '--',
+      cacheStore,
+      path.posix.join(testRoot, attemptId, 'store'),
+    ],
+    { timeout: 60_000, maxBuffer: 1024 },
+  );
+  const candidate = {
+    attemptId,
+    privatePath: privateCopy.privatePath,
+  };
+  const install = await runNamedCandidateCheck(
+    options,
+    candidate,
+    testPath,
+    installCommand,
+    launch,
+    confirmTermination,
+    inspectContainer,
+  );
+  if (classifyOfflineDependencyFailure(install) !== null)
+    throw new Error('Attempt-local offline dependency installation failed.');
+  const store = await runNamedCandidateCheck(
+    options,
+    candidate,
+    testPath,
+    storeStatusCommand,
+    launch,
+    confirmTermination,
+    inspectContainer,
+  );
+  if (classifyOfflineDependencyFailure(store) !== null)
+    throw new Error('Attempt-local dependency store integrity failed.');
+  if (
+    runCommand(['realpath', '-e', `${testPath}/node_modules`], {
+      timeout: 5_000,
+      maxBuffer: 1024,
+    }).trim() !== `${testPath}/node_modules` ||
+    runGit(testPath, ['remote'], runCommand) !== '' ||
+    runGit(testPath, ['rev-parse', 'HEAD'], runCommand) !== gitCommit
+  )
+    throw new Error('Disposable pilot tooling changed after preparation.');
+  return Object.freeze({ dependencyRoot: testPath, gitCommit, cacheSize });
 }
 
 export function buildCandidateTestArgs(options, candidate, testPath, command) {
