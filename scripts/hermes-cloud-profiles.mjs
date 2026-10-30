@@ -65,19 +65,24 @@ export function validateCloudConfig(role, config) {
 
 export async function provisionCloudProfile(
   role,
-  { replace = false, home = process.env.HERMES_HOME || 'D:\\Hermes' } = {},
+  { replace = false, commandRunner = hermes } = {},
 ) {
   const selected = roles[role];
   if (!selected) throw new Error(`Unknown role: ${role}`);
   const source = path.join(root, 'config', 'hermes-cloud', role, 'config.yaml');
   const config = await readFile(source, 'utf8');
   validateCloudConfig(role, config);
-  const profiles = hermes(['profile', 'list']);
-  const exists = new RegExp(`^\\s*${selected.profile}\\s`, 'm').test(profiles);
+  let details;
+  try {
+    details = commandRunner(['profile', 'show', selected.profile]);
+  } catch (error) {
+    if (!/does not exist/i.test(error.message)) throw error;
+  }
+  const exists = Boolean(details);
   if (exists && !replace)
     throw new Error(`${selected.profile} exists; pass --replace after review`);
   if (!exists)
-    hermes([
+    commandRunner([
       'profile',
       'create',
       selected.profile,
@@ -86,7 +91,20 @@ export async function provisionCloudProfile(
       '--description',
       `Stellar ${role} cloud role; host authority remains governed.`,
     ]);
-  const destination = path.join(home, 'profiles', selected.profile);
+  details ??= commandRunner(['profile', 'show', selected.profile]);
+  const match = /^Path:\s+(.+)\r?$/m.exec(details);
+  if (!match)
+    throw new Error(
+      `${selected.profile}: Hermes did not report a profile path`,
+    );
+  const destination = path.resolve(match[1].trim());
+  if (
+    path.basename(destination) !== selected.profile ||
+    path.basename(path.dirname(destination)) !== 'profiles'
+  )
+    throw new Error(
+      `${selected.profile}: Hermes reported an unexpected profile path`,
+    );
   await mkdir(destination, { recursive: true });
   await writeFile(path.join(destination, 'config.yaml'), config, 'utf8');
   await cp(
@@ -111,22 +129,27 @@ export async function provisionCloudProfile(
       { recursive: true, force: true },
     );
   }
-  const loadedModel = hermes([
+  const loadedModel = commandRunner([
     '-p',
     selected.profile,
     'config',
     'get',
     'model.default',
   ]);
-  const loadedProvider = hermes([
+  const loadedProvider = commandRunner([
     '-p',
     selected.profile,
     'config',
     'get',
     'model.provider',
   ]);
-  const loadedFallback = hermes(['-p', selected.profile, 'fallback', 'list']);
-  const toolsets = hermes(['-p', selected.profile, 'tools', 'list']);
+  const loadedFallback = commandRunner([
+    '-p',
+    selected.profile,
+    'fallback',
+    'list',
+  ]);
+  const toolsets = commandRunner(['-p', selected.profile, 'tools', 'list']);
   if (
     loadedModel !== selected.model ||
     loadedProvider !== 'openai-codex' ||
