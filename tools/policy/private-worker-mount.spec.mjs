@@ -179,7 +179,7 @@ async function fixture(t) {
       protectedPaths: ['AGENTS.md', 'policy/guard.txt'],
       runCommand: run,
     });
-  const worker = (privateCopy, attemptNumber, extra = {}) =>
+  const worker = (privateCopy, attemptNumber, extra = {}, runCommand = run) =>
     buildPrivatePodmanArgs(
       {
         issueNumber,
@@ -202,7 +202,7 @@ async function fixture(t) {
         minimalGuidanceSource: '/mnt/d/repo/tools/policy/peon-coding-agents.md',
         ...extra,
       },
-      { runCommand: run },
+      { runCommand },
     );
   return {
     source,
@@ -289,6 +289,38 @@ test('uses only the exact finalized private source as the worker workspace', asy
       path.join(f.privateHost, 'issue-145-attempt-1', 'workspace', 'AGENTS.md'),
     ),
     false,
+  );
+});
+
+test('attempt-local dependencies and Git metadata are read-only mounts', async (t) => {
+  const f = await fixture(t);
+  const copy = f.prepare(1);
+  const dependencyRoot =
+    '/home/peon/stellar-private-pilot-deps/issue-145-attempt-1/workspace';
+  const inspect = (args, options) =>
+    args[0] === 'realpath' &&
+    [`${dependencyRoot}/node_modules`, `${dependencyRoot}/.git`].includes(
+      args.at(-1),
+    )
+      ? args.at(-1)
+      : run(args, options);
+  const mount = f.worker(copy, 1, { dependencyRoot }, inspect);
+  assert.ok(
+    mount.args.includes(
+      `--mount=type=bind,src=${dependencyRoot}/node_modules,dst=/workspace/node_modules,ro`,
+    ),
+  );
+  assert.ok(
+    mount.args.includes(
+      `--mount=type=bind,src=${dependencyRoot}/.git,dst=/workspace/.git,ro`,
+    ),
+  );
+  assert.ok(
+    !mount.args.some((arg) => arg.includes('src=/home/peon/workspaces/')),
+  );
+  assert.throws(
+    () => f.worker(copy, 1, { dependencyRoot: f.source }, inspect),
+    /Exact disposable dependency workspace/,
   );
 });
 

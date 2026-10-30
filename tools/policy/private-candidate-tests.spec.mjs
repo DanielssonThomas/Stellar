@@ -81,6 +81,38 @@ test('named checks retain the restricted image, resources, network and attempt-l
   assert.ok(args.every((arg) => !arg.includes('stellar-dependency-cache')));
 });
 
+test('exact-source checks mount disposable Git, dependencies and store read-only', () => {
+  const strict = { ...options, requireExactTestSource: true };
+  const args = buildCandidateTestArgs(strict, candidate, workspace, [
+    'pnpm',
+    'exec',
+    'nx',
+    'show',
+    'projects',
+    '--json',
+  ]);
+  for (const mount of [
+    `--mount=type=bind,src=${workspace}/node_modules,dst=/workspace/node_modules,ro`,
+    `--mount=type=bind,src=${workspace}/.git,dst=/workspace/.git,ro`,
+    '--mount=type=bind,src=/home/peon/tests/issue-149-attempt-1/store,dst=/store,ro',
+  ])
+    assert.ok(args.includes(mount), mount);
+  const install = buildCandidateTestArgs(strict, candidate, workspace, [
+    'pnpm',
+    'install',
+    '--offline',
+    '--frozen-lockfile',
+    '--ignore-scripts',
+    '--package-import-method=copy',
+    '--store-dir',
+    '/store',
+  ]);
+  assert.ok(install.some((entry) => entry.endsWith('dst=/store,rw')));
+  assert.ok(
+    install.every((entry) => !entry.includes('dst=/workspace/.git,ro')),
+  );
+});
+
 test('molecule checks accept only the reviewed fixed commands', () => {
   const commands = [
     ['pnpm', 'exec', 'nx', 'show', 'project', 'ui-molecules', '--json'],

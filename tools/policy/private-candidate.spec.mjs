@@ -11,6 +11,7 @@ import {
   preparePrivateCandidateTestCopy,
   recordPrivateCandidateTestEvidence,
   verifyPrivateCandidate,
+  verifyPrivateCandidateTestCopy,
 } from './private-candidate.mjs';
 
 const issueNumber = 147;
@@ -490,4 +491,60 @@ test('test preparation copies exact candidate bytes without changing the candida
     () => assertExactPrivateCandidate(options, candidate, adapters.runCommand),
     /failed|changed/i,
   );
+});
+
+test('disposable test verification rejects changed and extra executable inputs', async (t) => {
+  const { scratch, privateCopy, options, adapters } = await fixture(t);
+  write(`${privateCopy.privatePath}/src/one.txt`, 'candidate\n');
+  const candidate = await collectPrivateCandidate(options, adapters);
+  const testRoot = `${scratch}/tests`;
+  run(['mkdir', '-m', '700', '--', testRoot]);
+  const { testPath } = preparePrivateCandidateTestCopy(
+    options,
+    candidate,
+    testRoot,
+    adapters.runCommand,
+  );
+  verifyPrivateCandidateTestCopy(
+    options,
+    candidate,
+    testRoot,
+    adapters.runCommand,
+  );
+  write(`${testPath}/src/one.txt`, 'substituted\n');
+  assert.throws(
+    () =>
+      verifyPrivateCandidateTestCopy(
+        options,
+        candidate,
+        testRoot,
+        adapters.runCommand,
+      ),
+    /failed/i,
+  );
+  write(`${testPath}/src/one.txt`, 'candidate\n');
+  write(`${testPath}/vitest.config.ts`, 'export default {};\n');
+  assert.throws(
+    () =>
+      verifyPrivateCandidateTestCopy(
+        options,
+        candidate,
+        testRoot,
+        adapters.runCommand,
+      ),
+    /failed/i,
+  );
+  run(['rm', '--', `${testPath}/vitest.config.ts`]);
+  run(['ln', '-s', 'one.txt', `${testPath}/src/alias.txt`]);
+  assert.throws(
+    () =>
+      verifyPrivateCandidateTestCopy(
+        options,
+        candidate,
+        testRoot,
+        adapters.runCommand,
+      ),
+    /failed/i,
+  );
+  assertExactPrivateCandidate(options, candidate, adapters.runCommand);
 });

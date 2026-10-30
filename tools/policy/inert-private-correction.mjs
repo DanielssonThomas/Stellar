@@ -711,6 +711,7 @@ export async function runInertPrivateCorrection(options, adapters = {}) {
           gid,
           cacheRoot,
           checkNames,
+          requireExactTestSource: true,
           workerCompletion: Promise.resolve(),
           signal: lifecycleSignal,
         };

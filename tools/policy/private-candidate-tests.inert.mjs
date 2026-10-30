@@ -197,6 +197,7 @@ async function main() {
       workerCompletion: Promise.resolve(),
       cacheRoot:
         '/home/peon/stellar-dependency-cache/9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
+      requireExactTestSource: true,
       checkNames: expectFailure
         ? ['ui-atoms-test']
         : [
