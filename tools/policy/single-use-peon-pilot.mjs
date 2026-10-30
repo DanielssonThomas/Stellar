@@ -401,13 +401,56 @@ async function runAttempt(
     },
   });
   let lastResult;
+  let admission = null;
   const worker = {
     ...baseWorker,
     async run(context) {
-      await assertCurrent(options, adapters, authorization);
-      measureDisk(runCommand, knownDiskPaths);
-      lastResult = await baseWorker.run(context);
-      return lastResult;
+      if (admission) throw new Error('A private pilot admission is active.');
+      let resolveReady;
+      let resolveAdmitted;
+      const pending = {
+        cancelled: false,
+        started: false,
+        ready: new Promise((resolve) => {
+          resolveReady = resolve;
+        }),
+        admitted: new Promise((resolve) => {
+          resolveAdmitted = resolve;
+        }),
+      };
+      admission = pending;
+      try {
+        await assertCurrent(options, adapters, authorization);
+        measureDisk(runCommand, knownDiskPaths);
+        if (pending.cancelled || context.signal?.aborted || signal?.aborted)
+          throw new Error('Private pilot admission was cancelled.');
+        const running = baseWorker.run(context);
+        pending.started = true;
+        resolveReady(true);
+        resolveAdmitted();
+        lastResult = await running;
+        return lastResult;
+      } finally {
+        if (!pending.started) resolveReady(false);
+        resolveAdmitted();
+        if (admission === pending) admission = null;
+      }
+    },
+    async waitForUsageReady() {
+      const pending = admission;
+      if (!pending) throw new Error('Private pilot admission was not started.');
+      if (!(await pending.ready))
+        throw new Error('Private pilot admission did not launch a worker.');
+      return baseWorker.waitForUsageReady?.();
+    },
+    async cancel(reason) {
+      const pending = admission;
+      if (pending) {
+        pending.cancelled = true;
+        await pending.admitted;
+        if (!pending.started) return true;
+      }
+      return baseWorker.cancel(reason);
     },
   };
   const candidateOptions = {

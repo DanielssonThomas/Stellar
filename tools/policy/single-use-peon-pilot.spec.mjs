@@ -9,7 +9,7 @@ import {
   recoverSingleUsePeonPilot,
   runSingleUsePeonPilot,
 } from './single-use-peon-pilot.mjs';
-import { readHandoff } from './supervise-worker.mjs';
+import { readHandoff, superviseWorker } from './supervise-worker.mjs';
 
 const revision = 'a'.repeat(40);
 const sourceDigest = 'b'.repeat(64);
@@ -117,6 +117,10 @@ async function fixture(mode = 'success') {
       };
       return {
         id: 'peon',
+        async waitForUsageReady() {
+          if (observed.workers === 0)
+            throw new Error('Meter readiness preceded worker launch.');
+        },
         async usage() {
           return usage;
         },
@@ -232,6 +236,88 @@ test('one independent metered success ends without feedback or correction', asyn
     assert.deepEqual(f.source.changes, []);
     await assert.rejects(
       runSingleUsePeonPilot(f.options, f.adapters),
+      /already consumed/,
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test('readiness waits for asynchronous admission before inspecting the meter', async () => {
+  const f = await fixture();
+  try {
+    await issueSingleUsePilotAuthorization(f.options, f.adapters);
+    const inspect = f.adapters.inspectWorkspace;
+    let supervisionStarted = false;
+    let inspections = 0;
+    let releaseAdmission;
+    let admissionEntered;
+    const entered = new Promise((resolve) => {
+      admissionEntered = resolve;
+    });
+    const gate = new Promise((resolve) => {
+      releaseAdmission = resolve;
+    });
+    f.adapters.inspectWorkspace = async (...args) => {
+      if (supervisionStarted && ++inspections === 2) {
+        admissionEntered();
+        await gate;
+      }
+      return inspect(...args);
+    };
+    f.adapters.runSupervisor = (args) => {
+      supervisionStarted = true;
+      return superviseWorker(args);
+    };
+    const running = runSingleUsePeonPilot(f.options, f.adapters);
+    await entered;
+    assert.equal(f.observed.workers, 0);
+    releaseAdmission();
+    const result = await running;
+    assert.equal(result.status, 'independent-peon-success');
+    assert.equal(f.observed.workers, 1);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test('cancellation during admission cannot launch a worker afterward', async () => {
+  const f = await fixture();
+  try {
+    await issueSingleUsePilotAuthorization(f.options, f.adapters);
+    const inspect = f.adapters.inspectWorkspace;
+    let supervisionStarted = false;
+    let inspections = 0;
+    let releaseAdmission;
+    let admissionEntered;
+    const entered = new Promise((resolve) => {
+      admissionEntered = resolve;
+    });
+    const gate = new Promise((resolve) => {
+      releaseAdmission = resolve;
+    });
+    f.adapters.inspectWorkspace = async (...args) => {
+      if (supervisionStarted && ++inspections === 2) {
+        admissionEntered();
+        await gate;
+      }
+      return inspect(...args);
+    };
+    f.adapters.runSupervisor = (args) => {
+      supervisionStarted = true;
+      return superviseWorker(args);
+    };
+    const controller = new AbortController();
+    f.options.signal = controller.signal;
+    const running = runSingleUsePeonPilot(f.options, f.adapters);
+    await entered;
+    controller.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    releaseAdmission();
+    await assert.rejects(running);
+    assert.equal(f.observed.workers, 0);
+    await assert.rejects(
+      runSingleUsePeonPilot({ ...f.options, signal: undefined }, f.adapters),
       /already consumed/,
     );
   } finally {
