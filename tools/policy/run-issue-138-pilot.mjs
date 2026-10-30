@@ -16,10 +16,7 @@ import {
   inspectClaimedWorktree,
   trustedPeonWorkerImage,
 } from './supervised-peon-run.mjs';
-import {
-  runWorkspaceInspection,
-  verifyPinnedWorkerImageCompatibility,
-} from './run-restricted-worker.mjs';
+import { runWorkspaceInspection } from './run-restricted-worker.mjs';
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -146,6 +143,13 @@ export function parsePilotArguments(argv) {
     fingerprint: values['source-fingerprint'],
     sessionId: values['session-id'],
   };
+}
+
+export function validatePinnedImageId(value) {
+  const id = String(value ?? '').trim();
+  if (!/^(?:sha256:)?[a-f0-9]{64}$/.test(id))
+    throw new Error('The pinned worker image is unavailable.');
+  return id;
 }
 
 function wsl(args, timeout = 10_000, maxBuffer = 16 * 1024) {
@@ -379,10 +383,19 @@ async function inspectProduction(expected) {
     5_000,
     1024,
   );
-  verifyPinnedWorkerImageCompatibility({
-    image: trustedPeonWorkerImage,
-    trustedRepositoryRoot: repositoryRoot,
-  });
+  const imageId = wsl(
+    [
+      'podman',
+      'image',
+      'inspect',
+      '--format',
+      '{{.Id}}',
+      trustedPeonWorkerImage,
+    ],
+    5_000,
+    1024,
+  );
+  validatePinnedImageId(imageId);
   const config = readFileSync(
     path.join(repositoryRoot, 'tools/policy/peon-hermes-narrow-config.yaml'),
     'utf8',
@@ -398,6 +411,7 @@ async function inspectProduction(expected) {
   return {
     host: inspectHostCheckout(),
     issue: current.issue,
+    issueDigest: current.issueDigest,
     claim: current.claim,
     revision: current.revision,
     source: current.source,
@@ -433,6 +447,7 @@ export function validatePilotEvidence(
     evidence.host.revision !== expected.revision ||
     evidence.host.trackedClean !== true ||
     evidence.issue?.number !== issueNumber ||
+    !/^[a-f0-9]{64}$/.test(evidence.issueDigest ?? '') ||
     evidence.issue.state !== 'OPEN' ||
     !labels.includes('worker:peon') ||
     !labels.includes('status:in-progress') ||
@@ -475,6 +490,8 @@ export function validatePilotEvidence(
       evidence.state?.kind !== 'authorized' ||
       authorization?.schema !== 'stellar.single-use-peon-pilot/v1' ||
       authorization.issueNumber !== issueNumber ||
+      authorization.issueDigest !== evidence.issueDigest ||
+      authorization.feedbackLevel !== 'diagnostic' ||
       authorization.sessionId !== expected.sessionId ||
       authorization.branch !== expected.branch ||
       authorization.worktreePath !== claim.worktreePath ||
@@ -490,6 +507,7 @@ export function validatePilotEvidence(
   return {
     go: true,
     issueNumber,
+    issueDigest: evidence.issueDigest,
     pilotNumber,
     sessionId: expected.sessionId,
     branch: expected.branch,
@@ -537,11 +555,25 @@ export async function runPilotOperation(
       signal: controller.signal,
     };
     if (expected.operation === 'authorize') {
-      const authorization = await issueAuthorization(options);
-      controller.signal.throwIfAborted();
+      const authorization = await issueAuthorization({
+        ...options,
+        expectedIdentity: {
+          issueNumber,
+          issueDigest: evidence.issueDigest,
+          sessionId: expected.sessionId,
+          branch: expected.branch,
+          worktreePath: evidence.claim.worktreePath,
+          sourceRevision: expected.revision,
+          sourceFingerprint: expected.fingerprint,
+          independentAttemptId: attempts[0],
+          correctionAttemptId: attempts[1],
+        },
+      });
       if (
         authorization?.schema !== 'stellar.single-use-peon-pilot/v1' ||
         authorization.issueNumber !== issueNumber ||
+        authorization.issueDigest !== evidence.issueDigest ||
+        authorization.feedbackLevel !== 'diagnostic' ||
         authorization.sessionId !== expected.sessionId ||
         authorization.branch !== expected.branch ||
         authorization.worktreePath !== evidence.claim.worktreePath ||
@@ -557,6 +589,7 @@ export async function runPilotOperation(
         ...report,
         state: 'authorized',
         authorizationId: authorization.id,
+        interruptedAfterCommit: controller.signal.aborted,
       };
     }
     const result = await runPilot(options);

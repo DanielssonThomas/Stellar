@@ -182,8 +182,23 @@ function assertBound(current, authorization) {
 /** Explicit maintainer action for a later live pilot; never called by dispatch. */
 export async function issueSingleUsePilotAuthorization(options, adapters = {}) {
   const current = await inspectSingleUsePilotAuthority(options, adapters);
+  const expected = options.expectedIdentity;
+  if (
+    expected?.issueNumber !== issueNumber ||
+    expected.issueDigest !== current.issueDigest ||
+    expected.sessionId !== current.claim.sessionId ||
+    expected.branch !== current.claim.branch ||
+    expected.worktreePath !== current.claim.worktreePath ||
+    expected.sourceRevision !== current.revision ||
+    expected.sourceFingerprint !== current.source.fingerprint ||
+    expected.independentAttemptId !== 'issue-138-attempt-1' ||
+    expected.correctionAttemptId !== 'issue-138-attempt-2'
+  )
+    throw new Error('Approved pilot identity changed before issuance.');
+  options.signal?.throwIfAborted();
   const paths = singleUsePilotStatePaths(options.repositoryRoot);
   await mkdir(paths.root, { recursive: true, mode: 0o700 });
+  options.signal?.throwIfAborted();
   const authorization = {
     schema: 'stellar.single-use-peon-pilot/v1',
     id: randomUUID(),

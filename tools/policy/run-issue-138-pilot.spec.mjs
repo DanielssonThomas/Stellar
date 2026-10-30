@@ -8,11 +8,13 @@ import {
   parsePilotArguments,
   runPilotOperation,
   validatePilotEvidence,
+  validatePinnedImageId,
 } from './run-issue-138-pilot.mjs';
 import { trustedPeonWorkerImage } from './supervised-peon-run.mjs';
 
 const revision = 'a'.repeat(40);
 const fingerprint = 'b'.repeat(64);
+const issueDigest = 'c'.repeat(64);
 const cacheDigest =
   '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0';
 const modelDigest =
@@ -90,6 +92,7 @@ function evidence(kind = 'empty') {
         'hermes-workflow:minimal-coding',
       ],
     },
+    issueDigest,
     claim,
     revision,
     source: {
@@ -115,6 +118,8 @@ function evidence(kind = 'empty') {
             authorization: {
               schema: 'stellar.single-use-peon-pilot/v1',
               issueNumber: 138,
+              issueDigest,
+              feedbackLevel: 'diagnostic',
               sessionId,
               branch,
               worktreePath: claim.worktreePath,
@@ -137,6 +142,13 @@ test('actual CLI without a fixed operation exits before any model request or sta
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Choose exactly one operation/);
   assert.equal(result.stdout, '');
+});
+
+test('read-only Podman image inspection accepts the existing rootless ID shape', () => {
+  const id = 'a'.repeat(64);
+  assert.equal(validatePinnedImageId(id), id);
+  assert.equal(validatePinnedImageId(`sha256:${id}`), `sha256:${id}`);
+  assert.throws(() => validatePinnedImageId('not-an-image-id'));
 });
 
 test('parser requires every exact identity and an explicit authorization approval token', () => {
@@ -195,6 +207,9 @@ test('stale, dirty, missing or substituted preflight evidence fails before autho
     },
     (item) => {
       item.claim.sessionId = 'wrong';
+    },
+    (item) => {
+      item.issueDigest = 'not-a-digest';
     },
     (item) => {
       item.claim.expiresAt = new Date(Date.now() - 1).toISOString();
@@ -260,11 +275,25 @@ test('explicit authorization calls the existing issuer once and refuses duplicat
   let calls = 0;
   const operations = {
     inspect: async () => evidence(),
-    issueAuthorization: async () => {
+    issueAuthorization: async ({ expectedIdentity, signal }) => {
       calls += 1;
+      assert.equal(signal.aborted, false);
+      assert.deepEqual(expectedIdentity, {
+        issueNumber: 138,
+        issueDigest,
+        sessionId,
+        branch,
+        worktreePath: path.resolve('disposable/issue-138'),
+        sourceRevision: revision,
+        sourceFingerprint: fingerprint,
+        independentAttemptId: 'issue-138-attempt-1',
+        correctionAttemptId: 'issue-138-attempt-2',
+      });
       return {
         schema: 'stellar.single-use-peon-pilot/v1',
         issueNumber: 138,
+        issueDigest,
+        feedbackLevel: 'diagnostic',
         id: 'inert-id',
         sessionId,
         branch,
@@ -283,6 +312,37 @@ test('explicit authorization calls the existing issuer once and refuses duplicat
   operations.inspect = async () => evidence('authorized');
   await assert.rejects(runPilotOperation(argv('authorize'), operations));
   assert.equal(calls, 1);
+});
+
+test('signal after a durable authorization commit is reported as committed', async () => {
+  const signals = new EventEmitter();
+  const result = await runPilotOperation(argv('authorize'), {
+    inspect: async () => evidence(),
+    issueAuthorization: async () => {
+      signals.emit('SIGINT');
+      signals.emit('SIGTERM');
+      return {
+        schema: 'stellar.single-use-peon-pilot/v1',
+        issueNumber: 138,
+        issueDigest,
+        feedbackLevel: 'diagnostic',
+        id: 'committed-inert-id',
+        sessionId,
+        branch,
+        worktreePath: path.resolve('disposable/issue-138'),
+        sourceRevision: revision,
+        sourceFingerprint: fingerprint,
+        independentAttemptId: 'issue-138-attempt-1',
+        correctionAttemptId: 'issue-138-attempt-2',
+      };
+    },
+    signalSource: signals,
+  });
+  assert.equal(result.state, 'authorized');
+  assert.equal(result.authorizationId, 'committed-inert-id');
+  assert.equal(result.interruptedAfterCommit, true);
+  assert.equal(signals.listenerCount('SIGINT'), 0);
+  assert.equal(signals.listenerCount('SIGTERM'), 0);
 });
 
 test('execute accepts only exact issued authority, does not reauthorize, and cannot replay', async () => {
