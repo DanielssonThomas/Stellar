@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
+  inspectHostCheckout,
   parsePilotArguments,
   runPilotOperation,
   validatePilotEvidence,
@@ -149,6 +152,66 @@ test('read-only Podman image inspection accepts the existing rootless ID shape',
   assert.equal(validatePinnedImageId(id), id);
   assert.equal(validatePinnedImageId(`sha256:${id}`), `sha256:${id}`);
   assert.throws(() => validatePinnedImageId('not-an-image-id'));
+});
+
+test('host checkout rejects hidden assume-unchanged and skip-worktree changes', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'stellar-host-158-'));
+  const commandFile = path.join(root, 'tools/policy/run-issue-138-pilot.mjs');
+  const runnerFile = path.join(root, 'tools/policy/single-use-peon-pilot.mjs');
+  const runnerPath = 'tools/policy/single-use-peon-pilot.mjs';
+  const git = (args) => {
+    const result = spawnSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    mkdirSync(path.dirname(commandFile), { recursive: true });
+    writeFileSync(commandFile, 'export const command = true;\n');
+    writeFileSync(runnerFile, 'export const runner = true;\n');
+    git(['init', '-b', 'develop']);
+    git(['config', 'core.autocrlf', 'false']);
+    git(['add', '.']);
+    git([
+      '-c',
+      'user.name=Inert Test',
+      '-c',
+      'user.email=inert@example.invalid',
+      'commit',
+      '-m',
+      'inert fixture',
+    ]);
+    assert.equal(inspectHostCheckout(root).trackedClean, true);
+    for (const [setFlag, clearFlag] of [
+      ['--assume-unchanged', '--no-assume-unchanged'],
+      ['--skip-worktree', '--no-skip-worktree'],
+    ]) {
+      git(['update-index', setFlag, runnerPath]);
+      writeFileSync(runnerFile, 'export const runner = false;\n');
+      assert.equal(
+        git(['status', '--porcelain=v1', '--untracked-files=no']),
+        '',
+      );
+      assert.throws(
+        () => inspectHostCheckout(root),
+        /Unsafe or malformed workspace index/,
+      );
+      git(['update-index', clearFlag, runnerPath]);
+      git(['restore', '--', runnerPath]);
+    }
+    assert.equal(inspectHostCheckout(root).trackedClean, true);
+  } finally {
+    if (
+      path
+        .resolve(root)
+        .startsWith(`${path.resolve(os.tmpdir())}${path.sep}`) &&
+      path.basename(root).startsWith('stellar-host-158-')
+    )
+      rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('parser requires every exact identity and an explicit authorization approval token', () => {

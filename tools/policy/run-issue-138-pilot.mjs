@@ -16,7 +16,10 @@ import {
   inspectClaimedWorktree,
   trustedPeonWorkerImage,
 } from './supervised-peon-run.mjs';
-import { runWorkspaceInspection } from './run-restricted-worker.mjs';
+import {
+  runWorkspaceInspection,
+  trustedIndexRecords,
+} from './run-restricted-worker.mjs';
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -156,8 +159,8 @@ function wsl(args, timeout = 10_000, maxBuffer = 16 * 1024) {
   return runWorkspaceInspection(args, { timeout, maxBuffer }).trim();
 }
 
-function inspectHostCheckout() {
-  const read = (args) => {
+export function inspectHostCheckout(root = repositoryRoot) {
+  const read = (args, maxBuffer = 1024) => {
     const result = spawnSync(
       'git',
       [
@@ -166,16 +169,21 @@ function inspectHostCheckout() {
         'core.fsmonitor=false',
         '-c',
         'core.untrackedCache=false',
+        '-c',
+        'core.ignorestat=false',
+        '-c',
+        'core.trustctime=true',
+        '-c',
+        'core.checkstat=default',
         '-C',
-        repositoryRoot,
+        root,
         ...args,
       ],
       {
-        cwd: repositoryRoot,
-        encoding: 'utf8',
+        cwd: root,
         windowsHide: true,
         timeout: 10_000,
-        maxBuffer: 1024,
+        maxBuffer,
         env: {
           ...process.env,
           GIT_CONFIG_NOSYSTEM: '1',
@@ -188,14 +196,26 @@ function inspectHostCheckout() {
     );
     if (result.error || result.status !== 0)
       throw new Error('Trusted host checkout could not be inspected.');
-    return result.stdout.trim();
+    return new TextDecoder('utf-8', { fatal: true }).decode(result.stdout);
   };
   read(['ls-files', '--error-unmatch', 'tools/policy/run-issue-138-pilot.mjs']);
+  const index = () =>
+    trustedIndexRecords(
+      read(['ls-files', '--cached', '--stage', '-v', '-z'], 8 * 1024 * 1024),
+    );
+  const before = index();
+  const branch = read(['branch', '--show-current']).trim();
+  const revision = read(['rev-parse', 'HEAD']).trim();
+  const status = read(
+    ['status', '--porcelain=v1', '--untracked-files=no'],
+    8 * 1024 * 1024,
+  );
+  if (JSON.stringify(index()) !== JSON.stringify(before))
+    throw new Error('Trusted host index changed during inspection.');
   return {
-    branch: read(['branch', '--show-current']),
-    revision: read(['rev-parse', 'HEAD']),
-    trackedClean:
-      read(['status', '--porcelain=v1', '--untracked-files=no']) === '',
+    branch,
+    revision,
+    trackedClean: status.trim() === '',
   };
 }
 
