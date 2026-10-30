@@ -81,6 +81,36 @@ test('named checks retain the restricted image, resources, network and attempt-l
   assert.ok(args.every((arg) => !arg.includes('stellar-dependency-cache')));
 });
 
+test('molecule checks accept only the reviewed fixed commands', () => {
+  const commands = [
+    ['pnpm', 'exec', 'nx', 'show', 'project', 'ui-molecules', '--json'],
+    ['pnpm', 'exec', 'nx', 'run', 'ui-molecules:lint'],
+    [
+      'pnpm',
+      'exec',
+      'node',
+      'tools/policy/run-ui-molecules-tests.mjs',
+      '--require-agent-status',
+    ],
+    ['pnpm', 'exec', 'nx', 'run', 'ui-molecules:build'],
+  ];
+  for (const command of commands) {
+    const args = buildCandidateTestArgs(options, candidate, workspace, command);
+    assert.ok(args.includes('--entrypoint=corepack'));
+    assert.deepEqual(args.slice(-command.length), command);
+  }
+  for (const command of [
+    ['pnpm', 'exec', 'nx', 'run', 'ui-molecules:unit-test'],
+    ['node', 'tools/policy/run-ui-molecules-tests.mjs'],
+    ['node', 'tools/policy/run-ui-molecules-tests.mjs', '--skip-tests'],
+    ['pnpm', 'exec', 'node', 'tools/policy/run-ui-molecules-tests.mjs'],
+  ])
+    assert.throws(
+      () => buildCandidateTestArgs(options, candidate, workspace, command),
+      /named command/,
+    );
+});
+
 test('unreviewed commands, substituted workspaces and stale attempt paths fail closed', () => {
   for (const command of [
     ['pnpm', 'run', 'arbitrary'],
@@ -195,7 +225,7 @@ test('offline metadata, missing contents, lock mismatch and uncertain install re
 test('reviewed lockfile and package inputs are required before any execution', async () => {
   assert.equal(
     validateReviewedDependencyInputs(candidate),
-    'd58b1d779f62119bfc1d38a264a7ca1ca779488beff9f06d882cd0a1cc6ecee5',
+    '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
   );
   const lfCandidate = {
     ...candidate,
@@ -213,7 +243,7 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(lfCandidate),
-    'd58b1d779f62119bfc1d38a264a7ca1ca779488beff9f06d882cd0a1cc6ecee5',
+    '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
   );
   const crlfCandidate = {
     ...candidate,
@@ -230,7 +260,7 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(crlfCandidate),
-    'd58b1d779f62119bfc1d38a264a7ca1ca779488beff9f06d882cd0a1cc6ecee5',
+    '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
   );
   await assert.rejects(
     runPrivateCandidateChecks(options, {

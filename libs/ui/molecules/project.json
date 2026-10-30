@@ -1,0 +1,38 @@
+{
+  "name": "ui-molecules",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/ui/molecules/src",
+  "prefix": "stellar",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:ui", "layer:molecule"],
+  "targets": {
+    "build": {
+      "executor": "@nx/angular:ng-packagr-lite",
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}"],
+      "options": {
+        "project": "libs/ui/molecules/ng-package.json",
+        "tsConfig": "libs/ui/molecules/tsconfig.lib.json"
+      },
+      "configurations": {
+        "production": {
+          "tsConfig": "libs/ui/molecules/tsconfig.lib.prod.json"
+        },
+        "development": {}
+      },
+      "defaultConfiguration": "production"
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/policy/run-ui-molecules-tests.mjs"
+      }
+    },
+    "unit-test": {
+      "executor": "@nx/angular:unit-test",
+      "options": {}
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}
