@@ -86,6 +86,8 @@ test('molecule checks accept only the reviewed fixed commands', () => {
     ['pnpm', 'exec', 'nx', 'show', 'project', 'ui-molecules', '--json'],
     ['pnpm', 'exec', 'nx', 'run', 'ui-molecules:lint'],
     [
+      'pnpm',
+      'exec',
       'node',
       'tools/policy/run-ui-molecules-tests.mjs',
       '--require-agent-status',
@@ -94,12 +96,14 @@ test('molecule checks accept only the reviewed fixed commands', () => {
   ];
   for (const command of commands) {
     const args = buildCandidateTestArgs(options, candidate, workspace, command);
+    assert.ok(args.includes('--entrypoint=corepack'));
     assert.deepEqual(args.slice(-command.length), command);
   }
   for (const command of [
     ['pnpm', 'exec', 'nx', 'run', 'ui-molecules:unit-test'],
     ['node', 'tools/policy/run-ui-molecules-tests.mjs'],
     ['node', 'tools/policy/run-ui-molecules-tests.mjs', '--skip-tests'],
+    ['pnpm', 'exec', 'node', 'tools/policy/run-ui-molecules-tests.mjs'],
   ])
     assert.throws(
       () => buildCandidateTestArgs(options, candidate, workspace, command),

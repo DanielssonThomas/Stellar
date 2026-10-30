@@ -91,6 +91,8 @@ const checks = Object.freeze({
     'ui-molecules:lint',
   ]),
   'ui-molecules-test': Object.freeze([
+    'pnpm',
+    'exec',
     'node',
     'tools/policy/run-ui-molecules-tests.mjs',
     '--require-agent-status',
