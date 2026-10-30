@@ -196,7 +196,7 @@ async function main() {
       gid: Number(peon(['id', '-g'])),
       workerCompletion: Promise.resolve(),
       cacheRoot:
-        '/home/peon/stellar-dependency-cache/d58b1d779f62119bfc1d38a264a7ca1ca779488beff9f06d882cd0a1cc6ecee5',
+        '/home/peon/stellar-dependency-cache/9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
       checkNames: expectFailure
         ? ['ui-atoms-test']
         : [

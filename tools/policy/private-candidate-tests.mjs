@@ -28,12 +28,12 @@ const trustedFiles = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
 // A lockfile or manifest content change needs a reviewed update to these pins.
 const reviewedTextDigests = Object.freeze({
   'package.json': Object.freeze([
-    '05ca6e62999c20680a9f730b18cf74c7c2221483028e2d690950328e5b541f14',
-    'c962e36cdf3d26b5c876a633db6c7a5e4a6e403aa4a6ed9233c58aeaf970d687',
+    '5638695381ffdc62b5d4aa1e83f99853c82e66db4d4c5fd86b009ce5b127bcb6',
+    'ccea48e999b785ee50ab325e8080ae38d38a41ec2c8fea5b6ea7befc14cb437a',
   ]),
   'pnpm-lock.yaml': Object.freeze([
-    'a1414eb54757d4d2121bcce054e2f2581de851ae3f0399a3c89272254f251eb6',
-    'd58b1d779f62119bfc1d38a264a7ca1ca779488beff9f06d882cd0a1cc6ecee5',
+    '4428c08045dd973b66f15a16f0bb5e977f199d43e800671c16a03ca8137d5f7f',
+    '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
   ]),
   'pnpm-workspace.yaml': Object.freeze([
     'a7bce599f23df0a210f951cc11d96e278b5feaeb15fcaab23141e78555ea28f8',
@@ -73,6 +73,34 @@ const checks = Object.freeze({
     'nx',
     'run',
     'ui-atoms:build',
+  ]),
+  'ui-molecules-discovery': Object.freeze([
+    'pnpm',
+    'exec',
+    'nx',
+    'show',
+    'project',
+    'ui-molecules',
+    '--json',
+  ]),
+  'ui-molecules-lint': Object.freeze([
+    'pnpm',
+    'exec',
+    'nx',
+    'run',
+    'ui-molecules:lint',
+  ]),
+  'ui-molecules-test': Object.freeze([
+    'node',
+    'tools/policy/run-ui-molecules-tests.mjs',
+    '--require-agent-status',
+  ]),
+  'ui-molecules-build': Object.freeze([
+    'pnpm',
+    'exec',
+    'nx',
+    'run',
+    'ui-molecules:build',
   ]),
 });
 const installCommand = Object.freeze([

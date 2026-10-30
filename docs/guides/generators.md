@@ -26,6 +26,8 @@ The `--layer` option accepts `atom`, `molecule`, `organism`, or `template`. File
 
 Each generated component is standalone, includes a `loading` input rendered with `SkeletonAtom`, and has tests for its content and loading state. Atoms reuse the local skeleton file; higher layers import it from `@stellar/ui-atoms`, following the allowed dependency direction.
 
+The `ui-molecules` library is prepared before issue #138 so its generator writes only under `libs/ui/molecules/src/`. The prepared library deliberately exports no `agent-status` component. Its declared Angular and atoms peers are reserved for generated molecules, so the empty baseline excludes only those two peers from Nx's obsolete-dependency lint check; other lint rules remain active. Its `test` target reports an explicit baseline skip while no component exists; once a molecule is generated, the target requires a matching component spec and runs Angular's real `unit-test` target. Trusted candidate verification additionally requires `agent-status` to exist before it runs those tests. The worker's intended writable directory is `libs/ui/molecules/src`, leaving its project configuration and package manifest read-only.
+
 ## Shared services
 
 Create an injectable service in its own shared Angular library:

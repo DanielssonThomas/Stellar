@@ -1,0 +1,50 @@
+import nx from '@nx/eslint-plugin';
+import baseConfig from '../../../eslint.config.mjs';
+
+export default [
+  ...baseConfig,
+  {
+    files: ['**/*.json'],
+    rules: {
+      '@nx/dependency-checks': [
+        'error',
+        {
+          // The empty trusted baseline reserves these peers for generated molecules.
+          ignoredDependencies: ['@angular/core', '@stellar/ui-atoms'],
+          ignoredFiles: ['{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}'],
+        },
+      ],
+    },
+    languageOptions: {
+      parser: await import('jsonc-eslint-parser'),
+    },
+  },
+  ...nx.configs['flat/angular'],
+  ...nx.configs['flat/angular-template'],
+  {
+    files: ['**/*.ts'],
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        {
+          type: 'attribute',
+          prefix: 'stellar',
+          style: 'camelCase',
+        },
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        {
+          type: 'element',
+          prefix: 'stellar',
+          style: 'kebab-case',
+        },
+      ],
+    },
+  },
+  {
+    files: ['**/*.html'],
+    // Override or add rules here
+    rules: {},
+  },
+];

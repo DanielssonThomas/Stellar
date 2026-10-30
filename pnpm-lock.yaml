@@ -180,6 +180,15 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
 
+  libs/ui/molecules:
+    dependencies:
+      '@angular/core':
+        specifier: ^21.2.0
+        version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+      '@stellar/ui-atoms':
+        specifier: workspace:^
+        version: link:../atoms
+
 packages:
   '@algolia/abtesting@1.14.1':
     resolution:
