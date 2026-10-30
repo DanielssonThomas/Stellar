@@ -56,7 +56,7 @@ const maxAttemptBytes = 3 * 1024 ** 3;
 const minFreeBytes = 4 * 1024 ** 3;
 const hex = /^[a-f0-9]{64}$/;
 
-function statePaths(repositoryRoot) {
+export function singleUsePilotStatePaths(repositoryRoot) {
   if (!path.isAbsolute(repositoryRoot ?? ''))
     throw new Error('Trusted absolute repository root is required.');
   const root = path.resolve(
@@ -119,7 +119,7 @@ function fingerprint(issue) {
     .digest('hex');
 }
 
-async function authority(options, adapters) {
+export async function inspectSingleUsePilotAuthority(options, adapters = {}) {
   const issue = await (adapters.loadIssue ?? loadIssue)(issueNumber);
   const claim = await (adapters.inspectClaim ?? inspectClaim)(
     options.repositoryRoot,
@@ -181,9 +181,24 @@ function assertBound(current, authorization) {
 
 /** Explicit maintainer action for a later live pilot; never called by dispatch. */
 export async function issueSingleUsePilotAuthorization(options, adapters = {}) {
-  const current = await authority(options, adapters);
-  const paths = statePaths(options.repositoryRoot);
+  const current = await inspectSingleUsePilotAuthority(options, adapters);
+  const expected = options.expectedIdentity;
+  if (
+    expected?.issueNumber !== issueNumber ||
+    expected.issueDigest !== current.issueDigest ||
+    expected.sessionId !== current.claim.sessionId ||
+    expected.branch !== current.claim.branch ||
+    expected.worktreePath !== current.claim.worktreePath ||
+    expected.sourceRevision !== current.revision ||
+    expected.sourceFingerprint !== current.source.fingerprint ||
+    expected.independentAttemptId !== 'issue-138-attempt-1' ||
+    expected.correctionAttemptId !== 'issue-138-attempt-2'
+  )
+    throw new Error('Approved pilot identity changed before issuance.');
+  options.signal?.throwIfAborted();
+  const paths = singleUsePilotStatePaths(options.repositoryRoot);
   await mkdir(paths.root, { recursive: true, mode: 0o700 });
+  options.signal?.throwIfAborted();
   const authorization = {
     schema: 'stellar.single-use-peon-pilot/v1',
     id: randomUUID(),
@@ -268,7 +283,7 @@ function contextPlan(feedback) {
 }
 
 async function assertCurrent(options, adapters, authorization) {
-  const current = await authority(options, adapters);
+  const current = await inspectSingleUsePilotAuthority(options, adapters);
   assertBound(current, authorization);
   return current;
 }
@@ -569,8 +584,8 @@ async function runAttempt(
   }, 750);
   const handoffPath =
     attemptNumber === 1
-      ? statePaths(options.repositoryRoot).independentHandoff
-      : statePaths(options.repositoryRoot).correctionHandoff;
+      ? singleUsePilotStatePaths(options.repositoryRoot).independentHandoff
+      : singleUsePilotStatePaths(options.repositoryRoot).correctionHandoff;
   try {
     const supervised = await (adapters.runSupervisor ?? superviseWorker)({
       task: current.task,
@@ -706,7 +721,7 @@ function releaseDisposableInputs(
 
 /** Consumes the fixed authorization before any worker can start. */
 export async function runSingleUsePeonPilot(options, adapters = {}) {
-  const paths = statePaths(options.repositoryRoot);
+  const paths = singleUsePilotStatePaths(options.repositoryRoot);
   if (options.signal?.aborted) throw new Error('Pilot was cancelled.');
   if (await exists(paths.consumed))
     throw new Error('Single-use pilot authorization was already consumed.');
@@ -900,7 +915,7 @@ export async function recoverSingleUsePeonPilot({
 }) {
   if (typeof confirmSupervisorStopped !== 'function')
     throw new Error('Trusted supervisor termination proof is required.');
-  const paths = statePaths(repositoryRoot);
+  const paths = singleUsePilotStatePaths(repositoryRoot);
   const active = await readState(paths.active);
   if (
     active.schema !== 'stellar.single-use-peon-pilot-active/v1' ||

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -10,6 +11,7 @@ import {
   runSingleUsePeonPilot,
 } from './single-use-peon-pilot.mjs';
 import { readHandoff, superviseWorker } from './supervise-worker.mjs';
+import './run-issue-138-pilot.spec.mjs';
 
 const revision = 'a'.repeat(40);
 const sourceDigest = 'b'.repeat(64);
@@ -70,7 +72,32 @@ async function fixture(mode = 'success') {
     changes: [],
   };
   const observed = { workers: 0, copies: 0, checks: 0, limits: [] };
-  const options = { repositoryRoot, sessionId };
+  const options = {
+    repositoryRoot,
+    sessionId,
+    expectedIdentity: {
+      issueNumber: 138,
+      issueDigest: createHash('sha256')
+        .update(
+          JSON.stringify({
+            number: issue.number,
+            state: issue.state,
+            title: issue.title,
+            body: issue.body,
+            labels: issue.labels,
+            dependencies: issue.dependencies,
+          }),
+        )
+        .digest('hex'),
+      sessionId,
+      branch,
+      worktreePath: claim.worktreePath,
+      sourceRevision: revision,
+      sourceFingerprint: sourceDigest,
+      independentAttemptId: 'issue-138-attempt-1',
+      correctionAttemptId: 'issue-138-attempt-2',
+    },
+  };
   const adapters = {
     loadIssue: async () => issue,
     inspectClaim: async () => claim,
@@ -238,6 +265,72 @@ test('one independent metered success ends without feedback or correction', asyn
       runSingleUsePeonPilot(f.options, f.adapters),
       /already consumed/,
     );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test('issuance rejects changed approval or cancellation before durable state writes', async () => {
+  for (const mode of ['changed-source', 'changed-issue', 'cancelled']) {
+    const f = await fixture();
+    try {
+      if (mode === 'changed-source') f.source.fingerprint = 'e'.repeat(64);
+      else if (mode === 'changed-issue')
+        f.adapters.loadIssue = async () => ({
+          ...issue,
+          title: 'Changed task',
+        });
+      else {
+        const controller = new AbortController();
+        controller.abort(new Error('Operator cancelled issuance.'));
+        f.options.signal = controller.signal;
+      }
+      await assert.rejects(
+        issueSingleUsePilotAuthorization(f.options, f.adapters),
+      );
+      const issued = path.join(
+        f.root,
+        '.stellar-supervisor-state',
+        'single-use-pilot-138',
+        'issued.json',
+      );
+      await assert.rejects(readFile(issued, 'utf8'), { code: 'ENOENT' });
+    } finally {
+      await f.cleanup();
+    }
+  }
+});
+
+test('cancellation during issuer reread cannot persist authorization', async () => {
+  const f = await fixture();
+  try {
+    const controller = new AbortController();
+    f.options.signal = controller.signal;
+    let entered;
+    const rereadStarted = new Promise((resolve) => {
+      entered = resolve;
+    });
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    f.adapters.inspectWorkspace = async () => {
+      entered();
+      await gate;
+      return f.source;
+    };
+    const pending = issueSingleUsePilotAuthorization(f.options, f.adapters);
+    await rereadStarted;
+    controller.abort(new Error('Operator cancelled during reread.'));
+    release();
+    await assert.rejects(pending);
+    const issued = path.join(
+      f.root,
+      '.stellar-supervisor-state',
+      'single-use-pilot-138',
+      'issued.json',
+    );
+    await assert.rejects(readFile(issued, 'utf8'), { code: 'ENOENT' });
   } finally {
     await f.cleanup();
   }
