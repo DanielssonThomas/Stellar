@@ -1,11 +1,633 @@
-<main
-  class="flex min-h-screen flex-col items-center justify-center gap-stellar-4 bg-stellar-canvas p-stellar-4 text-stellar-foreground"
->
-  <h1 class="font-stellar-sans text-stellar-display font-semibold">
-    Stellar foundation
-  </h1>
-  <p class="text-stellar-body" data-testid="action-count" aria-live="polite">
-    Actions: {{ actionCount() }}
-  </p>
-  <stellar-button-atom label="Open workspace" (activated)="recordAction()" />
-</main>
+<div class="stellar-surface min-h-screen text-stellar-foreground">
+  <div class="mx-auto flex min-h-screen max-w-[1800px] flex-col lg:flex-row">
+    <aside
+      class="border-b border-stellar-line bg-stellar-panel/85 px-5 py-5 lg:sticky lg:top-0 lg:h-screen lg:w-64 lg:shrink-0 lg:border-r lg:border-b-0 lg:px-6 lg:py-8"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="flex h-10 w-10 items-center justify-center rounded-xl border border-stellar-primary/40 bg-stellar-primary/15 text-xl font-black text-stellar-accent"
+        >
+          ✦
+        </div>
+        <div>
+          <p class="text-lg font-bold tracking-[0.2em]">STELLAR</p>
+          <p
+            class="text-[10px] font-medium uppercase tracking-[0.28em] text-stellar-muted"
+          >
+            Command center
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="mt-6 flex gap-2 lg:mt-12 lg:flex-col"
+        aria-label="Dashboard views"
+      >
+        <button
+          type="button"
+          [class]="
+            'flex flex-1 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors lg:flex-none ' +
+            (view() === 'operations'
+              ? 'bg-stellar-primary/15 text-stellar-accent'
+              : 'text-stellar-muted')
+          "
+          [attr.aria-pressed]="view() === 'operations'"
+          (click)="view.set('operations')"
+        >
+          <span aria-hidden="true">◈</span> Operations
+        </button>
+        <button
+          type="button"
+          [class]="
+            'flex flex-1 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors lg:flex-none ' +
+            (view() === 'studio'
+              ? 'bg-stellar-primary/15 text-stellar-accent'
+              : 'text-stellar-muted')
+          "
+          [attr.aria-pressed]="view() === 'studio'"
+          (click)="view.set('studio')"
+        >
+          <span aria-hidden="true">◇</span> Character Studio
+        </button>
+      </div>
+
+      <div
+        class="mt-8 hidden rounded-2xl border border-stellar-line bg-stellar-panel-raised/70 p-4 lg:block"
+      >
+        <p
+          class="text-[10px] font-bold uppercase tracking-[0.22em] text-stellar-muted"
+        >
+          Data integrity
+        </p>
+        <p class="mt-2 text-sm font-semibold">Observed, not assumed.</p>
+        <p class="mt-2 text-xs leading-relaxed text-stellar-muted">
+          A configured profile is never counted as a running agent.
+        </p>
+      </div>
+      <p class="mt-8 hidden text-[11px] text-stellar-muted lg:block">
+        Local status · Read only
+      </p>
+    </aside>
+
+    <main class="min-w-0 flex-1 px-5 pb-16 pt-7 sm:px-8 lg:px-10 lg:pt-9">
+      <header
+        class="flex flex-col gap-5 border-b border-stellar-line pb-7 sm:flex-row sm:items-start sm:justify-between"
+      >
+        <div>
+          <div
+            class="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-stellar-accent"
+          >
+            <span class="h-1.5 w-1.5 rounded-full bg-stellar-good"></span>
+            Stellar / Workspace
+          </div>
+          <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+            {{
+              view() === 'operations'
+                ? 'Operations Overview'
+                : 'Character Studio'
+            }}
+          </h1>
+          <p class="mt-2 max-w-2xl text-sm text-stellar-muted">
+            {{
+              view() === 'operations'
+                ? 'A live window into profiles, sessions, issues, and review work.'
+                : 'The production path from approved character references to finished Blender assets.'
+            }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-stellar-line bg-stellar-panel-raised px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-stellar-foreground transition-colors hover:border-stellar-primary focus-visible:outline-2 focus-visible:outline-stellar-primary"
+          (click)="refresh()"
+          [disabled]="loading()"
+        >
+          <span aria-hidden="true">↻</span> Refresh status
+        </button>
+      </header>
+
+      @if (loading()) {
+        <div
+          class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          aria-live="polite"
+          aria-label="Loading dashboard status"
+        >
+          @for (item of [1, 2, 3, 4]; track item) {
+            <div class="stellar-card rounded-2xl p-6">
+              <stellar-skeleton-atom />
+              <div class="mt-5"><stellar-skeleton-atom shape="control" /></div>
+            </div>
+          }
+        </div>
+      } @else if (error() && !snapshot()) {
+        <section class="stellar-card mt-8 rounded-2xl p-8" role="status">
+          <p class="text-lg font-semibold">Local status is unavailable</p>
+          <p class="mt-2 text-sm text-stellar-muted">
+            Start the read-only status adapter, then refresh. No activity is
+            inferred while it is offline.
+          </p>
+        </section>
+      }
+
+      @if (snapshot(); as data) {
+        <div
+          class="mt-5 flex flex-wrap items-center gap-3 text-[11px] text-stellar-muted"
+        >
+          <span
+            class="rounded-full border border-stellar-good/30 bg-stellar-good/10 px-3 py-1 font-semibold text-stellar-good"
+            >Local Hermes status</span
+          >
+          <span>Observed {{ data.observedAt | date: 'medium' }}</span>
+          @if (data.github.state === 'live') {
+            <span>· Public GitHub API</span>
+          } @else {
+            <span>· GitHub unavailable</span>
+          }
+          @if (error()) {
+            <span class="text-stellar-warn"
+              >· Refresh failed; showing last observation</span
+            >
+          }
+        </div>
+
+        @if (view() === 'operations') {
+          <section
+            class="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+            aria-label="Operations metrics"
+          >
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-xs font-semibold uppercase tracking-[0.15em] text-stellar-muted"
+              >
+                Configured profiles
+              </p>
+              <p
+                class="mt-4 text-3xl font-semibold"
+                data-testid="configured-profiles"
+              >
+                {{ configuredProfiles() }}
+              </p>
+              <p class="mt-2 text-xs text-stellar-muted">
+                Across 5 roles · not live agents
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-xs font-semibold uppercase tracking-[0.15em] text-stellar-muted"
+              >
+                Open issues
+              </p>
+              <p class="mt-4 text-3xl font-semibold">
+                {{
+                  data.github.state === 'live' ? data.github.issues.length : '—'
+                }}
+              </p>
+              <p class="mt-2 text-xs text-stellar-muted">
+                {{
+                  data.github.state === 'live'
+                    ? 'Public GitHub issue feed'
+                    : 'Source unavailable'
+                }}
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-xs font-semibold uppercase tracking-[0.15em] text-stellar-muted"
+              >
+                Blocked work
+              </p>
+              <p class="mt-4 text-3xl font-semibold text-stellar-warn">
+                {{
+                  data.github.state === 'live' ? blockedIssues().length : '—'
+                }}
+              </p>
+              <p class="mt-2 text-xs text-stellar-muted">
+                Issues marked status:blocked
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-xs font-semibold uppercase tracking-[0.15em] text-stellar-muted"
+              >
+                Recorded API calls
+              </p>
+              <p class="mt-4 text-3xl font-semibold">
+                {{ usageCoverage() === 'unavailable' ? '—' : totalCalls() }}
+              </p>
+              <p class="mt-2 text-xs text-stellar-muted">
+                {{
+                  usageCoverage() === 'unavailable'
+                    ? 'Session sources unavailable'
+                    : usageCoverage() === 'partial'
+                      ? 'Partial local session history'
+                      : 'Local session history only'
+                }}
+              </p>
+            </div>
+          </section>
+
+          <section class="mt-10" aria-labelledby="agent-heading">
+            <div class="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <p
+                  class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+                >
+                  01 / Engineering organization
+                </p>
+                <h2 id="agent-heading" class="mt-1 text-xl font-semibold">
+                  Agents & profiles
+                </h2>
+              </div>
+              <p class="hidden text-xs text-stellar-muted sm:block">
+                No process liveness is inferred
+              </p>
+            </div>
+            <div class="grid gap-4 xl:grid-cols-2">
+              @for (role of roles; track role) {
+                <article class="stellar-card rounded-2xl p-5">
+                  <div class="flex items-center justify-between gap-3">
+                    <h3 class="text-lg font-semibold">{{ role }}</h3>
+                    <span
+                      class="rounded-full border border-stellar-line px-2.5 py-1 text-[10px] uppercase tracking-wider text-stellar-muted"
+                      >{{ profilesFor(role).length }} profile{{
+                        profilesFor(role).length === 1 ? '' : 's'
+                      }}</span
+                    >
+                  </div>
+                  <div class="mt-4 space-y-3">
+                    @for (profile of profilesFor(role); track profile.id) {
+                      <div
+                        class="rounded-xl border border-stellar-line bg-stellar-canvas/45 p-4"
+                      >
+                        <div
+                          class="flex flex-wrap items-start justify-between gap-2"
+                        >
+                          <div>
+                            <p class="text-sm font-semibold">
+                              {{ profile.id }}
+                            </p>
+                            <p class="mt-0.5 text-xs text-stellar-muted">
+                              {{ profile.mode }}
+                            </p>
+                          </div>
+                          <span [class]="stateClasses(profile.sessionCount)">{{
+                            profile.sessionState === 'unavailable'
+                              ? 'Status unavailable'
+                              : profile.sessionCount > 0
+                                ? 'Session recorded'
+                                : 'No session'
+                          }}</span>
+                        </div>
+                        <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <p class="text-stellar-muted">Model</p>
+                            <p class="mt-1 break-words font-medium">
+                              {{ profile.model }}
+                            </p>
+                          </div>
+                          <div>
+                            <p class="text-stellar-muted">Provider</p>
+                            <p class="mt-1 break-words font-medium">
+                              {{ profile.provider }}
+                            </p>
+                          </div>
+                        </div>
+                        <div
+                          class="mt-4 flex flex-wrap justify-between gap-2 border-t border-stellar-line pt-3 text-[11px] text-stellar-muted"
+                        >
+                          <span
+                            >Last activity:
+                            {{
+                              profile.lastActivity
+                                ? (profile.lastActivity | date: 'short')
+                                : 'Not observed'
+                            }}</span
+                          ><span>{{
+                            profile.sessionState === 'unavailable'
+                              ? 'Session source unavailable'
+                              : profile.sessionCount + ' recorded sessions'
+                          }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+
+          <section
+            class="mt-10 grid gap-5 xl:grid-cols-2"
+            aria-label="Work queues"
+          >
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                02 / Delivery
+              </p>
+              <h2 class="mt-1 text-xl font-semibold">Issues & assignments</h2>
+              @if (data.github.state === 'live' && data.github.issues.length) {
+                <ul class="mt-5 divide-y divide-stellar-line">
+                  @for (
+                    issue of data.github.issues.slice(0, 7);
+                    track issue.number
+                  ) {
+                    <li class="py-3">
+                      <a
+                        [href]="issue.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-sm font-medium hover:text-stellar-accent"
+                        >#{{ issue.number }} {{ issue.title }}</a
+                      >
+                      <p class="mt-1 text-[11px] text-stellar-muted">
+                        {{ issue.owner }} · {{ issue.status }}
+                      </p>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="mt-5 text-sm text-stellar-muted">
+                  {{
+                    data.github.state === 'live'
+                      ? 'No open issues.'
+                      : 'GitHub issue feed unavailable.'
+                  }}
+                </p>
+              }
+            </div>
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                03 / Decisions
+              </p>
+              <h2 class="mt-1 text-xl font-semibold">
+                Review & approval queue
+              </h2>
+              @if (data.github.state === 'live' && data.github.pulls.length) {
+                <ul class="mt-5 divide-y divide-stellar-line">
+                  @for (
+                    pull of data.github.pulls.slice(0, 7);
+                    track pull.number
+                  ) {
+                    <li class="flex items-start justify-between gap-3 py-3">
+                      <a
+                        [href]="pull.url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-sm font-medium hover:text-stellar-accent"
+                        >#{{ pull.number }} {{ pull.title }}</a
+                      ><span
+                        class="shrink-0 rounded-full border border-stellar-line px-2 py-1 text-[10px] text-stellar-muted"
+                        >{{ pull.draft ? 'Draft' : 'Open PR' }}</span
+                      >
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="mt-5 text-sm text-stellar-muted">
+                  {{
+                    data.github.state === 'live'
+                      ? 'No open pull requests.'
+                      : 'GitHub review feed unavailable.'
+                  }}
+                </p>
+              }
+              <p
+                class="mt-4 border-t border-stellar-line pt-3 text-xs text-stellar-muted"
+              >
+                Approval decisions remain with the trusted host and human
+                reviewer.
+              </p>
+            </div>
+          </section>
+
+          <section
+            class="mt-5 grid gap-5 xl:grid-cols-2"
+            aria-label="Activity and usage"
+          >
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                04 / Execution
+              </p>
+              <h2 class="mt-1 text-xl font-semibold">Recent recorded events</h2>
+              @if (events().length) {
+                <ul class="mt-5 divide-y divide-stellar-line">
+                  @for (event of events(); track event.profile + event.at) {
+                    <li
+                      class="flex items-center justify-between gap-3 py-3 text-sm"
+                    >
+                      <span
+                        >{{
+                          event.kind === 'failure'
+                            ? 'Session failure'
+                            : 'Session activity'
+                        }}
+                        · {{ event.role }}</span
+                      ><span class="text-xs text-stellar-muted">{{
+                        event.at | date: 'short'
+                      }}</span>
+                    </li>
+                  }
+                </ul>
+                <p
+                  class="mt-4 border-t border-stellar-line pt-3 text-xs text-stellar-muted"
+                >
+                  {{ recentFailures() }} classified failures in this recent
+                  event sample.
+                </p>
+              } @else {
+                <p class="mt-5 text-sm text-stellar-muted">
+                  {{
+                    usageCoverage() === 'unavailable'
+                      ? 'Session history unavailable.'
+                      : 'No recorded events in the available session sources.'
+                  }}
+                </p>
+              }
+            </div>
+            <div class="stellar-card rounded-2xl p-5">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                05 / Usage
+              </p>
+              <h2 class="mt-1 text-xl font-semibold">Local session usage</h2>
+              <p class="mt-5 text-3xl font-semibold">
+                {{
+                  usageCoverage() === 'unavailable'
+                    ? '—'
+                    : totalTokens().toLocaleString()
+                }}
+                @if (usageCoverage() !== 'unavailable') {
+                  <span class="text-sm font-normal text-stellar-muted"
+                    >tokens</span
+                  >
+                }
+              </p>
+              <p class="mt-3 text-sm text-stellar-muted">
+                {{
+                  usageCoverage() === 'unavailable'
+                    ? 'Session usage unavailable.'
+                    : totalCalls() +
+                      ' recorded model calls across available Hermes profiles.'
+                }}
+                @if (usageCoverage() === 'partial') {
+                  Some profile session sources are unavailable.
+                }
+              </p>
+              <p
+                class="mt-5 border-t border-stellar-line pt-3 text-xs text-stellar-muted"
+              >
+                Account quota and billing are not supplied by this adapter.
+                Check Hermes usage separately.
+              </p>
+            </div>
+          </section>
+        } @else {
+          <section
+            class="relative mt-8 overflow-hidden rounded-3xl border border-stellar-primary/25 bg-stellar-panel p-7 sm:p-9"
+          >
+            <div
+              class="stellar-glow pointer-events-none absolute -right-24 -top-24 h-80 w-80"
+            ></div>
+            <div class="relative">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.22em] text-stellar-accent"
+              >
+                Production pipeline
+              </p>
+              <h2 class="mt-3 text-2xl font-semibold">
+                One character. A clear handoff.
+              </h2>
+              <p
+                class="mt-3 max-w-2xl text-sm leading-relaxed text-stellar-muted"
+              >
+                No approved character record is connected yet. This studio shows
+                the required stages and leaves unknown progress unclaimed until
+                a source is linked.
+              </p>
+            </div>
+          </section>
+          <section
+            class="mt-7 grid gap-4 lg:grid-cols-2"
+            aria-label="Character production phases"
+          >
+            <div class="stellar-card rounded-2xl p-6">
+              <div class="flex items-center justify-between">
+                <p
+                  class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+                >
+                  Phase 01
+                </p>
+                <span
+                  class="rounded-full border border-stellar-line px-3 py-1 text-[10px] text-stellar-muted"
+                  >Not observed</span
+                >
+              </div>
+              <h3 class="mt-4 text-xl font-semibold">VRoid foundation</h3>
+              <p class="mt-2 text-sm text-stellar-muted">
+                Reference approval, base model, proportions, outfit, and
+                expression pass.
+              </p>
+              <div class="mt-6 h-1.5 rounded-full bg-stellar-line"></div>
+              <p class="mt-3 text-xs text-stellar-muted">
+                Progress awaits a linked project source.
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-6">
+              <div class="flex items-center justify-between">
+                <p
+                  class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+                >
+                  Phase 02
+                </p>
+                <span
+                  class="rounded-full border border-stellar-line px-3 py-1 text-[10px] text-stellar-muted"
+                  >Not observed</span
+                >
+              </div>
+              <h3 class="mt-4 text-xl font-semibold">Blender refinement</h3>
+              <p class="mt-2 text-sm text-stellar-muted">
+                Topology, materials, rigging, final renders, and production
+                handoff.
+              </p>
+              <div class="mt-6 h-1.5 rounded-full bg-stellar-line"></div>
+              <p class="mt-3 text-xs text-stellar-muted">
+                No VRoid handoff recorded.
+              </p>
+            </div>
+          </section>
+          <section
+            class="mt-7 grid gap-4 lg:grid-cols-2"
+            aria-label="Character project records"
+          >
+            <div class="stellar-card rounded-2xl p-6">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                01 / Direction
+              </p>
+              <h3 class="mt-2 text-lg font-semibold">
+                References & design contract
+              </h3>
+              <p
+                class="mt-5 rounded-xl border border-dashed border-stellar-line p-5 text-sm text-stellar-muted"
+              >
+                No approved references or design contract linked.
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-6">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                02 / Collaboration
+              </p>
+              <h3 class="mt-2 text-lg font-semibold">
+                Character agent sessions
+              </h3>
+              <p
+                class="mt-5 rounded-xl border border-dashed border-stellar-line p-5 text-sm text-stellar-muted"
+              >
+                No sessions linked to a character. Hermes profile sessions are
+                not assumed to belong here.
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-6">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                03 / Visual review
+              </p>
+              <h3 class="mt-2 text-lg font-semibold">Latest renders</h3>
+              <p
+                class="mt-5 rounded-xl border border-dashed border-stellar-line p-5 text-sm text-stellar-muted"
+              >
+                No verified render source connected.
+              </p>
+            </div>
+            <div class="stellar-card rounded-2xl p-6">
+              <p
+                class="text-[11px] font-bold uppercase tracking-[0.2em] text-stellar-accent"
+              >
+                04 / Handoff
+              </p>
+              <h3 class="mt-2 text-lg font-semibold">
+                Requirements & next tasks
+              </h3>
+              <p
+                class="mt-5 rounded-xl border border-dashed border-stellar-line p-5 text-sm text-stellar-muted"
+              >
+                Unfulfilled design requirements and VRoid-to-Blender tasks will
+                appear when a character contract is linked.
+              </p>
+            </div>
+          </section>
+        }
+      }
+    </main>
+  </div>
+</div>

@@ -6,6 +6,8 @@ Stellar is an Nx integrated monorepo using Angular 21.2, TypeScript, and pnpm. `
 
 The first UI library is `libs/ui/atoms`. Its components demonstrate conventional atomic-layer naming, Tailwind styling through `libs/design-tokens`, and a reusable skeleton loading primitive. The app imports the component library through its public entry point and the token stylesheet through its global styles.
 
+The application shell now composes a local operations dashboard and Character Studio. A loopback-only Node adapter under `tools/dashboard/` exposes a single read-only status route using fixed Hermes profile IDs and selected session database columns; the app also shows public GitHub issue and PR metadata. The character panels have explicit empty states until an approved character source is linked. See the [local dashboard guide](../guides/operations-dashboard.md) for launch and data boundaries.
+
 ## Dependency direction
 
 Nx project tags and `@nx/enforce-module-boundaries` in `eslint.config.mjs` govern imports. Applications may import shared libraries. Shared libraries may import other shared libraries. UI layer tags constrain dependencies upward from atoms to molecules, organisms, and templates. Cycles and imports that violate these constraints fail linting.

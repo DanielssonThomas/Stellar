@@ -1,0 +1,30 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.stellar-surface {
+  background:
+    radial-gradient(circle at 15% -10%, rgb(113 75 209 / 20%), transparent 30%),
+    radial-gradient(circle at 90% 5%, rgb(40 117 142 / 14%), transparent 28%),
+    var(--stellar-color-canvas);
+}
+
+.stellar-card {
+  background: linear-gradient(145deg, rgb(24 31 51 / 88%), rgb(17 23 40 / 96%));
+  border: 1px solid var(--stellar-color-line);
+  box-shadow: var(--stellar-shadow-card);
+}
+
+.stellar-glow {
+  background: radial-gradient(circle, rgb(166 139 255 / 18%), transparent 65%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+  }
+}
