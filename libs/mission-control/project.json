@@ -1,21 +1,21 @@
 {
-  "name": "service-dashboard-status",
-  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/services/dashboard-status/src",
+  "name": "ui-templates",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/mission-control/src",
   "prefix": "stellar",
   "projectType": "library",
-  "tags": ["scope:shared", "type:util"],
+  "tags": ["scope:shared", "type:ui", "layer:template"],
   "targets": {
     "build": {
       "executor": "@nx/angular:ng-packagr-lite",
       "outputs": ["{workspaceRoot}/dist/{projectRoot}"],
       "options": {
-        "project": "libs/services/dashboard-status/ng-package.json",
-        "tsConfig": "libs/services/dashboard-status/tsconfig.lib.json"
+        "project": "libs/mission-control/ng-package.json",
+        "tsConfig": "libs/mission-control/tsconfig.lib.json"
       },
       "configurations": {
         "production": {
-          "tsConfig": "libs/services/dashboard-status/tsconfig.lib.prod.json"
+          "tsConfig": "libs/mission-control/tsconfig.lib.prod.json"
         },
         "development": {}
       },

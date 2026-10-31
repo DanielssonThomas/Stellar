@@ -4,7 +4,7 @@
   "peerDependencies": {
     "@angular/common": "^21.2.0",
     "@angular/core": "^21.2.0",
-    "@stellar/service-dashboard-status": "workspace:^",
+    "@stellar/service-dashboard-status": "^0.0.1",
     "@stellar/ui-atoms": "workspace:^",
     "clsx": "^2.1.1"
   },
