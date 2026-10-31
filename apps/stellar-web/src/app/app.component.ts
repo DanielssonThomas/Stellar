@@ -1,15 +1,9 @@
-import { Component, signal } from '@angular/core';
-import { ButtonAtom } from '@stellar/ui-atoms';
+import { Component } from '@angular/core';
+import { MissionControlTemplate } from '@stellar/ui-templates';
 
 @Component({
-  imports: [ButtonAtom],
+  imports: [MissionControlTemplate],
   selector: 'stellar-root',
-  templateUrl: './app.component.html',
+  template: '<stellar-mission-control-template />',
 })
-export class AppComponent {
-  readonly actionCount = signal(0);
-
-  recordAction(): void {
-    this.actionCount.update((count) => count + 1);
-  }
-}
+export class AppComponent {}
