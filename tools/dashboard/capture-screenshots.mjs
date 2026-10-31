@@ -14,6 +14,13 @@ try {
   });
   await page.goto('http://127.0.0.1:4200/');
   await page.getByRole('heading', { name: 'Mission Control' }).waitFor();
+  await page.getByRole('button', { name: /^Inspect Peon,/ }).waitFor();
+  await page.screenshot({
+    path: path.join(output, 'stellar-live.png'),
+    fullPage: false,
+  });
+  await page.getByRole('button', { name: 'Operations' }).click();
+  await page.getByText('Running · no live source').waitFor();
   await page.screenshot({
     path: path.join(output, 'stellar-operations.png'),
     fullPage: false,
@@ -23,6 +30,16 @@ try {
   await page.screenshot({
     path: path.join(output, 'stellar-character-studio.png'),
     fullPage: false,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: /Live/ }).click();
+  await page.getByRole('heading', { name: 'Activity', exact: true }).waitFor();
+  await page
+    .getByRole('heading', { name: 'Activity', exact: true })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: path.join(output, 'stellar-live-mobile.png'),
+    fullPage: true,
   });
 } finally {
   await browser.close();

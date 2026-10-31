@@ -4,6 +4,41 @@ test('Mission Control switches views and refreshes status without navigation', a
   page,
 }) => {
   let requests = 0;
+  const liveAgent = (id: string, name: string, project: string) => ({
+    id,
+    name,
+    project,
+    state: 'unknown',
+    sessionId: null,
+    task: null,
+    activity: null,
+    tool: null,
+    model: null,
+    provider: null,
+    usage: null,
+    startedAt: null,
+    lastObservedAt: null,
+    source: {
+      kind: 'hermes',
+      health: 'available',
+      observedAt: new Date().toISOString(),
+    },
+    events: [],
+  });
+  await page.route('**/api/live/events', (route) => route.abort());
+  await page.route('**/api/live', (route) =>
+    route.fulfill({
+      json: {
+        schemaVersion: 1,
+        sequence: 1,
+        observedAt: new Date().toISOString(),
+        agents: [
+          liveAgent('peon', 'Peon', 'stellar'),
+          liveAgent('designer', 'Designer', 'stellar-design'),
+        ],
+      },
+    }),
+  );
   await page.route('**/api/status', async (route) => {
     requests += 1;
     await route.fulfill({
@@ -69,6 +104,20 @@ test('Mission Control switches views and refreshes status without navigation', a
   await expect(
     page.getByRole('heading', { name: 'Mission Control' }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Stellar Live' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Inspect Peon/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Stellar-Design' }).click();
+  await expect(page.getByRole('button', { name: /Inspect Peon/ })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: /Inspect Designer/ }).click();
+  await expect(page.getByText('No verified running activity')).toBeVisible();
+  await page.getByRole('button', { name: 'All agents' }).click();
+  await page.getByRole('button', { name: 'Operations' }).click();
   await expect(page.getByText('Running · no live source')).toBeVisible();
   await page.getByRole('button', { name: 'Character Studio' }).click();
   await expect(

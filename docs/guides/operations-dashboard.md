@@ -4,12 +4,16 @@ The dashboard in `apps/stellar-web` shows read-only observations from local Herm
 
 ## Launch
 
-Use Node 22 and install the repository dependencies with `corepack pnpm install --offline --frozen-lockfile` when the local pnpm store is populated. Start these two commands in separate terminals from the repository checkout:
+Use Node 22 and install the repository dependencies with `corepack pnpm install --offline --frozen-lockfile` when the local pnpm store is populated. Start these three commands in separate terminals from the repository checkout:
 
 ```powershell
 $env:STELLAR_HERMES_ROOT = 'D:\Hermes'
 $env:STELLAR_DESIGN_ROOT = 'D:\ai-repositories\Stellar-Design'
 node tools/dashboard/status-server.mjs
+```
+
+```powershell
+node tools/live/server.mjs
 ```
 
 ```powershell
@@ -22,12 +26,12 @@ The GitHub feed uses unauthenticated public API requests with a four-second time
 
 Character Studio reads the local `Stellar-Design` checkout, not the Stellar engineering repository. For the fixed `stellar-assistant` identifier, the authoritative inputs are `characters/stellar-assistant/design-contract.yaml`, `phase-state.json`, `phase1-progress.json`, and the optional `designer-session-audit.json`. The contract reference comes from its fixed reference set; the UI labels it approved only when the contract records approval; the latest comparison is an exploratory, unapproved image named by the progress record. The adapter exposes only the character ID, contract approval, requirement totals and a bounded list of outstanding IDs/statuses, recorded Designer session count and bounded technical audit state, phase and handoff flags, blocker, image availability, and source file modification time. The outstanding count is computed before truncating the displayed list and excludes achieved requirements and approved differences. Pipeline stages derive from contract/reference approval, Phase 1 records, promoted source/export, Blender launch authorization, and recorded Blender sessions; unsupported stages show unknown, and final review is never marked done without a connected evidence source. Next-action guidance follows those same records. It never returns raw notes, session traces, session IDs, filesystem paths, or hashes. The current records show Phase 1 fidelity refinement, a blocked visual approval handoff, and no promoted source/export or Blender session. Older exploratory Blender renders are not Phase 2 completion evidence. A missing checkout or malformed record produces an explicit unavailable state. The recorded Designer assignment and prior sessions do not establish that Designer is executing now.
 
-To capture both running views after launch:
+To capture the running views after launch:
 
 ```powershell
 node tools/dashboard/capture-screenshots.mjs 'C:\absolute\output\folder'
 ```
 
-The command saves `stellar-operations.png` and `stellar-character-studio.png` in that folder.
+The command saves `stellar-live.png`, `stellar-live-mobile.png`, `stellar-operations.png`, and `stellar-character-studio.png` in that folder. Live screenshots use the local observed feed without fixture events.
 
 The dashboard adapter has a dedicated Nx test target. The required affected CI check runs its source and HTTP boundary regression suite when adapter files change.

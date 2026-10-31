@@ -6,6 +6,14 @@ Issue #164 provides a local, read-only feed of Hermes turn activity. It does not
 
 Use Node 22. Set `STELLAR_HERMES_ROOT` to the actual Hermes home if it is not `D:\Hermes`, then run `node tools/live/server.mjs` from this checkout. The server binds to `127.0.0.1:4212`. `GET /api/live` returns the latest allowlisted snapshot. `GET /api/live/events` streams snapshots through Server-Sent Events with a heartbeat every two seconds; clients can fall back to polling `/api/live`. Only the local Angular origins on port 4200 receive CORS permission. No request accepts a file path, command, session selector, or arbitrary query.
 
+## Live dashboard behavior
+
+Start `node tools/live/server.mjs` alongside the dashboard adapter and Angular app described in [operations-dashboard.md](operations-dashboard.md). Live is the default tab. It groups nine configured identities into Code Bay, Review Deck, and Creative Studio. Work motion and the running count require a fresh observed running lease. A disconnected or stale source demotes visible execution to unknown and clears current activity; recorded timeline events remain labeled as history. Project filters and agent selection are local display controls. EventSource reconnects automatically, and polling checks freshness every five seconds. Reduced-motion users see static workstations.
+
+The inspector shows only source-supported model, provider, usage, activity and tool category. Task text remains unavailable until a verified structured task binding exists. The browser receives no prompts, commands, credentials, raw paths or privileged controls.
+
+Captured from the running local feed: [desktop](../assets/live/stellar-live.png) and [mobile](../assets/live/stellar-live-mobile.png). These are observed snapshots, so the displayed agent state can differ from later observations.
+
 ## Runtime source map
 
 | Route                                    | Verified source                                                         | What the feed can establish                                                                                                                                                                                                                                    | Current limit                                                                                                                                                                                                                                                                                                |

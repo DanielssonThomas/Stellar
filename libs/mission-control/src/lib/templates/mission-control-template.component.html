@@ -16,8 +16,19 @@
         </div>
       </div>
       <div class="flex items-center gap-2 text-xs">
-        @if (snapshot()) {
-          <span [class]="stale() ? 'text-stellar-warn' : 'text-stellar-good'">{{
+        @if (view() === 'live') {
+          <span [class]="freshnessClass(live.fresh())">
+            {{
+              live.transport() === 'streaming'
+                ? 'SSE connected'
+                : live.transport()
+            }}
+          </span>
+          <span class="text-stellar-muted"
+            >· {{ live.ageSeconds() ?? '—' }}s old</span
+          >
+        } @else if (snapshot()) {
+          <span [class]="freshnessClass(!stale())">{{
             stale() ? 'Stale / unavailable' : 'Feeds refreshed'
           }}</span>
           <span class="text-stellar-muted">· {{ ageSeconds() }}s ago</span>
@@ -27,13 +38,21 @@
         <button
           type="button"
           class="ml-2 rounded-lg border border-stellar-line px-3 py-1.5 hover:bg-stellar-panel-raised"
-          (click)="status.refresh()"
+          (click)="view() === 'live' ? live.refresh() : status.refresh()"
         >
           Refresh
         </button>
       </div>
     </header>
     <nav aria-label="Dashboard views" class="mb-5 flex gap-2">
+      <button
+        type="button"
+        (click)="view.set('live')"
+        [attr.aria-pressed]="view() === 'live'"
+        [class]="tabClass('live')"
+      >
+        <span aria-hidden="true">✦</span> Live
+      </button>
       <button
         type="button"
         (click)="view.set('operations')"
@@ -51,7 +70,232 @@
         Character Studio
       </button>
     </nav>
-    @if (status.loading() && !snapshot()) {
+    @if (view() === 'live') {
+      <section aria-label="Stellar Live" class="live-layout">
+        <div class="live-main">
+          <div class="live-toolbar">
+            <div>
+              <p class="live-kicker">THE WORKPLACE</p>
+              <h2>Stellar Live</h2>
+              <p>Watch verified agent turns across engineering and design.</p>
+            </div>
+            <div class="live-filters" role="group" aria-label="Project filter">
+              <button
+                type="button"
+                [class]="filterClass('all')"
+                [attr.aria-pressed]="projectFilter() === 'all'"
+                (click)="filterLive('all')"
+              >
+                All agents
+              </button>
+              <button
+                type="button"
+                [class]="filterClass('stellar')"
+                [attr.aria-pressed]="projectFilter() === 'stellar'"
+                (click)="filterLive('stellar')"
+              >
+                Stellar
+              </button>
+              <button
+                type="button"
+                [class]="filterClass('stellar-design')"
+                [attr.aria-pressed]="projectFilter() === 'stellar-design'"
+                (click)="filterLive('stellar-design')"
+              >
+                Stellar-Design
+              </button>
+            </div>
+          </div>
+          <stellar-live-workplace-organism
+            [agents]="filteredLiveAgents()"
+            [selectedId]="selectedAgentId()"
+            [loading]="!live.snapshot() && live.transport() === 'connecting'"
+            (selectAgent)="selectLiveAgent($event)"
+          />
+          <div class="live-source-strip">
+            <span [class]="sourceIndicatorClass()"></span>
+            <strong>{{
+              live.transport() === 'streaming'
+                ? 'Live stream'
+                : live.transport() === 'polling'
+                  ? 'Polling fallback'
+                  : 'Live source unavailable'
+            }}</strong>
+            <span>{{
+              live.fresh() ? 'Fresh observation' : 'Stale or absent observation'
+            }}</span>
+            <span class="source-time"
+              >Last feed update:
+              {{
+                live.snapshot()?.observedAt
+                  ? (live.snapshot()?.observedAt | date: 'MMM d, HH:mm:ss')
+                  : 'unavailable'
+              }}</span
+            >
+          </div>
+        </div>
+        <aside class="live-inspector" aria-label="Agent and activity inspector">
+          <div class="inspector-heading">
+            <div>
+              <p class="live-kicker">INSPECTOR</p>
+              <h2>Activity</h2>
+            </div>
+            <button
+              type="button"
+              (click)="inspectorExpanded.set(!inspectorExpanded())"
+              [attr.aria-expanded]="inspectorExpanded()"
+              class="inspector-toggle"
+            >
+              {{ inspectorExpanded() ? 'Collapse' : 'Expand' }}
+            </button>
+          </div>
+          @if (inspectorExpanded()) {
+            @if (selectedLiveAgent(); as agent) {
+              <div class="inspected-agent">
+                <div class="inspected-avatar" aria-hidden="true">
+                  {{ agent.name.slice(0, 1) }}
+                </div>
+                <div>
+                  <strong>{{ agent.name }}</strong>
+                  <span
+                    >{{
+                      agent.project === 'stellar-design'
+                        ? 'Stellar-Design'
+                        : 'Stellar'
+                    }}
+                    · {{ agent.state }}</span
+                  >
+                </div>
+              </div>
+              <div class="inspector-facts">
+                <div>
+                  <span>Current task</span
+                  ><strong>{{
+                    agent.task ?? 'Unavailable from source'
+                  }}</strong>
+                </div>
+                <div>
+                  <span>Activity</span
+                  ><strong>{{
+                    agent.state === 'running'
+                      ? (agent.activity ?? 'Verified turn')
+                      : 'No verified running activity'
+                  }}</strong>
+                </div>
+                <div>
+                  <span>Tool</span
+                  ><strong>{{
+                    agent.state === 'running'
+                      ? (agent.tool ?? 'Unavailable')
+                      : 'Unavailable'
+                  }}</strong>
+                </div>
+                <div>
+                  <span>Last observed</span
+                  ><strong>{{
+                    agent.lastObservedAt
+                      ? (agent.lastObservedAt | date: 'MMM d, HH:mm:ss')
+                      : 'Unavailable'
+                  }}</strong>
+                </div>
+                <div>
+                  <span>Model · provider</span
+                  ><strong
+                    >{{ agent.model ?? 'Unknown' }} ·
+                    {{ agent.provider ?? 'Unknown' }}</strong
+                  >
+                </div>
+                <div>
+                  <span>Usage</span
+                  ><strong>{{
+                    agent.usage
+                      ? agent.usage.inputTokens +
+                        agent.usage.outputTokens +
+                        ' recorded tokens'
+                      : 'Unavailable'
+                  }}</strong>
+                </div>
+              </div>
+              @if (agent.project === 'stellar-design') {
+                <p class="inspector-note">
+                  No verified current session-to-character or render link is
+                  available. See Character Studio for labeled production
+                  records.
+                </p>
+              }
+            } @else {
+              <p class="inspector-note">
+                Select a workstation to inspect an agent.
+              </p>
+            }
+            <div class="timeline-heading">
+              <h3>Chronological activity</h3>
+              <span>{{ liveTimeline().length }} recorded events</span>
+            </div>
+            @if (selectedLiveEvent(); as event) {
+              <div class="event-focus">
+                <strong>{{ event.agentName }} · {{ event.label }}</strong>
+                <span
+                  >{{ event.at | date: 'MMM d, HH:mm:ss' }} · recorded
+                  {{ event.kind }}</span
+                >
+                <button
+                  type="button"
+                  (click)="
+                    selectedEventId.set(null);
+                    pinnedEvent.set(null);
+                    followTimeline.set(true)
+                  "
+                >
+                  Return to latest
+                </button>
+              </div>
+            }
+            <div
+              #timelineScroll
+              class="timeline-scroll"
+              (scroll)="onTimelineScroll($event)"
+              role="log"
+              aria-label="Chronological agent activity"
+              aria-live="polite"
+            >
+              @for (event of liveTimeline(); track event.id) {
+                <button
+                  type="button"
+                  [class]="liveEventClass(event.id)"
+                  (click)="selectLiveEvent(event.id, event.agentId)"
+                >
+                  <span [class]="eventMarkClass(event.kind)"></span>
+                  <span class="event-copy"
+                    ><strong>{{ event.agentName }}</strong
+                    ><small>{{ event.label }}</small></span
+                  >
+                  <time>{{ event.at | date: 'HH:mm:ss' }}</time>
+                </button>
+              } @empty {
+                <p class="timeline-empty">
+                  No recorded activity in this filter. Session history does not
+                  prove execution.
+                </p>
+              }
+            </div>
+            @if (!followTimeline() && liveTimeline().length) {
+              <button
+                type="button"
+                class="follow-button"
+                (click)="
+                  selectedEventId.set(null);
+                  pinnedEvent.set(null);
+                  followTimeline.set(true)
+                "
+              >
+                Follow newest activity ↓
+              </button>
+            }
+          }
+        </aside>
+      </section>
+    } @else if (status.loading() && !snapshot()) {
       <section class="grid gap-3 md:grid-cols-3" aria-label="Loading dashboard">
         <div class="panel"><stellar-skeleton-atom /></div>
         <div class="panel"><stellar-skeleton-atom /></div>
@@ -258,13 +502,7 @@
             </div>
             @for (event of events(); track event.profile + event.at) {
               <div class="timeline-row">
-                <span
-                  [class]="
-                    event.kind === 'failure'
-                      ? 'text-stellar-warn'
-                      : 'text-stellar-good'
-                  "
-                  >●</span
+                <span [class]="freshnessClass(event.kind !== 'failure')">●</span
                 ><span
                   >{{ event.role }} ·
                   {{
