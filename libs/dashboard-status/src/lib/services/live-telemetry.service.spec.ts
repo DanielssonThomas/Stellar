@@ -121,4 +121,31 @@ describe('LiveTelemetryService', () => {
     expect(service.agents()[0].activity).toBeNull();
     service.stop();
   });
+
+  it('accepts a newer observation after the local server resets its sequence', async () => {
+    const stream = new FakeStream();
+    const service = new LiveTelemetryService();
+    server.use(
+      http.get('http://127.0.0.1:4212/api/live', () =>
+        HttpResponse.json({ ...fixture(), sequence: 10 }),
+      ),
+    );
+    service.start(() => stream as unknown as EventSource);
+    await vi.waitFor(() => expect(service.snapshot()?.sequence).toBe(10));
+    stream.onopen?.();
+    const current = service.snapshot();
+    if (!current) throw new Error('Live fixture missing');
+    stream.emit({
+      ...fixture('completed'),
+      sequence: 1,
+      observedAt: new Date(
+        Date.parse(current.observedAt) + 1_000,
+      ).toISOString(),
+    });
+    expect(service.snapshot()?.sequence).toBe(1);
+    expect(service.agents()[0].state).toBe('completed');
+    stream.emit({ ...fixture(), sequence: 0, observedAt: current.observedAt });
+    expect(service.snapshot()?.sequence).toBe(1);
+    service.stop();
+  });
 });

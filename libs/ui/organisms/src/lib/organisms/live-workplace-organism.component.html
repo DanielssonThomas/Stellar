@@ -7,7 +7,11 @@
         Nine named workstations. Motion follows verified execution.
       </p>
     </div>
-    <div class="live-count" [class.has-running]="runningCount() > 0">
+    <div
+      class="live-count"
+      [class.has-running]="runningCount() > 0"
+      [class.text-stellar-good]="runningCount() > 0"
+    >
       <span class="live-dot" aria-hidden="true"></span>
       {{ runningCount() }} verified running
     </div>

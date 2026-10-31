@@ -61,9 +61,8 @@ h2 {
 }
 
 .live-count.has-running {
-  color: #9cf1c5;
-  border-color: rgb(91 211 153 / 35%);
-  background: rgb(37 122 83 / 17%);
+  border-color: color-mix(in srgb, var(--color-stellar-good) 35%, transparent);
+  background: color-mix(in srgb, var(--color-stellar-good) 13%, transparent);
 }
 
 .live-dot,
@@ -76,10 +75,10 @@ h2 {
 
 .has-running .live-dot,
 .station-status.active .station-led {
-  background: #62e4a4;
+  background: var(--color-stellar-good);
   box-shadow:
-    0 0 0 3px rgb(98 228 164 / 14%),
-    0 0 11px #62e4a4;
+    0 0 0 3px color-mix(in srgb, var(--color-stellar-good) 14%, transparent),
+    0 0 11px var(--color-stellar-good);
 }
 
 .world-floor {
@@ -284,7 +283,7 @@ h2 {
   text-transform: uppercase;
 }
 .station-status.active {
-  color: #a7f3d0;
+  color: var(--color-stellar-good);
 }
 .station-led {
   width: 0.35rem;
@@ -529,7 +528,7 @@ h2 {
   white-space: nowrap;
 }
 .station.is-running .station-activity {
-  color: #c6f8dc;
+  color: var(--color-stellar-good);
 }
 
 .world-footnote {
@@ -560,13 +559,6 @@ h2 {
   gap: 0.5rem;
   color: var(--color-stellar-muted);
   text-align: center;
-}
-.empty-workplace span {
-  color: var(--color-stellar-accent);
-  font-size: 2rem;
-}
-.empty-workplace strong {
-  color: var(--color-stellar-foreground);
 }
 .empty-workplace p {
   font-size: 0.72rem;

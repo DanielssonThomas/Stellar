@@ -197,7 +197,16 @@ export class LiveTelemetryService {
     const snapshot = parseSnapshot(raw);
     if (!snapshot) return;
     const current = this.snapshot();
-    if (current && snapshot.sequence < current.sequence) return;
+    if (current) {
+      const newerObservation =
+        Date.parse(snapshot.observedAt) > Date.parse(current.observedAt);
+      if (snapshot.sequence < current.sequence && !newerObservation) return;
+      if (
+        snapshot.sequence === current.sequence &&
+        Date.parse(snapshot.observedAt) < Date.parse(current.observedAt)
+      )
+        return;
+    }
     this.snapshot.set(snapshot);
     this.now.set(Date.now());
   }
