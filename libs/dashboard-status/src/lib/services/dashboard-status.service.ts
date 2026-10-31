@@ -9,6 +9,8 @@ export type ActivityState =
   | 'idle'
   | 'unknown';
 
+export type ProductionStageState = 'done' | 'current' | 'pending' | 'unknown';
+
 export interface DashboardAgent {
   role: string;
   id: string;
@@ -45,6 +47,15 @@ export interface DashboardCharacter {
   workflow?: string;
   contractApproved?: boolean;
   referenceAvailable?: boolean;
+  pipeline?: {
+    reference: ProductionStageState;
+    bodyFace: ProductionStageState;
+    vroidValidation: ProductionStageState;
+    blender: ProductionStageState;
+    finalReview: ProductionStageState;
+  };
+  nextAction?: string;
+  outstandingCount?: number;
   vroid?: {
     achieved: number;
     total: number;

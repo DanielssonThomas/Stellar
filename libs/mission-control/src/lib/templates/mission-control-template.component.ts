@@ -8,7 +8,10 @@ import {
   signal,
 } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
-import { DashboardStatusService } from '@stellar/service-dashboard-status';
+import {
+  DashboardStatusService,
+  type ProductionStageState,
+} from '@stellar/service-dashboard-status';
 import clsx from 'clsx';
 
 @Component({
@@ -99,5 +102,9 @@ export class MissionControlTemplate implements OnInit, OnDestroy {
 
   tabClass(tab: 'operations' | 'studio'): string {
     return clsx('tab', this.view() === tab && 'selected');
+  }
+
+  stageClass(stage?: ProductionStageState): string {
+    return clsx('stage', stage ?? 'unknown');
   }
 }

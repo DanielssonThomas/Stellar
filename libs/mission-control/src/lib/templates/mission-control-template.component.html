@@ -412,11 +412,50 @@
                 <div
                   class="mt-4 grid grid-cols-5 gap-1 text-center text-[10px]"
                 >
-                  <div class="stage done">Reference</div>
-                  <div class="stage current">Body / face</div>
-                  <div class="stage">VRoid validation</div>
-                  <div class="stage">Blender</div>
-                  <div class="stage">Final review</div>
+                  <div
+                    [class]="stageClass(character.pipeline?.reference)"
+                    [attr.aria-label]="
+                      'Reference: ' +
+                      (character.pipeline?.reference ?? 'unknown')
+                    "
+                  >
+                    Reference
+                  </div>
+                  <div
+                    [class]="stageClass(character.pipeline?.bodyFace)"
+                    [attr.aria-label]="
+                      'Body / face: ' +
+                      (character.pipeline?.bodyFace ?? 'unknown')
+                    "
+                  >
+                    Body / face
+                  </div>
+                  <div
+                    [class]="stageClass(character.pipeline?.vroidValidation)"
+                    [attr.aria-label]="
+                      'VRoid validation: ' +
+                      (character.pipeline?.vroidValidation ?? 'unknown')
+                    "
+                  >
+                    VRoid validation
+                  </div>
+                  <div
+                    [class]="stageClass(character.pipeline?.blender)"
+                    [attr.aria-label]="
+                      'Blender: ' + (character.pipeline?.blender ?? 'unknown')
+                    "
+                  >
+                    Blender
+                  </div>
+                  <div
+                    [class]="stageClass(character.pipeline?.finalReview)"
+                    [attr.aria-label]="
+                      'Final review: ' +
+                      (character.pipeline?.finalReview ?? 'unknown')
+                    "
+                  >
+                    Final review
+                  </div>
                 </div>
                 <p class="mt-3 text-xs text-stellar-muted">
                   Contract
@@ -439,8 +478,7 @@
                 </div>
                 <p class="text-sm">{{ character.blocker }}</p>
                 <p class="mt-3 text-xs text-stellar-muted">
-                  Next: resolve visual mismatches, capture outstanding views,
-                  obtain user visual approval before handoff.
+                  Next: {{ character.nextAction ?? 'Action unavailable.' }}
                 </p>
               </div>
               <div class="panel">
@@ -472,13 +510,11 @@
             <div class="panel">
               <div class="section-head">
                 <h3>Outstanding requirements</h3>
-                <span
-                  >{{
-                    (character.vroid?.total ?? 0) -
-                      (character.vroid?.achieved ?? 0)
-                  }}
-                  open</span
-                >
+                <span>{{
+                  character.outstandingCount === undefined
+                    ? 'unavailable'
+                    : character.outstandingCount + ' open'
+                }}</span>
               </div>
               @for (
                 requirement of character.outstanding;

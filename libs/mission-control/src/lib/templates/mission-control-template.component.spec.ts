@@ -62,6 +62,15 @@ describe('MissionControlTemplate', () => {
           },
           blender: { launchAllowed: false, sessionRecorded: false },
           blocker: 'Visual approval pending',
+          nextAction: 'Resolve visual mismatch before handoff.',
+          outstandingCount: 1,
+          pipeline: {
+            reference: 'done',
+            bodyFace: 'current',
+            vroidValidation: 'pending',
+            blender: 'pending',
+            finalReview: 'pending',
+          },
           latestImage: 'latest',
           outstanding: [{ id: 'FACE-001', status: 'visually mismatched' }],
           validation: 'Phase 1 visual approval pending',
@@ -93,6 +102,39 @@ describe('MissionControlTemplate', () => {
       'Visual approval pending',
     );
     expect(fixture.nativeElement.textContent).toContain('FACE-001');
+    expect(
+      fixture.nativeElement.querySelector(
+        '[aria-label="Body / face: current"]',
+      ),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('1 open');
+    service.snapshot.update((current) =>
+      current
+        ? {
+            ...current,
+            characters: current.characters?.map((character) => ({
+              ...character,
+              outstandingCount: 0,
+              nextAction: 'Inspect recorded Blender outputs.',
+              pipeline: {
+                reference: 'done',
+                bodyFace: 'done',
+                vroidValidation: 'done',
+                blender: 'current',
+                finalReview: 'pending',
+              } as const,
+            })),
+          }
+        : current,
+    );
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[aria-label="Blender: current"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain(
+      'Inspect recorded Blender outputs.',
+    );
+    expect(fixture.nativeElement.textContent).toContain('0 open');
     const image = fixture.nativeElement.querySelector('img');
     const initialImageUrl = image.getAttribute('src');
     expect(initialImageUrl).toContain('revision=');

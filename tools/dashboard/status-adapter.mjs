@@ -205,6 +205,42 @@ export async function readGithubStatus(fetcher = fetch, timeoutMs = 4000) {
 const designCharacter = 'stellar-assistant';
 const designRootDefault = 'D:\\ai-repositories\\Stellar-Design';
 
+function productionPipeline({
+  referenceApproved,
+  phase,
+  sourceRecorded,
+  exportRecorded,
+  blenderAllowed,
+  blenderSessionRecorded,
+}) {
+  const phaseOne = phase === 'phase_1_vroid_creation';
+  const validatedVroid =
+    referenceApproved && sourceRecorded && exportRecorded && blenderAllowed;
+  const phaseOneKnown = phaseOne && referenceApproved;
+  return {
+    reference: referenceApproved ? 'done' : 'unknown',
+    bodyFace: validatedVroid ? 'done' : phaseOneKnown ? 'current' : 'unknown',
+    vroidValidation: validatedVroid
+      ? 'done'
+      : phaseOneKnown && (sourceRecorded || exportRecorded)
+        ? 'current'
+        : phaseOneKnown
+          ? 'pending'
+          : 'unknown',
+    blender: blenderSessionRecorded
+      ? 'current'
+      : validatedVroid
+        ? 'pending'
+        : phaseOneKnown
+          ? 'pending'
+          : 'unknown',
+    finalReview:
+      phaseOneKnown || validatedVroid || blenderSessionRecorded
+        ? 'pending'
+        : 'unknown',
+  };
+}
+
 export async function readCharacterStatus(
   root = process.env.STELLAR_DESIGN_ROOT || designRootDefault,
 ) {
@@ -229,13 +265,42 @@ export async function readCharacterStatus(
       contract.character_id !== designCharacter
     )
       throw new Error('Character identity mismatch');
-    const requirements = Array.isArray(progress.requirements)
-      ? progress.requirements
-      : [];
+    if (!Array.isArray(progress.requirements))
+      throw new Error('Missing requirement progress');
+    const requirements = progress.requirements;
     const outstanding = requirements.filter(
       (item) =>
         item.status !== 'achieved' && item.status !== 'approved_difference',
     );
+    const referenceApproved =
+      contract.approval?.status === 'approved' &&
+      Array.isArray(contract.references) &&
+      contract.references.length > 0;
+    const sourceRecorded = Boolean(progress.source);
+    const exportRecorded = Boolean(progress.export);
+    const blenderAllowed = state.phase2_launch_allowed === true;
+    const blenderSessionRecorded = Boolean(state.blender_session_id);
+    const pipeline = productionPipeline({
+      referenceApproved,
+      phase: state.phase,
+      sourceRecorded,
+      exportRecorded,
+      blenderAllowed,
+      blenderSessionRecorded,
+    });
+    const nextAction = blenderSessionRecorded
+      ? 'Inspect recorded Blender outputs and Phase 2 progress before final review.'
+      : blenderAllowed && pipeline.vroidValidation === 'done'
+        ? 'Launch the authorized Blender handoff and record the Designer session.'
+        : !referenceApproved
+          ? 'Confirm the approved design contract and reference before production.'
+          : state.phase !== 'phase_1_vroid_creation'
+            ? 'Inspect production records to establish the next authorized stage.'
+            : outstanding.length > 0
+              ? 'Resolve outstanding visual requirements, capture missing views, and obtain user approval before handoff.'
+              : !sourceRecorded || !exportRecorded
+                ? 'Promote and validate the reviewed VRoid source and export before handoff.'
+                : 'Complete VRoid validation and record visual approval before Blender handoff.';
     const image =
       typeof progress.latest_review_comparison === 'string' &&
       progress.latest_review_comparison.startsWith(
@@ -256,19 +321,25 @@ export async function readCharacterStatus(
       contractApproved: contract.approval?.status === 'approved',
       referenceAvailable:
         Array.isArray(contract.references) && contract.references.length > 0,
+      pipeline,
+      nextAction,
       vroid: {
         achieved: requirements.filter((item) => item.status === 'achieved')
           .length,
         total: requirements.length,
-        sourceRecorded: Boolean(progress.source),
-        exportRecorded: Boolean(progress.export),
+        sourceRecorded,
+        exportRecorded,
       },
       blender: {
-        launchAllowed: state.phase2_launch_allowed === true,
-        sessionRecorded: Boolean(state.blender_session_id),
+        launchAllowed: blenderAllowed,
+        sessionRecorded: blenderSessionRecorded,
       },
       handoff: String(state.handoff_status ?? 'unknown').replaceAll('_', ' '),
-      blocker: String(progress.blocker ?? '').slice(0, 380),
+      blocker:
+        state.phase === 'phase_1_vroid_creation' && !blenderAllowed
+          ? String(progress.blocker ?? '').slice(0, 380)
+          : 'Current blockers beyond Phase 1 are not connected to this dashboard.',
+      outstandingCount: outstanding.length,
       outstanding: outstanding.slice(0, 5).map((item) => ({
         id: String(item.id).slice(0, 40),
         status: String(item.status).replaceAll('_', ' ').slice(0, 60),

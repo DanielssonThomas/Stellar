@@ -105,9 +105,11 @@ test('paginates open issues before computing complete counts', async () => {
 test('reads a fixed character production record without returning local paths or notes', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stellar-design-status-'));
   const base = path.join(root, 'characters', 'stellar-assistant');
+  const statePath = path.join(base, 'phase-state.json');
+  const progressPath = path.join(base, 'phase1-progress.json');
   await mkdir(base, { recursive: true });
   await writeFile(
-    path.join(base, 'phase-state.json'),
+    statePath,
     JSON.stringify({
       character_id: 'stellar-assistant',
       phase: 'phase_1_vroid_creation',
@@ -124,7 +126,7 @@ test('reads a fixed character production record without returning local paths or
     }),
   );
   await writeFile(
-    path.join(base, 'phase1-progress.json'),
+    progressPath,
     JSON.stringify({
       character_id: 'stellar-assistant',
       status: 'phase1_fidelity_refinement',
@@ -157,6 +159,14 @@ test('reads a fixed character production record without returning local paths or
     assert.equal(result.outstanding[0].id, 'FACE-001');
     assert.equal(result.blender.launchAllowed, false);
     assert.equal(result.designerSessionCount, 1);
+    assert.equal(result.outstandingCount, 1);
+    assert.deepEqual(result.pipeline, {
+      reference: 'done',
+      bodyFace: 'current',
+      vroidValidation: 'pending',
+      blender: 'pending',
+      finalReview: 'pending',
+    });
     assert.equal(
       result.technicalValidation,
       'verified disposable edit unpromoted',
@@ -165,6 +175,51 @@ test('reads a fixed character production record without returning local paths or
     assert.ok(!JSON.stringify(result).includes('PRIVATE_TRACE'));
     assert.ok(!JSON.stringify(result).includes('private-session-id'));
     assert.ok(!JSON.stringify(result).includes('secret-local-reference'));
+    await writeFile(
+      progressPath,
+      JSON.stringify({
+        character_id: 'stellar-assistant',
+        status: 'phase1_validation',
+        source: 'approved-source',
+        export: 'approved-export',
+        requirements: [
+          { id: 'BODY-002', status: 'achieved' },
+          { id: 'FACE-001', status: 'approved_difference' },
+        ],
+      }),
+    );
+    const acceptedDifference = await readCharacterStatus(root);
+    assert.equal(acceptedDifference.outstandingCount, 0);
+    assert.equal(acceptedDifference.outstanding.length, 0);
+    assert.equal(acceptedDifference.pipeline.vroidValidation, 'current');
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        character_id: 'stellar-assistant',
+        phase: 'phase_2_blender_creation',
+        phase2_launch_allowed: true,
+        blender_session_id: 'private-blender-session',
+      }),
+    );
+    const blender = await readCharacterStatus(root);
+    assert.equal(blender.pipeline.bodyFace, 'done');
+    assert.equal(blender.pipeline.vroidValidation, 'done');
+    assert.equal(blender.pipeline.blender, 'current');
+    assert.equal(blender.pipeline.finalReview, 'pending');
+    assert.match(blender.nextAction, /Blender outputs/);
+    assert.ok(!JSON.stringify(blender).includes('private-blender-session'));
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        character_id: 'stellar-assistant',
+        phase: 'unrecognized_phase',
+        phase2_launch_allowed: false,
+      }),
+    );
+    const unknownPhase = await readCharacterStatus(root);
+    assert.equal(unknownPhase.pipeline.bodyFace, 'unknown');
+    assert.equal(unknownPhase.pipeline.vroidValidation, 'unknown');
+    assert.equal(unknownPhase.pipeline.blender, 'unknown');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
