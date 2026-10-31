@@ -1,0 +1,136 @@
+:host {
+  display: block;
+}
+.stellar-surface {
+  background:
+    radial-gradient(circle at 15% -10%, rgb(113 75 209 / 16%), transparent 30%),
+    var(--stellar-color-canvas);
+}
+.tab {
+  border: 1px solid var(--color-stellar-line);
+  border-radius: 0.65rem;
+  padding: 0.5rem 1rem;
+  color: var(--color-stellar-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.tab.selected {
+  background: color-mix(in srgb, var(--color-stellar-primary) 20%, transparent);
+  color: var(--color-stellar-accent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-stellar-primary) 45%,
+    transparent
+  );
+}
+.panel {
+  border: 1px solid var(--color-stellar-line);
+  background: var(--color-stellar-panel);
+  border-radius: 0.85rem;
+  padding: 1rem;
+  min-width: 0;
+}
+.metric {
+  border: 1px solid var(--color-stellar-line);
+  background: var(--color-stellar-panel);
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 4.5rem;
+}
+.metric strong {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+.metric span {
+  font-size: 0.68rem;
+  color: var(--color-stellar-muted);
+  margin-top: 0.25rem;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+.section-head h2,
+.section-head h3 {
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+.section-head span {
+  color: var(--color-stellar-muted);
+  font-size: 0.68rem;
+}
+.work-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--color-stellar-line);
+  font-size: 0.75rem;
+}
+.work-row b {
+  display: block;
+  font-weight: 550;
+}
+.work-row small {
+  display: block;
+  color: var(--color-stellar-muted);
+  margin-top: 0.1rem;
+}
+.agent-row {
+  border: 1px solid var(--color-stellar-line);
+  background: var(--color-stellar-panel-raised);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.75rem;
+  min-width: 0;
+}
+.state {
+  border: 1px solid var(--color-stellar-line);
+  color: var(--color-stellar-muted);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--color-stellar-line);
+  padding: 0.4rem 0;
+  font-size: 0.7rem;
+}
+.timeline-row time {
+  margin-left: auto;
+  color: var(--color-stellar-muted);
+  white-space: nowrap;
+}
+.empty {
+  color: var(--color-stellar-muted);
+  font-size: 0.75rem;
+  padding: 0.5rem 0;
+}
+.stage {
+  border: 1px solid var(--color-stellar-line);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.15rem;
+  color: var(--color-stellar-muted);
+}
+.stage.done {
+  color: var(--color-stellar-good);
+  border-color: color-mix(in srgb, var(--color-stellar-good) 35%, transparent);
+}
+.stage.current {
+  color: var(--color-stellar-accent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-stellar-accent) 40%,
+    transparent
+  );
+}

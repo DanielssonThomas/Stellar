@@ -3,19 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
-  it('composes the shared button and responds to user activation', async () => {
+  it('composes Mission Control from the template library', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
     }).compileComponents();
     const fixture = TestBed.createComponent(AppComponent);
-    await fixture.whenStable();
-
-    fixture.nativeElement.querySelector('button').click();
-    await fixture.whenStable();
-
+    fixture.detectChanges();
     expect(
-      fixture.nativeElement.querySelector('[data-testid="action-count"]')
-        .textContent,
-    ).toContain('Actions: 1');
+      fixture.nativeElement.querySelector('stellar-mission-control-template'),
+    ).not.toBeNull();
   });
 });

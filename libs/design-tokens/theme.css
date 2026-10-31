@@ -7,6 +7,13 @@
   --color-stellar-primary: var(--stellar-color-primary);
   --color-stellar-primary-hover: var(--stellar-color-primary-hover);
   --color-stellar-skeleton: var(--stellar-color-skeleton);
+  --color-stellar-panel: var(--stellar-color-panel);
+  --color-stellar-panel-raised: var(--stellar-color-panel-raised);
+  --color-stellar-line: var(--stellar-color-line);
+  --color-stellar-muted: var(--stellar-color-muted);
+  --color-stellar-accent: var(--stellar-color-accent);
+  --color-stellar-good: var(--stellar-color-good);
+  --color-stellar-warn: var(--stellar-color-warn);
   --radius-stellar: var(--stellar-radius-control);
   --shadow-stellar-card: var(--stellar-shadow-card);
   --container-stellar-content: var(--stellar-layout-content);
@@ -17,20 +24,27 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   --stellar-font-family: ui-sans-serif, system-ui, sans-serif;
   --stellar-font-size-display: 1.875rem;
   --stellar-font-size-body: 1rem;
-  --stellar-color-canvas: #f7f8fc;
-  --stellar-color-foreground: #172033;
-  --stellar-color-primary: #4f46e5;
-  --stellar-color-primary-hover: #4338ca;
-  --stellar-color-skeleton: #cbd2e1;
+  --stellar-color-canvas: #090d19;
+  --stellar-color-foreground: #f4f4fb;
+  --stellar-color-primary: #a68bff;
+  --stellar-color-primary-hover: #c1afff;
+  --stellar-color-skeleton: #2c344b;
+  --stellar-color-panel: #111728;
+  --stellar-color-panel-raised: #181f33;
+  --stellar-color-line: #293249;
+  --stellar-color-muted: #a4aec4;
+  --stellar-color-accent: #c7b6ff;
+  --stellar-color-good: #69d6bb;
+  --stellar-color-warn: #f5bd78;
   --stellar-space-1: 0.25rem;
   --stellar-space-2: 0.5rem;
   --stellar-space-3: 0.75rem;
   --stellar-space-4: 1rem;
   --stellar-radius-control: 0.5rem;
-  --stellar-shadow-card: 0 1rem 3rem rgb(23 32 51 / 8%);
+  --stellar-shadow-card: 0 1rem 3rem rgb(0 0 0 / 20%);
   --stellar-layout-content: 72rem;
 }
