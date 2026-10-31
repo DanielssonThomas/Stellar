@@ -178,6 +178,7 @@ test('unavailable databases are disconnected without leaking paths or errors', (
   const snapshot = collectSnapshot({
     root: 'C:/secret/path',
     now,
+    collectCodex: () => [],
     readDatabase: () => {
       throw new Error('password=secret');
     },

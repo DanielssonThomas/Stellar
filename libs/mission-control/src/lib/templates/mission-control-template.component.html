@@ -77,7 +77,7 @@
             <div>
               <p class="live-kicker">THE WORKPLACE</p>
               <h2>Stellar Live</h2>
-              <p>Watch verified agent turns across engineering and design.</p>
+              <p>Watch observed agent turns across engineering and design.</p>
             </div>
             <div class="live-filters" role="group" aria-label="Project filter">
               <button
@@ -169,6 +169,14 @@
               </div>
               <div class="inspector-facts">
                 <div>
+                  <span>Source</span
+                  ><strong>{{
+                    agent.source.kind === 'codex-local-turn-history'
+                      ? 'Codex desktop history'
+                      : 'Hermes turn lease'
+                  }}</strong>
+                </div>
+                <div>
                   <span>Current task</span
                   ><strong>{{
                     agent.task ?? 'Unavailable from source'
@@ -178,7 +186,7 @@
                   <span>Activity</span
                   ><strong>{{
                     agent.state === 'running'
-                      ? (agent.activity ?? 'Verified turn')
+                      ? (agent.activity ?? 'Recent turn')
                       : 'No verified running activity'
                   }}</strong>
                 </div>

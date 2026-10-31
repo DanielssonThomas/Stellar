@@ -35,6 +35,14 @@ test('Mission Control switches views and refreshes status without navigation', a
         agents: [
           liveAgent('peon', 'Peon', 'stellar'),
           liveAgent('designer', 'Designer', 'stellar-design'),
+          {
+            ...liveAgent('codex-example', 'Codex A1B2', 'stellar-design'),
+            source: {
+              kind: 'codex-local-turn-history',
+              health: 'available',
+              observedAt: new Date().toISOString(),
+            },
+          },
         ],
       },
     }),
@@ -116,6 +124,8 @@ test('Mission Control switches views and refreshes status without navigation', a
   );
   await page.getByRole('button', { name: /Inspect Designer/ }).click();
   await expect(page.getByText('No verified running activity')).toBeVisible();
+  await page.getByRole('button', { name: /Inspect Codex A1B2/ }).click();
+  await expect(page.getByText('Codex desktop history')).toBeVisible();
   await page.getByRole('button', { name: 'All agents' }).click();
   await page.getByRole('button', { name: 'Operations' }).click();
   await expect(page.getByText('Running · no live source')).toBeVisible();

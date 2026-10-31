@@ -9,7 +9,7 @@ export interface WorkplaceAgent {
 }
 
 type Area = {
-  id: 'code' | 'review' | 'creative';
+  id: 'code' | 'review' | 'creative' | 'codex';
   label: string;
   caption: string;
   icon: string;
@@ -34,6 +34,13 @@ export class LiveWorkplaceOrganism {
   );
   readonly areas: readonly Area[] = [
     {
+      id: 'codex',
+      label: 'Codex Corner',
+      caption: 'Desktop sessions',
+      icon: '✳',
+      agents: [],
+    },
+    {
       id: 'code',
       label: 'Code Bay',
       caption: 'Engineering workstations',
@@ -57,7 +64,11 @@ export class LiveWorkplaceOrganism {
   ];
 
   agentsFor(area: Area): WorkplaceAgent[] {
-    return this.agents().filter((agent) => area.agents.includes(agent.id));
+    return this.agents().filter((agent) =>
+      area.id === 'codex'
+        ? agent.id.startsWith('codex-')
+        : area.agents.includes(agent.id),
+    );
   }
 
   countClass(): string {
@@ -85,6 +96,7 @@ export class LiveWorkplaceOrganism {
   }
 
   tone(agent: WorkplaceAgent): string {
+    if (agent.id.startsWith('codex-')) return 'lime';
     if (agent.id.startsWith('architect')) return 'violet';
     if (agent.id.startsWith('foreman')) return 'amber';
     if (agent.id.startsWith('peon')) return 'cyan';
@@ -94,7 +106,7 @@ export class LiveWorkplaceOrganism {
   }
 
   stateText(state: WorkplaceAgent['state']): string {
-    if (state === 'running') return 'Verified turn in progress';
+    if (state === 'running') return 'Recently observed turn in progress';
     if (state === 'completed') return 'Session completed';
     if (state === 'failed') return 'Session failed';
     if (state === 'disconnected') return 'Source disconnected';
