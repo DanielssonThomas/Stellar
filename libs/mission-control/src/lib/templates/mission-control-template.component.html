@@ -17,9 +17,7 @@
       </div>
       <div class="flex items-center gap-2 text-xs">
         @if (view() === 'live') {
-          <span
-            [class]="live.fresh() ? 'text-stellar-good' : 'text-stellar-warn'"
-          >
+          <span [class]="freshnessClass(live.fresh())">
             {{
               live.transport() === 'streaming'
                 ? 'SSE connected'
@@ -30,7 +28,7 @@
             >· {{ live.ageSeconds() ?? '—' }}s old</span
           >
         } @else if (snapshot()) {
-          <span [class]="stale() ? 'text-stellar-warn' : 'text-stellar-good'">{{
+          <span [class]="freshnessClass(!stale())">{{
             stale() ? 'Stale / unavailable' : 'Feeds refreshed'
           }}</span>
           <span class="text-stellar-muted">· {{ ageSeconds() }}s ago</span>
@@ -84,7 +82,7 @@
             <div class="live-filters" role="group" aria-label="Project filter">
               <button
                 type="button"
-                [class.active]="projectFilter() === 'all'"
+                [class]="filterClass('all')"
                 [attr.aria-pressed]="projectFilter() === 'all'"
                 (click)="filterLive('all')"
               >
@@ -92,7 +90,7 @@
               </button>
               <button
                 type="button"
-                [class.active]="projectFilter() === 'stellar'"
+                [class]="filterClass('stellar')"
                 [attr.aria-pressed]="projectFilter() === 'stellar'"
                 (click)="filterLive('stellar')"
               >
@@ -100,7 +98,7 @@
               </button>
               <button
                 type="button"
-                [class.active]="projectFilter() === 'stellar-design'"
+                [class]="filterClass('stellar-design')"
                 [attr.aria-pressed]="projectFilter() === 'stellar-design'"
                 (click)="filterLive('stellar-design')"
               >
@@ -115,12 +113,7 @@
             (selectAgent)="selectLiveAgent($event)"
           />
           <div class="live-source-strip">
-            <span
-              class="source-indicator"
-              [class.healthy]="
-                live.fresh() && live.transport() !== 'unavailable'
-              "
-            ></span>
+            <span [class]="sourceIndicatorClass()"></span>
             <strong>{{
               live.transport() === 'streaming'
                 ? 'Live stream'
@@ -269,14 +262,10 @@
               @for (event of liveTimeline(); track event.id) {
                 <button
                   type="button"
-                  class="live-event"
-                  [class.selected]="selectedEventId() === event.id"
+                  [class]="liveEventClass(event.id)"
                   (click)="selectLiveEvent(event.id, event.agentId)"
                 >
-                  <span
-                    class="event-mark"
-                    [class.failure]="event.kind === 'failure'"
-                  ></span>
+                  <span [class]="eventMarkClass(event.kind)"></span>
                   <span class="event-copy"
                     ><strong>{{ event.agentName }}</strong
                     ><small>{{ event.label }}</small></span
@@ -513,13 +502,7 @@
             </div>
             @for (event of events(); track event.profile + event.at) {
               <div class="timeline-row">
-                <span
-                  [class]="
-                    event.kind === 'failure'
-                      ? 'text-stellar-warn'
-                      : 'text-stellar-good'
-                  "
-                  >●</span
+                <span [class]="freshnessClass(event.kind !== 'failure')">●</span
                 ><span
                   >{{ event.role }} ·
                   {{

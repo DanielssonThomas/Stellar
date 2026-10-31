@@ -211,6 +211,32 @@ export class MissionControlTemplate implements OnInit, OnDestroy {
     return clsx('tab', this.view() === tab && 'selected');
   }
 
+  freshnessClass(fresh: boolean): string {
+    return clsx(fresh ? 'text-stellar-good' : 'text-stellar-warn');
+  }
+
+  filterClass(project: 'all' | LiveProject): string {
+    return clsx(this.projectFilter() === project && 'active');
+  }
+
+  sourceIndicatorClass(): string {
+    return clsx(
+      'source-indicator',
+      this.live.fresh() && this.live.transport() !== 'unavailable' && 'healthy',
+    );
+  }
+
+  liveEventClass(id: string | null): string {
+    return clsx(
+      'live-event',
+      id !== null && this.selectedEventId() === id && 'selected',
+    );
+  }
+
+  eventMarkClass(kind: LiveEvent['kind']): string {
+    return clsx('event-mark', kind === 'failure' && 'failure');
+  }
+
   stageClass(stage?: ProductionStageState): string {
     return clsx('stage', stage ?? 'unknown');
   }
