@@ -12,6 +12,7 @@
 - [Worker integration policy](guides/worker-integration-policy.md): deterministic offline eligibility checks for restricted worker pull requests.
 - [Restricted worker security](guides/worker-security.md): fork-only identity, local WSL and Podman boundaries, admission, and removal.
 - [Engineering organization](guides/engineering-organization.md): Architect, Foreman, Peon roles, profile setup, authority, and offline workflow.
+- [Stellar Live telemetry](guides/live-telemetry.md): local read-only source map, launch, and observation limits.
 - [Development roadmap](implementation/roadmap.md): bootstrap status and links to GitHub work.
 
 Operational guides will be added with the workflows they describe.
