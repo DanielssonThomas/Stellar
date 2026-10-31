@@ -37,6 +37,9 @@ describe('LiveWorkplaceOrganism', () => {
     expect(
       fixture.nativeElement.querySelectorAll('.avatar.working'),
     ).toHaveLength(1);
+    expect(
+      fixture.nativeElement.querySelectorAll('.activity-bubble'),
+    ).toHaveLength(1);
     expect(fixture.nativeElement.textContent).toContain('Execution unknown');
     expect(fixture.nativeElement.textContent).toContain('Editing files');
     let selected = '';

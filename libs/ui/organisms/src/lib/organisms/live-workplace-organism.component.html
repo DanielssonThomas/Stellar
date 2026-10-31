@@ -63,6 +63,11 @@
                       {{ agent.state === 'running' ? 'LIVE' : agent.state }}
                     </span>
                     <span class="avatar-scene" aria-hidden="true">
+                      @if (agent.state === 'running' && agent.activity) {
+                        <span class="activity-bubble">{{
+                          agent.activity
+                        }}</span>
+                      }
                       <span class="avatar-shadow"></span>
                       <span
                         class="avatar"

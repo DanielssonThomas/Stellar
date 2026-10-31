@@ -299,6 +299,21 @@ h2 {
   height: 7.25rem;
   margin-top: 0.2rem;
 }
+.activity-bubble {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  max-width: 5.2rem;
+  border: 1px solid var(--tone);
+  border-radius: 0.6rem 0.6rem 0.1rem 0.6rem;
+  padding: 0.25rem 0.35rem;
+  color: #fff;
+  background: #27314f;
+  font-size: 0.47rem;
+  line-height: 1.15;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+}
 .avatar-shadow {
   position: absolute;
   left: 50%;
