@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { collectCodexAgents } from './codex-telemetry.mjs';
 
 const profiles = Object.freeze([
   ['architect', 'Architect', 'stellar'],
@@ -198,6 +199,7 @@ export function collectSnapshot({
   now = Date.now(),
   processIdentity = defaultProcessIdentity,
   readDatabase = readProfileDatabase,
+  collectCodex = collectCodexAgents,
 } = {}) {
   const agents = profiles.map((profile) => {
     try {
@@ -229,6 +231,7 @@ export function collectSnapshot({
       };
     }
   });
+  agents.push(...collectCodex({ now }));
   return { schemaVersion: 1, observedAt: new Date(now).toISOString(), agents };
 }
 

@@ -70,7 +70,7 @@ function parseSnapshot(value: unknown): LiveSnapshot | null {
     !candidate.observedAt ||
     !Number.isFinite(Date.parse(candidate.observedAt)) ||
     !Array.isArray(candidate.agents) ||
-    candidate.agents.length > 9
+    candidate.agents.length > 17
   )
     return null;
   if (
