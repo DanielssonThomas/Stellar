@@ -4,6 +4,27 @@ import path from 'node:path';
 import { collectSnapshot } from './telemetry.mjs';
 
 const origins = new Set(['http://127.0.0.1:4200', 'http://localhost:4200']);
+const maxSseQueuedBytes = 128 * 1024;
+
+export function sendSsePacket(client, packet, clients) {
+  const bytes = Buffer.byteLength(packet, 'utf8');
+  if (
+    bytes > maxSseQueuedBytes ||
+    (client.writableLength ?? 0) + bytes > maxSseQueuedBytes
+  ) {
+    clients.delete(client);
+    client.destroy();
+    return false;
+  }
+  try {
+    if (client.write(packet)) return true;
+  } catch {
+    // A disconnected reader must not interrupt healthy clients.
+  }
+  clients.delete(client);
+  client.destroy();
+  return false;
+}
 
 export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
   const clients = new Set();
@@ -45,11 +66,13 @@ export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
       Connection: 'keep-alive',
       'X-Content-Type-Options': 'nosniff',
     });
-    response.write(
-      `event: snapshot\nid: ${sequence}\ndata: ${JSON.stringify({ sequence, ...latest })}\n\n`,
-    );
     clients.add(response);
     request.on('close', () => clients.delete(response));
+    sendSsePacket(
+      response,
+      `event: snapshot\nid: ${sequence}\ndata: ${JSON.stringify({ sequence, ...latest })}\n\n`,
+      clients,
+    );
   });
   const timer = setInterval(() => {
     try {
@@ -65,8 +88,10 @@ export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
         lastComparable = comparable;
         sequence += 1;
         const packet = `event: snapshot\nid: ${sequence}\ndata: ${JSON.stringify({ sequence, ...latest })}\n\n`;
-        for (const client of clients) client.write(packet);
-      } else for (const client of clients) client.write(': heartbeat\n\n');
+        for (const client of clients) sendSsePacket(client, packet, clients);
+      } else
+        for (const client of clients)
+          sendSsePacket(client, ': heartbeat\n\n', clients);
     } catch {
       latest = {
         schemaVersion: 1,
@@ -81,7 +106,7 @@ export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
       };
       sequence += 1;
       const packet = `event: snapshot\nid: ${sequence}\ndata: ${JSON.stringify({ sequence, ...latest })}\n\n`;
-      for (const client of clients) client.write(packet);
+      for (const client of clients) sendSsePacket(client, packet, clients);
     }
   }, intervalMs);
   timer.unref();

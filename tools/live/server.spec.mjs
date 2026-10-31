@@ -1,6 +1,51 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createLiveServer } from './server.mjs';
+import { createLiveServer, sendSsePacket } from './server.mjs';
+
+test('a stalled SSE reader is removed without starving another client', () => {
+  const writes = [];
+  const stalled = {
+    writableLength: 128 * 1024 - 1,
+    destroyed: false,
+    write: () => {
+      throw new Error('stalled reader must not be written');
+    },
+    destroy() {
+      this.destroyed = true;
+    },
+  };
+  const healthy = {
+    writableLength: 0,
+    destroyed: false,
+    write(packet) {
+      writes.push(packet);
+      return true;
+    },
+    destroy() {
+      this.destroyed = true;
+    },
+  };
+  const clients = new Set([stalled, healthy]);
+  for (const client of clients)
+    sendSsePacket(client, 'event: snapshot\ndata: updated\n\n', clients);
+  assert.equal(stalled.destroyed, true);
+  assert.equal(clients.has(stalled), false);
+  assert.equal(healthy.destroyed, false);
+  assert.deepEqual(writes, ['event: snapshot\ndata: updated\n\n']);
+
+  const backpressured = {
+    writableLength: 0,
+    destroyed: false,
+    write: () => false,
+    destroy() {
+      this.destroyed = true;
+    },
+  };
+  clients.add(backpressured);
+  assert.equal(sendSsePacket(backpressured, ': heartbeat\n\n', clients), false);
+  assert.equal(backpressured.destroyed, true);
+  assert.equal(clients.has(backpressured), false);
+});
 
 test('loopback server serves a bounded snapshot and rejects arbitrary routes', async () => {
   const server = createLiveServer(

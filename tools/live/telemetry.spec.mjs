@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readlinkSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,11 +49,13 @@ const rows = {
   ],
 };
 
-test('running requires an unexpired lease and a live holder process', () => {
+test('running requires an unexpired lease and a verified holder identity', () => {
   const profile = ['designer', 'Designer', 'stellar-design'];
+  const processIdentity = (pid) =>
+    pid === 100 ? { startedAt: now - 30_000, namespaceSupported: false } : null;
   const active = normalizeProfile(profile, rows, {
     now,
-    processAlive: (pid) => pid === 100,
+    processIdentity,
   });
   assert.equal(active.state, 'running');
   assert.equal(active.activity, 'Blender');
@@ -61,18 +64,90 @@ test('running requires an unexpired lease and a live holder process', () => {
   assert.notEqual(active.sessionId, session.id);
   assert.equal(JSON.stringify(active).includes('private'), false);
   assert.equal(
-    normalizeProfile(profile, rows, { now, processAlive: () => false }).state,
+    normalizeProfile(profile, rows, { now, processIdentity: () => null }).state,
     'unknown',
   );
   assert.equal(
     normalizeProfile(
       profile,
       { ...rows, leases: [{ ...rows.leases[0], expires_at: now / 1000 - 1 }] },
-      { now, processAlive: () => true },
+      { now, processIdentity },
     ).state,
     'unknown',
   );
 });
+
+test('recycled, foreign-namespace, and unverifiable holders remain unknown', () => {
+  const profile = ['peon', 'Peon', 'stellar'];
+  const stateFor = (holder, identity) =>
+    normalizeProfile(
+      profile,
+      { ...rows, leases: [{ ...rows.leases[0], holder }] },
+      { now, processIdentity: () => identity },
+    ).state;
+  assert.equal(
+    stateFor('pid=100:turn=old', {
+      startedAt: now - 10_000,
+      namespaceSupported: false,
+    }),
+    'unknown',
+  );
+  assert.equal(
+    stateFor('pid=100:pidns=999:turn=foreign', {
+      startedAt: now - 30_000,
+      namespaceSupported: true,
+      pidNamespace: '123',
+    }),
+    'unknown',
+  );
+  assert.equal(
+    stateFor('pid=100:turn=unstamped', {
+      startedAt: now - 30_000,
+      namespaceSupported: true,
+      pidNamespace: '123',
+    }),
+    'unknown',
+  );
+  assert.equal(
+    stateFor('pid=100:pidns=123:turn=local', {
+      startedAt: now - 30_000,
+      namespaceSupported: true,
+      pidNamespace: '123',
+    }),
+    'running',
+  );
+  assert.equal(stateFor('pid=100:turn=unverified', null), 'unknown');
+});
+
+test(
+  'the local process signal verifies an actual holder generation',
+  {
+    skip: !['linux', 'win32'].includes(process.platform),
+  },
+  () => {
+    const observedAt = Date.now();
+    const namespace =
+      process.platform === 'linux'
+        ? `:pidns=${/\[(\d+)\]/.exec(readlinkSync('/proc/self/ns/pid'))?.[1]}`
+        : '';
+    const activeRows = {
+      ...rows,
+      leases: [
+        {
+          conversation_id: session.id,
+          holder: `pid=${process.pid}${namespace}:turn=self`,
+          acquired_at: observedAt / 1000,
+          expires_at: observedAt / 1000 + 60,
+        },
+      ],
+    };
+    const snapshot = collectSnapshot({
+      now: observedAt,
+      readDatabase: () => activeRows,
+    });
+    assert.equal(snapshot.agents[0].state, 'running');
+  },
+);
 
 test('a recent completed session is historical and stops showing tool activity', () => {
   const ended = { ...session, ended_at: now / 1000 - 20, end_reason: 'normal' };
@@ -84,6 +159,19 @@ test('a recent completed session is historical and stops showing tool activity',
   assert.equal(agent.state, 'completed');
   assert.equal(agent.activity, null);
   assert.equal(agent.events.at(-1).kind, 'completion');
+  const retainedLease = normalizeProfile(
+    ['peon', 'Peon', 'stellar'],
+    { ...rows, sessions: [ended] },
+    {
+      now,
+      processIdentity: () => ({
+        startedAt: now - 30_000,
+        namespaceSupported: false,
+      }),
+    },
+  );
+  assert.equal(retainedLease.state, 'completed');
+  assert.equal(retainedLease.activity, null);
 });
 
 test('unavailable databases are disconnected without leaking paths or errors', () => {
@@ -143,7 +231,10 @@ test('overlapping source queries retain each tool message once before history li
     );
     const agent = normalizeProfile(['peon', 'Peon', 'stellar'], observed, {
       now: time * 1000,
-      processAlive: () => true,
+      processIdentity: () => ({
+        startedAt: (time - 120) * 1000,
+        namespaceSupported: false,
+      }),
     });
     assert.equal(agent.state, 'running');
     assert.equal(agent.events.length, 40);
