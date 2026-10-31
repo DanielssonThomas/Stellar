@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { describe, expect, it } from 'vitest';
+import { server } from '@stellar/test-support';
 import { DashboardStatusService } from './dashboard-status.service';
 
 describe('DashboardStatusService', () => {
-  afterEach(() => vi.unstubAllGlobals());
   it('is injectable as a shared singleton', () => {
     TestBed.configureTestingModule({ providers: [DashboardStatusService] });
 
@@ -26,15 +27,17 @@ describe('DashboardStatusService', () => {
         source: 'GitHub',
       },
     };
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => snapshot })
-        .mockRejectedValueOnce(new Error('offline')),
+    let fail = false;
+    server.use(
+      http.get('http://127.0.0.1:4211/api/status', () => {
+        return fail
+          ? new HttpResponse(null, { status: 503 })
+          : HttpResponse.json(snapshot);
+      }),
     );
     await service.refresh();
     expect(service.snapshot()).toEqual(snapshot);
+    fail = true;
     await service.refresh();
     expect(service.error()).toBe(true);
     expect(service.snapshot()).toEqual(snapshot);

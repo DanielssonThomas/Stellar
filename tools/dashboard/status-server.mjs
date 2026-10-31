@@ -50,7 +50,9 @@ export function createStatusServer(snapshot = buildSnapshot) {
     const imageKind =
       request.url === '/api/character-image/reference'
         ? 'reference'
-        : request.url === '/api/character-image/latest'
+        : /^\/api\/character-image\/latest(?:\?revision=\d{13})?$/.test(
+              request.url ?? '',
+            )
           ? 'latest'
           : null;
     if (request.method === 'GET' && imageKind) {

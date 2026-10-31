@@ -62,6 +62,10 @@ export class MissionControlTemplate implements OnInit, OnDestroy {
       ? Math.max(0, Math.round((this.now() - Date.parse(at)) / 1000))
       : null;
   });
+  readonly imageRevision = computed(() => {
+    const observedAt = this.snapshot()?.observedAt;
+    return observedAt ? Date.parse(observedAt) : 0;
+  });
   readonly stale = computed(
     () =>
       this.status.error() ||

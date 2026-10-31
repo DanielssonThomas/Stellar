@@ -65,7 +65,7 @@
     "test": {
       "executor": "@angular/build:unit-test",
       "options": {
-        "setupFiles": ["apps/stellar-web/src/test-setup.ts"]
+        "setupFiles": ["tools/testing/msw.ts"]
       }
     },
     "serve-static": {

@@ -195,47 +195,59 @@
           <section class="panel">
             <div class="section-head">
               <h2>Blocked & approvals</h2>
-              <span
-                >{{ blocked().length }} blocked ·
-                {{ snapshot()!.github.pulls.length }} open PRs</span
-              >
+              @if (snapshot()!.github.state === 'unavailable') {
+                <span class="text-stellar-warn"
+                  >Approval queue unavailable</span
+                >
+              } @else {
+                <span
+                  >{{ blocked().length }} blocked ·
+                  {{ snapshot()!.github.pulls.length }} open PRs</span
+                >
+              }
             </div>
             <div class="max-h-64 overflow-auto">
-              @for (
-                pull of snapshot()!.github.pulls.slice(0, 3);
-                track pull.number
-              ) {
-                <a
-                  class="work-row"
-                  [href]="pull.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  ><span class="min-w-0"
-                    ><b class="truncate"
-                      >PR #{{ pull.number }} {{ pull.title }}</b
-                    ><small>{{
-                      pull.draft ? 'draft' : 'open · review/approval'
-                    }}</small></span
-                  ><span class="text-stellar-accent">●</span></a
-                >
-              }
-              @for (issue of blocked().slice(0, 3); track issue.number) {
-                <a
-                  class="work-row"
-                  [href]="issue.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  ><span class="min-w-0"
-                    ><b class="truncate"
-                      >#{{ issue.number }} {{ issue.title }}</b
-                    ><small>{{ issue.owner }} · blocked</small></span
-                  ><span class="text-stellar-warn">●</span></a
-                >
-              }
-              @if (!blocked().length && !snapshot()!.github.pulls.length) {
+              @if (snapshot()!.github.state === 'unavailable') {
                 <p class="empty">
-                  No blocked issues or open PRs in the current feed.
+                  GitHub approval and blocker data unavailable.
                 </p>
+              } @else {
+                @for (
+                  pull of snapshot()!.github.pulls.slice(0, 3);
+                  track pull.number
+                ) {
+                  <a
+                    class="work-row"
+                    [href]="pull.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ><span class="min-w-0"
+                      ><b class="truncate"
+                        >PR #{{ pull.number }} {{ pull.title }}</b
+                      ><small>{{
+                        pull.draft ? 'draft' : 'open · review/approval'
+                      }}</small></span
+                    ><span class="text-stellar-accent">●</span></a
+                  >
+                }
+                @for (issue of blocked().slice(0, 3); track issue.number) {
+                  <a
+                    class="work-row"
+                    [href]="issue.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ><span class="min-w-0"
+                      ><b class="truncate"
+                        >#{{ issue.number }} {{ issue.title }}</b
+                      ><small>{{ issue.owner }} · blocked</small></span
+                    ><span class="text-stellar-warn">●</span></a
+                  >
+                }
+                @if (!blocked().length && !snapshot()!.github.pulls.length) {
+                  <p class="empty">
+                    No blocked issues or open PRs in the current feed.
+                  </p>
+                }
               }
             </div>
           </section>
@@ -346,7 +358,10 @@
               @if (character.latestImage) {
                 <img
                   class="aspect-[4/5] w-full rounded-lg bg-stellar-panel-raised object-cover"
-                  src="http://127.0.0.1:4211/api/character-image/latest"
+                  [src]="
+                    'http://127.0.0.1:4211/api/character-image/latest?revision=' +
+                    imageRevision()
+                  "
                   alt="Latest unapproved visual comparison for stellar-assistant"
                 />
               } @else {

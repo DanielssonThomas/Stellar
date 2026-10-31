@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -224,5 +224,45 @@ test('HTTP adapter accepts only its fixed read-only status route', async () => {
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('latest comparison accepts only a bounded revision query', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'stellar-image-route-'));
+  const asset = 'assets/characters/stellar-assistant-phase1/latest.png';
+  const progress = path.join(root, 'characters', 'stellar-assistant');
+  const image = path.join(root, asset);
+  await mkdir(progress, { recursive: true });
+  await mkdir(path.dirname(image), { recursive: true });
+  await writeFile(
+    path.join(progress, 'phase1-progress.json'),
+    JSON.stringify({ latest_review_comparison: asset }),
+  );
+  await writeFile(image, 'test image');
+  const previousRoot = process.env.STELLAR_DESIGN_ROOT;
+  process.env.STELLAR_DESIGN_ROOT = root;
+  const server = createStatusServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const current = await fetch(
+      `${base}/api/character-image/latest?revision=1793470000000`,
+    );
+    assert.equal(current.status, 200);
+    assert.equal(await current.text(), 'test image');
+    assert.equal(
+      (await fetch(`${base}/api/character-image/latest?path=../../auth.json`))
+        .status,
+      404,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    if (previousRoot === undefined) delete process.env.STELLAR_DESIGN_ROOT;
+    else process.env.STELLAR_DESIGN_ROOT = previousRoot;
+    const actualRoot = await realpath(root);
+    const tempRoot = await realpath(os.tmpdir());
+    assert.ok(actualRoot.startsWith(`${tempRoot}${path.sep}`));
+    assert.ok(path.basename(actualRoot).startsWith('stellar-image-route-'));
+    await rm(actualRoot, { recursive: true, force: true });
   }
 });

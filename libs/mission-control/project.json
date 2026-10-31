@@ -23,7 +23,9 @@
     },
     "test": {
       "executor": "@nx/angular:unit-test",
-      "options": {}
+      "options": {
+        "setupFiles": ["tools/testing/msw.ts"]
+      }
     },
     "lint": {
       "executor": "@nx/eslint:lint"

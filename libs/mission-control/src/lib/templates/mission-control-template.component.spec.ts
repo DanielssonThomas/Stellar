@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { http, HttpResponse } from 'msw';
 import { DashboardStatusService } from '@stellar/service-dashboard-status';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { server } from '@stellar/test-support';
 import { MissionControlTemplate } from './mission-control-template.component';
 
 describe('MissionControlTemplate', () => {
@@ -60,14 +62,26 @@ describe('MissionControlTemplate', () => {
           },
           blender: { launchAllowed: false, sessionRecorded: false },
           blocker: 'Visual approval pending',
+          latestImage: 'latest',
           outstanding: [{ id: 'FACE-001', status: 'visually mismatched' }],
           validation: 'Phase 1 visual approval pending',
         },
       ],
     });
+    let requests = 0;
+    server.use(
+      http.get('http://127.0.0.1:4211/api/status', () => {
+        requests += 1;
+        return HttpResponse.json(service.snapshot());
+      }),
+    );
     service.loading.set(false);
     const fixture = TestBed.createComponent(MissionControlTemplate);
     fixture.detectChanges();
+    await vi.waitFor(() =>
+      expect(service.lastSuccessfulFetch()).not.toBeNull(),
+    );
+    expect(requests).toBeGreaterThan(0);
     expect(fixture.nativeElement.textContent).toContain(
       'Running · no live source',
     );
@@ -79,6 +93,54 @@ describe('MissionControlTemplate', () => {
       'Visual approval pending',
     );
     expect(fixture.nativeElement.textContent).toContain('FACE-001');
+    const image = fixture.nativeElement.querySelector('img');
+    const initialImageUrl = image.getAttribute('src');
+    expect(initialImageUrl).toContain('revision=');
+    service.snapshot.update((current) =>
+      current
+        ? { ...current, observedAt: '2026-10-31T18:00:00.000Z' }
+        : current,
+    );
+    fixture.detectChanges();
+    expect(image.getAttribute('src')).not.toBe(initialImageUrl);
+    fixture.destroy();
+  });
+
+  it('shows the approval queue as unavailable when the GitHub feed is unavailable', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MissionControlTemplate],
+    }).compileComponents();
+    const service = TestBed.inject(DashboardStatusService);
+    service.snapshot.set({
+      observedAt: '2026-10-31T18:00:00.000Z',
+      agents: [],
+      github: {
+        state: 'unavailable',
+        issues: [],
+        pulls: [],
+        source: 'GitHub',
+      },
+    });
+    server.use(
+      http.get('http://127.0.0.1:4211/api/status', () =>
+        HttpResponse.json(service.snapshot()),
+      ),
+    );
+    service.loading.set(false);
+    const fixture = TestBed.createComponent(MissionControlTemplate);
+    fixture.detectChanges();
+    await vi.waitFor(() =>
+      expect(service.lastSuccessfulFetch()).not.toBeNull(),
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'Approval queue unavailable',
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'GitHub approval and blocker data unavailable.',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'No blocked issues or open PRs in the current feed.',
+    );
     fixture.destroy();
   });
 });
