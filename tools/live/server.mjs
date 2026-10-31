@@ -32,10 +32,20 @@ export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
   let lastComparable = '';
   let latest = collect();
   const server = http.createServer((request, response) => {
+    const port = server.address()?.port;
+    const host = request.headers.host?.toLowerCase();
     const origin = request.headers.origin;
     const cors = origins.has(origin)
       ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' }
       : {};
+    if (
+      ![`127.0.0.1:${port}`, `localhost:${port}`].includes(host) ||
+      (origin !== undefined && !origins.has(origin))
+    ) {
+      response.writeHead(403, { 'Cache-Control': 'no-store' });
+      response.end();
+      return;
+    }
     if (
       request.method !== 'GET' ||
       !['/api/live', '/api/live/events'].includes(request.url)

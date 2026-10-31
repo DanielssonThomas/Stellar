@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { test } from 'node:test';
 import { createLiveServer, sendSsePacket } from './server.mjs';
 
@@ -62,6 +63,48 @@ test('loopback server serves a bounded snapshot and rejects arbitrary routes', a
     const response = await fetch(`${base}/api/live`);
     assert.equal(response.status, 200);
     assert.equal((await response.json()).agents.length, 0);
+    assert.equal(
+      await new Promise((resolve, reject) =>
+        http
+          .get(
+            `${base}/api/live`,
+            { headers: { Host: `untrusted.example:${server.address().port}` } },
+            (res) => {
+              res.resume();
+              resolve(res.statusCode);
+            },
+          )
+          .on('error', reject),
+      ),
+      403,
+    );
+    assert.equal(
+      (
+        await fetch(`${base}/api/live`, {
+          headers: { Origin: 'http://untrusted.example:4200' },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await fetch(`${base}/api/live/events`, {
+          headers: {
+            Host: `untrusted.example:${server.address().port}`,
+            Origin: 'http://untrusted.example:4200',
+          },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await fetch(`${base}/api/live`, {
+          headers: { Origin: 'http://localhost:4200' },
+        })
+      ).status,
+      200,
+    );
     assert.equal((await fetch(`${base}/api/live?path=secret`)).status, 404);
     assert.equal(
       (await fetch(`${base}/api/live`, { method: 'POST' })).status,
