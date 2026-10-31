@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
-import { collectSnapshot, normalizeProfile } from './telemetry.mjs';
+import {
+  collectSnapshot,
+  normalizeProfile,
+  readProfileDatabase,
+} from './telemetry.mjs';
 
 const now = 1_800_000_000_000;
 const session = {
@@ -89,4 +97,66 @@ test('unavailable databases are disconnected without leaking paths or errors', (
   assert.equal(snapshot.agents.length, 9);
   assert.ok(snapshot.agents.every((agent) => agent.state === 'disconnected'));
   assert.equal(JSON.stringify(snapshot).includes('secret'), false);
+});
+
+test('overlapping source queries retain each tool message once before history limiting', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'stellar-live-'));
+  const databasePath = path.join(directory, 'state.db');
+  try {
+    const db = new DatabaseSync(databasePath);
+    db.exec(`
+      CREATE TABLE session_turn_leases (conversation_id TEXT, holder TEXT, acquired_at REAL, expires_at REAL);
+      CREATE TABLE sessions (id TEXT, parent_session_id TEXT, started_at REAL, ended_at REAL, end_reason TEXT, last_activity_at REAL, model TEXT, billing_provider TEXT, input_tokens INTEGER, output_tokens INTEGER);
+      CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, timestamp REAL, tool_name TEXT);
+    `);
+    const time = Date.now() / 1000;
+    db.prepare('INSERT INTO session_turn_leases VALUES (?, ?, ?, ?)').run(
+      'active-session',
+      'pid=100:turn=fixture',
+      time - 60,
+      time + 60,
+    );
+    db.prepare(
+      'INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      'active-session',
+      null,
+      time - 60,
+      null,
+      null,
+      time,
+      'qwen3-coder',
+      'local',
+      30,
+      10,
+    );
+    const insert = db.prepare('INSERT INTO messages VALUES (?, ?, ?, ?)');
+    for (let id = 1; id <= 50; id += 1)
+      insert.run(id, 'active-session', time - 51 + id, 'terminal');
+    db.close();
+
+    const observed = readProfileDatabase(databasePath);
+    assert.equal(observed.messages.length, 50);
+    assert.equal(
+      new Set(observed.messages.map((message) => message.id)).size,
+      50,
+    );
+    const agent = normalizeProfile(['peon', 'Peon', 'stellar'], observed, {
+      now: time * 1000,
+      processAlive: () => true,
+    });
+    assert.equal(agent.state, 'running');
+    assert.equal(agent.events.length, 40);
+    assert.equal(new Set(agent.events.map((event) => event.id)).size, 40);
+    assert.equal(
+      agent.events[0].at,
+      new Date((time - 40) * 1000).toISOString(),
+    );
+    assert.equal(
+      agent.events.at(-1).at,
+      new Date((time - 1) * 1000).toISOString(),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

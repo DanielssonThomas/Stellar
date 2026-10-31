@@ -176,8 +176,17 @@ export function readProfileDatabase(databasePath) {
       }
       messages.push(...toolsBySession.all(lease.conversation_id));
     }
-    messages.sort((a, b) => b.timestamp - a.timestamp);
-    return { leases, sessions, messages };
+    const uniqueMessages = new Map();
+    for (const message of messages) {
+      uniqueMessages.set(`${message.session_id}:${message.id}`, message);
+    }
+    return {
+      leases,
+      sessions,
+      messages: [...uniqueMessages.values()].sort(
+        (a, b) => b.timestamp - a.timestamp,
+      ),
+    };
   } finally {
     db.close();
   }
