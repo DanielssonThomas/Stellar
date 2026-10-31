@@ -23,8 +23,7 @@
       "@stellar/service-dashboard-status": [
         "libs/dashboard-status/src/index.ts"
       ],
-      "@stellar/test-support": ["tools/testing/msw.ts"],
-      "@stellar/ui-organisms": ["libs/ui/organisms/src/index.ts"]
+      "@stellar/test-support": ["tools/testing/msw.ts"]
     }
   }
 }

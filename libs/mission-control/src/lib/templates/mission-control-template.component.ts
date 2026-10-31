@@ -11,7 +11,6 @@ import {
   ViewChild,
 } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
-import { LiveWorkplaceOrganism } from '@stellar/ui-organisms';
 import {
   DashboardStatusService,
   LiveTelemetryService,
@@ -20,6 +19,7 @@ import {
   type ProductionStageState,
 } from '@stellar/service-dashboard-status';
 import clsx from 'clsx';
+import { LiveWorkplaceOrganism } from '../organisms/live-workplace-organism.component';
 
 type InspectedEvent = LiveEvent & {
   agentId: string;
