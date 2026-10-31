@@ -1,47 +1,82 @@
 import { expect, test } from '@playwright/test';
 
-test('operations and character studio show source status and honest empty states', async ({
+test('Mission Control switches views and refreshes status without navigation', async ({
   page,
 }) => {
+  let requests = 0;
   await page.route('**/api/status', async (route) => {
+    requests += 1;
     await route.fulfill({
       json: {
-        observedAt: '2026-10-30T21:00:00Z',
+        observedAt: new Date().toISOString(),
         agents: [
           {
-            role: 'Architect',
-            id: 'architect-cloud',
-            mode: 'Cloud',
-            model: 'gpt-6.1-sol',
+            role: 'Designer',
+            id: 'designer',
+            mode: 'Independent',
+            model: 'gpt-6.1-terra',
             provider: 'openai-codex',
             sessionCount: 1,
             sessionState: 'recorded',
-            lastActivity: '2026-10-30T20:00:00Z',
-            usage: { inputTokens: 100, outputTokens: 20, apiCalls: 1 },
+            lastActivity: null,
+            usage: { inputTokens: 0, outputTokens: 0, apiCalls: 0 },
             events: [],
-            source: 'Hermes local profile',
+            source: 'Hermes',
           },
         ],
         github: {
           state: 'live',
-          issues: [],
+          complete: true,
+          issues: [
+            {
+              number: 161,
+              title: 'Dashboard',
+              url: 'https://github.com/example/161',
+              status: 'in-progress',
+              owner: 'owner:codex',
+              blocked: false,
+            },
+          ],
           pulls: [],
-          source: 'Public GitHub API',
+          source: 'GitHub',
         },
+        characters: [
+          {
+            state: 'observed',
+            id: 'stellar-assistant',
+            source: 'Stellar-Design',
+            assignedAgent: 'Designer',
+            activity: 'unknown',
+            workflow: 'phase1 refinement',
+            contractApproved: true,
+            referenceAvailable: true,
+            vroid: {
+              achieved: 3,
+              total: 18,
+              sourceRecorded: false,
+              exportRecorded: false,
+            },
+            blender: { launchAllowed: false, sessionRecorded: false },
+            blocker: 'Visual approval pending',
+            outstanding: [{ id: 'FACE-001', status: 'visually mismatched' }],
+            validation: 'Phase 1 visual approval pending',
+          },
+        ],
       },
     });
   });
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Operations Overview' }),
+    page.getByRole('heading', { name: 'Mission Control' }),
   ).toBeVisible();
-  await expect(page.getByText('gpt-6.1-sol')).toBeVisible();
-  await expect(page.getByText('Session recorded')).toBeVisible();
+  await expect(page.getByText('Running · no live source')).toBeVisible();
   await page.getByRole('button', { name: 'Character Studio' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Character Studio' }),
+    page.getByText('Visual approval pending', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText('No approved references or design contract linked.'),
-  ).toBeVisible();
+  await expect(page.getByText('FACE-001')).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect.poll(() => requests).toBeGreaterThan(1);
+  await page.getByRole('button', { name: 'Operations' }).click();
+  await expect(page.getByText('#161 Dashboard')).toBeVisible();
 });

@@ -18,7 +18,11 @@
     "paths": {
       "@stellar/ui-atoms": ["libs/ui/atoms/src/index.ts"],
       "@stellar/generators": ["tools/generators/src/index.ts"],
-      "@stellar/ui-molecules": ["libs/ui/molecules/src/index.ts"]
+      "@stellar/ui-molecules": ["libs/ui/molecules/src/index.ts"],
+      "@stellar/ui-templates": ["libs/ui/templates/src/index.ts"],
+      "@stellar/service-dashboard-status": [
+        "libs/services/dashboard-status/src/index.ts"
+      ]
     }
   }
 }

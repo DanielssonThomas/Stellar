@@ -1,0 +1,491 @@
+<div class="stellar-surface min-h-screen text-stellar-foreground">
+  <main class="mx-auto max-w-[1540px] px-5 py-5 lg:px-8">
+    <header
+      class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-stellar-line pb-4"
+    >
+      <div class="flex items-center gap-4">
+        <span
+          class="flex h-9 w-9 items-center justify-center rounded-lg bg-stellar-primary/20 text-stellar-accent"
+          >✦</span
+        >
+        <div>
+          <p class="text-[11px] font-bold tracking-[0.3em] text-stellar-accent">
+            STELLAR
+          </p>
+          <h1 class="text-xl font-semibold">Mission Control</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        @if (snapshot()) {
+          <span [class]="stale() ? 'text-stellar-warn' : 'text-stellar-good'">{{
+            stale() ? 'Stale / unavailable' : 'Feeds refreshed'
+          }}</span>
+          <span class="text-stellar-muted">· {{ ageSeconds() }}s ago</span>
+        } @else {
+          <stellar-skeleton-atom />
+        }
+        <button
+          type="button"
+          class="ml-2 rounded-lg border border-stellar-line px-3 py-1.5 hover:bg-stellar-panel-raised"
+          (click)="status.refresh()"
+        >
+          Refresh
+        </button>
+      </div>
+    </header>
+    <nav aria-label="Dashboard views" class="mb-5 flex gap-2">
+      <button
+        type="button"
+        (click)="view.set('operations')"
+        [attr.aria-pressed]="view() === 'operations'"
+        [class]="tabClass('operations')"
+      >
+        Operations
+      </button>
+      <button
+        type="button"
+        (click)="view.set('studio')"
+        [attr.aria-pressed]="view() === 'studio'"
+        [class]="tabClass('studio')"
+      >
+        Character Studio
+      </button>
+    </nav>
+    @if (status.loading() && !snapshot()) {
+      <section class="grid gap-3 md:grid-cols-3" aria-label="Loading dashboard">
+        <div class="panel"><stellar-skeleton-atom /></div>
+        <div class="panel"><stellar-skeleton-atom /></div>
+        <div class="panel"><stellar-skeleton-atom /></div>
+      </section>
+    } @else if (!snapshot()) {
+      <section class="panel text-stellar-warn">
+        Local status service unavailable. Start the read-only adapter on port
+        4211.
+      </section>
+    } @else if (view() === 'operations') {
+      <section
+        aria-label="Operations summary"
+        class="mb-4 grid grid-cols-2 gap-2 md:grid-cols-5"
+      >
+        <div class="metric">
+          <strong>—</strong><span>Running · no live source</span>
+        </div>
+        <div class="metric">
+          <strong>{{
+            snapshot()!.github.state === 'unavailable'
+              ? '—'
+              : inProgress().length
+          }}</strong
+          ><span>In progress · execution unknown</span>
+        </div>
+        <div class="metric">
+          <strong>{{
+            snapshot()!.github.state === 'unavailable' ? '—' : queued().length
+          }}</strong
+          ><span>Queued issues</span>
+        </div>
+        <div class="metric">
+          <strong>{{
+            snapshot()!.github.state === 'unavailable' ? '—' : blocked().length
+          }}</strong
+          ><span>Blocked issues</span>
+        </div>
+        <div class="metric">
+          <strong>{{
+            snapshot()!.github.state === 'unavailable' ? '—' : review().length
+          }}</strong
+          ><span>Awaiting review</span>
+        </div>
+      </section>
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(330px,1fr)]">
+        <div class="space-y-4">
+          <section class="panel">
+            <div class="section-head">
+              <h2>Current work</h2>
+              <span>GitHub issue stage · owner label</span>
+            </div>
+            @if (snapshot()!.github.state === 'unavailable') {
+              <p class="empty">
+                GitHub feed unavailable. Work state cannot be verified.
+              </p>
+            } @else if (!inProgress().length) {
+              <p class="empty">
+                No issues marked in progress. No execution telemetry is
+                connected.
+              </p>
+            } @else {
+              <div class="max-h-64 overflow-auto">
+                @for (issue of inProgress(); track issue.number) {
+                  <a
+                    class="work-row"
+                    [href]="issue.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <span class="min-w-0"
+                      ><b class="truncate"
+                        >#{{ issue.number }} {{ issue.title }}</b
+                      ><small
+                        >{{ issue.owner }} ·
+                        {{ stateForIssue(issue.status) }}</small
+                      ></span
+                    >
+                    <time class="shrink-0 text-stellar-muted">{{
+                      issue.updatedAt
+                        ? (issue.updatedAt | date: 'MMM d, HH:mm')
+                        : 'time unknown'
+                    }}</time>
+                  </a>
+                }
+              </div>
+            }
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <h2>Agent roster</h2>
+              <span>Session history never implies execution</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              @for (agent of snapshot()!.agents; track agent.id) {
+                <div class="agent-row">
+                  <div class="flex items-center justify-between gap-2">
+                    <b
+                      >{{ agent.role }}
+                      <span class="font-normal text-stellar-muted">{{
+                        agent.mode
+                      }}</span></b
+                    ><span class="state">{{
+                      agent.model === 'Unavailable' ? 'unavailable' : 'unknown'
+                    }}</span>
+                  </div>
+                  <p class="mt-1 text-xs text-stellar-muted">
+                    {{
+                      agent.sessionState === 'unavailable'
+                        ? 'Telemetry unavailable'
+                        : agent.sessionCount + ' recorded sessions'
+                    }}
+                    ·
+                    {{
+                      agent.lastActivity
+                        ? (agent.lastActivity | date: 'MMM d, HH:mm')
+                        : 'No verified activity'
+                    }}
+                  </p>
+                  <details class="mt-1 text-[11px] text-stellar-muted">
+                    <summary class="cursor-pointer text-stellar-accent">
+                      Route & usage
+                    </summary>
+                    <p>{{ agent.model }} · {{ agent.provider }}</p>
+                    <p>
+                      @if (agent.sessionState === 'unavailable') {
+                        Usage unavailable
+                      } @else {
+                        {{ agent.usage.apiCalls }} calls ·
+                        {{ agent.usage.inputTokens + agent.usage.outputTokens }}
+                        tokens
+                      }
+                    </p>
+                  </details>
+                </div>
+              }
+            </div>
+          </section>
+        </div>
+        <div class="space-y-4">
+          <section class="panel">
+            <div class="section-head">
+              <h2>Blocked & approvals</h2>
+              <span
+                >{{ blocked().length }} blocked ·
+                {{ snapshot()!.github.pulls.length }} open PRs</span
+              >
+            </div>
+            <div class="max-h-64 overflow-auto">
+              @for (
+                pull of snapshot()!.github.pulls.slice(0, 3);
+                track pull.number
+              ) {
+                <a
+                  class="work-row"
+                  [href]="pull.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ><span class="min-w-0"
+                    ><b class="truncate"
+                      >PR #{{ pull.number }} {{ pull.title }}</b
+                    ><small>{{
+                      pull.draft ? 'draft' : 'open · review/approval'
+                    }}</small></span
+                  ><span class="text-stellar-accent">●</span></a
+                >
+              }
+              @for (issue of blocked().slice(0, 3); track issue.number) {
+                <a
+                  class="work-row"
+                  [href]="issue.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ><span class="min-w-0"
+                    ><b class="truncate"
+                      >#{{ issue.number }} {{ issue.title }}</b
+                    ><small>{{ issue.owner }} · blocked</small></span
+                  ><span class="text-stellar-warn">●</span></a
+                >
+              }
+              @if (!blocked().length && !snapshot()!.github.pulls.length) {
+                <p class="empty">
+                  No blocked issues or open PRs in the current feed.
+                </p>
+              }
+            </div>
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <h2>Activity timeline</h2>
+              <span>Recorded Hermes sessions</span>
+            </div>
+            @for (event of events(); track event.profile + event.at) {
+              <div class="timeline-row">
+                <span
+                  [class]="
+                    event.kind === 'failure'
+                      ? 'text-stellar-warn'
+                      : 'text-stellar-good'
+                  "
+                  >●</span
+                ><span
+                  >{{ event.role }} ·
+                  {{
+                    event.kind === 'failure'
+                      ? 'session failure'
+                      : 'session activity recorded'
+                  }}</span
+                ><time>{{ event.at | date: 'MMM d, HH:mm' }}</time>
+              </div>
+            }
+            @if (!events().length) {
+              <p class="empty">No recent session events available.</p>
+            }
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <h2>Recently completed</h2>
+              <span>Latest closed issue page</span>
+            </div>
+            @for (issue of completed(); track issue.number) {
+              <a
+                class="work-row"
+                [href]="issue.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                ><span class="min-w-0 truncate"
+                  >#{{ issue.number }} {{ issue.title }}</span
+                ><time class="text-stellar-muted">{{
+                  issue.updatedAt | date: 'MMM d'
+                }}</time></a
+              >
+            }
+            @if (!completed().length) {
+              <p class="empty">
+                No completed issues in the latest closed page.
+              </p>
+            }
+          </section>
+          <section class="panel text-xs text-stellar-muted">
+            <div class="section-head">
+              <h2>Source health</h2>
+              <span>{{
+                snapshot()!.observedAt | date: 'MMM d, HH:mm:ss'
+              }}</span>
+            </div>
+            <p>
+              GitHub: {{ snapshot()!.github.state }}
+              {{
+                snapshot()!.github.complete
+                  ? '· full open issue/PR pagination'
+                  : '· counts unavailable'
+              }}
+              · last source read
+              {{
+                snapshot()!.github.observedAt
+                  ? (snapshot()!.github.observedAt | date: 'MMM d, HH:mm:ss')
+                  : 'unknown'
+              }}
+            </p>
+            <p class="mt-1">
+              Agent state: no process-level execution source connected. Profile
+              and session data are historical.
+            </p>
+          </section>
+        </div>
+      </div>
+    } @else {
+      <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 class="text-xl font-semibold">Character Studio</h2>
+          <p class="text-xs text-stellar-muted">
+            Read-only production records from Stellar-Design
+          </p>
+        </div>
+        <span class="text-xs text-stellar-muted"
+          >Phase gates require recorded evidence</span
+        >
+      </div>
+      @for (character of characters(); track character.id) {
+        @if (character.state === 'unavailable') {
+          <section class="panel">
+            <h3 class="font-semibold">{{ character.id }}</h3>
+            <p class="mt-2 text-stellar-warn">{{ character.reason }}</p>
+            <p class="mt-2 text-xs text-stellar-muted">
+              Expected: {{ character.source }}
+            </p>
+          </section>
+        } @else {
+          <section class="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_310px]">
+            <div class="panel">
+              @if (character.latestImage) {
+                <img
+                  class="aspect-[4/5] w-full rounded-lg bg-stellar-panel-raised object-cover"
+                  src="http://127.0.0.1:4211/api/character-image/latest"
+                  alt="Latest unapproved visual comparison for stellar-assistant"
+                />
+              } @else {
+                <div
+                  class="flex aspect-[4/5] items-center justify-center rounded-lg bg-stellar-panel-raised text-xs text-stellar-muted"
+                >
+                  No comparison image recorded
+                </div>
+              }
+              <p class="mt-2 text-xs text-stellar-warn">
+                {{ character.latestImageLabel ?? 'No current render recorded' }}
+              </p>
+              <p class="mt-1 text-xs text-stellar-muted">
+                Approved reference available:
+                {{ character.referenceAvailable ? 'yes' : 'no' }}
+              </p>
+              @if (character.referenceAvailable) {
+                <a
+                  class="mt-2 inline-block text-xs text-stellar-accent underline"
+                  href="http://127.0.0.1:4211/api/character-image/reference"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >View approved reference</a
+                >
+              }
+            </div>
+            <div class="space-y-4">
+              <div class="panel">
+                <div class="section-head">
+                  <h3 class="text-lg font-semibold">{{ character.id }}</h3>
+                  <span class="state"
+                    >{{ character.activity ?? 'unknown' }} execution</span
+                  >
+                </div>
+                <p class="text-xs text-stellar-muted">
+                  Assigned role: {{ character.assignedAgent }} ·
+                  {{ character.workflow }}
+                </p>
+                <p class="mt-1 text-xs text-stellar-muted">
+                  Designer sessions recorded:
+                  {{ character.designerSessionCount ?? 'unavailable' }} · live
+                  execution unverified
+                </p>
+                <p class="mt-2 text-xs text-stellar-muted">
+                  Last production record:
+                  {{ character.lastVerifiedAt | date: 'MMM d, HH:mm' }}
+                </p>
+                <div
+                  class="mt-4 grid grid-cols-5 gap-1 text-center text-[10px]"
+                >
+                  <div class="stage done">Reference</div>
+                  <div class="stage current">Body / face</div>
+                  <div class="stage">VRoid validation</div>
+                  <div class="stage">Blender</div>
+                  <div class="stage">Final review</div>
+                </div>
+                <p class="mt-3 text-xs text-stellar-muted">
+                  Contract
+                  {{ character.contractApproved ? 'approved' : 'unverified' }} ·
+                  VRoid {{ character.vroid?.achieved }}/{{
+                    character.vroid?.total
+                  }}
+                  requirements achieved · Blender
+                  {{
+                    character.blender?.launchAllowed
+                      ? 'launch allowed'
+                      : 'not authorized'
+                  }}
+                </p>
+              </div>
+              <div class="panel">
+                <div class="section-head">
+                  <h3>Blocker & next action</h3>
+                  <span class="text-stellar-warn">{{ character.handoff }}</span>
+                </div>
+                <p class="text-sm">{{ character.blocker }}</p>
+                <p class="mt-3 text-xs text-stellar-muted">
+                  Next: resolve visual mismatches, capture outstanding views,
+                  obtain user visual approval before handoff.
+                </p>
+              </div>
+              <div class="panel">
+                <div class="section-head">
+                  <h3>Validation</h3>
+                  <span>{{ character.validation }}</span>
+                </div>
+                <p class="text-xs text-stellar-muted">
+                  VRoid source:
+                  {{
+                    character.vroid?.sourceRecorded
+                      ? 'recorded'
+                      : 'not promoted'
+                  }}
+                  · Export:
+                  {{
+                    character.vroid?.exportRecorded
+                      ? 'recorded'
+                      : 'not promoted'
+                  }}
+                  · Blender session:
+                  {{ character.blender?.sessionRecorded ? 'recorded' : 'none' }}
+                </p>
+                <p class="mt-1 text-xs text-stellar-muted">
+                  Designer technical audit: {{ character.technicalValidation }}
+                </p>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="section-head">
+                <h3>Outstanding requirements</h3>
+                <span
+                  >{{
+                    (character.vroid?.total ?? 0) -
+                      (character.vroid?.achieved ?? 0)
+                  }}
+                  open</span
+                >
+              </div>
+              @for (
+                requirement of character.outstanding;
+                track requirement.id
+              ) {
+                <div class="work-row">
+                  <span class="font-medium">{{ requirement.id }}</span
+                  ><small>{{ requirement.status }}</small>
+                </div>
+              }
+              <p class="mt-3 text-[11px] text-stellar-muted">
+                Source: {{ character.source }}
+              </p>
+            </div>
+          </section>
+        }
+      }
+      @if (!characters().length) {
+        <section class="panel text-stellar-warn">
+          No character production source connected.
+        </section>
+      }
+    }
+  </main>
+</div>

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -125,16 +125,33 @@ export async function readGithubStatus(fetcher = fetch, timeoutMs = 4000) {
     'User-Agent': 'stellar-dashboard',
   };
   const signal = AbortSignal.timeout(timeoutMs);
-  const [issuesResponse, pullsResponse] = await Promise.all([
-    fetcher(`${githubBase}/issues?state=open&per_page=100`, {
+  const pages = async (resource) => {
+    const entries = [];
+    for (let page = 1; page <= 30; page += 1) {
+      const response = await fetcher(
+        `${githubBase}/${resource}?state=open&per_page=100&page=${page}`,
+        { headers, signal },
+      );
+      if (!response.ok) throw new Error('GitHub public status unavailable');
+      const batch = await response.json();
+      if (!Array.isArray(batch)) throw new Error('Invalid GitHub response');
+      entries.push(...batch);
+      if (batch.length < 100) return entries;
+    }
+    throw new Error('GitHub pagination limit reached');
+  };
+  const [issueEntries, pullEntries, completedResponse] = await Promise.all([
+    pages('issues'),
+    pages('pulls'),
+    fetcher(`${githubBase}/issues?state=closed&per_page=100&page=1`, {
       headers,
       signal,
     }),
-    fetcher(`${githubBase}/pulls?state=open&per_page=100`, { headers, signal }),
   ]);
-  if (!issuesResponse.ok || !pullsResponse.ok)
+  if (!completedResponse.ok)
     throw new Error('GitHub public status unavailable');
-  const issues = (await issuesResponse.json())
+  const completedEntries = await completedResponse.json();
+  const issues = issueEntries
     .filter((item) => !item.pull_request)
     .map((item) => ({
       number: item.number,
@@ -152,31 +169,164 @@ export async function readGithubStatus(fetcher = fetch, timeoutMs = 4000) {
         )?.name ?? 'unassigned',
       blocked:
         item.labels?.some((label) => label.name === 'status:blocked') ?? false,
+      updatedAt: item.updated_at ?? null,
     }));
-  const pulls = (await pullsResponse.json()).map((item) => ({
+  const pulls = pullEntries.map((item) => ({
     number: item.number,
     title: String(item.title ?? '').slice(0, 160),
     url: `https://github.com/${repository}/pull/${item.number}`,
     draft: Boolean(item.draft),
+    updatedAt: item.updated_at ?? null,
   }));
-  return { state: 'live', issues, pulls, source: 'Public GitHub API' };
+  const recentCompleted = completedEntries
+    .filter(
+      (item) =>
+        !item.pull_request &&
+        item.labels?.some((label) => label.name === 'status:done'),
+    )
+    .slice(0, 5)
+    .map((item) => ({
+      number: item.number,
+      title: String(item.title ?? '').slice(0, 160),
+      url: `https://github.com/${repository}/issues/${item.number}`,
+      updatedAt: item.updated_at ?? null,
+    }));
+  return {
+    state: 'live',
+    issues,
+    pulls,
+    recentCompleted,
+    source: 'Public GitHub API',
+    observedAt: new Date().toISOString(),
+    complete: true,
+  };
 }
 
+const designCharacter = 'stellar-assistant';
+const designRootDefault = 'D:\\ai-repositories\\Stellar-Design';
+
+export async function readCharacterStatus(
+  root = process.env.STELLAR_DESIGN_ROOT || designRootDefault,
+) {
+  const base = path.join(root, 'characters', designCharacter);
+  try {
+    const [state, progress, contract, file, audit] = await Promise.all([
+      readFile(path.join(base, 'phase-state.json'), 'utf8').then(JSON.parse),
+      readFile(path.join(base, 'phase1-progress.json'), 'utf8').then(
+        JSON.parse,
+      ),
+      readFile(path.join(base, 'design-contract.yaml'), 'utf8').then(
+        JSON.parse,
+      ),
+      stat(path.join(base, 'phase1-progress.json')),
+      readFile(path.join(base, 'designer-session-audit.json'), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null),
+    ]);
+    if (
+      state.character_id !== designCharacter ||
+      progress.character_id !== designCharacter ||
+      contract.character_id !== designCharacter
+    )
+      throw new Error('Character identity mismatch');
+    const requirements = Array.isArray(progress.requirements)
+      ? progress.requirements
+      : [];
+    const outstanding = requirements.filter(
+      (item) =>
+        item.status !== 'achieved' && item.status !== 'approved_difference',
+    );
+    const image =
+      typeof progress.latest_review_comparison === 'string' &&
+      progress.latest_review_comparison.startsWith(
+        'assets/characters/stellar-assistant-phase1/',
+      )
+        ? 'latest'
+        : null;
+    return {
+      state: 'observed',
+      id: designCharacter,
+      assignedAgent: 'Designer',
+      activity: 'unknown',
+      designerSessionCount: Array.isArray(progress.designer_sessions)
+        ? progress.designer_sessions.length
+        : null,
+      phase: String(state.phase ?? 'unknown'),
+      workflow: String(progress.status ?? 'unknown').replaceAll('_', ' '),
+      contractApproved: contract.approval?.status === 'approved',
+      referenceAvailable:
+        Array.isArray(contract.references) && contract.references.length > 0,
+      vroid: {
+        achieved: requirements.filter((item) => item.status === 'achieved')
+          .length,
+        total: requirements.length,
+        sourceRecorded: Boolean(progress.source),
+        exportRecorded: Boolean(progress.export),
+      },
+      blender: {
+        launchAllowed: state.phase2_launch_allowed === true,
+        sessionRecorded: Boolean(state.blender_session_id),
+      },
+      handoff: String(state.handoff_status ?? 'unknown').replaceAll('_', ' '),
+      blocker: String(progress.blocker ?? '').slice(0, 380),
+      outstanding: outstanding.slice(0, 5).map((item) => ({
+        id: String(item.id).slice(0, 40),
+        status: String(item.status).replaceAll('_', ' ').slice(0, 60),
+      })),
+      latestImage: image,
+      latestImageLabel: image ? 'Exploratory comparison — unapproved' : null,
+      validation: state.phase2_launch_allowed
+        ? 'Phase 2 launch recorded as allowed'
+        : 'Phase 1 visual approval pending',
+      technicalValidation:
+        audit?.character_id === designCharacter
+          ? String(audit.status ?? 'unknown')
+              .replaceAll('_', ' ')
+              .slice(0, 100)
+          : 'No Designer audit recorded',
+      lastVerifiedAt: file.mtime.toISOString(),
+      source: 'Stellar-Design phase-state, phase1-progress, design-contract',
+    };
+  } catch {
+    return {
+      state: 'unavailable',
+      id: designCharacter,
+      source: 'Stellar-Design phase-state, phase1-progress, design-contract',
+      reason: 'Design checkout or required production records unavailable',
+    };
+  }
+}
+
+let githubCache = null;
 export async function buildSnapshot({
   hermesRoot = process.env.STELLAR_HERMES_ROOT || 'D:\\Hermes',
   fetcher = fetch,
 } = {}) {
   const agents = await readHermesStatus(hermesRoot);
+  const characters = [await readCharacterStatus()];
   let github;
   try {
-    github = await readGithubStatus(fetcher);
+    if (
+      fetcher === fetch &&
+      githubCache &&
+      Date.now() - githubCache.cachedAt < 300_000
+    ) {
+      github = githubCache.data;
+    } else {
+      github = await readGithubStatus(fetcher);
+      if (fetcher === fetch)
+        githubCache = { cachedAt: Date.now(), data: github };
+    }
   } catch {
-    github = {
-      state: 'unavailable',
-      issues: [],
-      pulls: [],
-      source: 'Public GitHub API',
-    };
+    github = githubCache
+      ? { ...githubCache.data, state: 'stale' }
+      : {
+          state: 'unavailable',
+          issues: [],
+          pulls: [],
+          recentCompleted: [],
+          source: 'Public GitHub API',
+        };
   }
-  return { observedAt: new Date().toISOString(), agents, github };
+  return { observedAt: new Date().toISOString(), agents, github, characters };
 }
