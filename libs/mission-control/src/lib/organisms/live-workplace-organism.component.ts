@@ -1,5 +1,6 @@
 import { Component, computed, input, output } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
+import clsx from 'clsx';
 export interface WorkplaceAgent {
   id: string;
   name: string;
@@ -57,6 +58,30 @@ export class LiveWorkplaceOrganism {
 
   agentsFor(area: Area): WorkplaceAgent[] {
     return this.agents().filter((agent) => area.agents.includes(agent.id));
+  }
+
+  countClass(): string {
+    return clsx(
+      'live-count',
+      this.runningCount() > 0 && 'has-running text-stellar-good',
+    );
+  }
+
+  stationClass(agent: WorkplaceAgent): string {
+    return clsx(
+      'station',
+      `tone-${this.tone(agent)}`,
+      agent.state === 'running' && 'is-running',
+      agent.id === this.selectedId() && 'is-selected',
+    );
+  }
+
+  statusClass(agent: WorkplaceAgent): string {
+    return clsx('station-status', agent.state === 'running' && 'active');
+  }
+
+  avatarClass(agent: WorkplaceAgent): string {
+    return clsx('avatar', agent.state === 'running' && 'working');
   }
 
   tone(agent: WorkplaceAgent): string {

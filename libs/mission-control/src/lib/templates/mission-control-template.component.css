@@ -98,7 +98,11 @@
   overflow: hidden;
   border: 1px solid var(--color-stellar-line);
   border-radius: 1.15rem;
-  background: linear-gradient(165deg, #171c31, #101526 80%);
+  background: linear-gradient(
+    165deg,
+    var(--color-stellar-panel-raised),
+    var(--color-stellar-panel) 80%
+  );
   box-shadow: 0 20px 55px rgb(0 0 0 / 19%);
 }
 .inspector-heading {
@@ -121,10 +125,11 @@
   align-items: center;
   gap: 0.7rem;
   margin: 0.9rem 0.9rem 0;
-  border: 1px solid rgb(168 145 255 / 23%);
+  border: 1px solid
+    color-mix(in srgb, var(--color-stellar-primary) 35%, transparent);
   border-radius: 0.75rem;
   padding: 0.65rem;
-  background: rgb(150 116 255 / 9%);
+  background: color-mix(in srgb, var(--color-stellar-primary) 12%, transparent);
 }
 .inspected-avatar {
   display: grid;
@@ -132,8 +137,8 @@
   width: 2.2rem;
   height: 2.2rem;
   border-radius: 0.7rem;
-  color: #fff;
-  background: linear-gradient(145deg, #a885ea, #6654ae);
+  color: var(--color-stellar-foreground);
+  background: var(--color-stellar-primary);
   font-size: 0.9rem;
   font-weight: 800;
 }
@@ -160,7 +165,7 @@
   justify-content: space-between;
   gap: 0.7rem;
   padding: 0.34rem 0;
-  border-bottom: 1px solid rgb(255 255 255 / 5%);
+  border-bottom: 1px solid var(--color-stellar-line);
 }
 .inspector-facts span {
   color: var(--color-stellar-muted);
@@ -201,21 +206,21 @@
   max-height: 15rem;
   min-height: 7.5rem;
   padding: 0 0.6rem 0.5rem;
-  scrollbar-color: #464c68 transparent;
+  scrollbar-color: var(--color-stellar-line) transparent;
 }
 .live-event {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
   width: 100%;
-  border-top: 1px solid rgb(255 255 255 / 6%);
+  border-top: 1px solid var(--color-stellar-line);
   padding: 0.56rem 0.4rem;
   text-align: left;
 }
 .live-event:hover,
 .live-event.selected {
   border-radius: 0.4rem;
-  background: rgb(153 126 255 / 11%);
+  background: color-mix(in srgb, var(--color-stellar-primary) 12%, transparent);
 }
 .event-mark {
   flex: 0 0 auto;
@@ -223,10 +228,10 @@
   height: 0.42rem;
   margin-top: 0.2rem;
   border-radius: 50%;
-  background: #72d5c4;
+  background: var(--color-stellar-good);
 }
 .event-mark.failure {
-  background: #f39a82;
+  background: var(--color-stellar-warn);
 }
 .event-copy {
   flex: 1;
@@ -260,10 +265,11 @@
   display: grid;
   gap: 0.2rem;
   margin: 0 0.9rem 0.6rem;
-  border: 1px solid rgb(164 142 255 / 27%);
+  border: 1px solid
+    color-mix(in srgb, var(--color-stellar-primary) 35%, transparent);
   border-radius: 0.65rem;
   padding: 0.55rem 0.7rem;
-  background: rgb(144 114 248 / 10%);
+  background: color-mix(in srgb, var(--color-stellar-primary) 12%, transparent);
 }
 .event-focus strong {
   color: var(--color-stellar-foreground);

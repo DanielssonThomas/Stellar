@@ -7,11 +7,7 @@
         Nine named workstations. Motion follows verified execution.
       </p>
     </div>
-    <div
-      class="live-count"
-      [class.has-running]="runningCount() > 0"
-      [class.text-stellar-good]="runningCount() > 0"
-    >
+    <div [class]="countClass()">
       <span class="live-dot" aria-hidden="true"></span>
       {{ runningCount() }} verified running
     </div>
@@ -49,20 +45,14 @@
                 @for (agent of agentsFor(area); track agent.id) {
                   <button
                     type="button"
-                    class="station"
-                    [class.is-running]="agent.state === 'running'"
-                    [class.is-selected]="agent.id === selectedId()"
-                    [class]="'station tone-' + tone(agent)"
+                    [class]="stationClass(agent)"
                     [attr.aria-pressed]="agent.id === selectedId()"
                     [attr.aria-label]="
                       'Inspect ' + agent.name + ', ' + stateText(agent.state)
                     "
                     (click)="selectAgent.emit(agent.id)"
                   >
-                    <span
-                      class="station-status"
-                      [class.active]="agent.state === 'running'"
-                    >
+                    <span [class]="statusClass(agent)">
                       <span class="station-led" aria-hidden="true"></span>
                       {{ agent.state === 'running' ? 'LIVE' : agent.state }}
                     </span>
@@ -73,10 +63,7 @@
                         }}</span>
                       }
                       <span class="avatar-shadow"></span>
-                      <span
-                        class="avatar"
-                        [class.working]="agent.state === 'running'"
-                      >
+                      <span [class]="avatarClass(agent)">
                         <span class="avatar-hair"></span>
                         <span class="avatar-face">
                           <span class="avatar-eyes"><i></i><i></i></span>
