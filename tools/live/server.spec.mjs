@@ -224,3 +224,60 @@ test('SSE follows a state change without a browser refresh', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('SSE recovers after a collector failure with unchanged agent data', async () => {
+  let calls = 0;
+  const server = createLiveServer(() => {
+    calls += 1;
+    if (calls === 3) throw new Error('temporary collector failure');
+    return {
+      schemaVersion: 1,
+      observedAt: '2026-10-31T00:00:00.000Z',
+      agents: [
+        { id: 'designer', state: 'running', source: { health: 'available' } },
+      ],
+    };
+  }, 20);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const abort = new AbortController();
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/live/events`,
+      { signal: abort.signal },
+    );
+    const reader = response.body.getReader();
+    let buffer = '';
+    const states = await Promise.race([
+      (async () => {
+        const result = [];
+        while (result.length < 4) {
+          const part = await reader.read();
+          assert.equal(part.done, false);
+          buffer += new TextDecoder().decode(part.value);
+          let boundary;
+          while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+            const packet = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const data = packet
+              .split('\n')
+              .find((line) => line.startsWith('data: '));
+            if (data) result.push(JSON.parse(data.slice(6)).agents[0].state);
+          }
+        }
+        return result;
+      })(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SSE recovery timeout')), 1000),
+      ),
+    ]);
+    assert.deepEqual(states, ['running', 'running', 'disconnected', 'running']);
+    const polling = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/live`,
+    );
+    assert.equal((await polling.json()).agents[0].state, 'running');
+  } finally {
+    abort.abort();
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

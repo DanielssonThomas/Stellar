@@ -124,6 +124,7 @@ export function createLiveServer(collect = collectSnapshot, intervalMs = 2000) {
         for (const client of clients)
           sendSsePacket(client, ': heartbeat\n\n', clients);
     } catch {
+      lastComparable = '';
       latest = {
         schemaVersion: 1,
         observedAt: new Date().toISOString(),
