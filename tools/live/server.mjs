@@ -5,24 +5,45 @@ import { collectSnapshot } from './telemetry.mjs';
 
 const origins = new Set(['http://127.0.0.1:4200', 'http://localhost:4200']);
 const maxSseQueuedBytes = 128 * 1024;
+const drainTimeoutMs = 2000;
+const pendingDrains = new WeakMap();
+
+function disconnectClient(client, clients) {
+  const timer = pendingDrains.get(client);
+  if (timer) clearTimeout(timer);
+  pendingDrains.delete(client);
+  clients.delete(client);
+  client.destroy();
+}
 
 export function sendSsePacket(client, packet, clients) {
   const bytes = Buffer.byteLength(packet, 'utf8');
   if (
+    pendingDrains.has(client) ||
     bytes > maxSseQueuedBytes ||
     (client.writableLength ?? 0) + bytes > maxSseQueuedBytes
   ) {
-    clients.delete(client);
-    client.destroy();
+    disconnectClient(client, clients);
     return false;
   }
   try {
     if (client.write(packet)) return true;
+    const timer = setTimeout(
+      () => disconnectClient(client, clients),
+      drainTimeoutMs,
+    );
+    timer.unref();
+    pendingDrains.set(client, timer);
+    client.once('drain', () => {
+      if (pendingDrains.get(client) !== timer) return;
+      clearTimeout(timer);
+      pendingDrains.delete(client);
+    });
+    return true;
   } catch {
     // A disconnected reader must not interrupt healthy clients.
   }
-  clients.delete(client);
-  client.destroy();
+  disconnectClient(client, clients);
   return false;
 }
 
