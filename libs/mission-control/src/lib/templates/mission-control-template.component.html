@@ -375,8 +375,16 @@
                 {{ character.latestImageLabel ?? 'No current render recorded' }}
               </p>
               <p class="mt-1 text-xs text-stellar-muted">
-                Approved reference available:
-                {{ character.referenceAvailable ? 'yes' : 'no' }}
+                Reference:
+                @if (character.referenceAvailable) {
+                  {{
+                    character.contractApproved
+                      ? 'approved'
+                      : 'recorded; approval unverified'
+                  }}
+                } @else {
+                  unavailable
+                }
               </p>
               @if (character.referenceAvailable) {
                 <a
@@ -384,7 +392,9 @@
                   href="http://127.0.0.1:4211/api/character-image/reference"
                   target="_blank"
                   rel="noopener noreferrer"
-                  >View approved reference</a
+                  >View
+                  {{ character.contractApproved ? 'approved' : 'recorded' }}
+                  reference</a
                 >
               }
             </div>

@@ -102,6 +102,9 @@ describe('MissionControlTemplate', () => {
       'Visual approval pending',
     );
     expect(fixture.nativeElement.textContent).toContain('FACE-001');
+    expect(fixture.nativeElement.textContent).toContain(
+      'View approved reference',
+    );
     expect(
       fixture.nativeElement.querySelector(
         '[aria-label="Body / face: current"]',
@@ -145,6 +148,52 @@ describe('MissionControlTemplate', () => {
     );
     fixture.detectChanges();
     expect(image.getAttribute('src')).not.toBe(initialImageUrl);
+    fixture.destroy();
+  });
+
+  it('labels a present reference neutrally when contract approval is unverified', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MissionControlTemplate],
+    }).compileComponents();
+    const service = TestBed.inject(DashboardStatusService);
+    service.snapshot.set({
+      observedAt: '2026-10-31T18:00:00.000Z',
+      agents: [],
+      github: { state: 'live', issues: [], pulls: [], source: 'GitHub' },
+      characters: [
+        {
+          state: 'observed',
+          id: 'stellar-assistant',
+          source: 'Stellar-Design',
+          assignedAgent: 'Designer',
+          activity: 'unknown',
+          contractApproved: false,
+          referenceAvailable: true,
+          outstanding: [],
+        },
+      ],
+    });
+    server.use(
+      http.get('http://127.0.0.1:4211/api/status', () =>
+        HttpResponse.json(service.snapshot()),
+      ),
+    );
+    service.loading.set(false);
+    const fixture = TestBed.createComponent(MissionControlTemplate);
+    fixture.componentInstance.view.set('studio');
+    fixture.detectChanges();
+    await vi.waitFor(() =>
+      expect(service.lastSuccessfulFetch()).not.toBeNull(),
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'recorded; approval unverified',
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'View recorded reference',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'View approved reference',
+    );
     fixture.destroy();
   });
 
