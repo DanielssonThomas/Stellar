@@ -1,0 +1,108 @@
+<section class="workplace" aria-label="Animated agent workplace">
+  <div class="world-heading">
+    <div>
+      <p class="eyebrow">STELLAR / LIVE WORKSPACE</p>
+      <h2>Where the work happens</h2>
+      <p class="subtitle">
+        Nine named workstations. Motion follows verified execution.
+      </p>
+    </div>
+    <div class="live-count" [class.has-running]="runningCount() > 0">
+      <span class="live-dot" aria-hidden="true"></span>
+      {{ runningCount() }} verified running
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-grid" aria-label="Loading live workplace">
+      <stellar-skeleton-atom shape="control" />
+      <stellar-skeleton-atom shape="control" />
+      <stellar-skeleton-atom shape="control" />
+    </div>
+  } @else if (!agents().length) {
+    <div class="empty-workplace">
+      <span aria-hidden="true">✦</span>
+      <strong>No agents in this view</strong>
+      <p>Choose another project filter or wait for the read-only feed.</p>
+    </div>
+  } @else {
+    <div class="world-floor">
+      <span class="ambient-star star-one" aria-hidden="true"></span>
+      <span class="ambient-star star-two" aria-hidden="true"></span>
+      <span class="ambient-star star-three" aria-hidden="true"></span>
+      <div class="areas">
+        @for (area of areas; track area.id) {
+          @if (agentsFor(area).length) {
+            <section [class]="'area area-' + area.id">
+              <div class="area-heading">
+                <div class="area-icon" aria-hidden="true">{{ area.icon }}</div>
+                <div>
+                  <h3>{{ area.label }}</h3>
+                  <p>{{ area.caption }}</p>
+                </div>
+              </div>
+              <div class="stations">
+                @for (agent of agentsFor(area); track agent.id) {
+                  <button
+                    type="button"
+                    class="station"
+                    [class.is-running]="agent.state === 'running'"
+                    [class.is-selected]="agent.id === selectedId()"
+                    [class]="'station tone-' + tone(agent)"
+                    [attr.aria-pressed]="agent.id === selectedId()"
+                    [attr.aria-label]="
+                      'Inspect ' + agent.name + ', ' + stateText(agent.state)
+                    "
+                    (click)="selectAgent.emit(agent.id)"
+                  >
+                    <span
+                      class="station-status"
+                      [class.active]="agent.state === 'running'"
+                    >
+                      <span class="station-led" aria-hidden="true"></span>
+                      {{ agent.state === 'running' ? 'LIVE' : agent.state }}
+                    </span>
+                    <span class="avatar-scene" aria-hidden="true">
+                      <span class="avatar-shadow"></span>
+                      <span
+                        class="avatar"
+                        [class.working]="agent.state === 'running'"
+                      >
+                        <span class="avatar-hair"></span>
+                        <span class="avatar-face">
+                          <span class="avatar-eyes"><i></i><i></i></span>
+                          <span class="avatar-mouth"></span>
+                        </span>
+                        <span class="avatar-body"></span>
+                        <span class="avatar-hand left"></span>
+                        <span class="avatar-hand right"></span>
+                      </span>
+                      <span class="desk">
+                        <span class="screen"><i></i><i></i><i></i></span>
+                        <span class="screen-stand"></span>
+                        <span class="desk-top"></span>
+                      </span>
+                    </span>
+                    <span class="station-name">{{ agent.name }}</span>
+                    <span class="station-activity">
+                      {{
+                        agent.state === 'running'
+                          ? (agent.activity ?? stateText(agent.state))
+                          : stateText(agent.state)
+                      }}
+                    </span>
+                  </button>
+                }
+              </div>
+            </section>
+          }
+        }
+      </div>
+    </div>
+  }
+  <div class="world-footnote">
+    <span class="footnote-mark" aria-hidden="true">◌</span>
+    A workstation shows a configured identity. Only a verified live lease
+    activates work motion.
+  </div>
+</section>

@@ -1,11 +1,25 @@
 import { TestBed } from '@angular/core/testing';
 import { http, HttpResponse } from 'msw';
 import { DashboardStatusService } from '@stellar/service-dashboard-status';
-import { describe, expect, it, vi } from 'vitest';
+import { LiveTelemetryService } from '@stellar/service-dashboard-status';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { server } from '@stellar/test-support';
 import { MissionControlTemplate } from './mission-control-template.component';
 
 describe('MissionControlTemplate', () => {
+  beforeEach(() => {
+    server.use(
+      http.get('http://127.0.0.1:4212/api/live', () =>
+        HttpResponse.json({
+          schemaVersion: 1,
+          sequence: 1,
+          observedAt: new Date().toISOString(),
+          agents: [],
+        }),
+      ),
+    );
+  });
+
   it('keeps recorded sessions separate from verified execution and shows production blockers', async () => {
     await TestBed.configureTestingModule({
       imports: [MissionControlTemplate],
@@ -91,6 +105,8 @@ describe('MissionControlTemplate', () => {
       expect(service.lastSuccessfulFetch()).not.toBeNull(),
     );
     expect(requests).toBeGreaterThan(0);
+    fixture.componentInstance.view.set('operations');
+    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain(
       'Running · no live source',
     );
@@ -148,6 +164,96 @@ describe('MissionControlTemplate', () => {
     );
     fixture.detectChanges();
     expect(image.getAttribute('src')).not.toBe(initialImageUrl);
+    fixture.destroy();
+  });
+
+  it('opens Live by default and filters and selects real-feed agents', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MissionControlTemplate],
+    }).compileComponents();
+    const live = TestBed.inject(LiveTelemetryService);
+    const at = new Date().toISOString();
+    live.snapshot.set({
+      schemaVersion: 1,
+      sequence: 2,
+      observedAt: at,
+      agents: [
+        {
+          id: 'peon',
+          name: 'Peon',
+          project: 'stellar',
+          state: 'unknown',
+          sessionId: null,
+          task: null,
+          activity: null,
+          tool: null,
+          model: null,
+          provider: null,
+          usage: null,
+          startedAt: null,
+          lastObservedAt: null,
+          source: {
+            kind: 'hermes-turn-lease',
+            health: 'available',
+            observedAt: at,
+          },
+          events: [],
+        },
+        {
+          id: 'designer',
+          name: 'Designer',
+          project: 'stellar-design',
+          state: 'running',
+          sessionId: 'opaque',
+          task: null,
+          activity: 'Editing files',
+          tool: 'Editing files',
+          model: null,
+          provider: null,
+          usage: null,
+          startedAt: at,
+          lastObservedAt: at,
+          source: {
+            kind: 'hermes-turn-lease',
+            health: 'available',
+            observedAt: at,
+          },
+          events: [{ id: 'event-1', at, kind: 'tool', label: 'Editing files' }],
+        },
+      ],
+    });
+    live.transport.set('polling');
+    server.use(
+      http.get('http://127.0.0.1:4211/api/status', () =>
+        HttpResponse.json({
+          observedAt: at,
+          agents: [],
+          github: { state: 'live', issues: [], pulls: [], source: 'GitHub' },
+        }),
+      ),
+    );
+    const fixture = TestBed.createComponent(MissionControlTemplate);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.view()).toBe('live');
+    expect(fixture.nativeElement.querySelectorAll('.station')).toHaveLength(2);
+    fixture.componentInstance.filterLive('stellar-design');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.station')).toHaveLength(1);
+    fixture.nativeElement.querySelector('.station').click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.selectedLiveAgent()?.id).toBe('designer');
+    expect(fixture.nativeElement.textContent).toContain('Editing files');
+    fixture.componentInstance.selectLiveEvent('event-1', 'designer');
+    const current = live.snapshot();
+    if (!current) throw new Error('Live fixture missing');
+    live.snapshot.set({
+      ...current,
+      sequence: 2,
+      agents: current.agents.map((agent) => ({ ...agent, events: [] })),
+    });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.selectedLiveEvent()?.id).toBe('event-1');
+    expect(fixture.nativeElement.textContent).toContain('Editing files');
     fixture.destroy();
   });
 
@@ -223,6 +329,8 @@ describe('MissionControlTemplate', () => {
     await vi.waitFor(() =>
       expect(service.lastSuccessfulFetch()).not.toBeNull(),
     );
+    fixture.componentInstance.view.set('operations');
+    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain(
       'Approval queue unavailable',
     );
