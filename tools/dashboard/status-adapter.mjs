@@ -14,7 +14,8 @@ const profiles = Object.freeze([
 ]);
 
 function configuredRoute(config) {
-  const block = /^model:\r?\n((?:^  [^\r\n]*\r?\n)*)/m.exec(config)?.[1] ?? '';
+  const block =
+    /^model:\r?\n((?:^ {2}[^\r\n]*\r?\n)*)/m.exec(config)?.[1] ?? '';
   const scalar = (key) => {
     const value = new RegExp(`^  ${key}:\\s*(.+)$`, 'm')
       .exec(block)?.[1]

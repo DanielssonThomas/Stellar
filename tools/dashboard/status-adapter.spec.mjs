@@ -232,7 +232,7 @@ test('bounds a stalled GitHub feed without blocking local observations indefinit
         once: true,
       });
     });
-  const keepAlive = setTimeout(() => {}, 100);
+  const keepAlive = setTimeout(() => undefined, 100);
   try {
     await assert.rejects(readGithubStatus(stalled, 20), {
       name: 'TimeoutError',
