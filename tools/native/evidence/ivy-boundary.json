@@ -1,0 +1,91 @@
+{
+  "hostChanges": [
+    "Validated actual ping/profile/capabilities instead of fabricating projected health success.",
+    "Projected only bounded canonical receipt final_response for reconciliation.",
+    "Split generated DTOs from pure parser/tests; kept typed unknown-field rejection.",
+    "Added process deadlines, owned child teardown, session/admission/generation binding, durable unknown-outcome journal and deterministic boundary tests.",
+    "Dropped partial message deltas because this contract publishes canonical completion only; avoids unnecessary native queue pressure."
+  ],
+  "schemaVersion": 1,
+  "profile": "foreman-cloud",
+  "silentHealth": {
+    "code": 0,
+    "timedOut": false,
+    "durationMs": 327,
+    "errorBytes": 0,
+    "frames": [
+      {
+        "id": 1,
+        "result": {
+          "pong": true
+        }
+      },
+      {
+        "id": 2,
+        "result": {
+          "profile": "ivy",
+          "protocol": 1,
+          "capabilities": [
+            "durable-admission-v1",
+            "event-replay-v1",
+            "local-cli-create-v1"
+          ]
+        }
+      }
+    ]
+  },
+  "limits": {
+    "parentDeadlineMs": 120000,
+    "decodedBytes": 65536,
+    "rawBytes": 1048576,
+    "maxTurns": 1
+  },
+  "limitations": [
+    "No user turn or inference was sent to Ivy during qualification.",
+    "No transcription, synthesis, recording or audio upload is introduced.",
+    "No autonomous worker authority or profile permission changes are claimed."
+  ],
+  "attempts": [
+    {
+      "launch": {
+        "code": 0,
+        "signal": null,
+        "stopped": null,
+        "bytes": 19643,
+        "durationMs": 19433
+      },
+      "session": "local-a04ab542685634736641acc67504934efc892819a0e67a5d339ba297bec15e02",
+      "result": "insufficient source context; no source supplied",
+      "sourceBytes": 1619,
+      "tokens": {
+        "input": 9184,
+        "output": 366,
+        "total": 9550,
+        "cache_read": 0,
+        "cache_write": 0
+      }
+    },
+    {
+      "launch": {
+        "code": 0,
+        "signal": null,
+        "stopped": null,
+        "bytes": 275444,
+        "durationMs": 64108
+      },
+      "session": "local-4873051df1a2fe59089408bb3ea8f7e99541c3592bb2baeac6dacfbb9bb848ac",
+      "result": "two source modules supplied after explicit coordinator authorization with changed context",
+      "sourceBytes": 17127,
+      "tokens": {
+        "input": 14354,
+        "output": 4216,
+        "total": 18570,
+        "cache_read": 0,
+        "cache_write": 0
+      }
+    }
+  ],
+  "mode": "supervised source contribution; host reviewed and applied",
+  "issue": 205,
+  "sourceFiles": ["ivy_bridge.py", "presentation.rs"]
+}

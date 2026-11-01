@@ -18,3 +18,29 @@ export {
   decodeAppInfoError,
 } from './lib/app-info-codec';
 export { capabilityLabel } from './lib/capability-label';
+export type {
+  IvyConnectionState,
+  IvyTurnState,
+  IvyErrorCode,
+  IvyRequest,
+  IvySubmitRequest,
+  IvyComponent,
+  IvyPresentation,
+  IvySnapshot,
+  IvyCommands,
+} from './generated';
+export {
+  ivyConnectCommand,
+  ivySnapshotCommand,
+  ivySubmitCommand,
+  ivyCancelCommand,
+  ivyReconcileCommand,
+  ivyDisconnectCommand,
+  ivyEvent,
+} from './generated';
+export {
+  decodeIvyRequest,
+  decodeIvySubmitRequest,
+  decodeIvyError,
+  decodeIvySnapshot,
+} from './lib/ivy-codec';
