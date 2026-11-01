@@ -13,13 +13,21 @@ fn check_page(window: Webview) {
         (async () => {
             const invoke = window.__TAURI__.core.invoke;
             try {
-                for (let n = 0; n < 100 && !document.querySelector('h1'); n++)
+                for (let n = 0; n < 100 && !(document.querySelector('stellar-root')?.getAttribute('data-desktop-ready') === 'true' &&
+                    document.querySelector('stellar-root')?.getAttribute('data-desktop-event') === 'true'); n++)
                     await new Promise(resolve => setTimeout(resolve, 100));
                 const reply = await invoke('shell_status', { request: { version: 1 } });
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
+                let malformedRejected = false;
+                try { await invoke('app_info', { request: { version: '1', sequence: '0' } }); }
+                catch (error) { malformedRejected = error.code === 'malformed_request'; }
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
+                const root = document.querySelector('stellar-root');
+                const adapterReady = root?.getAttribute('data-desktop-ready') === 'true' &&
+                    root?.getAttribute('data-desktop-event') === 'true' &&
+                    root?.getAttribute('data-desktop-capabilities') === 'Native window controls, Contract notifications';
                 const rootStyle = getComputedStyle(document.querySelector('stellar-root'));
                 const mainStyle = getComputedStyle(document.querySelector('main'));
                 const nonce = document.querySelector('#stellar-csp-anchor')?.nonce;
@@ -30,7 +38,7 @@ fn check_page(window: Webview) {
                     parseFloat(mainStyle.minHeight) >= window.innerHeight &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: !!rendered && styled && reply.version === 1 &&
+                await invoke('smoke_result', { success: !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -44,6 +52,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
+            crate::app_info::app_info,
             smoke_result
         ])
         .on_page_load(|window, payload| {

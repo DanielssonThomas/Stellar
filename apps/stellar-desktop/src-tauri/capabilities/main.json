@@ -2,5 +2,10 @@
   "identifier": "desktop-main",
   "description": "The local desktop shell may read its versioned readiness contract.",
   "windows": ["main"],
-  "permissions": ["allow-shell-status"]
+  "permissions": [
+    "allow-shell-status",
+    "allow-app-info",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
 }
