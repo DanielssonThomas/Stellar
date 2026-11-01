@@ -34,6 +34,8 @@ export type InteractionState = Readonly<{
   generation: number;
   reducedMotion: boolean;
   hangoverMs: number;
+  automaticSummary?: boolean;
+  presentationRequested?: boolean;
 }>;
 export type InteractionEvent =
   | Readonly<{
@@ -66,7 +68,8 @@ export type InteractionEvent =
       type: 'motion-complete' | 'hangover-timeout';
       generation: number;
     }>
-  | Readonly<{ type: 'reduced-motion'; enabled: boolean }>;
+  | Readonly<{ type: 'reduced-motion'; enabled: boolean }>
+  | Readonly<{ type: 'presentation-change'; visible: boolean }>;
 export type InteractionEffect =
   | Readonly<{
       type: 'animate';

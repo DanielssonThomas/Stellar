@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('microphone frames pass through the real detector to one summary and release on dismissal', async ({
+test('microphone frames drive activity without panels and release on dismissal', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -55,6 +55,9 @@ test('microphone frames pass through the real detector to one summary and releas
     });
   });
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
   const experience = page.locator('stellar-desktop-experience-template');
   await expect(page.locator('html')).not.toHaveAttribute(
     'data-inputs-listed',
@@ -93,15 +96,13 @@ test('microphone frames pass through the real detector to one summary and releas
   await expect(
     page.getByText('Activity detected', { exact: true }),
   ).toBeVisible();
-  await expect(experience).toHaveAttribute('data-phase', 'presenting', {
+  await expect(experience).toHaveAttribute('data-phase', 'idle', {
     timeout: 10000,
   });
-  await expect(page.locator('[data-instance-id]')).toHaveCount(1);
-  await expect(
-    page.getByText('Microphone activity', { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('dd').nth(1)).not.toHaveText('0%');
-  await page.getByRole('button', { name: 'Close Activity summary' }).click();
+  await expect(page.locator('[data-instance-id]')).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Stop microphone', exact: true })
+    .click();
   await expect(experience).toHaveAttribute('data-phase', 'idle');
   await expect(page.locator('html')).toHaveAttribute(
     'data-capture-stopped',
@@ -124,6 +125,9 @@ test('manual activity repeats, restores keyboard focus and never requests captur
     });
   });
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
   const experience = page.locator('stellar-desktop-experience-template');
   await expect(experience).toHaveAttribute('aria-busy', 'false');
   await expect(
@@ -139,10 +143,7 @@ test('manual activity repeats, restores keyboard focus and never requests captur
     await page
       .getByRole('button', { name: 'End activity', exact: true })
       .press('Enter');
-    await expect(experience).toHaveAttribute('data-phase', 'presenting');
-    await expect(page.locator('[data-instance-id]')).toHaveCount(1);
-    await expect(page.locator('[data-instance-id]')).toBeFocused();
-    await page.keyboard.press('Escape');
+    await expect(experience).toHaveAttribute('data-phase', 'idle');
     await expect(experience).toHaveAttribute('data-phase', 'idle');
     await expect(page.locator('[data-instance-id]')).toHaveCount(0);
     await expect(
@@ -151,7 +152,7 @@ test('manual activity repeats, restores keyboard focus and never requests captur
   }
 });
 
-test('denial preserves manual fallback, summary restore and resized bounds', async ({
+test('denial preserves manual fallback without unsolicited panels', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -162,6 +163,9 @@ test('denial preserves manual fallback, summary restore and resized bounds', asy
     });
   });
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Enable microphone' }).click();
   await expect(
     page.getByText(
@@ -172,26 +176,7 @@ test('denial preserves manual fallback, summary restore and resized bounds', asy
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
   await page.getByRole('button', { name: 'End activity', exact: true }).click();
-  await expect(page.locator('[data-instance-id]')).toBeVisible();
-  await page.getByRole('button', { name: 'Minimize Activity summary' }).click();
   await expect(page.locator('[data-instance-id]')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show activity' }).click();
-  await expect(page.locator('[data-instance-id]')).toHaveCount(1);
-  await page.setViewportSize({ width: 640, height: 520 });
-  await expect
-    .poll(async () =>
-      page.locator('[data-instance-id]').evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        return (
-          rect.x >= 0 &&
-          rect.y >= 0 &&
-          rect.right <= innerWidth &&
-          rect.bottom <= innerHeight
-        );
-      }),
-    )
-    .toBe(true);
-  await page.getByRole('button', { name: 'Close Activity summary' }).click();
   await expect(
     page.locator('stellar-desktop-experience-template'),
   ).toHaveAttribute('data-phase', 'idle');
@@ -201,6 +186,9 @@ test('resuming during docking and dismissing during motion cannot open stale sum
   page,
 }) => {
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
   const experience = page.locator('stellar-desktop-experience-template');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
@@ -209,7 +197,7 @@ test('resuming during docking and dismissing during motion cannot open stale sum
   await page.getByRole('button', { name: 'End activity', exact: true }).click();
   await expect
     .poll(() => experience.getAttribute('data-phase'), { intervals: [20] })
-    .toBe('docking');
+    .toBe('returning');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();

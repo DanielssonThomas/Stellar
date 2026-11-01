@@ -1,5 +1,6 @@
 import {
   createInteractionController,
+  initialState,
   type InteractionClock,
   type InteractionEffect,
   type InteractionEvent,
@@ -13,6 +14,7 @@ type WithoutSequence<T> = T extends unknown
 type PendingCommand = WithoutSequence<StageCommand<ProductionPayloadMap>>;
 
 export interface DesktopSessionOptions {
+  readonly automaticSummary?: boolean;
   readonly clock: InteractionClock;
   readonly now: () => number;
   readonly audio: { startMicrophone(): Promise<void>; stop(): Promise<void> };
@@ -30,6 +32,7 @@ export class DesktopSession {
 
   constructor(private readonly options: DesktopSessionOptions) {
     this.controller = createInteractionController({
+      state: { ...initialState, automaticSummary: options.automaticSummary },
       clock: options.clock,
       onChange: (state) => {
         if (state.phase === 'presenting' && state.surface)

@@ -32,7 +32,7 @@ Activity payloads contain `durationMs` from 0 to 86,400,000 and `peakLevel` from
 
 ## Bounds and lifetime
 
-The registry permits at most four live instances, including minimized instances. JSON payloads are limited to 2,048 UTF-8 bytes and commands to 4,096; recursive shape checks reject accessors, non-JSON values, cycles, sparse arrays and unusual prototypes. Accepted data is copied and frozen; snapshots retain no caller aliases.
+The registry permits at most four live instances, including minimized instances. Legacy JSON payloads are limited to 2,048 UTF-8 bytes and commands to 4,096. The allowlisted assistant-message accepts a nonempty title up to 160 UTF-8 bytes and body up to 8,192 UTF-8 bytes, rendered as plain Angular text. Only this surface has a 20 KiB serialized-payload / 24 KiB command ceiling, accommodating worst-case JSON escaping without rejecting valid wire text; recursive shape checks reject accessors, non-JSON values, cycles, sparse arrays and unusual prototypes. Accepted data is copied and frozen; snapshots retain no caller aliases.
 
 Allocate strictly increasing command IDs during a Stage lifetime. The registry retains at most 64 normalized commands/results plus a high-water ID. An identical retained command returns `duplicate` without executing again; reusing an ID with different content is rejected. Older evicted IDs are rejected as stale, so eviction cannot replay an old open. Valid but unsuccessful requests also consume their IDs. Local keyboard/button controls are trusted host interactions and remain available even when external sequence IDs are exhausted. Disposing the registry is terminal and clears its instances/history.
 
@@ -45,3 +45,7 @@ The pure `directStage` helper calculates bounded, non-overlapping rectangles for
 `STAGE_CATALOGUE` is a host-only Angular injection token mapping known names to imported component types, titles and payload decoders. Adding a surface requires code review and a typed validator; catalogue entries never come from command data. Dynamic outlets receive only the selected trusted type and its sanitized `payload` input. `StageCommand<YourPayloadMap>` supports compile-time extension. The second component under `src/testing` exists only to prove multiple-instance layout and lifecycle disposal; it is excluded from production compilation and exports.
 
 Run `pnpm exec nx run-many -t lint test build --projects=ui-molecules,ui-organisms`. Unit tests cover invalid commands, byte bounds, duplicate/stale/conflicting IDs, instance limits, immutable snapshots, layout, plain-text rendering, keyboard dismissal, nested focus restoration, resizing and disposal. The browser fixture exercises the actual Angular components through open/update/focus/minimize/close and keyboard dismissal; it does not claim audio or native-app verification.
+
+The desktop uses presentationChange to track visible content and dismissOnClose=false to keep local panel closure separate from legacy interaction dismissal. closePresentations closes trusted instances through the same owned registry. Docked emblem bounds are bottom-right; centered/focused sizing remains independent.
+
+A host may supply focusFallback with a persistent control when a transient disclosure launches content. Stage restores that control if the saved opener was removed; command payloads cannot choose focus targets.
