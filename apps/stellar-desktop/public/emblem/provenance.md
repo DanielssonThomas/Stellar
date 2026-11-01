@@ -1,14 +1,14 @@
 # Embedded hybrid emblem
 
-Runtime files are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md). Issue #176 supplied the hybrid raster artwork and editable SVG geometry; #204 composes its four stars into the outer frame, adds three matching inner circles and assigns eleven uniformly spaced logical planes. The manifest retains production-candidate status. All files share a 1280 square origin and all assembled transforms remain zero. The six registered raster files are unchanged.
+Runtime files are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md). Issue #176 supplied the hybrid raster artwork and editable SVG geometry; #204 composes its four stars into the outer frame, adds three matching inner circles and assigns eleven uniformly spaced logical planes. #211 divides each existing body into three registered clips, yielding fifteen logical planes over the same eleven image files. The manifest retains production-candidate status. All files share a 1280 square origin and all assembled transforms remain zero. The six registered raster files are unchanged.
 
-The runtime payload is 2,742,800 bytes for the manifest and eleven registered layers on this checkout. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the raster artwork; this does not attribute it to the earlier Hermes SVG study. Native performance and physical microphones require separate verification.
+The runtime payload is 2,744,096 bytes for the manifest and eleven unique registered image files on this checkout. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the raster artwork; this does not attribute it to the earlier Hermes SVG study. Native performance and physical microphones require separate verification.
 
 Copy integrity was checked byte-for-byte against source files on this checkout. SHA-256 hashes below normalize JSON/SVG text to LF and preserve exact PNG bytes.
 
 | Runtime file               | SHA-256                                                          |
 | -------------------------- | ---------------------------------------------------------------- |
-| manifest.json              | f85da103438a03d85daafcf0055e52e08e112beb9ccd63d646b78c07c2177fd7 |
+| manifest.json              | 5d19f26cbeb4bd01eaa4cec1963eaaecb281087179b36b0c537128e3ef2dd992 |
 | layers/violet-body.png     | 0010606509668e59836ba19a07eb9cf8e99d46ae275fe2f2c2258e4f1f021127 |
 | layers/violet-hair.png     | 5ca76606302c0758dd55b520c5ce0cd751bda9e9b8c827ff2e78920c19938da3 |
 | layers/violet-ornament.png | 693fdcba33e399e0585d05c27ca3fac38b93bd66d4d61c0cd08ecdd0647d09ef |

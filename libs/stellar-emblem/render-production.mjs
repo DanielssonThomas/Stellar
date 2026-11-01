@@ -59,28 +59,48 @@ const geometries = [
     id: 'inner-circle-' + number,
   })),
 ];
+const bodyClips = [
+  ['upper', [0, 0, 1280, 512]],
+  ['middle', [0, 512, 1280, 128]],
+  ['lower', [0, 640, 1280, 640]],
+];
+const characterLayers = registration.layers.flatMap((item) =>
+  item.id.endsWith('-body')
+    ? bodyClips.map(([part, clip]) => ({
+        ...item,
+        sourceId: item.id,
+        id: item.id + '-' + part,
+        clip,
+      }))
+    : [item],
+);
 const planeOrder = [
   'violet-hair',
-  'violet-body',
+  'violet-body-upper',
+  'violet-body-middle',
   'violet-ornament',
+  'violet-body-lower',
   'inner-circle',
   'inner-circle-2',
   'outer-frame',
   'inner-circle-3',
   'inner-circle-4',
-  'gold-body',
-  'gold-hair',
+  'gold-body-lower',
   'gold-ornament',
+  'gold-body-middle',
+  'gold-hair',
+  'gold-body-upper',
 ];
 const zero = { x: 0, y: 0, rotation: 0 };
 const entry = (item, z, extension) => ({
   id: item.id,
-  file: `layers/${item.id}.${extension}`,
+  file: `layers/${item.sourceId ?? item.id}.${extension}`,
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
   exploded: zero,
   planeIndex: planeOrder.indexOf(item.id),
+  ...(item.clip ? { clip: item.clip } : {}),
   ...(item.id === 'outer-frame'
     ? { spin: 'clockwise' }
     : item.id.startsWith('inner-circle')
@@ -93,9 +113,9 @@ const manifest = {
   viewBox: [0, 0, size, size],
   planeSpacing: 240,
   layers: [
-    ...registration.layers.map((item, z) => entry(item, z, 'png')),
+    ...characterLayers.map((item, z) => entry(item, z, 'png')),
     ...geometries.map((item, z) =>
-      entry(item, z + registration.layers.length, 'svg'),
+      entry(item, z + characterLayers.length, 'svg'),
     ),
   ],
 };
@@ -261,6 +281,17 @@ try {
     path.join(root, 'manifest.json'),
     await format(JSON.stringify(manifest), { parser: 'json' }),
   );
+  const previewClip = (layer) => {
+    if (!layer.clip) return 'none';
+    const [x, y, width, height] = layer.clip;
+    return (
+      'inset(' +
+      [y, size - x - width, size - y - height, x]
+        .map((value) => (value / size) * 100 + '%')
+        .join(' ') +
+      ')'
+    );
+  };
   const layers = manifest.layers.map((layer) => {
     if (
       !/^layers\/[a-z0-9-]+\.(png|svg)$/.test(layer.file) ||
@@ -285,7 +316,12 @@ try {
           return { layer, img };
         }),
       );
-      const render = (dimension, exploded, applyAssembled = false) => {
+      const render = (
+        dimension,
+        exploded,
+        applyAssembled = false,
+        original = false,
+      ) => {
         const c = document.createElement('canvas');
         c.width = c.height = dimension;
         const ctx = c.getContext('2d');
@@ -293,7 +329,10 @@ try {
         const scale = dimension / (size + 2 * margin);
         ctx.scale(scale, scale);
         ctx.translate(margin, margin);
+        const drawn = new Set();
         for (const { layer, img } of images) {
+          if (original && drawn.has(layer.file)) continue;
+          drawn.add(layer.file);
           ctx.save();
           if (exploded || applyAssembled) {
             const p = exploded ? layer.exploded : layer.assembled,
@@ -301,6 +340,11 @@ try {
             ctx.translate(p.x + a.x, p.y + a.y);
             ctx.rotate((p.rotation * Math.PI) / 180);
             ctx.translate(-a.x, -a.y);
+          }
+          if (!original && layer.clip) {
+            ctx.beginPath();
+            ctx.rect(...layer.clip);
+            ctx.clip();
           }
           ctx.drawImage(img, 0, 0, size, size);
           ctx.restore();
@@ -312,15 +356,20 @@ try {
       };
       const canonical = render(size, false);
       const duplicate = render(size, false, true);
+      const original = render(size, false, false, true);
+      if (!canonical.pixels.every((byte, i) => byte === original.pixels[i]))
+        throw new Error(
+          'Fragment assembly differs from original registered artwork',
+        );
       if (!canonical.pixels.every((byte, i) => byte === duplicate.pixels[i]))
         throw new Error('Zero-pose assembly differs');
       return {
         canonical: canonical.url,
-        assembled512: render(512, false).url,
+        assembled512: render(512, false, false, true).url,
         exploded512: render(512, true).url,
-        dock48: render(48, false).url,
-        dock64: render(64, false).url,
-        dock96: render(96, false).url,
+        dock48: render(48, false, false, true).url,
+        dock64: render(64, false, false, true).url,
+        dock96: render(96, false, false, true).url,
       };
     },
     { layers, size },
@@ -338,7 +387,7 @@ try {
     fullPage: true,
   });
   await page.setContent(
-    `<style>body{margin:24px;background:#0b0812;color:#ede1fa;font:14px system-ui}main{display:grid;grid-template-columns:repeat(4,270px);gap:12px}figure{margin:0}img{width:250px;height:250px}figcaption{font-size:13px}</style><h1>Independent registered layers · 1280 square canvases</h1><main>${layers.map((layer) => `<figure><img src="${layer.src}"><figcaption>${layer.id} · z=${layer.z}</figcaption></figure>`).join('')}</main>`,
+    `<style>body{margin:24px;background:#0b0812;color:#ede1fa;font:14px system-ui}main{display:grid;grid-template-columns:repeat(4,270px);gap:12px}figure{margin:0}img{width:250px;height:250px}figcaption{font-size:13px}</style><h1>Independent registered layers · 1280 square canvases</h1><main>${layers.map((layer) => `<figure><img src="${layer.src}" style="clip-path:${previewClip(layer)}"><figcaption>${layer.id} · z=${layer.z}</figcaption></figure>`).join('')}</main>`,
   );
   await page.screenshot({
     path: path.join(root, 'previews', 'layer-contact-sheet.png'),
@@ -346,8 +395,8 @@ try {
   });
   const bytes =
     fs.statSync(path.join(root, 'manifest.json')).size +
-    manifest.layers.reduce(
-      (sum, l) => sum + fs.statSync(path.join(root, l.file)).size,
+    [...new Set(manifest.layers.map((layer) => layer.file))].reduce(
+      (sum, file) => sum + fs.statSync(path.join(root, file)).size,
       0,
     );
   const budget = 4 * 1024 * 1024;
@@ -362,6 +411,7 @@ try {
     runtimeBytes: bytes,
     budgetBytes: budget,
     activeSvgContent: false,
+    fragmentAssemblyPixelIdentical: true,
   };
   fs.writeFileSync(
     path.join(root, 'previews', 'validation.json'),

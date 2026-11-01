@@ -1,5 +1,6 @@
 import type { Phase } from '@stellar/desktop-interaction';
 import { planeDepth } from './emblem-stack';
+import { validEmblemClip, type EmblemClip } from './emblem-clip';
 
 export interface EmblemPose {
   readonly x: number;
@@ -13,6 +14,7 @@ export interface EmblemLayer {
   readonly file: string;
   readonly z: number;
   readonly planeIndex?: number;
+  readonly clip?: EmblemClip;
   readonly anchor: { readonly x: number; readonly y: number };
   readonly assembled: EmblemPose;
   readonly exploded: EmblemPose;
@@ -123,6 +125,8 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
         return 'Emblem layers require unique, nonempty ids.';
       }
       ids.add(layer.id);
+      if (!validEmblemClip(layer.clip, manifest.viewBox))
+        return 'Invalid emblem clip.';
       if (layer.planeIndex !== undefined) {
         planeDepth(layer.planeIndex, layers.length, manifest.planeSpacing);
         if (planeIndices.has(layer.planeIndex))
