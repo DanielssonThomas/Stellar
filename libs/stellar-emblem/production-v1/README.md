@@ -1,0 +1,23 @@
+# Stellar hybrid emblem v1
+
+This production candidate follows the approved hybrid route for [#176](https://github.com/DanielssonThomas/Stellar/issues/176). The twelve registered files in `layers/`, in manifest paint order, define the canonical emblem. `previews/canonical.png` is their transparent 1280 × 1280 assembly. The earlier study and original concept sheet remain in `../assets/`; they are provenance, not runtime dependencies.
+
+## Artwork and registration
+
+The darker violet profile faces left behind the gold profile facing right. Each profile has one body, one coherent primary hair mass and one botanical/gemstone pin. The purple pin uses silver/lavender leaves; the gold pin retains its purple gemstone. No dangling earrings are present. Two complete SVG circles and four restrained cardinal ornaments complete the twelve layers. The six large raster groups preserve flowing hair and modeled faces without pretending that a full master or arbitrary crops are independent layers.
+
+`sources/master-guide-v1.png` is the untouched built-in imagegen visual guide, derived from the supplied concept. Six further built-in imagegen edits produced the untouched `sources/*-generated.png` cutouts. No API-key fallback or paid external route was used. The generator returned 1254 × 1254 PNGs, despite requesting a 1280 square canvas. It also drifted in placement. `registration.json` records the exact uniform scale and translation used to place each complete transparent source into the final 1280 square export canvas. The export does no repainting, background removal, clipping, filtering or artificial splitting. All creative extraction/refinement was done by imagegen. Prompt specifications are preserved in `sources/generation-prompts.md`.
+
+This registered assembly is a deliberate new canonical reconstruction, not a pixel-identical segmentation of the guide. Faces sit slightly lower, hair waves and pins differ, and the geometry is cleaner than the guide. The gold/violet identity and opposite profiles remain. The smaller full circle is geometrically complete even where hair overlaps it in the foreground. SVG source is editable; raster source cutouts and registration are retained for reproducible exports. Future local strand edits would require an image-editing source tool, rather than claiming these PNGs are vector paths.
+
+All exported layers share `viewBox: [0, 0, 1280, 1280]`, dimensions, origin and registration. Every assembled translation and rotation is zero. Paint-order `z` is metadata; the consumer adds no depth in the assembled pose. Explosion moves whole meaningful units with restrained offsets/rotations. The application owns the emblem's container position and size separately.
+
+## Reproduction and validation
+
+From the installed workspace, run `node libs/stellar-emblem/render-production.mjs`. It exports the complete registered PNG layers from untouched sources, generates the six safe geometric SVGs and manifest, then recreates the canonical and 512/48/64/96 px transparent previews and dark contact sheet. Generated outputs are deterministic for the same Chromium renderer. Canvas drawing is standard composition/export, not a second creative rendering route.
+
+The script checks source dimensions, real transparent/opaque/partial alpha, empty export borders, safe SVG element/attribute and local-reference allowlists, safe relative layer paths and zero assembly poses. It compares direct canonical composition against applying the manifest's assembled poses. `previews/validation.json` records the actual runtime byte count and a 4 MiB budget for manifest plus twelve runtime layers. Sources/history and review previews are excluded from this runtime budget. Runtime SVGs contain no embedded rasters, scripts, event handlers, external references or foreign objects. The consumer validates safe SVG/PNG/WebP paths and retains its existing image load-failure fallback.
+
+The inspected contact sheet preserves a readable gold foreground/violet background, two profile edges, both rings and cardinal accents at 512 px. At 96 px the hair groups and contrasting pins remain visible; at 64 px the silhouette and colour separation are stronger than the individual ornaments. At 48 px the pin facets and individual strands merge; the opposite profiles and gold frame remain recognizable. This is an explicit scale tradeoff, not a claim that every full-size detail survives docking. `previews/exploded512.png` shows coherent groups, not scattered strand fragments.
+
+Visual acceptance is recorded on the issue after Codex and an independent image-capable reviewer inspect these artifacts. Text-only Foreman output is not represented as visual inspection. This pack does not qualify native performance or autonomous workers.

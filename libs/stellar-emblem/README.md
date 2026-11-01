@@ -1,6 +1,8 @@
-# Stellar emblem asset study
+# Stellar emblem assets
 
-This pack is an **unapproved study**, not the final Stellar artwork. It may be used to exercise layer composition, motion and loading behavior. Issue #176 remains incomplete until the visual quality matches the supplied reference and Foreman and Codex inspect the final renders.
+The current hybrid artwork is in [`production-v1`](production-v1/README.md). Its canonical assembly is the registered twelve-layer pack, with 512 px, exploded and dock previews. Final acceptance requires Codex and an independent image-capable reviewer to inspect these artifacts.
+
+The earlier `assets/` and `fixtures/` pack below is a preserved **unapproved study**. Its text-only source and provenance remain available as capability evidence and must not be confused with the hybrid candidate.
 
 ## Source and authorship
 

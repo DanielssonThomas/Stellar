@@ -57,11 +57,26 @@ describe('emblem motion model', () => {
     'layers/%2e%2e/face.svg',
     './face.svg',
     'face.svg?x=1',
+    '../face.png',
+    'https://x/face.webp',
+    'face.png?x=1',
+    'face.webp#fragment',
+    'face.png.svg/../face.png',
+    'face.gif',
   ])('rejects unsafe file %s', (file) => {
     expect(
       manifestError({ ...manifest, layers: [{ ...layer, file }] }),
     ).not.toBeNull();
   });
+
+  it.each(['layers/face.svg', 'layers/face.png', 'layers/face.webp'])(
+    'accepts the safe hybrid layer path %s',
+    (file) => {
+      expect(
+        manifestError({ ...manifest, layers: [{ ...layer, file }] }),
+      ).toBeNull();
+    },
+  );
 
   it.each([
     null,
