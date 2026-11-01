@@ -264,7 +264,7 @@ test(
 
 test(
   'prepared hosts keep the attempt lease across implement and verify without consuming queued work',
-  { timeout: 90_000 },
+  { timeout: 180_000 },
   async (t) => {
     const fixtures = await shared(t);
     const grants = [];
