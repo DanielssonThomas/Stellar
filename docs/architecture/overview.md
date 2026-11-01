@@ -14,6 +14,10 @@ Nx project tags and `@nx/enforce-module-boundaries` in `eslint.config.mjs` gover
 
 Repository-owned Nx generators scaffold Angular applications and their mirrored Playwright E2E projects, atomic components, and shared Angular services. Their maintained invocation guide is [Generators](../guides/generators.md). Buildable Angular libraries use the Angular unit-test builder with Vitest; non-buildable Angular libraries use Nx's Vitest Analog integration.
 
+## Planned native desktop boundary
+
+[Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) plans a separate Windows-first Tauri desktop application. It is not part of the current web dashboard implementation. The [Rust/Tauri rules](rust-tauri.md) define modular native code, generated frontend contracts, readability and verification requirements for that work. The application, binding generator, native build targets and automated size checks remain to be introduced through the epic's feasibility and bootstrap issues.
+
 ## Verification
 
 Angular's supported unit-test builder runs Vitest. App tests share an MSW server setup for HTTP mocks. Playwright verifies the app's user-visible composition. Nx supplies project-aware targets and affected execution.
