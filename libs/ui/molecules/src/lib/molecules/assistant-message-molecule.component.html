@@ -1,0 +1,8 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="text" />
+} @else if (payload(); as message) {
+  <article class="space-y-3 text-stellar-foreground">
+    <h2 class="text-lg font-semibold">{{ message.title }}</h2>
+    <p class="whitespace-pre-wrap break-words">{{ message.body }}</p>
+  </article>
+}

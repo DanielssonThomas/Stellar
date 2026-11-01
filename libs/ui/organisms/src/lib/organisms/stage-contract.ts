@@ -51,7 +51,38 @@ export type StageResult = {
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 export type ProductionPayloadMap = {
   readonly 'activity-summary': ActivitySummaryPayload;
+  readonly 'assistant-message': {
+    readonly title: string;
+    readonly body: string;
+  };
 };
+
+export function decodeAssistantMessage(
+  value: unknown,
+): ProductionPayloadMap['assistant-message'] | null {
+  if (!plainRecord(value) || !exactKeys(value, ['title', 'body'])) return null;
+  const title = value['title'],
+    body = value['body'];
+  const encoder = new TextEncoder();
+  if (
+    typeof title !== 'string' ||
+    !title.trim() ||
+    encoder.encode(title).length > 160 ||
+    typeof body !== 'string' ||
+    !body.trim() ||
+    encoder.encode(body).length > 8192 ||
+    [...(title + body)].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return (
+        (code < 32 && ![9, 10, 13].includes(code)) ||
+        code === 127 ||
+        (code >= 0xd800 && code <= 0xdfff)
+      );
+    })
+  )
+    return null;
+  return Object.freeze({ title, body });
+}
 
 function exactKeys(
   value: Record<string, unknown>,
@@ -113,7 +144,14 @@ export function decodeStageCommand<P extends object>(
   decoders: Decoders<P>,
 ): StageCommand<P> | null {
   try {
-    if (!boundedJson(input, 4096) || !plainRecord(input)) return null;
+    if (
+      !plainRecord(input) ||
+      !boundedJson(
+        input,
+        input['surface'] === 'assistant-message' ? 24576 : 4096,
+      )
+    )
+      return null;
     const { contractVersion, commandId, instanceId, action } = input;
     if (
       contractVersion !== 1 ||
@@ -143,7 +181,10 @@ export function decodeStageCommand<P extends object>(
     if (
       typeof input['surface'] !== 'string' ||
       !Object.hasOwn(decoders, input['surface']) ||
-      !boundedJson(input['payload'], 2048)
+      !boundedJson(
+        input['payload'],
+        input['surface'] === 'assistant-message' ? 20480 : 2048,
+      )
     )
       return null;
     if (
@@ -154,7 +195,14 @@ export function decodeStageCommand<P extends object>(
       return null;
     const decode = decoders[input['surface'] as Surface<P>];
     const payload = decode(input['payload']);
-    if (payload === null || !boundedJson(payload, 2048)) return null;
+    if (
+      payload === null ||
+      !boundedJson(
+        payload,
+        input['surface'] === 'assistant-message' ? 20480 : 2048,
+      )
+    )
+      return null;
     const detached = freezeJson(JSON.parse(canonicalJson(payload)));
     return Object.freeze({
       ...shared,

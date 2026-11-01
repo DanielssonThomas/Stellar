@@ -8,3 +8,4 @@ export type {
   EmblemPose,
 } from './lib/molecules/emblem-motion-model';
 export { decodeEmblemManifest } from './lib/molecules/emblem-motion-model';
+export * from './lib/molecules/assistant-message-molecule.component';

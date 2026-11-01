@@ -41,6 +41,10 @@ export class StageOrganism {
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
+  readonly dismissOnClose = input(true);
+  readonly focusFallback = input<HTMLElement | null>(null);
+  readonly presentationChange = output<boolean>();
+  readonly retainedPresentations = output<boolean>();
   readonly interaction = output<InteractionEvent>();
   readonly motionDuration = computed(() => {
     const target = this.emblemTarget();
@@ -145,6 +149,17 @@ export class StageOrganism {
     this.afterAction(this.registry.interact(action, instanceId));
   }
 
+  closePresentations() {
+    for (const instance of this.registry.snapshot())
+      this.control('close', instance.instanceId);
+  }
+
+  restorePresentation() {
+    const instances = this.registry.snapshot();
+    const instance = instances.find((entry) => entry.minimized) ?? instances[0];
+    if (instance) this.control('focus', instance.instanceId);
+  }
+
   escape(event: Event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -164,7 +179,11 @@ export class StageOrganism {
       const panel = this.panels().find(
         (entry) => entry.nativeElement.dataset['instanceId'] === instanceId,
       )?.nativeElement;
-      const origin = this.origins.get(instanceId);
+      const savedOrigin = this.origins.get(instanceId);
+      const origin =
+        savedOrigin?.isConnected && savedOrigin !== this.document.body
+          ? savedOrigin
+          : this.focusFallback();
       if (panel && origin?.isConnected && !panel.contains(origin)) {
         for (const [dependent, savedOrigin] of this.origins) {
           if (panel.contains(savedOrigin)) this.origins.set(dependent, origin);
@@ -174,10 +193,14 @@ export class StageOrganism {
         origin.focus();
       if (action === 'close') {
         this.origins.delete(instanceId);
-        this.interaction.emit({ type: 'dismiss' });
+        if (this.dismissOnClose()) this.interaction.emit({ type: 'dismiss' });
       }
     }
     this.instances.set(this.registry.snapshot());
+    this.retainedPresentations.emit(this.registry.snapshot().length > 0);
+    this.presentationChange.emit(
+      this.registry.snapshot().some((instance) => !instance.minimized),
+    );
     if (action === 'open' || action === 'focus')
       this.focusRequest.set(instanceId);
   }
