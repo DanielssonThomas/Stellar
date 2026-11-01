@@ -29,6 +29,8 @@ const trustedFiles = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
 // A lockfile or manifest content change needs a reviewed update to these pins.
 const reviewedTextDigests = Object.freeze({
   'package.json': Object.freeze([
+    '2e32448de66f08f47fcd051a92e23838d46898e0a017bc8f7809bf50b8e29a02',
+    'feccff9bbc42112bea23a6448202498c54d8f13435de321136989d47bfc870fe',
     '5638695381ffdc62b5d4aa1e83f99853c82e66db4d4c5fd86b009ce5b127bcb6',
     'ccea48e999b785ee50ab325e8080ae38d38a41ec2c8fea5b6ea7befc14cb437a',
     '956dc7c4f7f9f16f2c32f5d3ed9cde80c2f85284a9039fdcc112b06488201b16',
