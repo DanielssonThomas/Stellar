@@ -42,6 +42,8 @@ The intended session boundaries are planning, technical dispatch, one implementa
 
 Fresh issue/claim/worktree/budget facts must be checked at every host operation. Idempotency keys, session IDs, attempt leases, exact revision checks, and safe-cleanup confirmation prevent duplicate or stale actions. Provider quota, timeout, authentication, context, and network failures remain distinct; none implies approval. If Architect is unavailable, previously authorized work may continue. Integration still waits for Architect or CEO approval.
 
+The [offline planning contract](engineering-planning.md) validates issue quality, duplicate-search coverage, anticipated scope risk, capability history and dependency order against a revision-bound trusted snapshot. It can save exclusive, integrity-checked recommendation records. It does not authenticate a live caller, fetch host facts, mutate GitHub or dispatch workers; those boundaries remain part of the trusted orchestration work.
+
 ## Current implementation boundary
 
 Epic [#95](https://github.com/DanielssonThomas/Stellar/issues/95) coordinates this work. Issue [#96](https://github.com/DanielssonThomas/Stellar/issues/96) covers identity templates, provisioning, and offline authorization. Existing `worker:peon` compatibility and Mira escalation paths remain in place. This slice does not activate Architect inference, Foreman inference, live Peon runs, multi-instance inference concurrency, or fallback merging. A live pilot requires a separate CEO decision after offline qualification and governance review.
