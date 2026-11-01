@@ -1,0 +1,30 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.surface,
+.emblem-slot {
+  position: absolute;
+  box-sizing: border-box;
+}
+.surface {
+  overflow: auto;
+  padding: var(--stellar-space-3, 0.75rem);
+}
+.surface:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--stellar-color-primary);
+  outline-offset: 2px;
+}
+header {
+  margin-bottom: var(--stellar-space-4, 1rem);
+}
+button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  cursor: pointer;
+}

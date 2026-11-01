@@ -25,6 +25,7 @@
       ],
       "@stellar/test-support": ["tools/testing/msw.ts"],
       "@stellar/desktop-interaction": ["libs/desktop-interaction/src/index.ts"],
+      "@stellar/ui-organisms": ["libs/ui/organisms/src/index.ts"],
       "@stellar/service-audio-activity": [
         "libs/services/audio-activity/src/index.ts"
       ],
