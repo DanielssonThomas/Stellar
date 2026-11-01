@@ -99,6 +99,19 @@ describe('StageOrganism', () => {
     vi.unstubAllGlobals();
   });
 
+  it('restores a persistent fallback when opening content detached its disclosure origin', async () => {
+    const transient = document.createElement('button');
+    document.body.append(transient);
+    transient.focus();
+    fixture.componentRef.setInput('focusFallback', opener);
+    fixture.componentInstance.dispatch(open());
+    await fixture.whenStable();
+    transient.remove();
+    fixture.componentInstance.control('close', 'summary');
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('renders only registered components, updates typed inputs and focuses the panel', async () => {
     expect(fixture.componentInstance.dispatch(open()).status).toBe('applied');
     await fixture.whenStable();
@@ -186,6 +199,29 @@ describe('StageOrganism', () => {
     expect(disconnect).toHaveBeenCalledOnce();
     expect(fixtureLifecycle.destroyed).toBe(1);
     expect(fixture.componentInstance.dispatch(open(2)).reason).toBe('disposed');
+  });
+
+  it('restores every minimized instance even when a visible instance is first', async () => {
+    fixture.componentInstance.dispatch(open(1, 'first'));
+    fixture.componentInstance.dispatch(open(2, 'second', 'fixture'));
+    await fixture.whenStable();
+    fixture.componentInstance.control('minimize', 'first');
+    await fixture.whenStable();
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);
+    expect(document.activeElement?.getAttribute('data-instance-id')).toBe(
+      'first',
+    );
+    fixture.componentInstance.control('minimize', 'first');
+    fixture.componentInstance.control('minimize', 'second');
+    await fixture.whenStable();
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(1);
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);
   });
 
   it.each(['close', 'minimize'])(

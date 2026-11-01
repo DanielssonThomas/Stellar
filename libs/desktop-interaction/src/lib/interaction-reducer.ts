@@ -51,7 +51,7 @@ export function reduceInteraction(
     update({ microphone: { status, requestId: null }, audioActive: false });
   };
   const present = (): void => {
-    if (s.surface === null) {
+    if (s.surface === null && s.automaticSummary !== false) {
       const id = allocate();
       if (id !== null) {
         update({ surface: { id } });
@@ -108,6 +108,7 @@ export function reduceInteraction(
     });
   };
   const quiet = (): void => {
+    if (s.presentationRequested) return;
     if (s.phase === 'focusing') return;
     if (
       active(s) ||
@@ -121,7 +122,7 @@ export function reduceInteraction(
     cancelMotion();
     const id = allocate();
     if (id === null) {
-      move('docked');
+      move(s.automaticSummary === false ? 'center' : 'docked');
       return;
     }
     update({ phase: 'hangover', hangover: id, target: 'focused' });
@@ -131,6 +132,7 @@ export function reduceInteraction(
     effects.push({ type: 'schedule-hangover', generation: id, delayMs });
   };
   const reconcile = (): void => {
+    if (s.presentationRequested) return;
     if (!active(s)) {
       quiet();
       return;
@@ -165,14 +167,22 @@ export function reduceInteraction(
     cancelHangover();
     cancelMotion();
     closeSurface();
-    update({ phase: 'idle', target: 'center' });
+    update(
+      s.presentationRequested
+        ? { phase: 'presenting', target: 'docked' }
+        : { phase: 'idle', target: 'center' },
+    );
   };
 
   if (s.phase === 'shutdown') return { state: s, effects };
   if (s.phase === 'suspended') {
     switch (event.type) {
       case 'resume':
-        update({ phase: 'idle' });
+        update(
+          s.presentationRequested
+            ? { phase: 'presenting', target: 'docked' }
+            : { phase: 'idle' },
+        );
         break;
       case 'shutdown':
         reset('shutdown');
@@ -250,15 +260,30 @@ export function reduceInteraction(
     case 'hangover-timeout':
       if (s.hangover !== null && s.hangover === event.generation) {
         update({ hangover: null });
-        if (!active(s)) move('docked');
+        if (!active(s))
+          move(s.automaticSummary === false ? 'center' : 'docked');
       }
       break;
     case 'dismiss':
       cancelHangover();
       closeSurface();
       stopCapture();
-      update({ manualActive: false, audioActive: false });
+      update({
+        manualActive: false,
+        audioActive: false,
+        presentationRequested: false,
+      });
       if (s.phase !== 'idle' && s.phase !== 'returning') move('center');
+      break;
+    case 'presentation-change':
+      if (s.presentationRequested === event.visible) break;
+      update({ presentationRequested: event.visible });
+      if (event.visible) move('docked');
+      else {
+        stopCapture();
+        update({ manualActive: false, audioActive: false });
+        move('center');
+      }
       break;
     case 'hidden':
     case 'minimized':

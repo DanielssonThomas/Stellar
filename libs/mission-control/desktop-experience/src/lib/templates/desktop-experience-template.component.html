@@ -8,6 +8,12 @@
     [loading]="loading()"
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
+    [dismissOnClose]="false"
+    [focusFallback]="menuTrigger"
+    (retainedPresentations)="requestedContent.set($event)"
+    (presentationChange)="
+      action.emit({ type: 'presentation-change', visible: $event })
+    "
     (interaction)="action.emit($event)"
   >
     <stellar-emblem-motion-molecule
@@ -23,111 +29,166 @@
     </stellar-emblem-motion-molecule>
   </stellar-stage-organism>
 
-  <section [class]="controlsClass()" aria-label="Experience controls">
-    <p class="status" aria-live="polite" aria-atomic="true">
-      {{ statusText() }}
-    </p>
-    <div class="actions">
+  <button
+    #menuTrigger
+    class="menu-trigger"
+    data-menu-trigger
+    type="button"
+    aria-label="Experience menu"
+    aria-controls="desktop-controls"
+    [attr.aria-expanded]="menu.open()"
+    (click)="menu.toggle()"
+  >
+    ☰
+  </button>
+  @if (menu.open()) {
+    <section
+      data-desktop-menu
+      id="desktop-controls"
+      [class]="controlsClass()"
+      aria-label="Experience controls"
+    >
+      <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <button
         type="button"
-        (click)="
-          action.emit({
-            type: state().manualActive ? 'manual-end' : 'manual-start',
-          })
-        "
+        [disabled]="assistantBusy() && !assistantUncertain()"
+        (click)="retryIvy.emit()"
       >
-        {{ state().manualActive ? 'End activity' : 'Start activity' }}
+        Connect Ivy
       </button>
-
-      @if (
-        state().microphone.status === 'requesting' ||
-        state().microphone.status === 'capturing'
-      ) {
-        <button type="button" (click)="stopMicrophone.emit()">
-          Stop microphone
+      @if (assistantUncertain()) {
+        <button type="button" (click)="reconcileIvy.emit()">
+          Check response
         </button>
-      } @else {
+      } @else if (assistantBusy()) {
+        <button type="button" (click)="cancelIvy.emit()">Cancel request</button>
+      }
+      <form class="assistant-input" (submit)="send($event)">
+        <label for="ivy-input">Message Ivy</label>
+        <textarea
+          id="ivy-input"
+          rows="2"
+          maxlength="8000"
+          [value]="draft()"
+          (input)="editDraft($event)"
+          placeholder="Type a message"
+        ></textarea>
+        <button
+          type="submit"
+          [disabled]="assistantBusy() || !draft().trim() || draftTooLong()"
+        >
+          Send
+        </button>
+        @if (draftTooLong()) {
+          <p role="status">Message exceeds the 8 KiB text limit.</p>
+        }
+      </form>
+      @if (assistantReply()) {
+        <p class="assistant-reply" aria-live="polite">{{ assistantReply() }}</p>
+      }
+      <p class="status" aria-live="polite" aria-atomic="true">
+        {{ statusText() }}
+      </p>
+      <div class="actions">
         <button
           type="button"
-          (click)="action.emit({ type: 'capture-request' })"
+          (click)="
+            action.emit({
+              type: state().manualActive ? 'manual-end' : 'manual-start',
+            })
+          "
         >
-          Enable microphone
+          {{ state().manualActive ? 'End activity' : 'Start activity' }}
         </button>
-      }
 
-      <button
-        type="button"
-        [disabled]="inputsLoading()"
-        (click)="chooseInputs.emit()"
-      >
-        {{
-          inputsLoading()
-            ? 'Finding inputs…'
-            : inputsVisible()
-              ? 'Refresh inputs'
-              : 'Choose microphone'
-        }}
-      </button>
+        @if (
+          state().microphone.status === 'requesting' ||
+          state().microphone.status === 'capturing'
+        ) {
+          <button type="button" (click)="stopMicrophone.emit()">
+            Stop microphone
+          </button>
+        } @else {
+          <button
+            type="button"
+            (click)="action.emit({ type: 'capture-request' })"
+          >
+            Enable microphone
+          </button>
+        }
 
-      @if (state().phase !== 'idle') {
-        <button type="button" (click)="action.emit({ type: 'dismiss' })">
-          Dismiss
+        <button
+          type="button"
+          [disabled]="inputsLoading()"
+          (click)="chooseInputs.emit()"
+        >
+          {{
+            inputsLoading()
+              ? 'Finding inputs…'
+              : inputsVisible()
+                ? 'Refresh inputs'
+                : 'Choose microphone'
+          }}
         </button>
-      }
 
-      @if (state().surface !== null) {
-        <button type="button" (click)="restoreSummary.emit()">
-          Show activity
-        </button>
-      }
-    </div>
-    <label class="motion-toggle">
-      <input
-        type="checkbox"
-        [checked]="state().reducedMotion"
-        (change)="setReduced($event)"
-      />
-      <span>Reduce motion</span>
-    </label>
-    @if (inputsVisible()) {
-      <div class="input-choice">
-        <label>
-          Microphone
-          <select [value]="selectedInputId()" (change)="chooseInput($event)">
-            <option value="" [selected]="selectedInputId() === ''">
-              System default microphone
-            </option>
-            @if (inputMissing()) {
-              <option [value]="selectedInputId()" selected disabled>
-                {{ selectedInputLabel() }}
-              </option>
-            }
-            @for (device of inputs(); track device.deviceId) {
-              <option
-                [value]="device.deviceId"
-                [selected]="selectedInputId() === device.deviceId"
-              >
-                {{ device.label }}
-              </option>
-            }
-          </select>
-        </label>
-        @if (inputError()) {
-          <p role="status">{{ inputError() }}</p>
+        @if (state().phase !== 'idle') {
+          <button type="button" (click)="dismissExperience()">Dismiss</button>
+        }
+
+        @if (requestedContent()) {
+          <button type="button" (click)="stage.restorePresentation()">
+            Show content
+          </button>
         }
       </div>
-    }
-    @if (state().microphone.status === 'capturing') {
-      <div class="input-level">
-        <span>{{ selectedInputLabel() }}</span>
-        <meter
-          min="0"
-          max="100"
-          [value]="inputMeter()"
-          aria-label="Microphone input level"
-        ></meter>
-        <span>{{ activityStatus() }}</span>
-      </div>
-    }
-  </section>
+      <label class="motion-toggle">
+        <input
+          type="checkbox"
+          [checked]="state().reducedMotion"
+          (change)="setReduced($event)"
+        />
+        <span>Reduce motion</span>
+      </label>
+      @if (inputsVisible()) {
+        <div class="input-choice">
+          <label>
+            Microphone
+            <select [value]="selectedInputId()" (change)="chooseInput($event)">
+              <option value="" [selected]="selectedInputId() === ''">
+                System default microphone
+              </option>
+              @if (inputMissing()) {
+                <option [value]="selectedInputId()" selected disabled>
+                  {{ selectedInputLabel() }}
+                </option>
+              }
+              @for (device of inputs(); track device.deviceId) {
+                <option
+                  [value]="device.deviceId"
+                  [selected]="selectedInputId() === device.deviceId"
+                >
+                  {{ device.label }}
+                </option>
+              }
+            </select>
+          </label>
+          @if (inputError()) {
+            <p role="status">{{ inputError() }}</p>
+          }
+        </div>
+      }
+      @if (state().microphone.status === 'capturing') {
+        <div class="input-level">
+          <span>{{ selectedInputLabel() }}</span>
+          <meter
+            min="0"
+            max="100"
+            [value]="inputMeter()"
+            aria-label="Microphone input level"
+          ></meter>
+          <span>{{ activityStatus() }}</span>
+        </div>
+      }
+    </section>
+  }
 </div>

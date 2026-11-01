@@ -41,6 +41,7 @@ export class DesktopExperience {
   );
   private stage: ((command: unknown) => StageResult) | undefined;
   readonly session = new DesktopSession({
+    automaticSummary: false,
     audio: {
       startMicrophone: () =>
         this.audio.startMicrophone(this.inputs.selectedId() || undefined),
@@ -117,6 +118,12 @@ export class DesktopExperience {
 
   connect(stage: (command: unknown) => StageResult) {
     this.stage = stage;
+  }
+
+  present(command: unknown): StageResult {
+    if (!this.stage || ['suspended', 'shutdown'].includes(this.state().phase))
+      return { status: 'rejected', reason: 'Desktop is not available' };
+    return this.stage(command);
   }
 
   dispatch(event: InteractionEvent) {

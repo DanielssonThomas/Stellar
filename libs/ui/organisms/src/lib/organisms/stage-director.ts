@@ -40,7 +40,7 @@ export function directStage(
         height - padding * 2,
       );
   const emblem = {
-    x: (width - size) / 2,
+    x: docked ? Math.max(padding, width - padding - size) : (width - size) / 2,
     y: docked ? height - padding - size : (height - size) / 2,
     width: size,
     height: size,

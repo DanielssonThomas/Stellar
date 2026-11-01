@@ -1,6 +1,12 @@
 import { InjectionToken, Type } from '@angular/core';
-import { ActivitySummaryMolecule } from '@stellar/ui-molecules';
-import { decodeActivitySummary } from './stage-contract';
+import {
+  ActivitySummaryMolecule,
+  AssistantMessageMolecule,
+} from '@stellar/ui-molecules';
+import {
+  decodeActivitySummary,
+  decodeAssistantMessage,
+} from './stage-contract';
 
 export interface StageSurfaceDefinition {
   readonly title: string;
@@ -16,6 +22,11 @@ export const STAGE_CATALOGUE = new InjectionToken<StageCatalogue>(
     providedIn: 'root',
     factory: () =>
       Object.freeze({
+        'assistant-message': Object.freeze({
+          title: 'Assistant message',
+          component: AssistantMessageMolecule,
+          decode: decodeAssistantMessage,
+        }),
         'activity-summary': Object.freeze({
           title: 'Activity summary',
           component: ActivitySummaryMolecule,
