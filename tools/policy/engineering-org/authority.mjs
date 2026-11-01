@@ -145,27 +145,4 @@ export function authorizeOperation({ caller, operation, issue, facts = {} }) {
   };
 }
 
-export function validateReviewReport(
-  report,
-  { expectedIssue, expectedRevision, authorId },
-) {
-  if (
-    !report ||
-    report.schemaVersion !== 1 ||
-    report.issueNumber !== expectedIssue ||
-    report.baselineRevision !== expectedRevision
-  )
-    throw new Error('Review report identity or baseline is stale.');
-  if (
-    report.reviewerId !== 'foreman' ||
-    report.authorId !== authorId ||
-    report.reviewerId === report.authorId
-  )
-    throw new Error('Review report does not prove independent Foreman review.');
-  if (
-    !['passed', 'corrections-required', 'blocked'].includes(report.decision) ||
-    !Array.isArray(report.findings)
-  )
-    throw new Error('Review report schema is invalid.');
-  return report;
-}
+export { validateReviewReport } from './review-report.mjs';
