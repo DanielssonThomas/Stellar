@@ -286,7 +286,7 @@ test('unreviewed package scripts remain rejected in both checkout byte forms', a
 test('reviewed lockfile and package inputs are required before any execution', async () => {
   assert.equal(
     validateReviewedDependencyInputs(candidate),
-    'f210bc60c2bb888c15c01f9f85c35706b841c5dbccc726ca56dc9d133ab927b0',
+    'cbe412020722d0f152e4c340aa8b578bde542799c99d3abbbd7a8091e4e9ea40',
   );
   const lfCandidate = {
     ...candidate,
@@ -304,7 +304,7 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(lfCandidate),
-    'f210bc60c2bb888c15c01f9f85c35706b841c5dbccc726ca56dc9d133ab927b0',
+    'cbe412020722d0f152e4c340aa8b578bde542799c99d3abbbd7a8091e4e9ea40',
   );
   const crlfCandidate = {
     ...candidate,
@@ -321,7 +321,7 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(crlfCandidate),
-    'f210bc60c2bb888c15c01f9f85c35706b841c5dbccc726ca56dc9d133ab927b0',
+    'cbe412020722d0f152e4c340aa8b578bde542799c99d3abbbd7a8091e4e9ea40',
   );
   await assert.rejects(
     runPrivateCandidateChecks(options, {
