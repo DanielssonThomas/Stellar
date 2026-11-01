@@ -9,6 +9,7 @@
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
     [dismissOnClose]="false"
+    [focusFallback]="menuTrigger"
     (retainedPresentations)="requestedContent.set($event)"
     (presentationChange)="
       action.emit({ type: 'presentation-change', visible: $event })
@@ -29,6 +30,7 @@
   </stellar-stage-organism>
 
   <button
+    #menuTrigger
     class="menu-trigger"
     data-menu-trigger
     type="button"

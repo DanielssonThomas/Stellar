@@ -47,3 +47,5 @@ The pure `directStage` helper calculates bounded, non-overlapping rectangles for
 Run `pnpm exec nx run-many -t lint test build --projects=ui-molecules,ui-organisms`. Unit tests cover invalid commands, byte bounds, duplicate/stale/conflicting IDs, instance limits, immutable snapshots, layout, plain-text rendering, keyboard dismissal, nested focus restoration, resizing and disposal. The browser fixture exercises the actual Angular components through open/update/focus/minimize/close and keyboard dismissal; it does not claim audio or native-app verification.
 
 The desktop uses presentationChange to track visible content and dismissOnClose=false to keep local panel closure separate from legacy interaction dismissal. closePresentations closes trusted instances through the same owned registry. Docked emblem bounds are bottom-right; centered/focused sizing remains independent.
+
+A host may supply focusFallback with a persistent control when a transient disclosure launches content. Stage restores that control if the saved opener was removed; command payloads cannot choose focus targets.

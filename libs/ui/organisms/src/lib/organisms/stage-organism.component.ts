@@ -42,6 +42,7 @@ export class StageOrganism {
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
   readonly dismissOnClose = input(true);
+  readonly focusFallback = input<HTMLElement | null>(null);
   readonly presentationChange = output<boolean>();
   readonly retainedPresentations = output<boolean>();
   readonly interaction = output<InteractionEvent>();
@@ -177,7 +178,11 @@ export class StageOrganism {
       const panel = this.panels().find(
         (entry) => entry.nativeElement.dataset['instanceId'] === instanceId,
       )?.nativeElement;
-      const origin = this.origins.get(instanceId);
+      const savedOrigin = this.origins.get(instanceId);
+      const origin =
+        savedOrigin?.isConnected && savedOrigin !== this.document.body
+          ? savedOrigin
+          : this.focusFallback();
       if (panel && origin?.isConnected && !panel.contains(origin)) {
         for (const [dependent, savedOrigin] of this.origins) {
           if (panel.contains(savedOrigin)) this.origins.set(dependent, origin);

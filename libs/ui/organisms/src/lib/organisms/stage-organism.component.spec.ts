@@ -99,6 +99,19 @@ describe('StageOrganism', () => {
     vi.unstubAllGlobals();
   });
 
+  it('restores a persistent fallback when opening content detached its disclosure origin', async () => {
+    const transient = document.createElement('button');
+    document.body.append(transient);
+    transient.focus();
+    fixture.componentRef.setInput('focusFallback', opener);
+    fixture.componentInstance.dispatch(open());
+    await fixture.whenStable();
+    transient.remove();
+    fixture.componentInstance.control('close', 'summary');
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('renders only registered components, updates typed inputs and focuses the panel', async () => {
     expect(fixture.componentInstance.dispatch(open()).status).toBe('applied');
     await fixture.whenStable();

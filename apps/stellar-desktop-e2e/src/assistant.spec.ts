@@ -77,6 +77,7 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   await expect(panel).toBeVisible();
   await page.getByRole('button', { name: 'Close Assistant message' }).click();
   await expect(panel).toHaveCount(0);
+  await expect(trigger).toBeFocused();
   await expect(
     page.locator('stellar-desktop-experience-template'),
   ).toHaveAttribute('data-phase', 'idle');
