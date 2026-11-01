@@ -1,0 +1,33 @@
+{
+  "issue": 180,
+  "role": "foreman-cloud",
+  "sessionId": "local-941f804687dc03c37273ab825ef74717af2136651013df2c19a9e0b970252ff2",
+  "provider": "openai-codex",
+  "model": "gpt-6.1-sol",
+  "apiCalls": 1,
+  "toolCalls": 0,
+  "inputTokens": 6329,
+  "outputTokens": 4095,
+  "costStatus": "included",
+  "promptSha256": "51e84f42d8f4cba0428b20a5021a3c72ab881411959e6f1bc4de46b85a456cd8",
+  "responseSha256": "dc64c901fea6525809eb6474832c04aa7b666c3a6745a13a8a041cdc681c5422",
+  "originalFiles": [
+    {
+      "path": "libs/services/audio-activity/src/lib/audio-model.ts",
+      "sha256": "80ba593b0af43dbee0c70a3aa3d1def15a4fad658ea4110e35e83004d35d0401"
+    },
+    {
+      "path": "libs/services/audio-activity/src/lib/activity-detector.ts",
+      "sha256": "cd9891e7bab23347173a8d591c13a8642550df2de22c9d521df9609cd584f100"
+    },
+    {
+      "path": "libs/services/audio-activity/src/lib/web-audio-source.ts",
+      "sha256": "50de57ed4f251dc21227cd859cff35c11b81596ef2e6cfc3031ba1a8c7672283"
+    }
+  ],
+  "hostCorrections": [
+    "Restart unfinished calibration after missing-frame gaps; clear detector activity on context suspension.",
+    "Removed non-null assertions and integrated lifecycle ownership, Angular facade, synthetic source and adversarial tests."
+  ],
+  "scope": "Source contribution reviewed and applied by Codex; not autonomous worker or hardware qualification."
+}
