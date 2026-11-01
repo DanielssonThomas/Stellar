@@ -5,18 +5,39 @@
   "planeSpacing": 240,
   "layers": [
     {
-      "id": "violet-body",
+      "id": "violet-body-upper",
       "file": "layers/violet-body.png",
       "z": 0,
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 1
+      "planeIndex": 1,
+      "clip": [0, 0, 1280, 512]
+    },
+    {
+      "id": "violet-body-middle",
+      "file": "layers/violet-body.png",
+      "z": 1,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "planeIndex": 2,
+      "clip": [0, 512, 1280, 128]
+    },
+    {
+      "id": "violet-body-lower",
+      "file": "layers/violet-body.png",
+      "z": 2,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "planeIndex": 4,
+      "clip": [0, 640, 1280, 640]
     },
     {
       "id": "violet-hair",
       "file": "layers/violet-hair.png",
-      "z": 1,
+      "z": 3,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
@@ -25,73 +46,84 @@
     {
       "id": "violet-ornament",
       "file": "layers/violet-ornament.png",
-      "z": 2,
+      "z": 4,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 2
+      "planeIndex": 3
     },
     {
-      "id": "gold-body",
+      "id": "gold-body-upper",
       "file": "layers/gold-body.png",
-      "z": 3,
+      "z": 5,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 8
+      "planeIndex": 14,
+      "clip": [0, 0, 1280, 512]
+    },
+    {
+      "id": "gold-body-middle",
+      "file": "layers/gold-body.png",
+      "z": 6,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "planeIndex": 12,
+      "clip": [0, 512, 1280, 128]
+    },
+    {
+      "id": "gold-body-lower",
+      "file": "layers/gold-body.png",
+      "z": 7,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "planeIndex": 10,
+      "clip": [0, 640, 1280, 640]
     },
     {
       "id": "gold-hair",
       "file": "layers/gold-hair.png",
-      "z": 4,
+      "z": 8,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 9
+      "planeIndex": 13
     },
     {
       "id": "gold-ornament",
       "file": "layers/gold-ornament.png",
-      "z": 5,
+      "z": 9,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 10
+      "planeIndex": 11
     },
     {
       "id": "outer-frame",
       "file": "layers/outer-frame.svg",
-      "z": 6,
+      "z": 10,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 5,
+      "planeIndex": 7,
       "spin": "clockwise"
     },
     {
       "id": "inner-circle",
       "file": "layers/inner-circle.svg",
-      "z": 7,
+      "z": 11,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 3,
+      "planeIndex": 5,
       "spin": "counter-clockwise"
     },
     {
       "id": "inner-circle-2",
       "file": "layers/inner-circle-2.svg",
-      "z": 8,
-      "anchor": { "x": 640, "y": 640 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 4,
-      "spin": "counter-clockwise"
-    },
-    {
-      "id": "inner-circle-3",
-      "file": "layers/inner-circle-3.svg",
-      "z": 9,
+      "z": 12,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
@@ -99,13 +131,23 @@
       "spin": "counter-clockwise"
     },
     {
-      "id": "inner-circle-4",
-      "file": "layers/inner-circle-4.svg",
-      "z": 10,
+      "id": "inner-circle-3",
+      "file": "layers/inner-circle-3.svg",
+      "z": 13,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 7,
+      "planeIndex": 8,
+      "spin": "counter-clockwise"
+    },
+    {
+      "id": "inner-circle-4",
+      "file": "layers/inner-circle-4.svg",
+      "z": 14,
+      "anchor": { "x": 640, "y": 640 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "planeIndex": 9,
       "spin": "counter-clockwise"
     }
   ]

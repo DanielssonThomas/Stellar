@@ -17,12 +17,15 @@ import clsx from 'clsx';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
+import { emblemClipPath } from './emblem-clip';
 import {
   clampAudioLevel,
   EmblemManifest,
   layerOrigin,
   layerTransform,
   manifestError,
+  isExplodedPhase,
+  consolidatedClipFiles,
 } from './emblem-motion-model';
 
 @Component({
@@ -58,7 +61,11 @@ export class EmblemMotionMolecule {
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
   private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
   private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
-  private readonly motion = createEmblemLayerMotion(this.document.defaultView);
+  private readonly settledPhase = signal<Phase | null>(null);
+  private readonly motion = createEmblemLayerMotion(
+    this.document.defaultView,
+    () => this.settledPhase.set(this.phase()),
+  );
   private readonly ambient = createEmblemAmbientMotion(
     this.document.defaultView,
   );
@@ -105,13 +112,28 @@ export class EmblemMotionMolecule {
     const manifest = this.manifest();
     if (!manifest || this.unavailable() || this.loading()) return [];
     const base = this.assetBasePath();
-    return manifest.layers.map((layer) => ({
-      ...layer,
-      src: base
-        ? `${base}${base.endsWith('/') ? '' : '/'}${layer.file}`
-        : layer.file,
-      origin: layerOrigin(layer, manifest),
-    }));
+    const unified =
+      this.settledPhase() === this.phase() && !isExplodedPhase(this.phase());
+    const drawn = new Set<string>();
+    const completeFiles = unified
+      ? consolidatedClipFiles(manifest)
+      : new Set<string>();
+    return manifest.layers.map((layer) => {
+      let clipPath = emblemClipPath(layer.clip, manifest.viewBox);
+      // A single original avoids fractional clip-edge seams after assembly settles.
+      if (unified && layer.clip && completeFiles.has(layer.file)) {
+        clipPath = drawn.has(layer.file) ? 'inset(100%)' : 'none';
+        drawn.add(layer.file);
+      }
+      return {
+        ...layer,
+        src: base
+          ? `${base}${base.endsWith('/') ? '' : '/'}${layer.file}`
+          : layer.file,
+        origin: layerOrigin(layer, manifest),
+        clipPath,
+      };
+    });
   });
 
   constructor() {
@@ -170,6 +192,7 @@ export class EmblemMotionMolecule {
             ? motionDurations.return
             : motionDurations.focus,
       );
+      this.settledPhase.set(this.motion.settled() ? phase : null);
       this.ambient.update(
         this.artwork().flatMap((artwork, index) => {
           const layer = layers[index];

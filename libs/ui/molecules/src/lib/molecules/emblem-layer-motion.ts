@@ -5,6 +5,7 @@ export interface EmblemLayerTarget {
 
 export function createEmblemLayerMotion(
   view: Pick<Window, 'getComputedStyle'> | null,
+  onSettled: () => void = () => undefined,
 ) {
   const animations = new Map<HTMLElement, Animation>();
   const transforms = new Map<HTMLElement, string>();
@@ -20,6 +21,7 @@ export function createEmblemLayerMotion(
   }
 
   return {
+    settled: () => animations.size === 0,
     update(targets: readonly EmblemLayerTarget[], durationMs: number) {
       if (disposed) return;
       const elements = new Set(targets.map(({ element }) => element));
@@ -57,6 +59,7 @@ export function createEmblemLayerMotion(
           animation.onfinish = null;
           animation.oncancel = null;
           animations.delete(element);
+          if (!animations.size) onSettled();
         };
         animation.onfinish = finish;
         animation.oncancel = finish;
