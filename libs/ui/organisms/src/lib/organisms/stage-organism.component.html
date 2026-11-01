@@ -9,6 +9,7 @@
 } @else {
   <div
     class="emblem-slot"
+    [style.--emblem-duration]="motionDuration()"
     [style.left.px]="layout().emblem.x"
     [style.top.px]="layout().emblem.y"
     [style.width.px]="layout().emblem.width"

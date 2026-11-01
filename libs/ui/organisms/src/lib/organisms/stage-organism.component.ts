@@ -17,6 +17,7 @@ import type {
   EmblemTarget,
   InteractionEvent,
 } from '@stellar/desktop-interaction';
+import { motionDurations } from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import clsx from 'clsx';
 import { STAGE_CATALOGUE } from './stage-catalogue';
@@ -41,6 +42,10 @@ export class StageOrganism {
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
   readonly interaction = output<InteractionEvent>();
+  readonly motionDuration = computed(() => {
+    const target = this.emblemTarget();
+    return `${target === 'docked' ? motionDurations.dock : target === 'center' ? motionDurations.return : motionDurations.focus}ms`;
+  });
   private readonly catalogue = Object.freeze({ ...inject(STAGE_CATALOGUE) });
   private readonly registry = createStageRegistry<Record<string, unknown>>(
     Object.fromEntries(

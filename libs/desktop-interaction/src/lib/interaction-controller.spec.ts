@@ -3,7 +3,11 @@ import {
   createInteractionController,
   type InteractionClock,
 } from './interaction-controller';
-import { initialState, type InteractionEffect } from './interaction-model';
+import {
+  initialState,
+  motionDurations,
+  type InteractionEffect,
+} from './interaction-model';
 
 function required<T>(value: T | null): T {
   if (value === null) throw new Error('Expected active resource');
@@ -20,6 +24,21 @@ const clock: InteractionClock = {
 afterEach(() => vi.useRealTimers());
 
 describe('clock-backed desktop interaction', () => {
+  it('lets the full shared assembly finish before quiet can dock', () => {
+    vi.useFakeTimers();
+    const controller = createInteractionController({ clock });
+    controller.dispatch({ type: 'manual-start' });
+    controller.dispatch({ type: 'manual-end' });
+    vi.advanceTimersByTime(motionDurations.focus - 1);
+    expect(controller.getState().phase).toBe('focusing');
+    vi.advanceTimersByTime(1);
+    expect(controller.getState().phase).toBe('hangover');
+    controller.dispatch({ type: 'dismiss' });
+    vi.advanceTimersByTime(motionDurations.return);
+    expect(controller.getState().phase).toBe('idle');
+    expect(controller.getState().surface).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('provides deterministic motion fallbacks and silence hysteresis under input jitter', () => {
     vi.useFakeTimers();
     const effects: InteractionEffect[] = [];
@@ -28,7 +47,7 @@ describe('clock-backed desktop interaction', () => {
       onEffect: (effect) => effects.push(effect),
     });
     controller.dispatch({ type: 'manual-start' });
-    vi.advanceTimersByTime(220);
+    vi.advanceTimersByTime(motionDurations.focus);
     expect(controller.getState().phase).toBe('listening');
     controller.dispatch({ type: 'manual-end' });
     vi.advanceTimersByTime(899);
@@ -39,11 +58,11 @@ describe('clock-backed desktop interaction', () => {
     controller.dispatch({ type: 'manual-end' });
     vi.advanceTimersByTime(900);
     expect(controller.getState().phase).toBe('docking');
-    vi.advanceTimersByTime(320);
+    vi.advanceTimersByTime(motionDurations.dock);
     expect(controller.getState().phase).toBe('presenting');
     expect(effects.filter((e) => e.type === 'open-surface')).toHaveLength(1);
     controller.dispatch({ type: 'dismiss' });
-    vi.advanceTimersByTime(260);
+    vi.advanceTimersByTime(motionDurations.return);
     expect(controller.getState().phase).toBe('idle');
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -70,7 +89,7 @@ describe('clock-backed desktop interaction', () => {
     });
     controller.dispatch({ type: 'capture-request' });
     controller.dispatch({ type: 'manual-start' });
-    vi.advanceTimersByTime(220);
+    vi.advanceTimersByTime(motionDurations.focus);
     controller.dispatch({ type: 'manual-end' });
     const generation = required(controller.getState().hangover);
     controller.dispose();

@@ -21,7 +21,7 @@ describe('emblem ambient motion', () => {
     const target = { element, spin: 'clockwise' as const, order: 0 };
     motion.update([target], true, false);
     expect(element.animate).toHaveBeenCalledWith(
-      expect.arrayContaining([{ transform: 'rotateY(-7deg) rotateZ(-3deg)' }]),
+      expect.arrayContaining([{ transform: 'rotateZ(360deg)' }]),
       expect.objectContaining({ iterations: Infinity }),
     );
     motion.update([target], true, false);
@@ -30,7 +30,7 @@ describe('emblem ambient motion', () => {
     expect(animations[0].cancel).toHaveBeenCalledOnce();
     expect(element.animate).toHaveBeenLastCalledWith(
       [{ transform: 'matrix(1, 0, 0, 1, 0, 2)' }, { transform: 'none' }],
-      expect.objectContaining({ iterations: 1, duration: 220 }),
+      expect.objectContaining({ iterations: 1, duration: 1000 }),
     );
     motion.update([target], false, true);
     expect(animations[1].cancel).toHaveBeenCalledOnce();
