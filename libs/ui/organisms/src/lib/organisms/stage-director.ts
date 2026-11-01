@@ -35,7 +35,7 @@ export function directStage(
   const size = docked
     ? Math.min(96, width - padding * 2, height * 0.2)
     : Math.min(
-        target === 'focused' ? 320 : 280,
+        target === 'focused' ? 320 : target === 'center' ? 480 : 280,
         width - padding * 2,
         height - padding * 2,
       );

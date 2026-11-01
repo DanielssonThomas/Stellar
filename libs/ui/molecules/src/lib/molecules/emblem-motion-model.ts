@@ -4,6 +4,7 @@ export interface EmblemPose {
   readonly x: number;
   readonly y: number;
   readonly rotation: number;
+  readonly depth?: number;
 }
 
 export interface EmblemLayer {
@@ -47,15 +48,20 @@ export function layerTransform(
   const minZ = zs.length ? Math.min(...zs) : layer.z;
   const maxZ = zs.length ? Math.max(...zs) : layer.z;
   const depth =
-    reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
+    pose.depth ??
+    (reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
       ? 0
-      : ((layer.z - (minZ + maxZ) / 2) / (maxZ - minZ)) * 18;
+      : ((layer.z - (minZ + maxZ) / 2) / (maxZ - minZ)) * 18);
   const width = manifest?.viewBox?.[2];
   const height = manifest?.viewBox?.[3];
   const x = Number.isFinite(width) && width !== 0 ? (pose.x / width) * 100 : 0;
   const y =
     Number.isFinite(height) && height !== 0 ? (pose.y / height) * 100 : 0;
-  return `translate(${x}% , ${y}%) translateZ(${depth}px) rotate(${pose.rotation}deg)`;
+  const depthTransform =
+    pose.depth === undefined
+      ? `translateZ(${depth}px)`
+      : `translateZ(${(depth / width) * 100}cqw)`;
+  return `translate(${x}% , ${y}%) ${depthTransform} rotate(${pose.rotation}deg)`;
 }
 
 export function layerOrigin(
@@ -157,5 +163,12 @@ function finitePoint(
 
 function finitePose(value: unknown): value is EmblemPose {
   if (!finitePoint(value)) return false;
-  return Number.isFinite((value as { rotation?: unknown }).rotation);
+  const pose = value as { rotation?: unknown; depth?: unknown };
+  return (
+    Number.isFinite(pose.rotation) &&
+    (pose.depth === undefined ||
+      (typeof pose.depth === 'number' &&
+        Number.isFinite(pose.depth) &&
+        Math.abs(pose.depth) <= 4096))
+  );
 }

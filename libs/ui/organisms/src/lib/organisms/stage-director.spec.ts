@@ -21,7 +21,7 @@ describe('Stage director', () => {
     expect(focused.emblem).toEqual({ x: 340, y: 240, width: 320, height: 320 });
     for (const rect of focused.surfaces)
       expect(overlaps(rect, focused.emblem)).toBe(false);
-    expect(directStage(viewport, [], 'center').emblem.width).toBe(280);
+    expect(directStage(viewport, [], 'center').emblem.width).toBe(480);
   });
   it.each([
     { width: 1440, height: 900 },
