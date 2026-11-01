@@ -51,7 +51,7 @@
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <button
         type="button"
-        [disabled]="assistantBusy()"
+        [disabled]="assistantBusy() && !assistantUncertain()"
         (click)="retryIvy.emit()"
       >
         Connect Ivy

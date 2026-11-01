@@ -155,7 +155,8 @@ export class StageOrganism {
   }
 
   restorePresentation() {
-    const instance = this.registry.snapshot()[0];
+    const instances = this.registry.snapshot();
+    const instance = instances.find((entry) => entry.minimized) ?? instances[0];
     if (instance) this.control('focus', instance.instanceId);
   }
 

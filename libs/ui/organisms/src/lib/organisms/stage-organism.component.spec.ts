@@ -201,6 +201,29 @@ describe('StageOrganism', () => {
     expect(fixture.componentInstance.dispatch(open(2)).reason).toBe('disposed');
   });
 
+  it('restores every minimized instance even when a visible instance is first', async () => {
+    fixture.componentInstance.dispatch(open(1, 'first'));
+    fixture.componentInstance.dispatch(open(2, 'second', 'fixture'));
+    await fixture.whenStable();
+    fixture.componentInstance.control('minimize', 'first');
+    await fixture.whenStable();
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);
+    expect(document.activeElement?.getAttribute('data-instance-id')).toBe(
+      'first',
+    );
+    fixture.componentInstance.control('minimize', 'first');
+    fixture.componentInstance.control('minimize', 'second');
+    await fixture.whenStable();
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(1);
+    fixture.componentInstance.restorePresentation();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);
+  });
+
   it.each(['close', 'minimize'])(
     'restores the original opener when an ancestor surface is removed by %s',
     async (action) => {

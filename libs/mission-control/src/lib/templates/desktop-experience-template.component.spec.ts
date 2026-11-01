@@ -79,6 +79,32 @@ describe('DesktopExperienceTemplate', () => {
     expect(fixture.nativeElement.getAttribute('aria-busy')).toBe('true');
   });
 
+  it('allows reconnecting an uncertain Ivy turn while keeping submission blocked', async () => {
+    const retry = vi.fn();
+    fixture.componentInstance.retryIvy.subscribe(retry);
+    fixture.componentInstance.menu.toggle();
+    fixture.componentInstance.draft.set('Explicit next message');
+    fixture.componentRef.setInput('assistantBusy', true);
+    fixture.componentRef.setInput('assistantUncertain', true);
+    await fixture.whenStable();
+    const buttons = [
+      ...fixture.nativeElement.querySelectorAll('button'),
+    ] as HTMLButtonElement[];
+    const connect = buttons.find(
+      (button) => button.textContent?.trim() === 'Connect Ivy',
+    );
+    const submit = buttons.find(
+      (button) => button.textContent?.trim() === 'Send',
+    );
+    expect(connect?.disabled).toBe(false);
+    expect(submit?.disabled).toBe(true);
+    connect?.click();
+    expect(retry).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('assistantUncertain', false);
+    await fixture.whenStable();
+    expect(connect?.disabled).toBe(true);
+  });
+
   it('renders explicit input choices and the already normalized real level independently of detection', async () => {
     fixture.componentInstance.menu.toggle();
     const selected = vi.fn();
