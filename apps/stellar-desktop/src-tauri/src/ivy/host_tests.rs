@@ -62,6 +62,37 @@ fn disconnect_fences_pending_connection_results() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn shutdown_reaps_only_the_owned_child_and_fences_pending_work() {
+    use std::{os::windows::process::CommandExt, process::Command};
+    let spawn = || {
+        Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep 10",
+            ])
+            .creation_flags(0x08000000)
+            .spawn()
+            .unwrap()
+    };
+    let (host, _) = fixture();
+    *host.child.lock().unwrap() = Some(spawn());
+    let mut unrelated = spawn();
+    let old = host.shared.view.lock().unwrap().epoch;
+    host.shutdown();
+    assert!(host.child.lock().unwrap().is_none());
+    assert!(!host.shared.current(old));
+    let unrelated_alive = unrelated.try_wait().unwrap().is_none();
+    unrelated.kill().unwrap();
+    unrelated.wait().unwrap();
+    assert!(unrelated_alive);
+    host.shutdown();
+    assert!(host.child.lock().unwrap().is_none());
+}
+
 #[test]
 fn uncertain_turns_cannot_be_resubmitted_under_a_new_id() {
     let (host, _receiver) = fixture();
