@@ -2,6 +2,7 @@
 
 - [Architecture overview](architecture/overview.md): current workspace structure, dependency direction, and governance boundaries.
 - [Rust and Tauri boundaries](architecture/rust-tauri.md): modular native code, generated TypeScript contracts, readability and verification requirements; links to the Rust/Tauri workflow skill.
+- [Desktop development](guides/desktop-development.md): Windows setup, native launch, generated contracts and required quality gates.
 - [Documentation policy](documentation-policy.md): ownership and maintenance rules for technical documentation.
 - [Architecture decisions](decisions/0001-nx-angular-library-architecture.md): why the initial framework and library boundaries were chosen.
 - [Independent integration approval proposal](decisions/0002-independent-integration-approval.md): proposed separation of technical assessment, management recommendation and human authorization; not an active merge route.

@@ -2,10 +2,246 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   assertReviewResumeStatus,
+  loadIssue,
   reconcileClaimStatus,
   windowsProcessReferencesWorktree,
   wslProcessReferencesIssueWorkspace,
 } from './manage-issue-worktree.mjs';
+import { createDependencyFixture } from './issue-dependency-fixtures.mjs';
+import { assertRepositoryIssue } from './issue-dependency-identity.mjs';
+import { validateAssignment } from './issue-worktree.mjs';
+import {
+  validateFreshIssue,
+  validateStatusTransition,
+} from './update-issue.mjs';
+
+const loadFixtureIssue = (fixture) =>
+  loadIssue(42, {
+    repository: fixture.repository,
+    runCommand: fixture.runCommand,
+  });
+
+describe('native dependency identity acquisition', () => {
+  it('retains exact local identities and existing claim/readiness state semantics', () => {
+    const f = createDependencyFixture();
+    const issue = loadFixtureIssue(f);
+    assert.equal(issue.state, 'OPEN');
+    assert.deepEqual(issue.dependencies, [
+      {
+        id: 2023,
+        number: 23,
+        repository_url: f.repositoryUrl,
+        state: 'CLOSED',
+        status: 'status:done',
+      },
+    ]);
+    assert.equal(validateFreshIssue(issue, 'codex').valid, true);
+    assert.equal(
+      validateAssignment({
+        issue,
+        worker: 'codex',
+        targetBranch: 'develop',
+        existingBranches: ['develop'],
+        dependencies: issue.dependencies,
+      }).valid,
+      true,
+    );
+    issue.labels = issue.labels.map((label) =>
+      label.name === 'status:ready' ? { name: 'status:triage' } : label,
+    );
+    assert.equal(
+      validateStatusTransition({
+        issue,
+        worker: 'codex',
+        expected: 'status:triage',
+        next: 'status:ready',
+      }).valid,
+      true,
+    );
+  });
+
+  it('can inspect incomplete triage while preventing its promotion and preserving verified dependencies', () => {
+    const f = createDependencyFixture();
+    f.state.issue.body = null;
+    f.state.issue.labels = [{ name: 'status:triage' }, { name: 'owner:codex' }];
+    const issue = loadFixtureIssue(f);
+    assert.equal(issue.body, '');
+    assert.equal(issue.dependencies[0].id, 2023);
+    assert.equal(
+      validateStatusTransition({
+        issue,
+        worker: 'codex',
+        expected: 'status:triage',
+        next: 'status:ready',
+      }).valid,
+      false,
+    );
+    f.state.native[0].repository_url =
+      'https://api.github.com/repos/foreign/project';
+    assert.throws(() => loadFixtureIssue(f), /invalid identity/);
+  });
+
+  it('never substitutes a local closed issue for foreign or incomplete native evidence', () => {
+    for (const change of [
+      (f) => {
+        f.state.native[0].repository_url =
+          'https://api.github.com/repos/foreign/project';
+        f.state.native[0].state = 'open';
+      },
+      (f) => {
+        f.state.native[0].id += 1;
+      },
+      (f) => {
+        delete f.state.native[0].id;
+      },
+      (f) => {
+        delete f.state.native[0].repository_url;
+      },
+      (f) => {
+        f.state.native[0].pull_request = null;
+      },
+      (f) => {
+        f.state.fetched[23].pull_request = {};
+      },
+      (f) => {
+        f.state.fetched[23].repository_url += '?substituted=true';
+      },
+      (f) => {
+        f.state.fetched[23].number = 24;
+      },
+      (f) => {
+        delete f.state.fetched[23].state;
+      },
+      (f) => {
+        delete f.state.fetched[23].labels;
+      },
+      (f) => {
+        delete f.state.issue.id;
+      },
+      (f) => {
+        f.state.native.push(structuredClone(f.state.native[0]));
+      },
+    ]) {
+      const f = createDependencyFixture();
+      change(f);
+      assert.throws(
+        () => loadFixtureIssue(f),
+        /invalid identity|incomplete|duplicated/,
+      );
+    }
+    const f = createDependencyFixture([23, 24]);
+    f.state.native[1].id = f.state.native[0].id;
+    assert.throws(() => loadFixtureIssue(f), /duplicated/);
+    const self = createDependencyFixture();
+    self.state.native[0].id = self.state.issue.id;
+    assert.throws(() => loadFixtureIssue(self), /own identity/);
+    assert.equal(self.calls.includes('/issues/23'), false);
+    for (const expectedId of [0, -1, null, '2023'])
+      assert.throws(
+        () =>
+          assertRepositoryIssue(f.state.fetched[23], {
+            repository: f.repository,
+            number: 23,
+            expectedId,
+          }),
+        /invalid identity/,
+      );
+  });
+
+  it('checks later pages, rejects broken links and refuses truncated body/native admission', () => {
+    const f = createDependencyFixture([23, 24]);
+    const next = `<${f.repositoryUrl}/issues/42/dependencies/blocked_by?per_page=100&page=2>; rel="next"`;
+    f.state.pages.set(1, {
+      status: 200,
+      value: [f.state.native[0]],
+      link: next,
+    });
+    f.state.pages.set(2, { status: 200, value: [f.state.native[1]] });
+    assert.equal(loadFixtureIssue(f).dependencies.length, 2);
+    assert.ok(f.calls.some((route) => route.endsWith('page=2')));
+    f.state.pages.get(1).link =
+      `${next}, ${next.replace('page=2', 'page=3').replace('rel="next"', 'rel="last"')}`;
+    assert.throws(() => loadFixtureIssue(f), /advertised last page/);
+    f.state.pages.get(1).link = next;
+    f.state.native[1].repository_url =
+      'https://api.github.com/repos/foreign/project';
+    assert.throws(() => loadFixtureIssue(f), /invalid identity/);
+    for (const link of [
+      next.replace('page=2', 'page=1'),
+      next.replace('/repos/', '/foreign/'),
+      next.replace('api.github.com', 'foreign.example'),
+      next.replace('rel="next"', 'rel="last"'),
+      `${next}, ${next}`,
+      `${next}, ${next.replace('page=2', 'page=1').replace('rel="next"', 'rel="last"')}`,
+      Array(2)
+        .fill(
+          next.replace('page=2', 'page=1').replace('rel="next"', 'rel="first"'),
+        )
+        .join(', '),
+      'malformed; rel="next"',
+    ]) {
+      f.state.pages.get(1).link = link;
+      assert.throws(() => loadFixtureIssue(f), /pagination/);
+    }
+    f.state.pages.clear();
+    f.state.native = [f.state.native[0]];
+    assert.equal(validateFreshIssue(loadFixtureIssue(f), 'codex').valid, false);
+    const full = createDependencyFixture(
+      Array.from({ length: 100 }, (_, index) => index + 100),
+    );
+    assert.equal(loadFixtureIssue(full).dependencies.length, 100);
+    assert.ok(full.calls.some((route) => route.endsWith('page=2')));
+  });
+
+  it('uses the GitHub CLI web hostname and rejects unsupported API bases before a subprocess', () => {
+    const f = createDependencyFixture();
+    assert.equal(loadFixtureIssue(f).number, 42);
+    for (const apiUrl of [
+      'https://github.com',
+      'https://api.github.com.evil',
+      'https://enterprise.example/api/v3',
+      'http://api.github.com',
+      'https://user@api.github.com',
+    ]) {
+      let invoked = false;
+      assert.throws(
+        () =>
+          loadIssue(42, {
+            apiUrl,
+            runCommand: () => {
+              invoked = true;
+            },
+          }),
+        /GitHub.com API base/,
+      );
+      assert.equal(invoked, false);
+    }
+  });
+
+  it('fails closed for failed or malformed REST reads and a complete pagination bound', () => {
+    for (const response of [
+      '[]',
+      'HTTP/2.0 403 Forbidden\r\n\r\n{}',
+      'HTTP/2.0 200 OK\r\n\r\n{',
+      'HTTP/2.0 200 OK\r\nlink: a\r\nlink: b\r\n\r\n{}',
+    ])
+      assert.throws(() => loadIssue(42, { runCommand: () => response }));
+    const f = createDependencyFixture(
+      Array.from({ length: 100 }, (_, index) => index + 100),
+    );
+    for (let page = 1; page <= 10; page += 1)
+      f.state.pages.set(page, { status: 200, value: f.state.native });
+    assert.throws(() => loadFixtureIssue(f), /pagination limit/);
+    assert.equal(
+      f.calls.filter((route) => route.includes('blocked_by')).length,
+      10,
+    );
+    assert.equal(
+      f.calls.some((route) => route === '/issues/100'),
+      false,
+    );
+  });
+});
 
 describe('expired review live-process guard', () => {
   it('treats a running Codex process on the exact worktree as active', () => {

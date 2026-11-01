@@ -1,4 +1,4 @@
-import { dependenciesFromBody } from './issue-worktree.mjs';
+import { readIssueDependencies } from './issue-dependency-reader.mjs';
 import {
   digest,
   isRevision,
@@ -81,67 +81,19 @@ export async function readCheckRuns(request, sha) {
 }
 
 export async function issueContext(request, number, { repository } = {}) {
-  requireValue(
-    Number.isSafeInteger(number) &&
-      number > 0 &&
-      typeof repository === 'string' &&
-      /^[\w.-]+\/[\w.-]+$/.test(repository),
-    'A positive issue identity and trusted repository are required.',
-  );
-  const repositoryUrl = `https://api.github.com/repos/${repository}`;
-  const matchesRepository = (value) =>
-    typeof value === 'string' &&
-    value.toLowerCase() === repositoryUrl.toLowerCase();
-  const globalIdentity = (value) =>
-    Number.isSafeInteger(value?.id) &&
-    value.id > 0 &&
-    matchesRepository(value.repository_url);
-  const issue = await readJson(request, `/issues/${number}`);
-  requireValue(
-    issue?.number === number &&
-      globalIdentity(issue) &&
-      !issue.pull_request &&
-      typeof issue.body === 'string',
-    `Issue #${number} was not found or has invalid identity.`,
-  );
-  const expected = dependenciesFromBody(issue.body);
-  const native = await readAll(
-    request,
-    `/issues/${number}/dependencies/blocked_by`,
-  );
-  requireValue(
-    new Set(expected).size === expected.length &&
-      expected.length === native.length &&
-      expected.every((id) =>
-        native.some((dependency) => dependency.number === id),
-      ),
-    `Issue #${number} dependency records do not match.`,
-  );
-  requireValue(
-    native.every(globalIdentity) &&
-      new Set(native.map((dependency) => dependency.id)).size === native.length,
-    `Issue #${number} native dependency repository or global identity is invalid.`,
-  );
-  const dependencies = [];
-  for (const id of expected.sort((left, right) => left - right)) {
-    const declared = native.find((dependency) => dependency.number === id);
-    const dependency = await readJson(request, `/issues/${id}`);
-    requireValue(
-      dependency?.number === id &&
-        !dependency.pull_request &&
-        globalIdentity(dependency) &&
-        dependency.id === declared.id,
-      `Dependency #${id} is missing or has invalid identity.`,
-    );
-    dependencies.push({
-      id: dependency.id,
-      number: id,
-      repository_url: repositoryUrl,
-      state: dependency.state,
-      labels: dependency.labels,
-    });
-  }
-  return { ...issue, dependencies };
+  const issue = await readIssueDependencies(request, number, { repository });
+  return {
+    ...issue,
+    dependencies: issue.dependencies.map(
+      ({ id, number, repository_url, state, labels }) => ({
+        id,
+        number,
+        repository_url,
+        state,
+        labels,
+      }),
+    ),
+  };
 }
 
 export async function readReviewThreads(

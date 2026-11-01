@@ -1,0 +1,194 @@
+{
+  "name": "stellar-desktop",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "prefix": "stellar",
+  "sourceRoot": "apps/stellar-desktop/src",
+  "tags": ["scope:app", "type:app"],
+  "targets": {
+    "build": {
+      "executor": "@angular/build:application",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/apps/stellar-desktop",
+        "browser": "apps/stellar-desktop/src/main.ts",
+        "tsConfig": "apps/stellar-desktop/tsconfig.app.json",
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "apps/stellar-desktop/public"
+          }
+        ],
+        "styles": ["apps/stellar-desktop/src/styles.css"]
+      },
+      "configurations": {
+        "production": {
+          "budgets": [
+            {
+              "type": "initial",
+              "maximumWarning": "500kb",
+              "maximumError": "1mb"
+            },
+            {
+              "type": "anyComponentStyle",
+              "maximumWarning": "4kb",
+              "maximumError": "8kb"
+            }
+          ],
+          "outputHashing": "all",
+          "optimization": {
+            "scripts": true,
+            "styles": {
+              "minify": true,
+              "inlineCritical": false
+            },
+            "fonts": true
+          }
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@angular/build:dev-server",
+      "configurations": {
+        "production": {
+          "buildTarget": "stellar-desktop:build:production"
+        },
+        "development": {
+          "buildTarget": "stellar-desktop:build:development"
+        }
+      },
+      "defaultConfiguration": "development",
+      "options": {
+        "host": "127.0.0.1",
+        "port": 4300
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "test": {
+      "executor": "@angular/build:unit-test",
+      "options": {
+        "setupFiles": ["tools/testing/msw.ts"]
+      }
+    },
+    "serve-static": {
+      "continuous": true,
+      "executor": "@nx/web:file-server",
+      "options": {
+        "buildTarget": "stellar-desktop:build",
+        "port": 4300,
+        "staticFilePath": "dist/apps/stellar-desktop/browser",
+        "spa": true
+      }
+    },
+    "native-fmt": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["native"],
+      "options": {
+        "command": "node tools/native/cargo.mjs fmt"
+      },
+      "outputs": []
+    },
+    "native-clippy": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["native"],
+      "options": {
+        "command": "node tools/native/cargo.mjs clippy"
+      },
+      "outputs": [],
+      "dependsOn": ["build"]
+    },
+    "native-test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["native"],
+      "options": {
+        "command": "node tools/native/cargo.mjs test"
+      },
+      "outputs": [],
+      "dependsOn": ["build"]
+    },
+    "native-build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["native", "production", "^production"],
+      "options": {
+        "command": "node tools/native/cargo.mjs build"
+      },
+      "outputs": ["{workspaceRoot}/target/debug/stellar-desktop.exe"],
+      "dependsOn": ["build"]
+    },
+    "native-launch": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": ["native"],
+      "options": {
+        "command": "node tools/native/cargo.mjs launch"
+      },
+      "outputs": [],
+      "dependsOn": ["native-build"],
+      "continuous": true
+    },
+    "native-smoke": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": ["native", "production", "^production"],
+      "options": {
+        "command": "node tools/native/cargo.mjs smoke"
+      },
+      "outputs": ["{workspaceRoot}/artifacts/native/smoke.json"],
+      "dependsOn": ["native-build"]
+    },
+    "contract-check": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["native"],
+      "options": {
+        "command": "node tools/native/cargo.mjs contract-check"
+      },
+      "outputs": []
+    },
+    "rust-size-check": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "native",
+        "{workspaceRoot}/**/*.rs",
+        "{workspaceRoot}/.gitignore"
+      ],
+      "options": {
+        "command": "node tools/native/cargo.mjs size"
+      },
+      "outputs": []
+    }
+  },
+  "implicitDependencies": ["design-tokens", "desktop-contracts"],
+  "namedInputs": {
+    "native": [
+      "{workspaceRoot}/Cargo.toml",
+      "{workspaceRoot}/Cargo.lock",
+      "{workspaceRoot}/rust-toolchain.toml",
+      "{projectRoot}/src-tauri/**/*",
+      "{workspaceRoot}/tools/native/**/*",
+      "{workspaceRoot}/libs/desktop-contracts/**/*",
+      "{workspaceRoot}/docs/architecture/rust-tauri.md",
+      {
+        "runtime": "node -p process.platform"
+      },
+      {
+        "runtime": "cargo --version"
+      },
+      "{workspaceRoot}/pnpm-lock.yaml"
+    ]
+  }
+}

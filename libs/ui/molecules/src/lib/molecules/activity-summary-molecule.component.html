@@ -1,0 +1,25 @@
+<article [class]="classes()" aria-label="Activity summary">
+  @if (loading()) {
+    <div role="status" aria-label="Loading activity summary">
+      <stellar-skeleton-atom shape="text" />
+    </div>
+  } @else if (error()) {
+    <p role="status">Activity summary unavailable</p>
+  } @else if (payload(); as activity) {
+    <dl class="grid grid-cols-2 gap-4">
+      <div>
+        <dt class="text-sm opacity-70">Duration</dt>
+        <dd class="text-xl">{{ duration() }}</dd>
+      </div>
+      <div>
+        <dt class="text-sm opacity-70">Peak level</dt>
+        <dd class="text-xl">{{ peak() }}%</dd>
+      </div>
+    </dl>
+    @if (activity.inputLabel) {
+      <p class="text-sm opacity-70">{{ activity.inputLabel }}</p>
+    }
+  } @else {
+    <p role="status">No activity recorded</p>
+  }
+</article>

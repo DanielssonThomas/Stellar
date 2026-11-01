@@ -1,2 +1,4 @@
 packages:
   - libs/*/*
+  - libs/desktop-interaction
+  - libs/desktop-contracts

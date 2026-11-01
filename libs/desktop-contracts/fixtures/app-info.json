@@ -1,0 +1,55 @@
+{
+  "request": {
+    "version": 1,
+    "sequence": "18446744073709551615"
+  },
+  "reply": {
+    "version": 1,
+    "sequence": "18446744073709551615",
+    "application": "stellar-desktop",
+    "capabilities": [
+      {
+        "kind": "native_window"
+      },
+      {
+        "kind": "contract_events"
+      }
+    ],
+    "build_revision": null
+  },
+  "event": {
+    "version": 1,
+    "info": {
+      "version": 1,
+      "sequence": "18446744073709551615",
+      "application": "stellar-desktop",
+      "capabilities": [
+        {
+          "kind": "native_window"
+        },
+        {
+          "kind": "contract_events"
+        }
+      ],
+      "build_revision": null
+    }
+  },
+  "errors": [
+    {
+      "code": "malformed_request"
+    },
+    {
+      "code": "unsupported_version",
+      "received": 2
+    },
+    {
+      "code": "invalid_sequence"
+    },
+    {
+      "code": "label_too_long"
+    },
+    {
+      "code": "event_unavailable"
+    }
+  ]
+}

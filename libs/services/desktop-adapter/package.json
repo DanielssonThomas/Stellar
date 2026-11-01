@@ -1,0 +1,9 @@
+{
+  "name": "@stellar/service-desktop-adapter",
+  "version": "0.0.1",
+  "peerDependencies": {
+    "@angular/core": "^21.2.0",
+    "@stellar/desktop-contracts": "workspace:*"
+  },
+  "sideEffects": false
+}

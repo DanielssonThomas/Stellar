@@ -1,6 +1,6 @@
 # Rust and Tauri boundaries
 
-These are contribution requirements for native code introduced into Stellar. The desktop application, Cargo workspace, binding generator and native CI targets are not implemented by this document. [Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) owns delivery; its feasibility spike selects compatible tooling and its bootstrap installs enforcement. Until then, reviewers apply these rules directly and report unavailable automation rather than claiming it passed.
+These contribution requirements govern Stellar native code. The desktop bootstrap supplies the Cargo workspace, pinned binding generator, AST-based size gate and Windows native CI targets. See the [desktop development guide](../guides/desktop-development.md) for setup and commands. [Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) owns subsequent native delivery.
 
 ## Module responsibilities
 
@@ -20,7 +20,7 @@ Count physical lines, including blank lines and comments, in each handwritten Ru
 
 Production and test lines are counted separately. In a mixed file, a Rust-aware counter must separate complete test-only items selected by `cfg(test)` from production items; ambiguous or mixed conditional items count as production. Dedicated test files count wholly as tests. Both counts use the same 300/500 thresholds. Moving tests out of a production module does not make their complexity exempt.
 
-Generated and vendored source is excluded only through explicit paths with verifiable provenance and generation/vendor ownership. A filename or an author-written comment alone cannot establish an exclusion. The bootstrap must test boundary counts, mixed test items and exclusion/exception handling before activating the automated check. Until then, include the counts and any uncertainty in the review evidence.
+Generated and vendored source is excluded only through explicit paths with verifiable provenance and generation/vendor ownership. A filename or an author-written comment alone cannot establish an exclusion. The size gate tests boundary counts, mixed test items and exception handling. No tracked Rust source exclusion is currently approved. Include counts and any decomposition decisions in review evidence.
 
 Exceptions belong in this document and require independent review appropriate to the changed-file risk. Each entry must name one exact repository-relative file, the count category, a numeric ceiling, the reason the module remains cohesive, alternatives considered, the authorizing issue/PR and a date or condition for reassessment. Review the exception in the same PR as the file, or before it. No wildcard, directory-wide or permanent blanket exemption is valid; a changed path, exceeded ceiling or elapsed reassessment condition requires a new review. No exceptions are currently approved.
 
@@ -34,7 +34,7 @@ Define an explicit serialization contract, including stable field names and tagg
 
 Generated static types are not a runtime validator. Validate frontend input at native command boundaries and decode untrusted runtime payloads in the frontend adapter. Reject malformed input, unsupported contract versions and unknown variants intentionally. Use exhaustive handling for known variants; version mismatches produce a controlled compatibility error. Frontend and backend ship together in this milestone, so a new variant normally updates both in one PR. Any later independently updated consumer needs an explicit compatibility decision.
 
-To extend a backend type, change the Rust definition, regenerate bindings with the pinned tool, update consumers and validators, then verify serialization fixtures and TypeScript exhaustiveness. Review the generated diff. Generation must be deterministic, run without a live application or microphone, and fail CI when committed output differs. The bootstrap supplies the repository command; do not invent a currently available command in documentation.
+To extend a backend type, change the Rust definition, regenerate bindings with the pinned tool, update consumers and validators, then verify serialization fixtures and TypeScript exhaustiveness. Review the generated diff. Generation must be deterministic, run without a live application or microphone, and fail CI when committed output differs. Run `node tools/native/cargo.mjs contract-generate` to regenerate and the `stellar-desktop:contract-check` target to reject drift.
 
 ## Verification and native safety
 
@@ -55,3 +55,15 @@ Also run the actual repository binding-generation drift check, generated-consume
 Keep Tauri capabilities and content policy explicit and minimal. Registering an application command does not by itself establish adequate authorization. Validate each privileged operation at its boundary; never accept arbitrary paths, shell commands or executable UI content as a shortcut. Credential access, protected governance and integration authority remain governed by the existing [engineering organization](../guides/engineering-organization.md), not by this document or an agent's generated plan.
 
 Use the [Rust/Tauri workflow skill](../../.agents/skills/develop-rust-tauri/SKILL.md) alongside the normal issue and PR workflow. The [architecture overview](overview.md) remains the entry point for current implementation and governance.
+
+## Machine-readable exception registry
+
+The Rust-aware size gate reads this registry; no source exclusions or exceptions are currently approved.
+
+<!-- rust-size-exceptions:start -->
+
+```json
+[]
+```
+
+<!-- rust-size-exceptions:end -->

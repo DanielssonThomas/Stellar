@@ -1,0 +1,26 @@
+{
+  "name": "desktop-contracts",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/desktop-contracts/src",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:model"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/desktop-contracts",
+        "main": "libs/desktop-contracts/src/index.ts",
+        "tsConfig": "libs/desktop-contracts/tsconfig.lib.json",
+        "assets": ["libs/desktop-contracts/*.md"]
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/desktop-contracts"
+      }
+    }
+  }
+}

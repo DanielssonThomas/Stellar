@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile,
@@ -13,6 +14,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { defaultLimits } from '../supervise-worker.mjs';
+import { loadIssue } from '../manage-issue-worktree.mjs';
+import { createDependencyFixture } from '../issue-dependency-fixtures.mjs';
+import { createEngineeringHost } from './host-engine.mjs';
+import { inertRecipe } from './host-session.mjs';
 import {
   assertRepositoryAdmission,
   createRepositoryAdmission,
@@ -159,6 +164,56 @@ async function fixture(t) {
     inspect: () => createRepositoryAdmission(options()).inspect(request),
   };
 }
+
+test('repository REST dependency provenance gates a real host before reservation or launch', async (t) => {
+  const f = await fixture(t);
+  const api = createDependencyFixture();
+  api.state.issue = {
+    ...f.issue,
+    id: 1042,
+    repository_url: api.repositoryUrl,
+    state: 'open',
+    body: f.issue.body.replace('Dependencies\nNone', 'Dependencies\n#23'),
+  };
+  const readIssue = () =>
+    loadIssue(42, { repository: api.repository, runCommand: api.runCommand });
+  Object.assign(f.issue, readIssue());
+  f.record.issueDigest = repositoryIssueDigest(f.issue);
+  await f.save();
+  const options = f.options();
+  options.hostReaders.loadIssue = readIssue;
+  const admission = createRepositoryAdmission(options);
+  assert.equal(
+    (await admission.inspect(request)).facts.issue.dependencies[0].id,
+    2023,
+  );
+  const storeRoot = join(f.root, 'host-journal');
+  const poolRoot = join(f.root, 'host-pool');
+  const recipes = Object.fromEntries(
+    await Promise.all(
+      ['dispatch', 'implement', 'verify', 'review', 'reconcile'].map(
+        async (phase) => [phase, await inertRecipe(phase)],
+      ),
+    ),
+  );
+  const host = await createEngineeringHost({
+    admission,
+    storeRoot,
+    poolRoot,
+    recipes,
+  });
+  const claimBefore = await readFile(f.claimPath, 'utf8');
+  api.state.native[0].repository_url =
+    'https://api.github.com/repos/foreign/project';
+  api.state.native[0].state = 'open';
+  await assert.rejects(
+    host.prepare({ ...request, key: 'foreign-dependency' }),
+    /invalid identity/,
+  );
+  assert.deepEqual(await readdir(storeRoot), []);
+  assert.deepEqual(await readdir(poolRoot), []);
+  assert.equal(await readFile(f.claimPath, 'utf8'), claimBefore);
+});
 
 test('reads real claim and registered git worktree and returns stable detached admission facts', async (t) => {
   const f = await fixture(t);
