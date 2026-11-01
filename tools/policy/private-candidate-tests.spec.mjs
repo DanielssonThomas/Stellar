@@ -254,6 +254,35 @@ test('offline metadata, missing contents, lock mismatch and uncertain install re
   );
 });
 
+test('unreviewed package scripts remain rejected in both checkout byte forms', async () => {
+  const manifest = JSON.parse(
+    readFileSync(path.join(root, 'package.json'), 'utf8'),
+  );
+  manifest.scripts['policy:test'] = 'node unreviewed-policy-runner.mjs';
+  const lf = `${JSON.stringify(manifest, null, 2)}\n`;
+  for (const text of [lf, lf.replaceAll('\n', '\r\n')]) {
+    const changed = {
+      ...candidate,
+      files: candidate.files.map((entry) =>
+        entry.path === 'package.json'
+          ? {
+              ...entry,
+              sha256: createHash('sha256').update(text).digest('hex'),
+            }
+          : entry,
+      ),
+    };
+    assert.throws(
+      () => validateReviewedDependencyInputs(changed),
+      /package.json differs/,
+    );
+    await assert.rejects(
+      runPrivateCandidateChecks(options, changed),
+      /package.json differs/,
+    );
+  }
+});
+
 test('reviewed lockfile and package inputs are required before any execution', async () => {
   assert.equal(
     validateReviewedDependencyInputs(candidate),
