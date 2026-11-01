@@ -30,7 +30,7 @@ function assertCacheInputs(candidate) {
     'Cargo.lock',
     'rust-toolchain.toml',
     'tools/native/**/*',
-    'libs/desktop-contracts/src/**/*',
+    'libs/desktop-contracts/**/*',
     'docs/architecture/rust-tauri.md',
   ])
     assert.ok(
@@ -110,7 +110,12 @@ test('normal host keeps decorations and only its explicit local readiness permis
   assert.equal(config.app.windows[0].resizable, true);
   assert.equal(config.app.windows[0].devtools, false);
   assert.deepEqual(config.app.security.capabilities, ['desktop-main']);
-  assert.deepEqual(capability.permissions, ['allow-shell-status']);
+  assert.deepEqual(capability.permissions, [
+    'allow-shell-status',
+    'allow-app-info',
+    'core:event:allow-listen',
+    'core:event:allow-unlisten',
+  ]);
   assert.equal(capability.remote, undefined);
   assert.match(config.app.security.csp, /script-src 'self';/);
   assert.doesNotMatch(

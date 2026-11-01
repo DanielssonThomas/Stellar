@@ -17,3 +17,4 @@ ts-rs = "=12.0.1"
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 native-smoke = []
+contract-variant-fixture = []
