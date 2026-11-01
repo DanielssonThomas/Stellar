@@ -219,10 +219,12 @@ function orderedTasks(tasks) {
 }
 
 export function planEngineeringWork(packet, snapshot, { now }) {
+  const packetDigest = digest(packet);
   const snapshotDigest = validateSnapshot(snapshot, now);
   requireValue(
     packet?.schemaVersion === 1 &&
       packet.snapshotDigest === snapshotDigest &&
+      isText(packet.repository) &&
       packet.repository === snapshot.repository &&
       packet.revision === snapshot.revision &&
       packet.policyRevision === snapshot.policyRevision &&
@@ -259,7 +261,9 @@ export function planEngineeringWork(packet, snapshot, { now }) {
   );
   for (const task of packet.tasks) {
     requireValue(
-      /^[a-z][a-z0-9-]{0,63}$/.test(task.key) && isText(task.milestone),
+      isText(task.key) &&
+        /^[a-z][a-z0-9-]{0,63}$/.test(task.key) &&
+        isText(task.milestone),
       'Task identity and milestone are required.',
     );
     unique(task.after, 'Planned dependencies');
@@ -280,7 +284,7 @@ export function planEngineeringWork(packet, snapshot, { now }) {
     revision: snapshot.revision,
     policyRevision: snapshot.policyRevision,
     snapshotDigest,
-    packetDigest: digest(packet),
+    packetDigest,
     epicNumber: packet.epicNumber,
     evaluatedAt: now,
     executionAuthorized: false,

@@ -133,6 +133,52 @@ test('prepares an evidenced bounded assignment without granting execution or mut
   assert.equal(result.packetDigest, digest(value.packet));
   value.packet.tasks[0].after.push('later-input-mutation');
   assert.deepEqual(result.recommendations[0].after, []);
+  value.packet.repository = 'other/repository';
+  value.snapshot.repository = 'other/repository';
+  value.packet.tasks[0].key = 'changed-key';
+  assert.equal(result.repository, 'DanielssonThomas/Stellar');
+  assert.equal(result.recommendations[0].key, 'loading-state');
+});
+
+test('canonical evidence rejects sparse arrays and non-JSON properties before capability traversal', () => {
+  assert.throws(() => digest(new Array(1)), /dense JSON arrays/);
+  const value = fixture();
+  value.snapshot.scopes[0].requiredSkills = new Array(1);
+  value.snapshot.evidence = [];
+  assert.throws(() => evaluate(value), /dense JSON arrays/);
+  const extended = [];
+  extended.extra = 'not a JSON array element';
+  assert.throws(() => digest(extended), /dense JSON arrays/);
+  assert.throws(() => digest([undefined]), /only JSON values/);
+  const accessor = ['value'];
+  let accessed = false;
+  Object.defineProperty(accessor, '0', {
+    enumerable: true,
+    get() {
+      accessed = true;
+      return 'value';
+    },
+  });
+  assert.throws(() => digest(accessor), /dense JSON arrays/);
+  assert.equal(accessed, false);
+  assert.throws(
+    () => digest({ [Symbol('hidden')]: 'value' }),
+    /JSON data properties/,
+  );
+});
+
+test('repository, task and authorized worker identities reject coercible arrays', () => {
+  const repository = fixture();
+  repository.packet.repository = repository.snapshot.repository = [
+    'DanielssonThomas/Stellar',
+  ];
+  assert.throws(() => evaluate(rebind(repository)), /snapshot identity/);
+  const task = fixture();
+  task.packet.tasks[0].key = task.snapshot.scopes[0].key = ['loading-state'];
+  assert.throws(() => evaluate(rebind(task)), /Task identity/);
+  const worker = fixture();
+  worker.snapshot.authorizedWorkers = [['peon']];
+  assert.throws(() => evaluate(rebind(worker)), /worker or target identities/);
 });
 
 test('rejects changed repository, revision, policy and snapshot evidence', () => {
@@ -417,10 +463,16 @@ test('stores exclusive revision-bound records and rejects corruption and stale r
     const path = join(directory, 'plan.json');
     const value = fixture();
     const result = evaluate(value);
-    await writePlanningRecord(path, value.packet, value.snapshot, { now });
+    const recordDigest = await writePlanningRecord(
+      path,
+      value.packet,
+      value.snapshot,
+      { now },
+    );
     const expected = {
       snapshotDigest: result.snapshotDigest,
       packetDigest: result.packetDigest,
+      recordDigest,
     };
     assert.deepEqual(await readPlanningRecord(path, expected), result);
     await assert.rejects(
@@ -435,6 +487,15 @@ test('stores exclusive revision-bound records and rejects corruption and stale r
     stored.record.executionAuthorized = true;
     await writeFile(path, JSON.stringify(stored));
     await assert.rejects(readPlanningRecord(path, expected), /integrity/);
+    stored.record.executionAuthorized = false;
+    stored.record.recommendations[0].role = 'foreman';
+    stored.digest = digest(stored.record);
+    await writeFile(path, JSON.stringify(stored));
+    await assert.rejects(readPlanningRecord(path, expected), /integrity/);
+    await assert.rejects(
+      readPlanningRecord(path, { ...expected, recordDigest: undefined }),
+      /digests are required/,
+    );
     await writeFile(path, '{');
     await assert.rejects(readPlanningRecord(path, expected), SyntaxError);
   } finally {

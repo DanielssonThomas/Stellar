@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
-import { digest, requireValue } from './planning-evidence.mjs';
+import { digest, isDigest, requireValue } from './planning-evidence.mjs';
 import { planEngineeringWork } from './planning.mjs';
 
 export async function writePlanningRecord(path, packet, snapshot, options) {
@@ -22,15 +22,16 @@ export async function writePlanningRecord(path, packet, snapshot, options) {
 
 export async function readPlanningRecord(
   path,
-  { snapshotDigest, packetDigest },
+  { snapshotDigest, packetDigest, recordDigest },
 ) {
   requireValue(
     isAbsolute(path),
     'Planning record requires a trusted absolute path.',
   );
   requireValue(
-    /^[0-9a-f]{64}$/.test(snapshotDigest ?? '') &&
-      /^[0-9a-f]{64}$/.test(packetDigest ?? ''),
+    isDigest(snapshotDigest) &&
+      isDigest(packetDigest) &&
+      isDigest(recordDigest),
     'Expected planning evidence digests are required.',
   );
   const file = await open(path, 'r');
@@ -46,7 +47,8 @@ export async function readPlanningRecord(
   }
   const envelope = JSON.parse(content);
   requireValue(
-    envelope.digest === digest(envelope.record),
+    envelope.digest === recordDigest &&
+      recordDigest === digest(envelope.record),
     'Planning record integrity check failed.',
   );
   requireValue(

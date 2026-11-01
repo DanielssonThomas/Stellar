@@ -8,6 +8,25 @@ export const isText = (value) =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= 4096;
 export const isRevision = (value) =>
   typeof value === 'string' && /^[0-9a-f]{40}$/.test(value);
+export const isDigest = (value) =>
+  typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+
+function requireDenseArray(value) {
+  requireValue(
+    Array.isArray(value) &&
+      Object.getPrototypeOf(value) === Array.prototype &&
+      value.length <= 1_000_000 &&
+      Reflect.ownKeys(value).length === value.length + 1,
+    'Planning evidence requires dense JSON arrays.',
+  );
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    requireValue(
+      descriptor && 'value' in descriptor && descriptor.enumerable,
+      'Planning evidence requires dense JSON arrays.',
+    );
+  }
+}
 
 export function digest(value) {
   const canonical = (item) => {
@@ -16,10 +35,20 @@ export function digest(value) {
       return JSON.stringify(item);
     if (typeof item === 'number' && Number.isFinite(item))
       return JSON.stringify(item);
-    if (Array.isArray(item)) return `[${item.map(canonical).join(',')}]`;
+    if (Array.isArray(item)) {
+      requireDenseArray(item);
+      return `[${item.map(canonical).join(',')}]`;
+    }
     requireValue(
       item && Object.getPrototypeOf(item) === Object.prototype,
       'Planning evidence must contain only JSON values.',
+    );
+    requireValue(
+      Reflect.ownKeys(item).length === Object.keys(item).length &&
+        Object.keys(item).every(
+          (key) => 'value' in Object.getOwnPropertyDescriptor(item, key),
+        ),
+      'Planning evidence must contain only JSON data properties.',
     );
     return `{${Object.keys(item)
       .sort()
@@ -46,6 +75,7 @@ export function timestamp(value) {
 }
 
 export function unique(values, name) {
+  requireDenseArray(values);
   requireValue(
     Array.isArray(values) && new Set(values).size === values.length,
     `${name} must be an array without duplicates.`,
@@ -54,9 +84,11 @@ export function unique(values, name) {
 }
 
 export function validateSnapshot(snapshot, now) {
+  const snapshotDigest = digest(snapshot);
   requireValue(
     snapshot?.schemaVersion === 1 &&
-      /^[\w.-]+\/[\w.-]+$/.test(snapshot.repository ?? '') &&
+      isText(snapshot.repository) &&
+      /^[\w.-]+\/[\w.-]+$/.test(snapshot.repository) &&
       isRevision(snapshot.revision) &&
       isRevision(snapshot.policyRevision),
     'Trusted planning snapshot identity is invalid.',
@@ -94,7 +126,9 @@ export function validateSnapshot(snapshot, now) {
   unique(snapshot.targetBranches, 'Target branches');
   requireValue(
     snapshot.targetBranches.every(isText) &&
-      snapshot.authorizedWorkers.every((id) => /^[a-z][a-z0-9-]*$/.test(id)),
+      snapshot.authorizedWorkers.every(
+        (id) => isText(id) && /^[a-z][a-z0-9-]*$/.test(id),
+      ),
     'Trusted worker or target identities are invalid.',
   );
   for (const entry of snapshot.evidence) {
@@ -110,7 +144,7 @@ export function validateSnapshot(snapshot, now) {
       'Capability evidence is malformed or not host-verified.',
     );
   }
-  return digest(snapshot);
+  return snapshotDigest;
 }
 
 export function assessSearch(scope, snapshot) {

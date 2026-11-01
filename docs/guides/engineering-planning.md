@@ -6,7 +6,7 @@ The caller must obtain and authenticate the snapshot from trusted host records. 
 
 ## Inputs and binding
 
-Call `planEngineeringWork(packet, snapshot, { now })` with an explicit trusted UTC clock. Snapshot and packet use schema version 1 and exact repository, source revision and policy revision identities. `digest` from `planning-evidence.mjs` creates a deterministic SHA-256 over bounded canonical JSON. The packet must name the snapshot digest. Any changed issue contract, scope, search result, capability evidence, repository or revision needs a fresh packet and evaluation.
+Call `planEngineeringWork(packet, snapshot, { now })` with an explicit trusted UTC clock. Snapshot and packet use schema version 1 and exact repository, source revision and policy revision identities. `digest` from `planning-evidence.mjs` creates a deterministic SHA-256 over bounded canonical JSON, rejecting sparse arrays, accessor properties and other non-JSON data. Identity fields must have their declared types; coercible arrays or objects are not identities. The packet must name the snapshot digest. Any changed issue contract, scope, search result, capability evidence, repository or revision needs a fresh packet and evaluation.
 
 The snapshot contains:
 
@@ -38,9 +38,9 @@ The task's proposed role must agree with the computed role and include a rationa
 
 ## Records and verification
 
-`writePlanningRecord(path, packet, snapshot, options)` evaluates the packet itself and exclusively creates a record at a trusted absolute host path. It writes the result and its digest, flushes the file, and never overwrites an existing record. The host owns the record directory and must protect it from agent writes. File flushing is not a portable guarantee of directory-entry survival after power loss.
+`writePlanningRecord(path, packet, snapshot, options)` evaluates the packet itself and exclusively creates a record at a trusted absolute host path. It writes the result and its digest, flushes the file, and never overwrites an existing record. It returns the record digest, which the host must retain independently of the record file. The host owns the record directory and must protect it from agent writes. File flushing is not a portable guarantee of directory-entry survival after power loss.
 
-`readPlanningRecord(path, { snapshotDigest, packetDigest })` checks bounded size, JSON integrity and expected evidence identities. A partial write, corruption or mismatched snapshot fails rather than authorizing a retry. Record hashes detect content changes; they are not signatures or proof of producer identity. Preserve a failed record for host-side diagnosis and do not reuse its path automatically. Re-evaluate against current facts before any later issue mutation or dispatch; a saved recommendation is not a claim, authorization lease or readiness transition.
+`readPlanningRecord(path, { snapshotDigest, packetDigest, recordDigest })` checks bounded size, the host-retained record digest and expected evidence identities. Obtain `recordDigest` from the trusted write result, never from the envelope being read. Changing recommendations and replacing the envelope checksum therefore still fails the expected digest check. A partial write, corruption or mismatched snapshot fails rather than authorizing a retry. Hashes are not signatures or proof of producer identity; the trusted host must protect the retained expectation. Preserve a failed record for host-side diagnosis and do not reuse its path automatically. Re-evaluate against current facts before any later issue mutation or dispatch; a saved recommendation is not a claim, authorization lease or readiness transition.
 
 Run the deterministic fixtures with:
 
