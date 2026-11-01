@@ -2,6 +2,12 @@
 
 GitHub Issues and the [Stellar Development project](https://github.com/users/DanielssonThomas/projects/2) are the canonical backlog. [Epic 2](https://github.com/DanielssonThomas/Stellar/issues/16) tracks the autonomous agent development infrastructure; child issue labels and native relationships hold task status and dependencies.
 
+## Cinematic desktop milestone
+
+[Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) owns the planned Windows-first Tauri application: a layered Stellar emblem, opt-in local audio activity and a trusted demo surface, without an AI backend. It remains separate from the operations dashboard. The [Rust/Tauri contribution rules](../architecture/rust-tauri.md) establish the native and generated-contract boundaries; the epic's feasibility and bootstrap work supplies the implementation and enforcement.
+
+The epic reuses [engineering organization #95](https://github.com/DanielssonThomas/Stellar/issues/95) for orchestration. Sensitive Foreman implementation requires its qualified execution and independent review route; ordinary Peon assignments retain their existing isolation and claim requirements. Follow native GitHub dependencies for execution order and current status. The desktop plan does not itself activate an agent, change merge authority or authorize production distribution.
+
 ## Bootstrap boundary
 
 The Nx/Angular workspace, governed generators, issue/commit policies, documentation governance, and CI workflow are implemented. GitHub ruleset 25456574 is active for `main`, `develop`, and `release/**`; it requires pull requests and a passing `verify` check, blocks force pushes and deletion, and currently requires zero approving reviews. The current issue-to-worktree-to-PR demonstration is recorded in [issue #9](https://github.com/DanielssonThomas/Stellar/issues/9).

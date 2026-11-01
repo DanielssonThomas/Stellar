@@ -1,6 +1,7 @@
 # Documentation
 
 - [Architecture overview](architecture/overview.md): current workspace structure, dependency direction, and governance boundaries.
+- [Rust and Tauri boundaries](architecture/rust-tauri.md): modular native code, generated TypeScript contracts, readability and verification requirements; links to the Rust/Tauri workflow skill.
 - [Documentation policy](documentation-policy.md): ownership and maintenance rules for technical documentation.
 - [Architecture decisions](decisions/0001-nx-angular-library-architecture.md): why the initial framework and library boundaries were chosen.
 - [Manual release guide](guides/manual-release.md): maintainer-controlled monthly release procedure.
