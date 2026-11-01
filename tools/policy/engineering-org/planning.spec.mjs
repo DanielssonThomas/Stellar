@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import test from 'node:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { digest } from './planning-evidence.mjs';
+import { digest, MAX_PLANNING_BYTES } from './planning-evidence.mjs';
 import { planEngineeringWork } from './planning.mjs';
 import { readPlanningRecord, writePlanningRecord } from './planning-record.mjs';
 
@@ -498,6 +499,72 @@ test('stores exclusive revision-bound records and rejects corruption and stale r
     );
     await writeFile(path, '{');
     await assert.rejects(readPlanningRecord(path, expected), SyntaxError);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('canonical size limits count UTF-8 bytes at ASCII and Unicode boundaries', () => {
+  assert.doesNotThrow(() => digest('a'.repeat(MAX_PLANNING_BYTES - 2)));
+  assert.throws(
+    () => digest('a'.repeat(MAX_PLANNING_BYTES - 1)),
+    /UTF-8 byte bound/,
+  );
+  const characters = Math.floor((MAX_PLANNING_BYTES - 2) / 3);
+  assert.doesNotThrow(() => digest('界'.repeat(characters)));
+  assert.throws(() => digest('界'.repeat(characters + 1)), /UTF-8 byte bound/);
+});
+
+test('large Unicode plans round-trip and oversized input leaves no record file', async () => {
+  function unicodePlan(count) {
+    const value = fixture();
+    const task = value.packet.tasks[0];
+    const scope = value.snapshot.scopes[0];
+    value.packet.tasks = Array.from({ length: count }, (_, index) => ({
+      ...structuredClone(task),
+      key: `task-${index}`,
+      issue: { ...structuredClone(task.issue), title: `Task ${index}` },
+      milestone: '界'.repeat(4096),
+      assignment: { role: 'peon', rationale: '界'.repeat(4096) },
+    }));
+    value.snapshot.scopes = value.packet.tasks.map((item) => ({
+      ...structuredClone(scope),
+      key: item.key,
+      contractDigest: digest(item.issue),
+    }));
+    return rebind(value);
+  }
+  const directory = await mkdtemp(join(tmpdir(), 'stellar-planning-unicode-'));
+  try {
+    const value = unicodePlan(32);
+    const path = join(directory, 'large.json');
+    const result = evaluate(value);
+    const recordDigest = await writePlanningRecord(
+      path,
+      value.packet,
+      value.snapshot,
+      { now },
+    );
+    assert.deepEqual(
+      await readPlanningRecord(path, {
+        snapshotDigest: result.snapshotDigest,
+        packetDigest: result.packetDigest,
+        recordDigest,
+      }),
+      result,
+    );
+    const stored = await readFile(path, 'utf8');
+    assert.ok(Buffer.byteLength(stored, 'utf8') > stored.length * 2);
+    assert.ok(Buffer.byteLength(stored, 'utf8') <= MAX_PLANNING_BYTES);
+    const oversized = unicodePlan(64);
+    const rejected = join(directory, 'rejected.json');
+    await assert.rejects(
+      writePlanningRecord(rejected, oversized.packet, oversized.snapshot, {
+        now,
+      }),
+      /UTF-8 byte bound/,
+    );
+    await assert.rejects(access(rejected), { code: 'ENOENT' });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

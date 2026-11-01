@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+
+export const MAX_PLANNING_BYTES = 1_000_000;
 
 export function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -57,8 +60,8 @@ export function digest(value) {
   };
   const text = canonical(value);
   requireValue(
-    text.length <= 1_000_000,
-    'Planning evidence exceeds its bound.',
+    Buffer.byteLength(text, 'utf8') <= MAX_PLANNING_BYTES,
+    'Planning evidence exceeds its UTF-8 byte bound.',
   );
   return createHash('sha256').update(text).digest('hex');
 }
