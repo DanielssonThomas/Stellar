@@ -4,6 +4,7 @@
 - [Rust and Tauri boundaries](architecture/rust-tauri.md): modular native code, generated TypeScript contracts, readability and verification requirements; links to the Rust/Tauri workflow skill.
 - [Documentation policy](documentation-policy.md): ownership and maintenance rules for technical documentation.
 - [Architecture decisions](decisions/0001-nx-angular-library-architecture.md): why the initial framework and library boundaries were chosen.
+- [Independent integration approval proposal](decisions/0002-independent-integration-approval.md): proposed separation of technical assessment, management recommendation and human authorization; not an active merge route.
 - [Manual release guide](guides/manual-release.md): maintainer-controlled monthly release procedure.
 - [Nx generators](guides/generators.md): application, atomic component, and service generator commands and defaults.
 - [Issue workflow](guides/issue-workflow.md): metadata, ownership, dependencies, and status transitions.
