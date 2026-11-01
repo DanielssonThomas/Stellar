@@ -121,3 +121,66 @@ fn disconnected_queued_submit_restores_the_unadmitted_journal_state() {
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn ready_subscriber_submission_keeps_its_busy_and_deduplication_state() {
+    let slot = Arc::new(Mutex::new(None::<std::sync::Weak<IvyHost>>));
+    let observed = slot.clone();
+    let fired = std::sync::atomic::AtomicBool::new(false);
+    let (mut host, receiver) = fixture();
+    host.shared.publish = Arc::new(move |snapshot| {
+        if snapshot.connection == IvyConnectionState::Ready
+            && snapshot.turn == IvyTurnState::Idle
+            && !fired.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            let host = observed
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .upgrade()
+                .unwrap();
+            host.request(Action::Submit(IvySubmitRequest {
+                version: 1,
+                input_id: "00000000-0000-0000-0000-000000000001".into(),
+                text: "subscriber user turn".into(),
+            }))
+            .unwrap();
+        }
+    });
+    let host = Arc::new(host);
+    *slot.lock().unwrap() = Some(Arc::downgrade(&host));
+    host.shared.view.lock().unwrap().snapshot.connection = IvyConnectionState::Connecting;
+    let directory = std::env::temp_dir().join(format!("stellar-ivy-ready-{}", std::process::id()));
+    let (journal, record) = Journal::open(&directory).unwrap();
+    let session = Session {
+        journal,
+        record,
+        broker: None,
+        shared: host.shared.clone(),
+        epoch: 0,
+        buffered: vec![],
+        replay: None,
+    };
+    publish_ready(&session);
+    assert_eq!(host.snapshot().unwrap().turn, IvyTurnState::Submitting);
+    assert_eq!(
+        host.snapshot().unwrap().turn_id.as_deref(),
+        Some("00000000-0000-0000-0000-000000000001")
+    );
+    assert!(matches!(
+        host.request(Action::Submit(IvySubmitRequest {
+            version: 1,
+            input_id: "00000000-0000-0000-0000-000000000002".into(),
+            text: "second turn".into()
+        })),
+        Err(IvyErrorCode::Busy)
+    ));
+    assert!(matches!(
+        receiver.try_recv().unwrap().action,
+        Action::Submit(_)
+    ));
+    assert!(receiver.try_recv().is_err());
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}

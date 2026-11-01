@@ -237,15 +237,16 @@ fn connect(session: &mut Session, child: OwnedChild) -> Result<(), IvyErrorCode>
     {
         return Err(IvyErrorCode::Protocol);
     }
+    publish_ready(session);
+    Ok(())
+}
+
+fn publish_ready(session: &Session) {
+    session.restore_admission_state();
     session.shared.update(session.epoch, |view| {
         view.connection = IvyConnectionState::Ready;
         view.error = None;
-        if session.record.unsettled {
-            view.turn = IvyTurnState::Uncertain;
-        }
     });
-    session.restore_admission_state();
-    Ok(())
 }
 
 fn fail(session: &mut Session, error: IvyErrorCode) {
