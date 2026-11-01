@@ -1,6 +1,6 @@
 # Audio activity
 
-`@stellar/service-audio-activity` provides opt-in Web Audio capture, an independent amplitude detector, a synthetic source and an Angular facade. It does not classify speech, record audio, upload data, transcribe, or call a model. Its models are frontend state and do not duplicate native IPC contracts.
+`@stellar/service-audio-activity` provides opt-in Web Audio capture, an independent amplitude detector, a synthetic source and an Angular facade. It does not classify speech, persist audio, upload data, transcribe, or call a model. Its optional continuous PCM subscription supports a bounded local utterance consumer. Its models are frontend state and do not duplicate native IPC contracts.
 
 ## Ownership and integration
 
@@ -22,7 +22,19 @@ Activation requires RMS above `max(0.015, noiseFloor × 3)` for **120 ms**. Rele
 
 The visual level maps RMS from −60 dBFS through 0 dBFS to finite 0..1; exact silence is zero. Peak level is the maximum normalized instantaneous peak for the session. Clipping means a sample magnitude reached 0.999. Nonfinite frames and non-increasing timestamps do not alter the detector. Time comes from `performance.now()` in the real source. Duration is cumulative accepted intervals while the previous state was active, including the configured hangover, excluding gaps over 100 ms and candidate time. It is not speech duration. Stop preserves duration/peak while clearing current activity/level; a new session resets summaries.
 
-Only scalar frame summaries leave the capture module. Its reusable sample array stays inside the analyser closure; it is never attached to events or persisted. The library contains no network/storage client. Synthetic sources and injected clocks are test/integration boundaries, not evidence of physical hardware behavior.
+Scalar activity summaries remain independent of the optional PCM path. The analyser sample array stays inside its closure; it is never attached to events or persisted. The library contains no network/storage client. Synthetic sources and injected clocks are test/integration boundaries, not evidence of physical hardware behavior.
+
+## Continuous PCM and local utterances
+
+`subscribePcm(listener)` returns an unsubscribe function. It does not start capture. An explicitly started `WebAudioSource` taps its existing selected MediaStream through the static `audio-worklets/stellar-pcm-worklet.js` asset; there is no second getUserMedia call. Applications copy the library's two worklet JavaScript files into that directory through build assets. No blob URLs, remote scripts or CSP relaxation are needed.
+
+The worklet averages channels, continuously resamples the actual context rate into mono 16 kHz PCM16, and emits at most 640 samples per chunk. Fractional sample weight is retained across render quanta. Its output graph is silent, never microphone monitoring. At most four unacknowledged chunks may wait for the main thread; overflow is dropped and exposed as a sequence discontinuity rather than concatenated into fabricated continuous audio. Stop closes the port, disconnects the tap and releases the original tracks/context. Unsupported or failed worklets emit `unavailable`; amplitude activity remains usable.
+
+Events are `{type:'chunk',chunk:{sampleRate:16000,sequence,samples:Int16Array}}`, `reset` or `unavailable`. Each subscriber receives its own sample copy. Source-generation fencing ignores late callbacks. Stop, replacement, suspension and disposal reset consumers. Callbacks execute outside Angular; do not log or persist PCM. Consumers own their delivered copies and should overwrite retained audio after use.
+
+`createUtteranceAssembler().push(chunk,{active,calibrating})` returns a detached Int16Array only when a candidate finishes. It retains at most 20 seconds/320000 samples, including 240 ms preroll. Calibration, malformed/empty chunks and sequence discontinuities discard buffered audio. A candidate needs 200 ms of amplitude activity and finishes after 1400 ms with activity false, approximately two seconds after actual silence with the detector's 600 ms hangover. A capped utterance waits for quiet before rearming. This is only amplitude-based segmentation; the configured local speech recognizer still owns speech/VAD classification.
+
+The speech coordinator must call `reset()` and drop incoming chunks while unavailable, hidden, busy, or playing a reply; it owns exactly-once submission and any native effects. Subscriptions need not stop the existing activity stream when gated. Reset overwrites both fixed internal buffers; returned utterances remain owned by the caller. No silence/noise classification is represented as recognized text.
 
 ## Verification
 
@@ -30,7 +42,7 @@ Only scalar frame summaries leave the capture module. Its reusable sample array 
 pnpm exec nx run-many -t lint test build e2e --projects=service-audio-activity
 ```
 
-The E2E target runs a local Angular/Vite fixture in Playwright Chromium. Install the repository's pinned Chromium with `pnpm exec playwright install chromium`, or set process-local `STELLAR_BROWSER_CHANNEL=chrome` to use an installed Chrome. It verifies no automatic capture, a mocked denial, manual activity, calibration, duration, hangover, mute, minimize, stop and no external requests. The test-only fixture does not ship in the Angular package; its compiler/browser/test-runner imports are excluded only from production dependency inference, while ordinary lint checks remain active.
+The E2E target runs a local Angular/Vite fixture in Playwright Chromium. Install the repository's pinned Chromium with `pnpm exec playwright install chromium`, or set process-local `STELLAR_BROWSER_CHANNEL=chrome` to use an installed Chrome. It verifies no automatic capture, a mocked denial, manual activity, calibration, duration, hangover, mute, minimize, stop and no external requests. A synthetic oscillator feeds a real MediaStream and AudioWorklet at 44.1 kHz to verify contiguous 16 kHz PCM and track cleanup without microphone or speaker use. The test-only fixture does not ship in the Angular package; its compiler/browser/test-runner imports are excluded only from production dependency inference, while ordinary lint checks remain active.
 
 Vitest covers synthetic noise/timing/clipping fixtures, stale and invalid samples, capture cancellation, graph failures, late callbacks, resource/listener cleanup, suspension, visual rate limits and injector disposal. Foreman supplied the initial typed model, detector and sensitive capture source in one recorded source-only contribution; the host reviewed, corrected and integrated it. The receipt is retained in `evidence/foreman-contribution.json`.
 

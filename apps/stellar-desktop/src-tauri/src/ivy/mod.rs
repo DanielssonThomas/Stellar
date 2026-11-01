@@ -4,7 +4,7 @@ mod journal;
 pub mod presentation;
 mod presentation_decode;
 mod process;
-mod runtime;
+pub(crate) mod runtime;
 mod session;
 #[cfg(test)]
 mod session_tests;

@@ -209,6 +209,9 @@ importers:
       '@stellar/desktop-contracts':
         specifier: workspace:*
         version: link:../../desktop-contracts
+      '@stellar/service-audio-activity':
+        specifier: workspace:*
+        version: link:../audio-activity
 
   libs/ui/atoms:
     dependencies:

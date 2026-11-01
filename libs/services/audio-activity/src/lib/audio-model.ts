@@ -1,3 +1,5 @@
+import type { PcmEvent } from './pcm-model';
+
 export interface AudioFrame {
   readonly timestampMs: number;
   readonly rms: number;
@@ -19,6 +21,7 @@ export type AudioStatus =
 export interface AudioSink {
   readonly frame: (frame: AudioFrame) => void;
   readonly status: (status: AudioStatus) => void;
+  readonly pcm?: (event: PcmEvent) => void;
 }
 
 export interface AudioSource {

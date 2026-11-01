@@ -3,6 +3,7 @@ import { AudioActivityController } from '../audio-activity-controller';
 import { WebAudioSource } from '../web-audio-source';
 import type { AudioSource } from '../audio-model';
 import { listAudioInputs } from '../audio-inputs';
+import type { PcmEvent } from '../pcm-model';
 
 @Injectable({ providedIn: 'root' })
 export class AudioActivityService {
@@ -32,6 +33,10 @@ export class AudioActivityService {
 
   listInputs() {
     return listAudioInputs();
+  }
+
+  subscribePcm(listener: (event: PcmEvent) => void): () => void {
+    return this.controller.subscribePcm(listener);
   }
 
   start(source: AudioSource, deviceId?: string): Promise<void> {

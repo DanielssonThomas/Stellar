@@ -119,6 +119,10 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-ivy-cancel',
     'allow-ivy-reconcile',
     'allow-ivy-disconnect',
+    'allow-speech-transcribe',
+    'allow-speech-speak',
+    'allow-speech-stop',
+    'allow-speech-snapshot',
     'core:event:allow-listen',
     'core:event:allow-unlisten',
   ]);

@@ -84,3 +84,23 @@ cargo test --locked -p stellar-desktop --bin stellar-desktop installed_gateway_s
 ```
 
 The native-smoke build keeps its explicit test command handler and does not enroll Ivy commands, so CI smoke cannot contact the personal gateway. A normal application's silent startup and subsequent user-initiated conversation still require native/UI acceptance on the final integrated revision; a unit or health-check result is not a real assistant answer.
+
+## Local speech boundary
+
+The speech feature uses the selected Web Audio stream. Microphone activity remains distinct from recognition: only a completed nonempty local transcript can reach the existing conversation coordinator, using its stable utterance UUID. The native speech commands never submit a prompt. Startup does not load speech models, capture audio or synthesize a greeting.
+
+Generated `SpeechTranscribeRequest` carries mono 16 kHz signed PCM16, limited to 320,000 samples (20 seconds). The separate speech subprocess frame is limited to 3 MiB; responses are limited to 16 KiB with an eight-frame queue. `speech_transcribe` returns at most 8,192 UTF-8 bytes, including an empty result for no recognized speech. The installed faster-whisper base model runs on CPU/int8 with VAD and confidence filtering. Loading explicitly requires cached files; missing models produce a controlled error, with no installation, download, cloud provider or fallback. Input samples remain in memory and are not written to disk.
+
+`speech_speak` accepts at most 4,000 UTF-8 bytes and uses the existing fixed local Kokoro/af_heart engine and its dedicated interpreter. Longer replies remain available as text. Synthesis writes only to a native-owned temporary directory, with a maximum accepted WAV of 8 MiB and 90 seconds. The host removes complete and partial WAV output after stopping and reaping the owned process. `speech_stop`, window destruction and application exit cancel owned speech work; they never stop the shared Ivy gateway. Transcription has a 60-second deadline, synthesis plus playback a 120-second deadline. Only one speech operation runs at a time. A failed cleanup retains the occupied operation until cleanup succeeds. Abrupt OS termination can leave a temporary output directory; graceful-stop guarantees do not imply crash-proof deletion.
+
+The renderer cannot choose paths, engines, voices, executables or provider commands. Speech state distinguishes transcription, synthesis and playback, and stale operation results cannot replace a new owner. The frontend suspends utterance collection while processing or playing a reply and exposes stop/mute independently from conversation cancellation. This is a bounded turn-taking voice path, not full-duplex barge-in.
+
+The [Foreman source receipt](../../tools/native/evidence/speech-boundary.json) records the actual bounded source contribution and host corrections. `native-test` also runs the dependency-free `tools/native/speech_worker_test.py`; these tests use fake model modules and prove bounds and dispatch behavior, not recognition quality. Inert-child Rust tests cover stop, stale results, cleanup and process ownership. Actual local-engine and user speech acceptance must be reported separately.
+
+The [offline synthetic-engine receipt](../../tools/native/evidence/speech-offline-qualification.json) records an actual cached-model run: Whisper recognized the installed generated Kokoro sample in 7,137 ms and returned empty text for one second of digital silence in 2,105 ms. Kokoro generated 53,839 mono PCM16 frames at 24 kHz in 5,701 ms; playback was replaced with a test stub, and the temporary WAV was removed. No microphone, audible playback or Ivy inference was used. These timings include interpreter/model startup and are single observations, not performance percentiles or physical voice acceptance. The explicit local qualification helper can reproduce this synthetic path with the installed managed Hermes Python:
+
+```sh
+python -I tools/native/qualify-speech.py --run-local-engines
+```
+
+It requires the existing local models and documented generated sample, writes its receipt under `artifacts/native`, and is excluded from automatic CI tests. It does not download missing assets or send a conversation prompt.

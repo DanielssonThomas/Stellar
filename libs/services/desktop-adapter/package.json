@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "peerDependencies": {
     "@angular/core": "^21.2.0",
-    "@stellar/desktop-contracts": "workspace:*"
+    "@stellar/desktop-contracts": "workspace:*",
+    "@stellar/service-audio-activity": "workspace:*"
   },
   "sideEffects": false
 }

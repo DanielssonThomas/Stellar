@@ -181,18 +181,16 @@ if (action === 'smoke') {
       ? ''
       : cargo(args[action], action.startsWith('contract-'));
   if (action === 'test') {
-    const bridge = spawnSync(
-      'python',
-      ['-I', 'tools/native/ivy_bridge_test.py'],
-      {
+    for (const script of ['ivy_bridge_test.py', 'speech_worker_test.py']) {
+      const bridge = spawnSync('python', ['-I', `tools/native/${script}`], {
         cwd: root,
         env,
         windowsHide: true,
         stdio: 'inherit',
-      },
-    );
-    if (bridge.error) throw bridge.error;
-    if (bridge.status !== 0) process.exit(bridge.status ?? 1);
+      });
+      if (bridge.error) throw bridge.error;
+      if (bridge.status !== 0) process.exit(bridge.status ?? 1);
+    }
   }
   if (action.startsWith('contract-')) {
     const file = resolve(root, 'libs/desktop-contracts/src/generated.ts');

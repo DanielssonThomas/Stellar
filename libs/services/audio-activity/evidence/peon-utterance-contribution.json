@@ -1,0 +1,10 @@
+{
+  "issue": 207,
+  "profile": "peon-cloud",
+  "model": "gpt-6-luna",
+  "session": "local-19fe1a6fa17f9b638d693c886b392375809f48da22fc81f9ec77a3a716c46543",
+  "inputTokens": 3699,
+  "outputTokens": 1176,
+  "scope": "One bounded source-only fixed-buffer/preroll assembler contribution. Host implemented same-stream worklet/resampler and subscription integration, corrected first-active-chunk and empty-input cases, preserved detached outputs and changed quiet tail to1400ms. No worker tools, runtime permission changes or live microphone/provider calls.",
+  "qualification": "Synthetic deterministic tests and actual headless AudioWorklet fixture are not physical microphone or speech-recognition acceptance."
+}
