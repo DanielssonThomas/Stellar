@@ -22,7 +22,7 @@ Create a component in one of the four atomic layers:
 corepack pnpm exec nx g @stellar/generators:atomic-component --name=account-summary --layer=molecule
 ```
 
-The `--layer` option accepts `atom`, `molecule`, `organism`, or `template`. Files use the matching layer suffix, such as `account-summary-molecule.component.ts` and `AccountSummaryMolecule`. If the requested layer library does not exist, the generator creates a buildable Angular library with the matching `scope:shared`, `type:ui`, and `layer:*` tags. It removes Nx's starter component and exports the generated component from the library entry point.
+The `--layer` option accepts `atom`, `molecule`, `organism`, or `template`. Files use the matching layer suffix, such as `account-summary-molecule.component.ts` and `AccountSummaryMolecule`. An existing layer library may retain its registered location (such as `ui-templates` under `libs/mission-control`), provided it is a shared UI library with matching layer tags, a safe path below `libs/`, and a source entry point inside its root. Its existing dependencies are preserved. If the requested layer library does not exist, the generator creates a buildable Angular library with the matching `scope:shared`, `type:ui`, and `layer:*` tags. It removes Nx's starter component and exports the generated component from the library entry point.
 
 Each generated component is standalone, includes a `loading` input rendered with `SkeletonAtom`, and has tests for its content and loading state. Atoms reuse the local skeleton file; higher layers import it from `@stellar/ui-atoms`, following the allowed dependency direction.
 

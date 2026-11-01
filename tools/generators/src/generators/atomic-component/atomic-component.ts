@@ -35,6 +35,7 @@ export async function atomicComponentGenerator(
   let projectRoot = `libs/ui/${layerOptions.plural}`;
   let librarySourceRoot = `${projectRoot}/src`;
   const projects = getProjects(tree);
+  const created = !projects.has(projectName);
 
   if (!projects.has(projectName)) {
     await angularLibraryGenerator(tree, {
@@ -71,7 +72,7 @@ export async function atomicComponentGenerator(
     projectRoot = project.root;
     librarySourceRoot = project.sourceRoot;
   }
-  if (layer !== 'atom') configureLayerManifest(tree, projectRoot);
+  if (layer !== 'atom') configureLayerManifest(tree, projectRoot, created);
 
   const baseName = `${name}-${layer}`;
   const sourceRoot = `${librarySourceRoot}/lib/${layerOptions.plural}`;
@@ -128,7 +129,11 @@ function removeLibraryPlaceholder(
   if (tree.exists(indexPath)) tree.write(indexPath, '');
 }
 
-function configureLayerManifest(tree: Tree, projectRoot: string): void {
+function configureLayerManifest(
+  tree: Tree,
+  projectRoot: string,
+  created: boolean,
+): void {
   const manifestPath = `${projectRoot}/package.json`;
   const atomsManifestPath = 'libs/ui/atoms/package.json';
   const manifest = JSON.parse(readText(tree, manifestPath)) as {
@@ -138,7 +143,7 @@ function configureLayerManifest(tree: Tree, projectRoot: string): void {
     ? (JSON.parse(readText(tree, atomsManifestPath)) as { version?: string })
     : undefined;
   manifest.peerDependencies ??= {};
-  delete manifest.peerDependencies['@angular/common'];
+  if (created) delete manifest.peerDependencies['@angular/common'];
   manifest.peerDependencies['@stellar/ui-atoms'] = atomsManifest?.version
     ? 'workspace:^'
     : '*';

@@ -104,7 +104,10 @@ describe('atomicComponentGenerator', () => {
     );
     tree.write(
       'libs/mission-control/package.json',
-      JSON.stringify({ name: '@stellar/ui-templates', peerDependencies: {} }),
+      JSON.stringify({
+        name: '@stellar/ui-templates',
+        peerDependencies: { '@angular/common': '^21.2.0' },
+      }),
     );
     await atomicComponentGenerator(tree, {
       name: 'desktop-experience',
@@ -119,6 +122,10 @@ describe('atomicComponentGenerator', () => {
       'retained',
     );
     expect(tree.exists('libs/ui/templates/project.json')).toBe(false);
+    expect(
+      JSON.parse(tree.read('libs/mission-control/package.json', 'utf8') ?? '{}')
+        .peerDependencies['@angular/common'],
+    ).toBe('^21.2.0');
   });
 
   it.each([

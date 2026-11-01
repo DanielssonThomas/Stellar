@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampAudioLevel,
+  decodeEmblemManifest,
   EmblemManifest,
   isExplodedPhase,
   layerOrigin,
@@ -23,6 +24,19 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('decodes imported JSON through the existing geometry and resource checks', () => {
+    expect(decodeEmblemManifest(JSON.parse(JSON.stringify(manifest)))).toEqual(
+      manifest,
+    );
+    expect(decodeEmblemManifest({ ...manifest, viewBox: [0, 0] })).toBeNull();
+    expect(
+      decodeEmblemManifest({
+        ...manifest,
+        layers: [{ ...layer, file: 'https://remote/layer.svg' }],
+      }),
+    ).toBeNull();
+    expect(decodeEmblemManifest(null)).toBeNull();
+  });
   it('preserves assembled geometry and expresses exploded motion in relative coordinates', () => {
     expect(manifestError(manifest)).toBeNull();
     expect(layerTransform(layer, manifest, 'listening', false)).toContain(

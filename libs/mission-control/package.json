@@ -2,6 +2,7 @@
   "name": "@stellar/ui-templates",
   "version": "0.0.1",
   "peerDependencies": {
+    "@angular/common": "^21.2.0",
     "@stellar/desktop-interaction": "workspace:^",
     "@stellar/ui-molecules": "workspace:^",
     "@stellar/ui-organisms": "workspace:^",

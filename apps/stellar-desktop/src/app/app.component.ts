@@ -6,7 +6,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { DesktopExperienceTemplate } from '@stellar/ui-templates';
+import { DesktopExperienceTemplate } from '@stellar/ui-templates/desktop-experience';
 import { DesktopExperience } from './desktop-experience';
 import { DesktopAdapterService } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';

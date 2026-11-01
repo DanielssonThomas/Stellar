@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import studyManifest from '../../public/emblem/manifest.json';
 import {
   computed,
   DestroyRef,
@@ -13,7 +13,7 @@ import {
   type InteractionEvent,
 } from '@stellar/desktop-interaction';
 import { AudioActivityService } from '@stellar/service-audio-activity';
-import type { EmblemManifest } from '@stellar/ui-molecules';
+import { decodeEmblemManifest } from '@stellar/ui-molecules';
 import type { StageResult } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
 
@@ -21,8 +21,8 @@ import { DesktopSession } from './desktop-session';
 export class DesktopExperience {
   readonly audio = inject(AudioActivityService);
   readonly state = signal(initialState);
-  readonly manifest = signal<EmblemManifest | null>(null);
-  readonly loading = signal(true);
+  readonly manifest = signal(decodeEmblemManifest(studyManifest));
+  readonly loading = signal(false);
   readonly assetError = signal<string | null>(null);
   private readonly document = inject(DOCUMENT);
   private readonly media = this.document.defaultView?.matchMedia?.(
@@ -46,9 +46,9 @@ export class DesktopExperience {
     const state = this.state();
     if (this.assetError())
       return 'Artwork unavailable. Activity controls remain available.';
-    if (audio.status === 'denied')
+    if (state.microphone.status === 'denied')
       return 'Microphone permission denied. You can still start activity manually.';
-    if (['missing', 'unavailable', 'disconnected'].includes(audio.status))
+    if (['missing', 'disconnected'].includes(state.microphone.status))
       return 'Microphone unavailable. You can still start activity manually.';
     if (audio.status === 'requesting')
       return 'Waiting for microphone permission';
@@ -63,24 +63,14 @@ export class DesktopExperience {
   });
 
   constructor() {
-    const subscription = inject(HttpClient)
-      .get<EmblemManifest>('emblem/manifest.json')
-      .subscribe({
-        next: (manifest) => {
-          this.manifest.set(manifest);
-          this.loading.set(false);
-        },
-        error: () => {
-          this.assetError.set('Artwork could not be loaded.');
-          this.loading.set(false);
-        },
-      });
     effect(() => this.session.updateAudio(this.audio.state()));
     const visibility = () =>
       this.session.dispatch({
         type: this.document.hidden ? 'hidden' : 'resume',
       });
     const pagehide = () => this.session.dispatch({ type: 'hidden' });
+    const blur = () => this.session.dispatch({ type: 'minimized' });
+    const focus = () => this.session.dispatch({ type: 'resume' });
     const preference = () =>
       this.session.dispatch({
         type: 'reduced-motion',
@@ -89,11 +79,14 @@ export class DesktopExperience {
     preference();
     this.document.addEventListener('visibilitychange', visibility);
     this.document.defaultView?.addEventListener('pagehide', pagehide);
+    this.document.defaultView?.addEventListener('blur', blur);
+    this.document.defaultView?.addEventListener('focus', focus);
     this.media?.addEventListener('change', preference);
     inject(DestroyRef).onDestroy(() => {
-      subscription.unsubscribe();
       this.document.removeEventListener('visibilitychange', visibility);
       this.document.defaultView?.removeEventListener('pagehide', pagehide);
+      this.document.defaultView?.removeEventListener('blur', blur);
+      this.document.defaultView?.removeEventListener('focus', focus);
       this.media?.removeEventListener('change', preference);
       this.session.dispose();
       this.stage = undefined;

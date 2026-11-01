@@ -93,6 +93,22 @@ describe('desktop composition session', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('refreshes the existing summary after resumed activity without duplicating surfaces', () => {
+    const { session, registry, commands } = setup();
+    session.dispatch({ type: 'reduced-motion', enabled: true });
+    for (const duration of [1000, 2000]) {
+      session.dispatch({ type: 'manual-start' });
+      vi.advanceTimersByTime(duration);
+      session.dispatch({ type: 'manual-end' });
+      vi.runAllTimers();
+      expect(registry.snapshot()).toHaveLength(1);
+      expect(registry.snapshot()[0].payload.durationMs).toBe(duration);
+    }
+    expect(
+      commands.mock.calls.filter(([command]) => command.action === 'open'),
+    ).toHaveLength(1);
+  });
+
   it('requires explicit capture, retains manual fallback after denial, and ignores stale audio', () => {
     const { session, audio, registry } = setup();
     session.updateAudio(audioState('capturing', true));
@@ -148,5 +164,24 @@ describe('desktop composition session', () => {
     expect(session.state.microphone.status).toBe('stopped');
     expect(audio.startMicrophone).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('closes a presented microphone summary on stop instead of relabeling it as manual', () => {
+    const { session, registry, commands } = setup();
+    session.dispatch({ type: 'reduced-motion', enabled: true });
+    session.dispatch({ type: 'capture-request' });
+    session.updateAudio(audioState('capturing', true));
+    session.updateAudio(audioState('capturing', false));
+    vi.runAllTimers();
+    expect(registry.snapshot()[0].payload.inputLabel).toBe(
+      'Microphone activity',
+    );
+    const before = commands.mock.calls.length;
+    session.stopMicrophone();
+    expect(session.state.phase).toBe('idle');
+    expect(registry.snapshot()).toHaveLength(0);
+    expect(
+      commands.mock.calls.slice(before).map(([command]) => command.action),
+    ).toEqual(['close']);
   });
 });

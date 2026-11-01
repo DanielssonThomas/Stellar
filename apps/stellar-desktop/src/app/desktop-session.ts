@@ -31,7 +31,11 @@ export class DesktopSession {
   constructor(private readonly options: DesktopSessionOptions) {
     this.controller = createInteractionController({
       clock: options.clock,
-      onChange: options.onState,
+      onChange: (state) => {
+        if (state.phase === 'presenting' && state.surface)
+          this.summary('update', state.surface.id);
+        options.onState(state);
+      },
       onEffect: (effect) => this.apply(effect),
     });
   }
@@ -116,30 +120,37 @@ export class DesktopSession {
         void this.options.audio.stop();
         break;
       case 'open-surface': {
-        const audio = this.audioState?.activity;
-        const microphone = this.captureId !== null;
-        this.command({
-          action: 'open',
-          instanceId: `activity-${effect.id}`,
-          surface: 'activity-summary',
-          prominence: 'primary',
-          payload: {
-            durationMs: Math.min(
-              86400000,
-              Math.round(
-                microphone ? (audio?.durationMs ?? 0) : this.manualDuration,
-              ),
-            ),
-            peakLevel: microphone ? (audio?.peakLevel ?? 0) : 0,
-            inputLabel: microphone ? 'Microphone activity' : 'Manual activity',
-          },
-        });
+        this.summary('open', effect.id);
         break;
       }
       case 'close-surface':
         this.command({ action: 'close', instanceId: `activity-${effect.id}` });
         break;
     }
+  }
+
+  private summary(action: 'open' | 'update', id: number) {
+    const audio = this.audioState?.activity;
+    const microphone = this.captureId !== null;
+    const data = {
+      instanceId: `activity-${id}`,
+      surface: 'activity-summary' as const,
+      payload: {
+        durationMs: Math.min(
+          86400000,
+          Math.round(
+            microphone ? (audio?.durationMs ?? 0) : this.manualDuration,
+          ),
+        ),
+        peakLevel: microphone ? (audio?.peakLevel ?? 0) : 0,
+        inputLabel: microphone ? 'Microphone activity' : 'Manual activity',
+      },
+    };
+    this.command(
+      action === 'open'
+        ? { ...data, action, prominence: 'primary' }
+        : { ...data, action },
+    );
   }
 
   private command(command: PendingCommand) {

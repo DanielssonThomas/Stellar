@@ -140,6 +140,11 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
   }
 }
 
+export function decodeEmblemManifest(value: unknown): EmblemManifest | null {
+  const candidate = value as EmblemManifest | null;
+  return manifestError(candidate) === null ? candidate : null;
+}
+
 function finitePoint(
   value: unknown,
 ): value is { readonly x: number; readonly y: number } {

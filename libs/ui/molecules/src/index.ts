@@ -7,3 +7,4 @@ export type {
   EmblemManifest,
   EmblemPose,
 } from './lib/molecules/emblem-motion-model';
+export { decodeEmblemManifest } from './lib/molecules/emblem-motion-model';
