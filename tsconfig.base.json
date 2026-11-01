@@ -24,7 +24,8 @@
         "libs/dashboard-status/src/index.ts"
       ],
       "@stellar/test-support": ["tools/testing/msw.ts"],
-      "@stellar/desktop-interaction": ["libs/desktop-interaction/src/index.ts"]
+      "@stellar/desktop-interaction": ["libs/desktop-interaction/src/index.ts"],
+      "@stellar/desktop-contracts": ["libs/desktop-contracts/src/index.ts"]
     }
   }
 }

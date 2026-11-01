@@ -14,9 +14,9 @@ Nx project tags and `@nx/enforce-module-boundaries` in `eslint.config.mjs` gover
 
 Repository-owned Nx generators scaffold Angular applications and their mirrored Playwright E2E projects, atomic components, and shared Angular services. Their maintained invocation guide is [Generators](../guides/generators.md). Buildable Angular libraries use the Angular unit-test builder with Vitest; non-buildable Angular libraries use Nx's Vitest Analog integration.
 
-## Planned native desktop boundary
+## Native desktop boundary
 
-[Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) plans a separate Windows-first Tauri desktop application. It is not part of the current web dashboard implementation. The [Rust/Tauri rules](rust-tauri.md) define modular native code, generated frontend contracts, readability and verification requirements for that work. The application, binding generator, native build targets and automated size checks remain to be introduced through the epic's feasibility and bootstrap issues.
+`apps/stellar-desktop` is a separate Windows-first Angular/Tauri shell, with a mirrored Playwright project. Rust-owned readiness contracts are generated into `libs/desktop-contracts`; native Nx targets enforce formatting, Clippy, tests, binding drift, AST-based Rust size checks and an actual Windows WebView smoke. Native decorations and explicit local CSP/capabilities keep the blank shell minimal. The [Rust/Tauri rules](rust-tauri.md) govern native boundaries; the [desktop guide](../guides/desktop-development.md) documents setup and verification. Microphone integration remains separate work under [Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172).
 
 ## Verification
 

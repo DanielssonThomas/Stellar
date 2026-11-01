@@ -1,0 +1,3 @@
+[workspace]
+members = ["apps/stellar-desktop/src-tauri", "tools/native/rust-size"]
+resolver = "3"
