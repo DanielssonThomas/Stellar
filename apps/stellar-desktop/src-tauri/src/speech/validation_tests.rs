@@ -6,15 +6,16 @@ const ID: &str = "00000000-0000-0000-0000-000000000001";
 #[test]
 fn wire_requests_reject_wrong_versions_types_unknown_fields_and_pcm_bounds() {
     for value in [
-        json!({"version":1,"utterance_id":ID,"sample_rate_hz":16000,"pcm":[0.5]}),
-        json!({"version":1,"utterance_id":ID,"sample_rate_hz":16000,"pcm":[32768]}),
-        json!({"version":1,"utterance_id":ID,"sample_rate_hz":16000,"pcm":[true]}),
-        json!({"version":1,"utterance_id":ID,"sample_rate_hz":16000,"pcm":[0],"path":"untrusted"}),
+        json!({"version":1,"epoch":"0","utterance_id":ID,"sample_rate_hz":16000,"pcm":[0.5]}),
+        json!({"version":1,"epoch":"0","utterance_id":ID,"sample_rate_hz":16000,"pcm":[32768]}),
+        json!({"version":1,"epoch":"0","utterance_id":ID,"sample_rate_hz":16000,"pcm":[true]}),
+        json!({"version":1,"epoch":"0","utterance_id":ID,"sample_rate_hz":16000,"pcm":[0],"path":"untrusted"}),
     ] {
         assert!(decode::<SpeechTranscribeRequest>(Some(value)).is_err());
     }
     let mut request = SpeechTranscribeRequest {
         version: 2,
+        epoch: "0".into(),
         utterance_id: ID.into(),
         sample_rate_hz: 16000,
         pcm: vec![0],
@@ -33,6 +34,7 @@ fn wire_requests_reject_wrong_versions_types_unknown_fields_and_pcm_bounds() {
 fn speech_text_limit_counts_utf8_bytes_and_identity_is_canonical() {
     let mut request = SpeechSpeakRequest {
         version: 1,
+        epoch: "0".into(),
         utterance_id: ID.into(),
         text: "界".repeat(1333),
     };
@@ -51,6 +53,7 @@ fn speech_text_limit_counts_utf8_bytes_and_identity_is_canonical() {
     }
     let snapshot = SpeechSnapshot {
         version: 1,
+        epoch: "0".into(),
         revision: u64::MAX.to_string(),
         operation_id: Some(ID.into()),
         state: SpeechState::Speaking,

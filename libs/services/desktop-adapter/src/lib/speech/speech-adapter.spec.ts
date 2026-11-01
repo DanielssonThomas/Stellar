@@ -8,6 +8,7 @@ import {
 const id = '11111111-2222-4333-8444-555555555555';
 const audio = {
   version: 1,
+  epoch: '0',
   utterance_id: id,
   sample_rate_hz: 16000,
   pcm: [0, -32768, 32767],

@@ -36,6 +36,7 @@ pub struct SpeechRequest {
 #[serde(deny_unknown_fields)]
 pub struct SpeechTranscribeRequest {
     pub version: u16,
+    pub epoch: String,
     pub utterance_id: String,
     pub sample_rate_hz: u32,
     pub pcm: Vec<i16>,
@@ -53,6 +54,7 @@ pub struct SpeechTranscript {
 #[serde(deny_unknown_fields)]
 pub struct SpeechSpeakRequest {
     pub version: u16,
+    pub epoch: String,
     pub utterance_id: String,
     pub text: String,
 }
@@ -61,6 +63,7 @@ pub struct SpeechSpeakRequest {
 #[serde(deny_unknown_fields)]
 pub struct SpeechSnapshot {
     pub version: u16,
+    pub epoch: String,
     pub revision: String,
     pub operation_id: Option<String>,
     pub state: SpeechState,
@@ -71,10 +74,18 @@ impl Default for SpeechSnapshot {
     fn default() -> Self {
         Self {
             version: 1,
+            epoch: "0".into(),
             revision: "0".into(),
             operation_id: None,
             state: SpeechState::Idle,
             error: None,
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechStopRequest {
+    pub version: u16,
+    pub epoch: String,
 }

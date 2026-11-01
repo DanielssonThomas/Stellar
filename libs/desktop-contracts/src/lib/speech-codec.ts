@@ -1,6 +1,7 @@
 import type {
   SpeechError,
   SpeechRequest,
+  SpeechStopRequest,
   SpeechSnapshot,
   SpeechSpeakRequest,
   SpeechState,
@@ -55,6 +56,11 @@ export function decodeSpeechRequest(value: unknown): SpeechRequest {
   return { version: version(data['version']) };
 }
 
+export function decodeSpeechStopRequest(value: unknown): SpeechStopRequest {
+  const data = record(value, ['version', 'epoch']);
+  return { version: version(data['version']), epoch: sequence(data['epoch']) };
+}
+
 export function decodeSpeechError(value: unknown): SpeechError {
   return variant(value, errors);
 }
@@ -64,6 +70,7 @@ export function decodeSpeechTranscribeRequest(
 ): SpeechTranscribeRequest {
   const data = record(value, [
     'version',
+    'epoch',
     'utterance_id',
     'sample_rate_hz',
     'pcm',
@@ -82,6 +89,7 @@ export function decodeSpeechTranscribeRequest(
     throw new DesktopContractError('malformed');
   return {
     version: version(data['version']),
+    epoch: sequence(data['epoch']),
     utterance_id: identifier(data['utterance_id']),
     sample_rate_hz: 16000,
     pcm: [...pcm],
@@ -98,11 +106,12 @@ export function decodeSpeechTranscript(value: unknown): SpeechTranscript {
 }
 
 export function decodeSpeechSpeakRequest(value: unknown): SpeechSpeakRequest {
-  const data = record(value, ['version', 'utterance_id', 'text']);
+  const data = record(value, ['version', 'epoch', 'utterance_id', 'text']);
   const text = boundedString(data['text'], 4000);
   if (!text.trim()) throw new DesktopContractError('malformed');
   return {
     version: version(data['version']),
+    epoch: sequence(data['epoch']),
     utterance_id: identifier(data['utterance_id']),
     text,
   };
@@ -112,6 +121,7 @@ export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
   const data = record(value, [
     'version',
     'revision',
+    'epoch',
     'operation_id',
     'state',
     'error',
@@ -119,6 +129,7 @@ export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
   return {
     version: version(data['version']),
     revision: sequence(data['revision']),
+    epoch: sequence(data['epoch']),
     operation_id:
       data['operation_id'] === null ? null : identifier(data['operation_id']),
     state: variant(data['state'], states),

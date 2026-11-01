@@ -1,6 +1,7 @@
 import {
   decodeSpeechError,
   decodeSpeechRequest,
+  decodeSpeechStopRequest,
   decodeSpeechSnapshot,
   decodeSpeechSpeakRequest,
   decodeSpeechTranscribeRequest,
@@ -63,10 +64,10 @@ export class SpeechAdapter {
     );
   }
 
-  stop(): Promise<SpeechSnapshot> {
+  stop(epoch: string): Promise<SpeechSnapshot> {
     return this.invoke(
       speechStopCommand,
-      decodeSpeechRequest({ version: 1 }),
+      this.validate(() => decodeSpeechStopRequest({ version: 1, epoch })),
       decodeSpeechSnapshot,
     );
   }

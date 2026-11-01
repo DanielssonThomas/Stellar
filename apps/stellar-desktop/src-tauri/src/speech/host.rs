@@ -1,9 +1,4 @@
-use super::{
-    contracts::*,
-    process::{self, ChildSlot},
-    scratch::Scratch,
-    validation,
-};
+use super::{contracts::*, process, scratch::Scratch, state::*, validation};
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -14,28 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-type Publisher = Arc<dyn Fn(SpeechSnapshot) + Send + Sync>;
-#[cfg(test)]
-type SettlementGate = Arc<dyn Fn() + Send + Sync>;
-struct Operation {
-    serial: u64,
-    child: ChildSlot,
-    cancelled: AtomicBool,
-    scratch: Option<Scratch>,
-}
-struct View {
-    snapshot: SpeechSnapshot,
-    active: Option<Arc<Operation>>,
-    serial: u64,
-    closed: bool,
-}
-struct Inner {
-    view: Mutex<View>,
-    publish: Publisher,
-    scratch: PathBuf,
-    #[cfg(test)]
-    settlement_gate: Mutex<Option<SettlementGate>>,
-}
 #[derive(Clone)]
 pub struct SpeechHost {
     inner: Arc<Inner>,
@@ -50,6 +23,7 @@ impl SpeechHost {
                     active: None,
                     serial: 0,
                     closed: false,
+                    epoch: 0,
                 }),
                 publish,
                 scratch,
@@ -67,7 +41,13 @@ impl SpeechHost {
             .snapshot
             .clone())
     }
-    fn reserve(&self, id: String, state: SpeechState) -> Result<Arc<Operation>, SpeechError> {
+    fn reserve(
+        &self,
+        id: String,
+        epoch: &str,
+        state: SpeechState,
+    ) -> Result<Arc<Operation>, SpeechError> {
+        let epoch = validation::epoch(epoch)?;
         let (operation, snapshot) = {
             let mut view = self
                 .inner
@@ -76,6 +56,12 @@ impl SpeechHost {
                 .map_err(|_| SpeechError::Unavailable)?;
             if view.closed {
                 return Err(SpeechError::Unavailable);
+            }
+            if epoch < view.epoch {
+                return Err(SpeechError::Cancelled);
+            }
+            if epoch > view.epoch {
+                return Err(SpeechError::MalformedRequest);
             }
             if view.active.is_some() {
                 return Err(SpeechError::Busy);
@@ -108,7 +94,11 @@ impl SpeechHost {
         validation::transcribe(&request)?;
         let payload =
             process::payload(json!({"pcm":request.pcm,"sample_rate_hz":request.sample_rate_hz}))?;
-        let operation = self.reserve(request.utterance_id.clone(), SpeechState::Transcribing)?;
+        let operation = self.reserve(
+            request.utterance_id.clone(),
+            &request.epoch,
+            SpeechState::Transcribing,
+        )?;
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         let host = self.clone();
         std::thread::spawn(move || {
@@ -126,7 +116,11 @@ impl SpeechHost {
     }
     pub fn speak(&self, request: SpeechSpeakRequest) -> Result<SpeechSnapshot, SpeechError> {
         validation::speak(&request)?;
-        let operation = self.reserve(request.utterance_id, SpeechState::Synthesizing)?;
+        let operation = self.reserve(
+            request.utterance_id,
+            &request.epoch,
+            SpeechState::Synthesizing,
+        )?;
         let output = operation
             .scratch
             .as_ref()
@@ -225,51 +219,51 @@ impl SpeechHost {
         result
     }
     pub fn shutdown(&self) -> Result<SpeechSnapshot, SpeechError> {
-        self.inner
-            .view
-            .lock()
-            .map_err(|_| SpeechError::Unavailable)?
-            .closed = true;
-        self.stop()
+        self.stop_inner(None)
     }
-    pub fn stop(&self) -> Result<SpeechSnapshot, SpeechError> {
-        let active = {
-            let view = self
+    pub fn stop_epoch(&self, epoch: &str) -> Result<SpeechSnapshot, SpeechError> {
+        self.stop_inner(Some(validation::epoch(epoch)?))
+    }
+    fn stop_inner(&self, epoch: Option<u64>) -> Result<SpeechSnapshot, SpeechError> {
+        let (active, snapshot) = {
+            let mut view = self
                 .inner
                 .view
                 .lock()
                 .map_err(|_| SpeechError::Unavailable)?;
+            if let Some(epoch) = epoch {
+                if epoch < view.epoch {
+                    return Ok(view.snapshot.clone());
+                }
+                if epoch > view.epoch {
+                    return Err(SpeechError::MalformedRequest);
+                }
+                view.epoch = view.epoch.checked_add(1).ok_or(SpeechError::Unavailable)?;
+                view.snapshot.epoch = view.epoch.to_string();
+            } else {
+                view.closed = true;
+            }
             if let Some(operation) = &view.active {
                 operation.cancelled.store(true, Ordering::SeqCst);
             }
-            view.active.clone()
+            (view.active.clone(), advance(&mut view))
         };
         if let Some(operation) = active {
             match self.settle(&operation, Err(SpeechError::Cancelled)) {
                 Ok(_) | Err(SpeechError::Cancelled) => {}
                 Err(error) => return Err(error),
             }
+        } else {
+            (self.inner.publish)(snapshot);
         }
         self.snapshot()
     }
 }
 
-fn current(view: &View, operation: &Operation) -> bool {
-    view.active
-        .as_ref()
-        .is_some_and(|active| active.serial == operation.serial)
-}
-fn advance(view: &mut View) -> SpeechSnapshot {
-    let revision = view
-        .snapshot
-        .revision
-        .parse::<u64>()
-        .unwrap_or_default()
-        .saturating_add(1);
-    view.snapshot.revision = revision.to_string();
-    view.snapshot.clone()
-}
-
 #[cfg(test)]
 #[path = "host_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "epoch_tests.rs"]
+mod epoch_tests;

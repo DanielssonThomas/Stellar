@@ -42,6 +42,7 @@ export function initialSpeechSnapshot(): SpeechSnapshot {
   return {
     version: 1,
     revision: '0',
+    epoch: '0',
     operation_id: null,
     state: 'idle',
     error: null,

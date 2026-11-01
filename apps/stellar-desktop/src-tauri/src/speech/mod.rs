@@ -3,6 +3,7 @@ mod frames;
 mod host;
 mod process;
 mod scratch;
+mod state;
 mod validation;
 use contracts::*;
 pub use host::SpeechHost;
@@ -45,7 +46,7 @@ pub fn speech_stop(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<SpeechSnapshot, SpeechError> {
-    let request: SpeechRequest = validation::decode(request)?;
+    let request: SpeechStopRequest = validation::decode(request)?;
     validation::version(request.version)?;
-    host.stop()
+    host.stop_epoch(&request.epoch)
 }

@@ -48,6 +48,7 @@ export type {
   SpeechState,
   SpeechError,
   SpeechRequest,
+  SpeechStopRequest,
   SpeechTranscribeRequest,
   SpeechTranscript,
   SpeechSpeakRequest,
@@ -63,6 +64,7 @@ export {
 } from './generated';
 export {
   decodeSpeechRequest,
+  decodeSpeechStopRequest,
   decodeSpeechTranscribeRequest,
   decodeSpeechTranscript,
   decodeSpeechSpeakRequest,

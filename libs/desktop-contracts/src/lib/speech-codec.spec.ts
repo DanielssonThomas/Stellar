@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeSpeechError,
   decodeSpeechRequest,
+  decodeSpeechStopRequest,
   decodeSpeechSnapshot,
   decodeSpeechSpeakRequest,
   decodeSpeechTranscribeRequest,
@@ -11,6 +12,7 @@ import {
 const utterance_id = '11111111-2222-4333-8444-555555555555';
 const input = {
   version: 1,
+  epoch: '0',
   utterance_id,
   sample_rate_hz: 16000,
   pcm: [-32768, 0, 32767],
@@ -43,6 +45,8 @@ describe('speech wire boundary', () => {
     { utterance_id: 'arbitrary-path' },
     { utterance_id: utterance_id.toUpperCase().replace('1111', 'ABCD') },
     { version: 2 },
+    { epoch: '01' },
+    { epoch: '18446744073709551616' },
     { path: 'not-allowed' },
   ])('rejects malformed audio input %j', (change) => {
     expect(() =>
@@ -67,13 +71,19 @@ describe('speech wire boundary', () => {
     expect(
       decodeSpeechSpeakRequest({
         version: 1,
+        epoch: '0',
         utterance_id,
         text: 'é'.repeat(2000),
       }).text,
     ).toHaveLength(2000);
     for (const text of ['', '  ', 'é'.repeat(2001), '\ud800'])
       expect(() =>
-        decodeSpeechSpeakRequest({ version: 1, utterance_id, text }),
+        decodeSpeechSpeakRequest({
+          version: 1,
+          epoch: '0',
+          utterance_id,
+          text,
+        }),
       ).toThrow();
   });
 
@@ -81,6 +91,7 @@ describe('speech wire boundary', () => {
     const state = {
       version: 1,
       revision: '18446744073709551615',
+      epoch: '0',
       operation_id: utterance_id,
       state: 'speaking',
       error: null,
@@ -97,6 +108,13 @@ describe('speech wire boundary', () => {
     expect(decodeSpeechError('model_missing')).toBe('model_missing');
     expect(() => decodeSpeechError('unknown')).toThrow();
     expect(decodeSpeechRequest({ version: 1 })).toEqual({ version: 1 });
+    expect(
+      decodeSpeechStopRequest({ version: 1, epoch: '18446744073709551615' })
+        .epoch,
+    ).toBe('18446744073709551615');
+    expect(() =>
+      decodeSpeechStopRequest({ version: 1, epoch: '-1' }),
+    ).toThrow();
     expect(() =>
       decodeSpeechRequest({ version: 1, command: 'exec' }),
     ).toThrow();

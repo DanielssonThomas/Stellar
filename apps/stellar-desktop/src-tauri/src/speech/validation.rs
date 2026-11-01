@@ -34,6 +34,7 @@ pub fn identity(value: &str) -> Result<(), SpeechError> {
 
 pub fn transcribe(request: &SpeechTranscribeRequest) -> Result<(), SpeechError> {
     version(request.version)?;
+    epoch(&request.epoch)?;
     identity(&request.utterance_id)?;
     if request.sample_rate_hz != 16_000 || request.pcm.is_empty() || request.pcm.len() > 320_000 {
         return Err(SpeechError::MalformedRequest);
@@ -43,9 +44,20 @@ pub fn transcribe(request: &SpeechTranscribeRequest) -> Result<(), SpeechError> 
 
 pub fn speak(request: &SpeechSpeakRequest) -> Result<(), SpeechError> {
     version(request.version)?;
+    epoch(&request.epoch)?;
     identity(&request.utterance_id)?;
     if request.text.trim().is_empty() || request.text.len() > 4_000 {
         return Err(SpeechError::MalformedRequest);
     }
     Ok(())
+}
+
+pub fn epoch(value: &str) -> Result<u64, SpeechError> {
+    let parsed = value
+        .parse::<u64>()
+        .map_err(|_| SpeechError::MalformedRequest)?;
+    if parsed.to_string() != value {
+        return Err(SpeechError::MalformedRequest);
+    }
+    Ok(parsed)
 }

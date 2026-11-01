@@ -12,6 +12,7 @@ fn invalid_pcm_and_identity_never_reserve_work() {
     );
     let request = SpeechTranscribeRequest {
         version: 1,
+        epoch: "0".into(),
         utterance_id: "bad".into(),
         sample_rate_hz: 16_000,
         pcm: vec![0],
@@ -32,7 +33,7 @@ fn synchronous_stop_during_admission_prevents_process_launch() {
         Arc::new(move |snapshot| {
             if snapshot.state == SpeechState::Transcribing {
                 let host = observed.lock().unwrap().clone().unwrap();
-                host.stop().unwrap();
+                host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
             }
         }),
     );
@@ -40,6 +41,7 @@ fn synchronous_stop_during_admission_prevents_process_launch() {
     let completion = host
         .transcribe(SpeechTranscribeRequest {
             version: 1,
+            epoch: "0".into(),
             utterance_id: identity(),
             sample_rate_hz: 16000,
             pcm: vec![0; 16],
@@ -60,19 +62,35 @@ fn busy_cancel_and_stale_completion_preserve_new_owner() {
         std::env::temp_dir().join("stellar-speech-owners"),
         Arc::new(|_| {}),
     );
-    let first = host.reserve(identity(), SpeechState::Transcribing).unwrap();
+    let first = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing,
+        )
+        .unwrap();
     assert!(matches!(
-        host.reserve(identity(), SpeechState::Transcribing),
+        host.reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing
+        ),
         Err(SpeechError::Busy)
     ));
-    host.stop().unwrap();
-    let second = host.reserve(identity(), SpeechState::Transcribing).unwrap();
+    host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
+    let second = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing,
+        )
+        .unwrap();
     assert!(matches!(
         host.settle(&first, Ok("late text".into())),
         Err(SpeechError::Cancelled)
     ));
     assert!(current(&host.inner.view.lock().unwrap(), &second));
-    host.stop().unwrap();
+    host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
 }
 
 #[test]
@@ -87,6 +105,7 @@ fn shutdown_seals_admission_before_a_delayed_command_can_reserve() {
     let thread = std::thread::spawn(move || {
         let request = SpeechTranscribeRequest {
             version: 1,
+            epoch: "0".into(),
             utterance_id: identity(),
             sample_rate_hz: 16000,
             pcm: vec![0; 16],
@@ -103,10 +122,14 @@ fn shutdown_seals_admission_before_a_delayed_command_can_reserve() {
     host.shutdown().unwrap();
     release.send(()).unwrap();
     thread.join().unwrap();
-    host.stop().unwrap();
+    host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
     host.shutdown().unwrap();
     assert!(matches!(
-        host.reserve(identity(), SpeechState::Synthesizing),
+        host.reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Synthesizing
+        ),
         Err(SpeechError::Unavailable)
     ));
     assert!(host.inner.view.lock().unwrap().active.is_none());
@@ -118,7 +141,13 @@ fn shutdown_cancels_existing_admission_and_refuses_reentrant_new_work() {
         std::env::temp_dir().join("stellar-speech-shutdown-active"),
         Arc::new(|_| {}),
     );
-    let operation = host.reserve(identity(), SpeechState::Transcribing).unwrap();
+    let operation = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing,
+        )
+        .unwrap();
     host.shutdown().unwrap();
     assert!(operation.cancelled.load(Ordering::SeqCst));
     assert!(matches!(
@@ -126,7 +155,11 @@ fn shutdown_cancels_existing_admission_and_refuses_reentrant_new_work() {
         Err(SpeechError::Cancelled)
     ));
     assert!(matches!(
-        host.reserve(identity(), SpeechState::Transcribing),
+        host.reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing
+        ),
         Err(SpeechError::Unavailable)
     ));
 }
@@ -137,7 +170,13 @@ fn cancellation_between_cleanup_and_settlement_cannot_return_a_transcript() {
         std::env::temp_dir().join("stellar-speech-settlement"),
         Arc::new(|_| {}),
     );
-    let operation = host.reserve(identity(), SpeechState::Transcribing).unwrap();
+    let operation = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing,
+        )
+        .unwrap();
     let (ready, waiting) = std::sync::mpsc::sync_channel(1);
     let (release, resume) = std::sync::mpsc::sync_channel(1);
     let resume = Mutex::new(resume);
@@ -170,11 +209,17 @@ fn cancellation_between_cleanup_and_settlement_cannot_return_a_transcript() {
 fn temporary_audio_is_removed_after_stop_and_cannot_reappear_from_stale_work() {
     let root = std::env::temp_dir().join(format!("stellar-speech-scratch-{}", std::process::id()));
     let host = SpeechHost::new(root.clone(), Arc::new(|_| {}));
-    let operation = host.reserve(identity(), SpeechState::Synthesizing).unwrap();
+    let operation = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Synthesizing,
+        )
+        .unwrap();
     let output = operation.scratch.as_ref().unwrap().output();
     std::fs::write(&output, b"temporary audio").unwrap();
     std::fs::write(output.with_file_name("reply.tmp.wav"), b"partial").unwrap();
-    host.stop().unwrap();
+    host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
     assert!(!output.parent().unwrap().exists());
     assert!(matches!(
         host.execute(&operation, "speak", vec![], Duration::from_secs(1)),
@@ -202,10 +247,16 @@ fn stopping_real_inert_worker_reaps_it_and_preserves_an_unrelated_process() {
         std::env::temp_dir().join("stellar-speech-process"),
         Arc::new(|_| {}),
     );
-    let operation = host.reserve(identity(), SpeechState::Transcribing).unwrap();
+    let operation = host
+        .reserve(
+            identity(),
+            &host.snapshot().unwrap().epoch,
+            SpeechState::Transcribing,
+        )
+        .unwrap();
     let _frames = process::spawn(command(), &operation.child, b"{}\n".to_vec()).unwrap();
     let mut unrelated = command().spawn().unwrap();
-    host.stop().unwrap();
+    host.stop_epoch(&host.snapshot().unwrap().epoch).unwrap();
     let alive = unrelated.try_wait().unwrap().is_none();
     unrelated.kill().unwrap();
     unrelated.wait().unwrap();

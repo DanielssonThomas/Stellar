@@ -2,6 +2,7 @@
   "name": "stellar-desktop-e2e",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
+  "tags": ["scope:app", "type:app"],
   "sourceRoot": "apps/stellar-desktop-e2e/src",
   "implicitDependencies": ["stellar-desktop"],
   "// targets": "to see all targets run: nx show project stellar-desktop-e2e --web",

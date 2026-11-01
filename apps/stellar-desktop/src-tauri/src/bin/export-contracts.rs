@@ -46,6 +46,7 @@ fn main() {
         SpeechState::decl(&config),
         SpeechError::decl(&config),
         SpeechRequest::decl(&config),
+        SpeechStopRequest::decl(&config),
         SpeechTranscribeRequest::decl(&config),
         SpeechTranscript::decl(&config),
         SpeechSpeakRequest::decl(&config),
@@ -112,6 +113,6 @@ fn main() {
         serde_json::to_string(SPEECH_EVENT).unwrap()
     );
     println!(
-        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechRequest; [speechSnapshotCommand]: SpeechRequest }};"
+        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest }};"
     );
 }

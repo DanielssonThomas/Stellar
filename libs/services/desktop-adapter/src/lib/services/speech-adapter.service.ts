@@ -39,7 +39,9 @@ export class SpeechAdapterService {
   private disposed = false;
   private generation = 0;
   private highestRevision = -1n;
+  private localFailure = false;
   private subscription?: Promise<() => void>;
+  private prepared?: Promise<void>;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => {
@@ -58,10 +60,11 @@ export class SpeechAdapterService {
       return Promise.reject(new SpeechAdapterError('contract'));
     const generation = this.generation;
     return this.run(async () => {
-      await this.listen();
+      await this.prepare();
       this.assertCurrent(generation);
       return this.adapter.transcribe({
         version: 1,
+        epoch: this.current().epoch,
         utterance_id: utteranceId,
         sample_rate_hz: 16000,
         pcm: Array.from(pcm),
@@ -72,14 +75,15 @@ export class SpeechAdapterService {
   speak(text: string, utteranceId: string): Promise<SpeechSnapshot> {
     const generation = this.generation;
     return this.run(async () => {
-      await this.listen();
+      await this.prepare();
       this.assertCurrent(generation);
       const snapshot = await this.adapter.speak({
         version: 1,
+        epoch: this.current().epoch,
         utterance_id: utteranceId,
         text,
       });
-      this.accept(snapshot);
+      this.accept(snapshot, true);
       return this.current();
     });
   }
@@ -87,8 +91,9 @@ export class SpeechAdapterService {
   stop(): Promise<SpeechSnapshot> {
     ++this.generation;
     return this.run(async () => {
-      const snapshot = await this.adapter.stop();
-      this.accept(snapshot);
+      this.accept(await this.adapter.snapshot(), true);
+      const snapshot = await this.adapter.stop(this.current().epoch);
+      this.accept(snapshot, true);
       return this.current();
     });
   }
@@ -107,6 +112,19 @@ export class SpeechAdapterService {
     return this.subscription;
   }
 
+  private prepare(): Promise<void> {
+    if (!this.prepared) {
+      const pending = this.listen().then(async () => {
+        this.accept(await this.adapter.snapshot(), true);
+      });
+      this.prepared = pending;
+      void pending.catch(() => {
+        if (this.prepared === pending) this.prepared = undefined;
+      });
+    }
+    return this.prepared;
+  }
+
   private async run<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
@@ -116,18 +134,25 @@ export class SpeechAdapterService {
     }
   }
 
-  private accept(snapshot: SpeechSnapshot) {
+  private accept(snapshot: SpeechSnapshot, confirmedReply = false) {
     if (this.disposed) return;
     const revision = BigInt(snapshot.revision);
-    if (revision <= this.highestRevision) return;
+    if (
+      revision < this.highestRevision ||
+      (revision === this.highestRevision &&
+        !(confirmedReply && this.localFailure))
+    )
+      return;
     this.highestRevision = revision;
+    this.localFailure = false;
     this.current.set(snapshot);
   }
 
   private failed(error: unknown) {
     if (error instanceof SpeechAdapterError && error.code === 'cancelled')
       return;
-    if (!this.disposed)
+    if (!this.disposed) {
+      this.localFailure = true;
       this.current.update((state) => ({
         ...state,
         state: 'unavailable',
@@ -138,6 +163,7 @@ export class SpeechAdapterService {
             ? error.code
             : 'protocol',
       }));
+    }
   }
 
   private assertCurrent(generation: number) {
