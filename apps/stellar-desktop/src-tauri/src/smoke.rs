@@ -29,13 +29,24 @@ fn check_page(window: Webview) {
                     root?.getAttribute('data-desktop-event') === 'true' &&
                     root?.getAttribute('data-desktop-capabilities') === 'Native window controls, Contract notifications';
                 const rootStyle = getComputedStyle(document.querySelector('stellar-root'));
-                const mainStyle = getComputedStyle(document.querySelector('main'));
+                const main = document.querySelector('main');
+                const template = main?.querySelector('stellar-desktop-experience-template');
+                const experience = template?.querySelector('.experience');
+                const fillsViewport = (element, display = 'block') => {
+                    if (!element) return false;
+                    const style = getComputedStyle(element);
+                    const bounds = element.getBoundingClientRect();
+                    return style.display === display && style.visibility === 'visible' &&
+                        Math.abs(bounds.x) <= 1 && Math.abs(bounds.y) <= 1 &&
+                        Math.abs(bounds.width - window.innerWidth) <= 1 &&
+                        Math.abs(bounds.height - window.innerHeight) <= 1 &&
+                        Math.abs(parseFloat(style.height) - window.innerHeight) <= 1;
+                };
                 const nonce = document.querySelector('#stellar-csp-anchor')?.nonce;
                 const componentStyles = [...document.querySelectorAll('style')].filter(style =>
                     style.id !== 'stellar-csp-anchor' && style.textContent.includes('_nghost'));
-                const styled = rootStyle.display === 'block' && mainStyle.display === 'flex' &&
-                    mainStyle.alignItems === 'center' && mainStyle.justifyContent === 'center' &&
-                    parseFloat(mainStyle.minHeight) >= window.innerHeight &&
+                const styled = rootStyle.display === 'block' && fillsViewport(main) && fillsViewport(template) &&
+                    fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
                 await invoke('smoke_result', { success: !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
