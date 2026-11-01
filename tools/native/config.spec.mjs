@@ -100,7 +100,7 @@ test('missing locks, source globs, build dependencies and cached smoke are rejec
   assert.throws(() => assertCacheInputs(skippedBuild));
 });
 
-test('normal host keeps decorations and only its explicit local readiness permission', () => {
+test('normal host keeps decorations and only its explicit local commands', () => {
   assert.equal(
     project.targets.build.configurations.production.optimization.styles
       .inlineCritical,
@@ -113,6 +113,12 @@ test('normal host keeps decorations and only its explicit local readiness permis
   assert.deepEqual(capability.permissions, [
     'allow-shell-status',
     'allow-app-info',
+    'allow-ivy-connect',
+    'allow-ivy-snapshot',
+    'allow-ivy-submit',
+    'allow-ivy-cancel',
+    'allow-ivy-reconcile',
+    'allow-ivy-disconnect',
     'core:event:allow-listen',
     'core:event:allow-unlisten',
   ]);

@@ -180,6 +180,20 @@ if (action === 'smoke') {
     action === 'contract-check'
       ? ''
       : cargo(args[action], action.startsWith('contract-'));
+  if (action === 'test') {
+    const bridge = spawnSync(
+      'python',
+      ['-I', 'tools/native/ivy_bridge_test.py'],
+      {
+        cwd: root,
+        env,
+        windowsHide: true,
+        stdio: 'inherit',
+      },
+    );
+    if (bridge.error) throw bridge.error;
+    if (bridge.status !== 0) process.exit(bridge.status ?? 1);
+  }
   if (action.startsWith('contract-')) {
     const file = resolve(root, 'libs/desktop-contracts/src/generated.ts');
     if (action === 'contract-generate') writeFileSync(file, text);

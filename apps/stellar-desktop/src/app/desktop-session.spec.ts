@@ -5,6 +5,7 @@ import {
   decodeActivitySummary,
 } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
+import { motionDurations } from '@stellar/desktop-interaction';
 
 function setup(automaticSummary = true) {
   vi.useFakeTimers();
@@ -85,7 +86,7 @@ describe('desktop composition session', () => {
       vi.advanceTimersByTime(1000);
       expect(session.state.phase).toBe('listening');
       session.dispatch({ type: 'manual-end' });
-      vi.advanceTimersByTime(1220);
+      vi.advanceTimersByTime(session.state.hangoverMs + motionDurations.dock);
       expect(session.state.phase).toBe('presenting');
       expect(registry.snapshot()).toHaveLength(1);
       expect(registry.snapshot()[0].payload).toEqual({
@@ -106,12 +107,12 @@ describe('desktop composition session', () => {
   it('cancels stale docking and disposal timers', () => {
     const { session, registry } = setup();
     session.dispatch({ type: 'manual-start' });
-    vi.advanceTimersByTime(220);
+    vi.advanceTimersByTime(motionDurations.focus);
     session.dispatch({ type: 'manual-end' });
     vi.advanceTimersByTime(950);
     expect(session.state.phase).toBe('docking');
     session.dispatch({ type: 'manual-start' });
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(motionDurations.focus);
     expect(session.state.phase).toBe('listening');
     expect(registry.snapshot()).toHaveLength(0);
     session.dispatch({ type: 'dismiss' });

@@ -1,7 +1,19 @@
+import { motionDurations } from '@stellar/desktop-interaction';
+
 export interface EmblemAmbientTarget {
   readonly element: HTMLElement;
   readonly spin?: 'clockwise' | 'counter-clockwise';
   readonly order: number;
+}
+
+function rotationAngle(transform: string): number {
+  const values = /^matrix\(([^)]+)\)$/
+    .exec(transform)?.[1]
+    .split(',')
+    .map(Number);
+  return values?.length === 6 && values.every(Number.isFinite)
+    ? (Math.atan2(values[1], values[0]) * 180) / Math.PI
+    : 0;
 }
 
 export function createEmblemAmbientMotion(
@@ -41,20 +53,18 @@ export function createEmblemAmbientMotion(
         const ordinal = Number.isFinite(order)
           ? Math.max(0, Math.min(31, order))
           : 0;
+        const angle = rotationAngle(from);
         const frames = spin
-          ? [
-              `rotateY(${-7 * direction}deg) rotateZ(-3deg)`,
-              `rotateY(${7 * direction}deg) rotateZ(3deg)`,
-            ]
-          : ['translateY(-1.1%)', 'translateY(1.1%)'];
+          ? [`rotateZ(${angle}deg)`, `rotateZ(${angle + 360 * direction}deg)`]
+          : [from, 'translateY(-1.1%)', 'translateY(1.1%)', from];
         const animation = element.animate(
-          (idle ? [from, ...frames, from] : [from, 'none']).map(
-            (transform) => ({ transform }),
-          ),
+          (idle ? frames : [from, 'none']).map((transform) => ({ transform })),
           {
-            duration: idle ? (spin ? 16000 : 6000) + ordinal * 170 : 220,
+            duration: idle
+              ? (spin ? 16000 : 6000) + ordinal * 170
+              : motionDurations.focus,
             iterations: idle ? Infinity : 1,
-            easing: 'ease-in-out',
+            easing: idle && spin ? 'linear' : 'ease-in-out',
           },
         );
         running.set(element, { animation, idle });

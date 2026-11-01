@@ -1,6 +1,6 @@
 {
   "canvas": 1280,
-  "layers": 12,
+  "layers": 11,
   "rasterLayers": [
     {
       "id": "violet-body",
@@ -99,9 +99,9 @@
       }
     }
   ],
-  "svgLayers": 6,
+  "svgLayers": 5,
   "zeroPose": "All manifest poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 2742595,
+  "runtimeBytes": 2742800,
   "budgetBytes": 4194304,
   "activeSvgContent": false
 }

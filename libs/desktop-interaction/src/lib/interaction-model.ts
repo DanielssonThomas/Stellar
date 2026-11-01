@@ -87,9 +87,9 @@ export type InteractionResult = Readonly<{
   effects: readonly InteractionEffect[];
 }>;
 export const motionDurations = Object.freeze({
-  focus: 220,
-  dock: 320,
-  return: 260,
+  focus: 1000,
+  dock: 1000,
+  return: 1000,
 });
 export const initialState: InteractionState = Object.freeze({
   phase: 'idle',

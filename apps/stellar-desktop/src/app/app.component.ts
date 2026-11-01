@@ -8,7 +8,10 @@ import {
 } from '@angular/core';
 import { DesktopExperienceTemplate } from '@stellar/ui-templates/desktop-experience';
 import { DesktopExperience } from './desktop-experience';
-import { DesktopAdapterService } from '@stellar/service-desktop-adapter';
+import {
+  DesktopAdapterService,
+  IvyAdapterService,
+} from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
 
 @Component({
@@ -31,8 +34,12 @@ export class AppComponent {
   readonly eventSeen = signal(false);
   readonly capabilities = signal('');
   private readonly adapter = inject(DesktopAdapterService);
+  private readonly ivy = inject(IvyAdapterService);
 
   constructor() {
+    afterNextRender(() => {
+      void this.ivy.connect().catch(() => undefined);
+    });
     afterNextRender(() =>
       this.experience.connect((command) => this.view().dispatch(command)),
     );
