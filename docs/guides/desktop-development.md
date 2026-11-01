@@ -14,6 +14,8 @@ This builds Angular, compiles the embedded-content host, and opens `target/debug
 
 The composition root registers thin commands; private `shell` behavior has no Tauri dependency. No background tasks or device resources exist yet. The local main capability grants only the read-only `shell_status` command, enrolled through `AppManifest::commands`. Production configuration has an explicit CSP, no remote capability, no filesystem or shell plugin and no developer tools. Navigation permits only the embedded local origin. Native commands validate deserialized requests and version compatibility.
 
+Angular production builds keep critical CSS external (`optimization.styles.inlineCritical: false`) to avoid its inline stylesheet activation handler under the strict script policy. Tauri supplies a fresh nonce on the static color-scheme style anchor in each embedded response. Bootstrap passes that runtime value through Angular's `CSP_NONCE` token so component styles receive the same authorized nonce; browser development without native CSP uses no nonce. The native smoke checks actual component and utility computed styles, centering, viewport height and nonce propagation. See [Angular's CSP guidance](https://angular.dev/best-practices/security#content-security-policy).
+
 ## Contracts and checks
 
 Rust owns IPC serialization. `libs/desktop-contracts` exports ts-rs output and a strict reply decoder; future frontend adapters should use that public entry point. Change Rust first, run `node tools/native/cargo.mjs contract-generate`, and review the generated diff. `contract-check` fails on drift, including uncommitted changes to generated output.

@@ -20,7 +20,17 @@ fn check_page(window: Webview) {
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
-                await invoke('smoke_result', { success: !!rendered && reply.version === 1 &&
+                const rootStyle = getComputedStyle(document.querySelector('stellar-root'));
+                const mainStyle = getComputedStyle(document.querySelector('main'));
+                const nonce = document.querySelector('#stellar-csp-anchor')?.nonce;
+                const componentStyles = [...document.querySelectorAll('style')].filter(style =>
+                    style.id !== 'stellar-csp-anchor' && style.textContent.includes('_nghost'));
+                const styled = rootStyle.display === 'block' && mainStyle.display === 'flex' &&
+                    mainStyle.alignItems === 'center' && mainStyle.justifyContent === 'center' &&
+                    parseFloat(mainStyle.minHeight) >= window.innerHeight &&
+                    !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
+                    !document.querySelector('link[rel="stylesheet"][media="print"]');
+                await invoke('smoke_result', { success: !!rendered && styled && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();

@@ -101,6 +101,11 @@ test('missing locks, source globs, build dependencies and cached smoke are rejec
 });
 
 test('normal host keeps decorations and only its explicit local readiness permission', () => {
+  assert.equal(
+    project.targets.build.configurations.production.optimization.styles
+      .inlineCritical,
+    false,
+  );
   assert.equal(config.app.windows[0].decorations, true);
   assert.equal(config.app.windows[0].resizable, true);
   assert.equal(config.app.windows[0].devtools, false);

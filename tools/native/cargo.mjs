@@ -128,6 +128,8 @@ if (action === 'smoke') {
         platform: process.platform,
         embeddedWebView: true,
         renderedShell: true,
+        styledShell: true,
+        runtimeStyleNonce: true,
         versionedIpc: true,
         invalidVersionRejected: true,
       };
