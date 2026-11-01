@@ -1,0 +1,58 @@
+@if (loading()) {
+  <div
+    class="flex h-full items-center justify-center"
+    role="status"
+    aria-label="Loading Stage"
+  >
+    <stellar-skeleton-atom shape="control" />
+  </div>
+} @else {
+  <div
+    class="emblem-slot"
+    [style.left.px]="layout().emblem.x"
+    [style.top.px]="layout().emblem.y"
+    [style.width.px]="layout().emblem.width"
+    [style.height.px]="layout().emblem.height"
+  >
+    <ng-content select="[stage-emblem]" />
+  </div>
+  @for (surface of surfaces(); track surface.instanceId) {
+    <section
+      #panel
+      [class]="surface.classes"
+      [attr.data-instance-id]="surface.instanceId"
+      [attr.aria-label]="surface.title"
+      role="region"
+      tabindex="-1"
+      [style.left.px]="surface.x"
+      [style.top.px]="surface.y"
+      [style.width.px]="surface.width"
+      [style.height.px]="surface.height"
+    >
+      <header class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-lg font-medium">{{ surface.title }}</h2>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="rounded-stellar px-2 py-1 text-sm"
+            [attr.aria-label]="'Minimize ' + surface.title"
+            (click)="control('minimize', surface.instanceId)"
+          >
+            Minimize
+          </button>
+          <button
+            type="button"
+            class="rounded-stellar px-2 py-1 text-sm"
+            [attr.aria-label]="'Close ' + surface.title"
+            (click)="control('close', surface.instanceId)"
+          >
+            Close
+          </button>
+        </div>
+      </header>
+      <ng-container
+        *ngComponentOutlet="surface.component; inputs: surface.inputs"
+      />
+    </section>
+  }
+}

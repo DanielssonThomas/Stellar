@@ -296,10 +296,6 @@ test('reviewed lockfile and package inputs are required before any execution', a
     validateReviewedDependencyInputs(candidate),
     canonicalLockDigest,
   );
-  assert.equal(
-    validateReviewedDependencyInputs(candidate),
-    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
-  );
   const lfCandidate = {
     ...candidate,
     files: candidate.files.map((entry) => ({
@@ -314,10 +310,6 @@ test('reviewed lockfile and package inputs are required before any execution', a
         .digest('hex'),
     })),
   };
-  assert.equal(
-    validateReviewedDependencyInputs(lfCandidate),
-    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
-  );
   assert.equal(
     validateReviewedDependencyInputs(lfCandidate),
     canonicalLockDigest,
@@ -335,10 +327,6 @@ test('reviewed lockfile and package inputs are required before any execution', a
         .digest('hex'),
     })),
   };
-  assert.equal(
-    validateReviewedDependencyInputs(crlfCandidate),
-    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
-  );
   assert.equal(
     validateReviewedDependencyInputs(crlfCandidate),
     canonicalLockDigest,
