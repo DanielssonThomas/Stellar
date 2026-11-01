@@ -12,6 +12,9 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { validateIssue } from './validate-issue.mjs';
+import { dependenciesFromBody } from './issue-dependency-identity.mjs';
+
+export { dependenciesFromBody } from './issue-dependency-identity.mjs';
 
 const leaseHours = 12;
 const lockStaleMs = 60_000;
@@ -22,22 +25,6 @@ export function ownerLabel(worker) {
   return worker === 'codex' || worker === 'maintainer'
     ? `owner:${worker}`
     : `worker:${worker}`;
-}
-
-export function dependenciesFromBody(body = '') {
-  const lines = body.split(/\r?\n/);
-  const start = lines.findIndex((line) =>
-    /^#{1,6}\s+Dependencies\s*$/i.test(line),
-  );
-  if (start < 0) return null;
-  const content = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^#{1,6}\s/.test(line)) break;
-    content.push(line);
-  }
-  const value = content.join('\n').trim();
-  if (/^(?:none|n\/a)$/i.test(value)) return [];
-  return [...value.matchAll(/#(\d+)/g)].map((match) => Number(match[1]));
 }
 
 export function validateAssignment({

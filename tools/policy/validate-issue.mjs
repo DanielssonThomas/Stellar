@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { readIssueDependencies } from './issue-dependency-reader.mjs';
 
 export const categories = {
   priority: [
@@ -195,50 +196,28 @@ async function api(path, method, token, apiUrl, body) {
   return response;
 }
 
-async function validateNativeDependencies(issue) {
-  const body = section(issue.body ?? '', 'Dependencies');
-  const expected = /^\s*(?:none|n\/a)\s*$/i.test(body)
-    ? []
-    : [...body.matchAll(/#(\d+)/g)].map((match) => Number(match[1]));
-  if (!process.env.GITHUB_TOKEN || foundStatus(issue) === 'status:triage')
+export async function validateNativeDependencies(
+  issue,
+  {
+    request,
+    repository = process.env.GITHUB_REPOSITORY,
+    apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com',
+  } = {},
+) {
+  if (
+    (!request && !process.env.GITHUB_TOKEN) ||
+    foundStatus(issue) === 'status:triage'
+  )
     return [];
-
-  const token = process.env.GITHUB_TOKEN;
-  const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
-  const errors = [];
-  if (new Set(expected).size !== expected.length)
-    errors.push('List each dependency only once.');
-  for (const number of expected) {
-    const response = await api(`/issues/${number}`, 'GET', token, apiUrl);
-    if (response.status === 404)
-      errors.push(`Dependency #${number} does not exist in this repository.`);
-    else if ((await response.json()).pull_request)
-      errors.push(`Dependency #${number} is a pull request, not an issue.`);
-  }
-  const nativeResponse = await api(
-    `/issues/${issue.number}/dependencies/blocked_by`,
-    'GET',
-    token,
-    apiUrl,
+  const read =
+    request ?? ((route) => api(route, 'GET', process.env.GITHUB_TOKEN, apiUrl));
+  await readIssueDependencies(
+    read,
+    issue.number,
+    { repository, apiUrl },
+    issue,
   );
-  if (nativeResponse.status === 404) {
-    errors.push('GitHub could not read native issue dependencies.');
-    return errors;
-  }
-  const native = (await nativeResponse.json()).map(
-    (dependency) => dependency.number,
-  );
-  for (const number of expected) {
-    if (!native.includes(number))
-      errors.push(`Link #${number} as a native blocked-by dependency.`);
-  }
-  for (const number of native) {
-    if (!expected.includes(number))
-      errors.push(
-        `Record native dependency #${number} in the Dependencies section.`,
-      );
-  }
-  return errors;
+  return [];
 }
 
 async function validateTargetBranch(issue) {
@@ -261,7 +240,7 @@ async function validateTargetBranch(issue) {
     : [];
 }
 
-async function ensureTriageLabel(issue) {
+async function ensureTriageLabel() {
   const token = process.env.GITHUB_TOKEN;
   const apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com';
   const response = await api('/labels/status%3Atriage', 'GET', token, apiUrl);
