@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "status": "study",
+  "viewBox": [0, 0, 512, 512],
+  "assembled": "stellar-emblem-study.svg",
+  "reference": "stellar-emblem-reference.png",
+  "layers": [
+    {
+      "id": "outer-ring",
+      "file": "layers/outer-ring.svg",
+      "z": 0,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -121,
+        "y": -12,
+        "rotation": -8.25
+      }
+    },
+    {
+      "id": "inner-ring",
+      "file": "layers/inner-ring.svg",
+      "z": 1,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -99,
+        "y": 0,
+        "rotation": -6.75
+      }
+    },
+    {
+      "id": "cardinal-stars",
+      "file": "layers/cardinal-stars.svg",
+      "z": 2,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -77,
+        "y": 12,
+        "rotation": -5.25
+      }
+    },
+    {
+      "id": "violet-hair-back",
+      "file": "layers/violet-hair-back.svg",
+      "z": 3,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -55,
+        "y": -12,
+        "rotation": -3.75
+      }
+    },
+    {
+      "id": "violet-hair-front",
+      "file": "layers/violet-hair-front.svg",
+      "z": 4,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -33,
+        "y": 0,
+        "rotation": -2.25
+      }
+    },
+    {
+      "id": "violet-silhouette",
+      "file": "layers/violet-silhouette.svg",
+      "z": 5,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": -11,
+        "y": 12,
+        "rotation": -0.75
+      }
+    },
+    {
+      "id": "violet-botanical",
+      "file": "layers/violet-botanical.svg",
+      "z": 6,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 11,
+        "y": -12,
+        "rotation": 0.75
+      }
+    },
+    {
+      "id": "violet-gem",
+      "file": "layers/violet-gem.svg",
+      "z": 7,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 33,
+        "y": 0,
+        "rotation": 2.25
+      }
+    },
+    {
+      "id": "gold-hair",
+      "file": "layers/gold-hair.svg",
+      "z": 8,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 55,
+        "y": 12,
+        "rotation": 3.75
+      }
+    },
+    {
+      "id": "gold-silhouette",
+      "file": "layers/gold-silhouette.svg",
+      "z": 9,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 77,
+        "y": -12,
+        "rotation": 5.25
+      }
+    },
+    {
+      "id": "gold-botanical",
+      "file": "layers/gold-botanical.svg",
+      "z": 10,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 99,
+        "y": 0,
+        "rotation": 6.75
+      }
+    },
+    {
+      "id": "gold-gem",
+      "file": "layers/gold-gem.svg",
+      "z": 11,
+      "anchor": {
+        "x": 256,
+        "y": 256
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 121,
+        "y": 12,
+        "rotation": 8.25
+      }
+    }
+  ]
+}

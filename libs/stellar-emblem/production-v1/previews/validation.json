@@ -1,0 +1,107 @@
+{
+  "canvas": 1280,
+  "layers": 12,
+  "rasterLayers": [
+    {
+      "id": "violet-body",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 1367163,
+        "opaque": 975,
+        "partial": 204378
+      },
+      "exportAlpha": {
+        "transparent": 1501745,
+        "visible": 136655
+      }
+    },
+    {
+      "id": "violet-hair",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 814138,
+        "opaque": 1671,
+        "partial": 756707
+      },
+      "exportAlpha": {
+        "transparent": 1229025,
+        "visible": 409375
+      }
+    },
+    {
+      "id": "violet-ornament",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 1223938,
+        "opaque": 960,
+        "partial": 347618
+      },
+      "exportAlpha": {
+        "transparent": 1622094,
+        "visible": 16306
+      }
+    },
+    {
+      "id": "gold-body",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 1413187,
+        "opaque": 482,
+        "partial": 158847
+      },
+      "exportAlpha": {
+        "transparent": 1532418,
+        "visible": 105982
+      }
+    },
+    {
+      "id": "gold-hair",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 999370,
+        "opaque": 562,
+        "partial": 572584
+      },
+      "exportAlpha": {
+        "transparent": 1275705,
+        "visible": 362695
+      }
+    },
+    {
+      "id": "gold-ornament",
+      "width": 1280,
+      "height": 1280,
+      "sourceWidth": 1254,
+      "sourceHeight": 1254,
+      "sourceAlpha": {
+        "transparent": 1167548,
+        "opaque": 903,
+        "partial": 404065
+      },
+      "exportAlpha": {
+        "transparent": 1615864,
+        "visible": 22536
+      }
+    }
+  ],
+  "svgLayers": 6,
+  "zeroPose": "All manifest poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
+  "runtimeBytes": 2742595,
+  "budgetBytes": 4194304,
+  "activeSvgContent": false
+}
