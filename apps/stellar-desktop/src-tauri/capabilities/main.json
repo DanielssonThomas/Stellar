@@ -5,6 +5,12 @@
   "permissions": [
     "allow-shell-status",
     "allow-app-info",
+    "allow-ivy-connect",
+    "allow-ivy-snapshot",
+    "allow-ivy-submit",
+    "allow-ivy-cancel",
+    "allow-ivy-reconcile",
+    "allow-ivy-disconnect",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

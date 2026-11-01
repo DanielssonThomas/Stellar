@@ -6,12 +6,16 @@ mod app_info_contracts;
 mod command_name;
 #[path = "../contracts.rs"]
 mod contracts;
+#[path = "../ivy/wire.rs"]
+mod ivy;
 
 use app_info_contracts::{
     APP_INFO_EVENT, AppCapability, AppInfoError, AppInfoEvent, AppInfoReply, AppInfoRequest,
 };
 use command_name::APP_INFO_COMMAND;
 use contracts::{ShellError, ShellReply, ShellRequest};
+use ivy::contracts::*;
+use ivy::presentation::{IvyComponent, IvyPresentation};
 use ts_rs::TS;
 
 fn main() {
@@ -26,6 +30,14 @@ fn main() {
         AppInfoReply::decl(&config),
         AppInfoError::decl(&config),
         AppInfoEvent::decl(&config),
+        IvyConnectionState::decl(&config),
+        IvyTurnState::decl(&config),
+        IvyErrorCode::decl(&config),
+        IvyRequest::decl(&config),
+        IvySubmitRequest::decl(&config),
+        IvyComponent::decl(&config),
+        IvyPresentation::decl(&config),
+        IvySnapshot::decl(&config),
     ] {
         let definition = definition
             .lines()
@@ -46,4 +58,27 @@ fn main() {
         "export type DesktopCommands = {{ [appInfoCommand]: {{ request: AppInfoRequest; reply: AppInfoReply }} }};"
     );
     println!("export type DesktopEvents = {{ [appInfoEvent]: AppInfoEvent }};");
+    for (name, command) in [
+        "ivyConnectCommand",
+        "ivySnapshotCommand",
+        "ivySubmitCommand",
+        "ivyCancelCommand",
+        "ivyReconcileCommand",
+        "ivyDisconnectCommand",
+    ]
+    .iter()
+    .zip(IVY_COMMANDS)
+    {
+        println!(
+            "export const {name} = {} as const;",
+            serde_json::to_string(command).unwrap()
+        );
+    }
+    println!(
+        "export const ivyEvent = {} as const;",
+        serde_json::to_string(IVY_EVENT).unwrap()
+    );
+    println!(
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest }};"
+    );
 }
