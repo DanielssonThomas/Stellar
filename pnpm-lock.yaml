@@ -183,6 +183,12 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@types/node@26.6.5)(jsdom@22.1.0)(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(less@4.5.1)(lightningcss@1.33.0)(sass-embedded@1.105.2)(sass@1.105.2)(terser@5.51.2)(yaml@2.9.1))
 
+  libs/services/audio-activity:
+    dependencies:
+      '@angular/core':
+        specifier: ^21.2.0
+        version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+
   libs/ui/atoms:
     dependencies:
       '@angular/core':
