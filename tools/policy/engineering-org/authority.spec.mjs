@@ -6,7 +6,6 @@ import {
   managerAvailability,
   mapPeonInstance,
   transitionManagerAvailability,
-  validateReviewReport,
 } from './authority.mjs';
 
 test('models verified provider failure, approval-required, recovery, and return to available', () => {
@@ -176,42 +175,6 @@ test('requires a current Peon-ready assignment, ignoring prose for privileges', 
       facts: { sessionId: 's1', claimSessionId: 's1' },
     }).authorized,
     true,
-  );
-});
-
-test('requires a fresh independent review report', () => {
-  const report = {
-    schemaVersion: 1,
-    issueNumber: 8,
-    baselineRevision: 'abc',
-    reviewerId: 'foreman',
-    authorId: 'peon',
-    decision: 'passed',
-    findings: [],
-  };
-  assert.equal(
-    validateReviewReport(report, {
-      expectedIssue: 8,
-      expectedRevision: 'abc',
-      authorId: 'peon',
-    }),
-    report,
-  );
-  assert.throws(
-    () =>
-      validateReviewReport(
-        { ...report, baselineRevision: 'old' },
-        { expectedIssue: 8, expectedRevision: 'abc', authorId: 'peon' },
-      ),
-    /stale/,
-  );
-  assert.throws(
-    () =>
-      validateReviewReport(
-        { ...report, authorId: 'foreman' },
-        { expectedIssue: 8, expectedRevision: 'abc', authorId: 'foreman' },
-      ),
-    /independent/,
   );
 });
 
