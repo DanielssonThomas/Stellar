@@ -129,3 +129,21 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     /unsafe-eval|unsafe-inline|https:|\*/,
   );
 });
+
+test('owned Ivy cleanup is connected to window destruction and app exit', () => {
+  const source = readFileSync(
+    new URL(
+      '../../apps/stellar-desktop/src-tauri/src/main.rs',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  for (const event of ['WindowEvent::Destroyed', 'RunEvent::Exit']) {
+    assert.ok(source.includes(`matches!(event, tauri::${event})`));
+  }
+  assert.match(source, /\.build\(tauri::generate_context!\(\)\)/);
+  assert.match(
+    source,
+    /\.run\(\|app, event\|\s*\{[\s\S]*?RunEvent::Exit[\s\S]*?app\.try_state::<ivy::IvyHost>\(\)[\s\S]*?host\.shutdown\(\)/,
+  );
+});

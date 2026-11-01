@@ -52,6 +52,13 @@ fn main() {
         ivy::ivy_disconnect
     ]);
     builder
-        .run(tauri::generate_context!())
-        .expect("Stellar desktop failed to launch");
+        .build(tauri::generate_context!())
+        .expect("Stellar desktop failed to launch")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<ivy::IvyHost>()
+            {
+                host.shutdown();
+            }
+        });
 }
