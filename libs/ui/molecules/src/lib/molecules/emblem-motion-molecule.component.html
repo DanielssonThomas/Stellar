@@ -41,6 +41,7 @@
           >
             <img
               [src]="layer.src"
+              [style.clip-path]="layer.clipPath"
               alt=""
               draggable="false"
               (error)="assetFailed()"

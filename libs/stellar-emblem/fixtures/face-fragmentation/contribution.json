@@ -1,0 +1,14 @@
+{
+  "issue": 211,
+  "profile": "peon-cloud",
+  "session": "local-e372f78bc8c1c80eab06c8b6fd0ccb3011833da100b3c341905018eb35b291bd",
+  "durationMs": 8030,
+  "tokens": {
+    "input": 5502,
+    "output": 780,
+    "total": 6282
+  },
+  "tools": 0,
+  "source": ["libs/ui/molecules/src/lib/molecules/emblem-clip.ts"],
+  "hostIntegration": "Codex removed obvious comments and integrated manifest validation, registered clip rendering, fifteen-plane metadata, settlement consolidation and composition regressions. No profile, permissions, credentials or raster artwork changed."
+}

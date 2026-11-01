@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
 
-function setup() {
+function setup(onSettled: () => void = () => undefined) {
   const element = document.createElement('div');
   const animations: {
     onfinish: (() => void) | null;
@@ -16,15 +16,30 @@ function setup() {
     return animation as unknown as Animation;
   });
   element.animate = animate;
-  const motion = createEmblemLayerMotion({
-    getComputedStyle: () =>
-      ({ transform: 'matrix(1, 0, 0, 1, 12, 3)' }) as CSSStyleDeclaration,
-  });
+  const motion = createEmblemLayerMotion(
+    {
+      getComputedStyle: () =>
+        ({ transform: 'matrix(1, 0, 0, 1, 12, 3)' }) as CSSStyleDeclaration,
+    },
+    onSettled,
+  );
   motion.update([{ element, transform: 'translateX(0%)' }], 220);
   return { element, animate, animations, motion };
 }
 
 describe('emblem layer motion', () => {
+  it('notifies settlement only after the owned transition completes', () => {
+    const onSettled = vi.fn();
+    const { element, motion, animations } = setup(onSettled);
+    motion.update([{ element, transform: 'translateX(25%)' }], 1000);
+    expect(motion.settled()).toBe(false);
+    expect(onSettled).not.toHaveBeenCalled();
+    animations[0].onfinish?.();
+    expect(motion.settled()).toBe(true);
+    expect(onSettled).toHaveBeenCalledOnce();
+    motion.dispose();
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
   it('rebases interrupted transitions from rendered transforms', () => {
     const { element, animate, animations, motion } = setup();
     motion.update([{ element, transform: 'translateX(25%)' }], 220);

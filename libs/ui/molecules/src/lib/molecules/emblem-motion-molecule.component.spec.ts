@@ -69,6 +69,33 @@ describe('EmblemMotionMolecule', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps body fragments during motion and consolidates only after real settlement', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: manifest.layers.map((layer, index) => ({
+        ...layer,
+        file: 'layers/body.png',
+        clip: [0, index * 256, 512, 256],
+      })),
+    });
+    await fixture.whenStable();
+    fixture.componentRef.setInput('phase', 'focusing');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.clipPath),
+    ).toEqual(['inset(0% 0% 50% 0%)', 'inset(50% 0% 0% 0%)']);
+    for (const animation of animations) animation.onfinish?.();
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.clipPath),
+    ).toEqual(['none', 'inset(100%)']);
+    fixture.componentRef.setInput('phase', 'returning');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.clipPath),
+    ).toEqual(['inset(0% 0% 50% 0%)', 'inset(50% 0% 0% 0%)']);
+  });
+
   it('renders independent inert SVG images, accessible label and supplied origins', () => {
     const images: HTMLImageElement[] = Array.from(
       fixture.nativeElement.querySelectorAll('img'),

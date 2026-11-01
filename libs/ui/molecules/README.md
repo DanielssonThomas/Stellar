@@ -35,4 +35,6 @@ Run `pnpm exec nx run-many -t lint test build --projects=ui-molecules`. Tests co
 
 The 1 November 2026 browser fixture used the actual Angular component, interaction controller and 12 independent study SVGs. Captures cover center, focus, listening, docked, returning, reduced motion, 48/64/96 px sizes and DPR 2, with a recorded transition. On Windows 11 build 26200, Intel i7-14700K, headless Chromium 156.0.8078.4 at 1440×900/DPR 1, five seconds of steady listening with optional rings/glow yielded 298 frame intervals: median 16.7 ms, p95 16.8 ms, maximum 50.1 ms. The p95 preview target of 25 ms passed; a strict zero-frames-over-50-ms target did not (one outlier). This is browser preview evidence, not a native/GPU performance qualification. The optional environment remains off by default.
 
+Optional registered clip rectangles split a source image into independent planes without changing its pixels. Invalid/noninteger/out-of-bounds rectangles fail manifest validation. Real animation settlement consolidates assembled repeated sources to one original, preventing scaled clip seams; returning restores clipped fragments. Legacy manifests retain the unclipped path.
+
 AssistantMessageMolecule renders only its requested title/body payload through Angular text interpolation and exposes a skeleton loading state. It interprets neither HTML nor Markdown.
