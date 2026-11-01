@@ -19,3 +19,23 @@ export {
   IvyAdapterService,
   IVY_TRANSPORT,
 } from './lib/services/ivy-adapter.service';
+export { SpeechAdapter, SpeechAdapterError } from './lib/speech/speech-adapter';
+export {
+  nativeSpeechTransport,
+  browserSpeechTransport,
+  initialSpeechSnapshot,
+} from './lib/speech/speech-transport';
+export type {
+  SpeechTransport,
+  SpeechNativeApi,
+} from './lib/speech/speech-transport';
+export {
+  SpeechAdapterService,
+  SPEECH_TRANSPORT,
+} from './lib/services/speech-adapter.service';
+export { VoiceConversation } from './lib/speech/voice-conversation';
+export type {
+  VoiceContext,
+  VoiceView,
+  VoicePorts,
+} from './lib/speech/voice-conversation';

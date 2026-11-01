@@ -1,10 +1,12 @@
 import type { AudioSink, AudioSource, AudioStatus } from './audio-model';
+import { attachPcmTap, type PcmTapDependencies } from './pcm-tap';
 
 export interface WebAudioSourceDependencies {
   readonly acquire?: (deviceId?: string) => Promise<MediaStream>;
   readonly audio?: () => AudioContext;
   readonly now?: () => number;
   readonly schedule?: (callback: () => void) => () => void;
+  readonly pcm?: PcmTapDependencies;
 }
 
 interface Session {
@@ -15,6 +17,7 @@ interface Session {
   source: MediaStreamAudioSourceNode | undefined;
   analyser: AnalyserNode | undefined;
   cancel: (() => void) | undefined;
+  stopPcm: (() => void) | undefined;
   readonly removers: (() => void)[];
   status: AudioStatus | undefined;
 }
@@ -66,7 +69,7 @@ export class WebAudioSource implements AudioSource {
   private readonly now: () => number;
   private readonly schedule: (callback: () => void) => () => void;
 
-  constructor(dependencies: WebAudioSourceDependencies = {}) {
+  constructor(private readonly dependencies: WebAudioSourceDependencies = {}) {
     this.acquire = dependencies.acquire ?? defaultAcquire;
     this.audio = dependencies.audio ?? (() => new AudioContext());
     this.now = dependencies.now ?? (() => performance.now());
@@ -97,6 +100,12 @@ export class WebAudioSource implements AudioSource {
       /* Cleanup must still release capture. */
     }
     for (const remove of session.removers.splice(0)) remove();
+    try {
+      session.stopPcm?.();
+    } catch {
+      // Track and context cleanup still runs if the PCM graph was already closed.
+    }
+    session.stopPcm = undefined;
     try {
       session.source?.disconnect();
     } catch {
@@ -155,6 +164,7 @@ export class WebAudioSource implements AudioSource {
       source: undefined,
       analyser: undefined,
       cancel: undefined,
+      stopPcm: undefined,
       removers: [],
       status: undefined,
     };
@@ -267,6 +277,27 @@ export class WebAudioSource implements AudioSource {
       }
       session.cancel = cancel;
       stateChanged();
+      if (sink.pcm && this.isCurrent(session)) {
+        void attachPcmTap(
+          context,
+          source,
+          (event) => {
+            if (this.isCurrent(session) && context.state === 'running')
+              session.sink?.pcm?.(event);
+          },
+          () => this.isCurrent(session),
+          this.dependencies.pcm,
+        ).then(
+          (stop) => {
+            if (this.isCurrent(session)) session.stopPcm = stop;
+            else stop();
+          },
+          () => {
+            if (this.isCurrent(session))
+              session.sink?.pcm?.({ type: 'unavailable' });
+          },
+        );
+      }
     } catch (error: unknown) {
       await this.finish(session, failureStatus(error));
     }

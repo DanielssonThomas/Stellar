@@ -74,10 +74,83 @@ try {
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(page.locator('#status')).toHaveText('idle');
   expect(await page.evaluate(() => window.captureRequests)).toBe(1);
+  const pcm = await page.evaluate(
+    async ({ sourceUrl, workletUrl }) => {
+      const { WebAudioSource } = await import(sourceUrl);
+      const generator = new AudioContext({ sampleRate: 44100 });
+      const oscillator = generator.createOscillator();
+      const destination = generator.createMediaStreamDestination();
+      oscillator.frequency.value = 440;
+      oscillator.connect(destination);
+      oscillator.start();
+      await generator.resume();
+      let acquisitions = 0;
+      const capture = new WebAudioSource({
+        acquire: async () => {
+          acquisitions++;
+          return destination.stream;
+        },
+        audio: () => new AudioContext({ sampleRate: 44100 }),
+        pcm: { url: workletUrl },
+      });
+      const chunks = [];
+      let timer;
+      try {
+        await new Promise((resolve, reject) => {
+          timer = setTimeout(
+            () => reject(Error('PCM fixture timed out')),
+            5000,
+          );
+          void capture.start({
+            frame: () => undefined,
+            status: () => undefined,
+            pcm: (event) => {
+              if (event.type === 'unavailable')
+                reject(Error('Worklet unavailable'));
+              if (event.type !== 'chunk') return;
+              chunks.push(event.chunk);
+              if (chunks.length === 5) resolve();
+            },
+          });
+        });
+        await capture.stop();
+        return {
+          acquisitions,
+          sequences: chunks.map((chunk) => chunk.sequence),
+          rates: chunks.map((chunk) => chunk.sampleRate),
+          sizes: chunks.map((chunk) => chunk.samples.length),
+          audibleData: chunks.some((chunk) =>
+            chunk.samples.some((value) => value !== 0),
+          ),
+          stopped: destination.stream
+            .getTracks()
+            .every((track) => track.readyState === 'ended'),
+        };
+      } finally {
+        clearTimeout(timer);
+        await capture.stop();
+        oscillator.stop();
+        oscillator.disconnect();
+        await generator.close();
+      }
+    },
+    {
+      sourceUrl: `/@fs/${workspace.replaceAll('\\', '/')}/libs/services/audio-activity/src/lib/web-audio-source.ts`,
+      workletUrl: `/@fs/${workspace.replaceAll('\\', '/')}/libs/services/audio-activity/worklet/stellar-pcm-worklet.js`,
+    },
+  );
+  expect(pcm).toEqual({
+    acquisitions: 1,
+    sequences: [0, 1, 2, 3, 4],
+    rates: [16000, 16000, 16000, 16000, 16000],
+    sizes: [640, 640, 640, 640, 640],
+    audibleData: true,
+    stopped: true,
+  });
   expect(errors).toEqual([]);
   expect(external).toEqual([]);
   console.log(
-    'Audio browser fixture passed: denied-capture stub, manual activity, calibration, duration, hangover, mute, minimize, stop, and no external requests. Physical microphone was not used.',
+    'Audio browser fixture passed: denied-capture stub, manual activity, lifecycle cleanup, actual44100Hz oscillator-to-stream AudioWorklet producing contiguous16000Hz PCM, and no external requests. Physical microphone and speakers were not used.',
   );
 } finally {
   await browser?.close();

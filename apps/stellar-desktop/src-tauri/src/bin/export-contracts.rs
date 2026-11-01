@@ -8,6 +8,10 @@ mod command_name;
 mod contracts;
 #[path = "../ivy/wire.rs"]
 mod ivy;
+#[path = "../speech/contracts.rs"]
+mod speech;
+#[path = "../speech/command_names.rs"]
+mod speech_names;
 
 use app_info_contracts::{
     APP_INFO_EVENT, AppCapability, AppInfoError, AppInfoEvent, AppInfoReply, AppInfoRequest,
@@ -16,6 +20,7 @@ use command_name::APP_INFO_COMMAND;
 use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
+use speech::*;
 use ts_rs::TS;
 
 fn main() {
@@ -38,6 +43,14 @@ fn main() {
         IvyComponent::decl(&config),
         IvyPresentation::decl(&config),
         IvySnapshot::decl(&config),
+        SpeechState::decl(&config),
+        SpeechError::decl(&config),
+        SpeechRequest::decl(&config),
+        SpeechStopRequest::decl(&config),
+        SpeechTranscribeRequest::decl(&config),
+        SpeechTranscript::decl(&config),
+        SpeechSpeakRequest::decl(&config),
+        SpeechSnapshot::decl(&config),
     ] {
         let definition = definition
             .lines()
@@ -80,5 +93,26 @@ fn main() {
     );
     println!(
         "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest }};"
+    );
+    for (name, command) in [
+        "speechTranscribeCommand",
+        "speechSpeakCommand",
+        "speechStopCommand",
+        "speechSnapshotCommand",
+    ]
+    .iter()
+    .zip(speech_names::SPEECH_COMMANDS)
+    {
+        println!(
+            "export const {name} = {} as const;",
+            serde_json::to_string(command).unwrap()
+        );
+    }
+    println!(
+        "export const speechEvent = {} as const;",
+        serde_json::to_string(SPEECH_EVENT).unwrap()
+    );
+    println!(
+        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest }};"
     );
 }

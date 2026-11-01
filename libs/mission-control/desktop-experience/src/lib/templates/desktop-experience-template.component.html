@@ -49,6 +49,20 @@
       aria-label="Experience controls"
     >
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
+      <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      <button
+        type="button"
+        [attr.aria-pressed]="voiceMuted()"
+        (click)="muteVoice.emit(!voiceMuted())"
+      >
+        {{ voiceMuted() ? 'Unmute voice' : 'Mute voice' }}
+      </button>
+      @if (voiceBusy()) {
+        <button type="button" (click)="stopVoice.emit()">Stop voice</button>
+      }
+      @if (voiceError()) {
+        <button type="button" (click)="retryVoice.emit()">Retry voice</button>
+      }
       <button
         type="button"
         [disabled]="assistantBusy() && !assistantUncertain()"

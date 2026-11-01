@@ -1,0 +1,24 @@
+{
+  "issue": 207,
+  "worker": "foreman-cloud",
+  "session": "local-fd7ca80d3d3107e4f298a3509af24478c89293522091aa68992f06f60845a23d",
+  "source": "apps/stellar-desktop/src-tauri/src/speech/speech_worker.py",
+  "calls": 1,
+  "maxTurns": 1,
+  "toolCalls": 0,
+  "parentLimitMs": 120000,
+  "rawLimitBytes": 1048576,
+  "decodedLimitBytes": 65536,
+  "elapsedMs": 49604,
+  "rawBytes": 189067,
+  "decodedBytes": 10897,
+  "usage": { "input": 8035, "output": 3040, "total": 11075 },
+  "hostReview": [
+    "Verified installed transcription helper exports and configuration schema.",
+    "Emit bounded UTF-8 rather than expanding Unicode to ASCII escapes.",
+    "Explicitly pin Kokoro and af_heart when calling the installed engine.",
+    "Native host owns deadlines, child termination, typed IPC and temporary output cleanup.",
+    "Native integration found sounddevice absent from the voice environment; host replaced playback with synchronous standard-library winsound, preserving bounds and owned-process cancellation."
+  ],
+  "qualification": "Source contribution only; actual audio and conversation qualification is recorded separately."
+}

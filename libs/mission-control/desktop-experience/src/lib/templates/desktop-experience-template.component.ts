@@ -55,6 +55,13 @@ export class DesktopExperienceTemplate {
   readonly cancelIvy = output<void>();
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
+  readonly voiceStatus = input('Local voice idle');
+  readonly voiceMuted = input(false);
+  readonly voiceBusy = input(false);
+  readonly voiceError = input(false);
+  readonly muteVoice = output<boolean>();
+  readonly stopVoice = output<void>();
+  readonly retryVoice = output<void>();
   readonly draft = signal('');
   readonly draftTooLong = computed(
     () => new TextEncoder().encode(this.draft().trim()).length > 8192,

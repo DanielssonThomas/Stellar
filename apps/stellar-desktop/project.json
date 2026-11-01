@@ -15,6 +15,11 @@
         "tsConfig": "apps/stellar-desktop/tsconfig.app.json",
         "assets": [
           {
+            "glob": "*.js",
+            "input": "libs/services/audio-activity/worklet",
+            "output": "audio-worklets"
+          },
+          {
             "glob": "**/*",
             "input": "apps/stellar-desktop/public"
           }

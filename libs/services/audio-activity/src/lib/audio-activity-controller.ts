@@ -1,4 +1,5 @@
 import { ActivityDetector } from './activity-detector';
+import { validPcmChunk, type PcmEvent } from './pcm-model';
 import type {
   ActivitySnapshot,
   AudioFrame,
@@ -20,6 +21,7 @@ export class AudioActivityController {
   private lastPublished: number | undefined;
   private readonly bindings = new Set<() => void>();
   private current: AudioActivityState;
+  private readonly pcmListeners = new Set<(event: PcmEvent) => void>();
 
   constructor(
     private readonly onChange: (state: AudioActivityState) => void,
@@ -33,12 +35,20 @@ export class AudioActivityController {
     return this.current;
   }
 
+  subscribePcm(listener: (event: PcmEvent) => void): () => void {
+    if (this.disposed) return () => undefined;
+    this.pcmListeners.add(listener);
+    return () => this.pcmListeners.delete(listener);
+  }
+
   async start(source: AudioSource, deviceId?: string): Promise<void> {
     if (this.disposed) return;
     const generation = ++this.generation;
     const previous = this.source;
     this.source = source;
     void this.release(previous);
+    if (!this.owns(generation, source)) return;
+    this.emitPcm({ type: 'reset' });
     if (!this.owns(generation, source)) return;
     this.detector.reset();
     this.lastPublished = undefined;
@@ -50,9 +60,13 @@ export class AudioActivityController {
           frame: (frame) => {
             if (generation === this.generation) this.frame(frame);
           },
+          pcm: (event) => {
+            if (this.owns(generation, source)) this.emitPcm(event);
+          },
           status: (status) => {
             if (generation !== this.generation) return;
             if (status === 'suspended') {
+              this.emitPcm({ type: 'reset' });
               this.detector.pause();
               this.publish(status, this.detector.snapshot());
               return;
@@ -76,6 +90,7 @@ export class AudioActivityController {
     const source = this.source;
     this.source = undefined;
     const cleanup = this.release(source);
+    this.emitPcm({ type: 'reset' });
     if (generation === this.generation)
       this.publish(status, {
         ...this.detector.snapshot(),
@@ -92,7 +107,9 @@ export class AudioActivityController {
   dispose(): Promise<void> {
     this.disposed = true;
     for (const unbind of this.bindings) unbind();
-    return this.stop();
+    const stopped = this.stop();
+    this.pcmListeners.clear();
+    return stopped;
   }
 
   bindLifecycle(document: Document, window: Window): () => void {
@@ -131,6 +148,31 @@ export class AudioActivityController {
       return;
     this.lastPublished = frame.timestampMs;
     this.publish(this.current.status, activity);
+  }
+
+  private emitPcm(event: PcmEvent) {
+    if (event.type === 'chunk' && !validPcmChunk(event.chunk)) {
+      this.emitPcm({ type: 'reset' });
+      return;
+    }
+    const generation = this.generation;
+    for (const listener of [...this.pcmListeners]) {
+      if (generation !== this.generation) break;
+      if (!this.pcmListeners.has(listener)) continue;
+      try {
+        listener(
+          event.type === 'chunk'
+            ? {
+                type: 'chunk',
+                chunk: { ...event.chunk, samples: event.chunk.samples.slice() },
+              }
+            : event,
+        );
+      } catch {
+        // One consumer cannot retain capture resources by interrupting teardown.
+      }
+    }
+    if (event.type === 'chunk') event.chunk.samples.fill(0);
   }
 
   private freeze(

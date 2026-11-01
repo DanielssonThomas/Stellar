@@ -44,3 +44,30 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
 } from './lib/ivy-codec';
+export type {
+  SpeechState,
+  SpeechError,
+  SpeechRequest,
+  SpeechStopRequest,
+  SpeechTranscribeRequest,
+  SpeechTranscript,
+  SpeechSpeakRequest,
+  SpeechSnapshot,
+  SpeechCommands,
+} from './generated';
+export {
+  speechTranscribeCommand,
+  speechSpeakCommand,
+  speechStopCommand,
+  speechSnapshotCommand,
+  speechEvent,
+} from './generated';
+export {
+  decodeSpeechRequest,
+  decodeSpeechStopRequest,
+  decodeSpeechTranscribeRequest,
+  decodeSpeechTranscript,
+  decodeSpeechSpeakRequest,
+  decodeSpeechSnapshot,
+  decodeSpeechError,
+} from './lib/speech-codec';

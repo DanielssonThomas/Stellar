@@ -1,0 +1,80 @@
+{
+  "synthetic": true,
+  "microphoneUsed": false,
+  "llmRequests": 0,
+  "audiblePlayback": false,
+  "workerSha256": "d7e6f69154e3d2b51c21f2248e41073cc5cb85bb69ce9dd9f3e913c0ab01b969",
+  "sample": "D:\\Hermes\\profiles\\ivy\\voice\\samples-local\\kokoro-af_heart-friendly.wav",
+  "sampleSha256": "10118fd24c5db215b0c3945507d4edec32463e3f44219df0c55e8b361d4f06df",
+  "transcription": {
+    "exitCode": 0,
+    "durationMs": 2711,
+    "sampleCount": 71615,
+    "frames": [
+      {
+        "state": "transcribing"
+      },
+      {
+        "text": "Hi, I'm here. Tell me what you have in mind and we'll work through it together."
+      }
+    ],
+    "stderrBytes": 0
+  },
+  "silence": {
+    "exitCode": 0,
+    "durationMs": 1983,
+    "sampleCount": 16000,
+    "frames": [
+      {
+        "state": "transcribing"
+      },
+      {
+        "text": ""
+      }
+    ],
+    "stderrBytes": 0
+  },
+  "synthesis": {
+    "exitCode": 0,
+    "durationMs": 2319,
+    "result": {
+      "frames": [
+        {
+          "state": "synthesizing"
+        },
+        {
+          "state": "speaking"
+        },
+        {
+          "done": true
+        }
+      ],
+      "playbackBackend": {
+        "module": "winsound",
+        "available": true,
+        "filenameFlag": 131072,
+        "noDefaultFlag": 2,
+        "synchronousDefault": true,
+        "python": "3.12.15"
+      },
+      "playbackStubCalls": [
+        {
+          "pathProvided": true,
+          "flags": 131074
+        },
+        {
+          "pathProvided": false,
+          "flags": 0
+        }
+      ],
+      "wav": {
+        "frames": 53839,
+        "sampleRate": 24000,
+        "channels": 1,
+        "sampleWidth": 2
+      }
+    },
+    "stderrBytes": 0
+  },
+  "temporaryOutputRemoved": true
+}

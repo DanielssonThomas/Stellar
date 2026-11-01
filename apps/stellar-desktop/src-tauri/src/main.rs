@@ -8,6 +8,7 @@ mod ivy;
 mod shell;
 #[cfg(feature = "native-smoke")]
 mod smoke;
+mod speech;
 
 fn main() {
     use tauri::{Emitter, Manager};
@@ -29,6 +30,13 @@ fn main() {
                     let _ = handle.emit_to("main", ivy::contracts::IVY_EVENT, snapshot);
                 }),
             ));
+            let handle = app.handle().clone();
+            app.manage(speech::SpeechHost::new(
+                app.path().app_local_data_dir()?.join("speech"),
+                std::sync::Arc::new(move |snapshot| {
+                    let _ = handle.emit_to("main", speech::contracts::SPEECH_EVENT, snapshot);
+                }),
+            ));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -36,6 +44,11 @@ fn main() {
                 && let Some(host) = window.try_state::<ivy::IvyHost>()
             {
                 host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<speech::SpeechHost>()
+            {
+                let _ = host.shutdown();
             }
         });
     #[cfg(feature = "native-smoke")]
@@ -49,7 +62,11 @@ fn main() {
         ivy::ivy_submit,
         ivy::ivy_cancel,
         ivy::ivy_reconcile,
-        ivy::ivy_disconnect
+        ivy::ivy_disconnect,
+        speech::speech_transcribe,
+        speech::speech_speak,
+        speech::speech_stop,
+        speech::speech_snapshot
     ]);
     builder
         .build(tauri::generate_context!())
@@ -59,6 +76,11 @@ fn main() {
                 && let Some(host) = app.try_state::<ivy::IvyHost>()
             {
                 host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<speech::SpeechHost>()
+            {
+                let _ = host.shutdown();
             }
         });
 }
