@@ -106,13 +106,15 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       ids.add(layer.id);
       if (
         typeof layer.file !== 'string' ||
-        !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.svg$/.test(layer.file) ||
+        !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:svg|png|webp)$/.test(
+          layer.file,
+        ) ||
         layer.file.startsWith('/') ||
         layer.file.includes('\\') ||
         layer.file.includes(':') ||
         layer.file.split('/').some((part) => part === '' || part === '..')
       ) {
-        return 'Emblem layer file must be a safe relative SVG path.';
+        return 'Emblem layer file must be a safe relative SVG, PNG or WebP path.';
       }
       if (
         !Number.isFinite(layer.z) ||

@@ -1,0 +1,53 @@
+{
+  "canvas": 1280,
+  "layers": [
+    {
+      "id": "violet-body",
+      "scale": 0.8,
+      "x": 30,
+      "y": 80,
+      "anchor": [410, 600],
+      "exploded": [-45, 4, -3]
+    },
+    {
+      "id": "violet-hair",
+      "scale": 0.72,
+      "x": 95,
+      "y": 150,
+      "anchor": [450, 450],
+      "exploded": [-75, -25, -5]
+    },
+    {
+      "id": "violet-ornament",
+      "scale": 0.21,
+      "x": 345,
+      "y": 280,
+      "anchor": [460, 455],
+      "exploded": [-95, -45, -7]
+    },
+    {
+      "id": "gold-body",
+      "scale": 0.8,
+      "x": 125,
+      "y": 90,
+      "anchor": [870, 600],
+      "exploded": [38, 4, 3]
+    },
+    {
+      "id": "gold-hair",
+      "scale": 0.78,
+      "x": 90,
+      "y": 115,
+      "anchor": [830, 450],
+      "exploded": [68, 22, 5]
+    },
+    {
+      "id": "gold-ornament",
+      "scale": 0.23,
+      "x": 550,
+      "y": 275,
+      "anchor": [700, 425],
+      "exploded": [95, -38, 7]
+    }
+  ]
+}
