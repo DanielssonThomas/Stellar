@@ -1,4 +1,14 @@
-import { Component, computed, input, output, viewChild } from '@angular/core';
+import {
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { DesktopMenu } from './desktop-menu';
 import {
   initialState,
   type InteractionEvent,
@@ -26,9 +36,22 @@ export interface MicrophoneOption {
     '[attr.aria-busy]': 'loading()',
     '[attr.data-phase]': 'state().phase',
     '(keydown.escape)': 'dismiss($event)',
+    '(document:pointerdown)': 'menu.outside($event)',
   },
 })
 export class DesktopExperienceTemplate {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly menu = new DesktopMenu(this.host.nativeElement, () =>
+    this.host.nativeElement.querySelector<HTMLButtonElement>(
+      '[data-menu-trigger]',
+    ),
+  );
+  readonly assistantStatus = input('Ivy disconnected');
+  readonly assistantReply = input('');
+  readonly assistantBusy = input(false);
+  readonly submitText = output<string>();
+  readonly draft = signal('');
+  readonly requestedContent = signal(false);
   readonly state = input<InteractionState>(initialState);
   readonly manifest = input<EmblemManifest | null>(null);
   readonly loading = input(false);
@@ -67,8 +90,16 @@ export class DesktopExperienceTemplate {
     return this.stage().dispatch(command);
   }
   dismiss(event: Event) {
+    if (this.menu.open()) {
+      this.menu.keydown(event as KeyboardEvent);
+      return;
+    }
     if (this.state().phase === 'idle') return;
     event.preventDefault();
+    this.dismissExperience();
+  }
+  dismissExperience() {
+    this.stage().closePresentations();
     this.action.emit({ type: 'dismiss' });
   }
   setReduced(event: Event) {
@@ -80,5 +111,18 @@ export class DesktopExperienceTemplate {
   chooseInput(event: Event) {
     if (event.target instanceof HTMLSelectElement)
       this.selectInput.emit(event.target.value);
+  }
+
+  editDraft(event: Event) {
+    if (event.target instanceof HTMLTextAreaElement)
+      this.draft.set(event.target.value);
+  }
+
+  send(event: Event) {
+    event.preventDefault();
+    const text = this.draft().trim();
+    if (!text || text.length > 8000 || this.assistantBusy()) return;
+    this.submitText.emit(text);
+    this.draft.set('');
   }
 }

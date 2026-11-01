@@ -40,6 +40,9 @@ export class StageOrganism {
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
+  readonly dismissOnClose = input(true);
+  readonly presentationChange = output<boolean>();
+  readonly retainedPresentations = output<boolean>();
   readonly interaction = output<InteractionEvent>();
   private readonly catalogue = Object.freeze({ ...inject(STAGE_CATALOGUE) });
   private readonly registry = createStageRegistry<Record<string, unknown>>(
@@ -140,6 +143,16 @@ export class StageOrganism {
     this.afterAction(this.registry.interact(action, instanceId));
   }
 
+  closePresentations() {
+    for (const instance of this.registry.snapshot())
+      this.control('close', instance.instanceId);
+  }
+
+  restorePresentation() {
+    const instance = this.registry.snapshot()[0];
+    if (instance) this.control('focus', instance.instanceId);
+  }
+
   escape(event: Event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -169,10 +182,14 @@ export class StageOrganism {
         origin.focus();
       if (action === 'close') {
         this.origins.delete(instanceId);
-        this.interaction.emit({ type: 'dismiss' });
+        if (this.dismissOnClose()) this.interaction.emit({ type: 'dismiss' });
       }
     }
     this.instances.set(this.registry.snapshot());
+    this.retainedPresentations.emit(this.registry.snapshot().length > 0);
+    this.presentationChange.emit(
+      this.registry.snapshot().some((instance) => !instance.minimized),
+    );
     if (action === 'open' || action === 'focus')
       this.focusRequest.set(instanceId);
   }

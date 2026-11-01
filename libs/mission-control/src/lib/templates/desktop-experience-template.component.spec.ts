@@ -17,8 +17,14 @@ describe('DesktopExperienceTemplate', () => {
   it('keeps the launch empty and delegates manual activity without requesting a microphone', async () => {
     const action = vi.fn();
     fixture.componentInstance.action.subscribe(action);
-    const button: HTMLButtonElement =
-      fixture.nativeElement.querySelector('button');
+    expect(
+      fixture.nativeElement.querySelector('[data-desktop-menu]'),
+    ).toBeNull();
+    fixture.componentInstance.menu.toggle();
+    await fixture.whenStable();
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[data-desktop-menu] .actions button',
+    );
     expect(button.textContent).toContain('Start activity');
     expect(
       fixture.nativeElement.querySelector('[data-instance-id]'),
@@ -31,7 +37,11 @@ describe('DesktopExperienceTemplate', () => {
       manualActive: true,
     });
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('button')).toBe(button);
+    expect(
+      fixture.nativeElement.querySelector(
+        '[data-desktop-menu] .actions button',
+      ),
+    ).toBe(button);
     expect(button.textContent).toContain('End activity');
   });
 
@@ -47,6 +57,8 @@ describe('DesktopExperienceTemplate', () => {
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
     );
     expect(action).toHaveBeenCalledWith({ type: 'dismiss' });
+    fixture.componentInstance.menu.toggle();
+    await fixture.whenStable();
     const input: HTMLInputElement =
       fixture.nativeElement.querySelector('input');
     input.checked = true;
@@ -68,6 +80,7 @@ describe('DesktopExperienceTemplate', () => {
   });
 
   it('renders explicit input choices and the already normalized real level independently of detection', async () => {
+    fixture.componentInstance.menu.toggle();
     const selected = vi.fn();
     fixture.componentInstance.selectInput.subscribe(selected);
     fixture.componentRef.setInput('inputsVisible', true);

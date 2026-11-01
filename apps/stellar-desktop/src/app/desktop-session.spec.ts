@@ -6,7 +6,7 @@ import {
 } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
 
-function setup() {
+function setup(automaticSummary = true) {
   vi.useFakeTimers();
   const audio = {
     startMicrophone: vi.fn(async () => undefined),
@@ -17,6 +17,7 @@ function setup() {
   });
   const commands = vi.fn((command) => registry.dispatch(command));
   const session = new DesktopSession({
+    automaticSummary,
     audio,
     now: () => Date.now(),
     onState: vi.fn(),
@@ -48,6 +49,34 @@ const audioState = (
 
 describe('desktop composition session', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('returns ambient without automatic content and keeps explicit presentation through continued activity', () => {
+    const { session, registry, commands } = setup(false);
+    session.dispatch({ type: 'manual-start' });
+    vi.runAllTimers();
+    session.dispatch({ type: 'manual-end' });
+    vi.runAllTimers();
+    expect(session.state.phase).toBe('idle');
+    expect(session.state.target).toBe('center');
+    expect(registry.snapshot()).toHaveLength(0);
+    expect(commands).not.toHaveBeenCalled();
+    session.dispatch({ type: 'presentation-change', visible: true });
+    vi.runAllTimers();
+    expect(session.state.phase).toBe('presenting');
+    session.dispatch({ type: 'manual-start' });
+    session.dispatch({ type: 'manual-end' });
+    vi.runAllTimers();
+    expect(session.state.target).toBe('docked');
+    session.dispatch({ type: 'hidden' });
+    session.dispatch({ type: 'resume' });
+    expect(session.state.target).toBe('docked');
+    session.dispatch({ type: 'presentation-change', visible: false });
+    vi.runAllTimers();
+    expect(session.state.phase).toBe('idle');
+    expect(commands).not.toHaveBeenCalled();
+    session.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('uses the real controller and registry for repeated manual loops without capture', () => {
     const { session, audio, registry } = setup();
