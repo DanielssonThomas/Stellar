@@ -1,0 +1,33 @@
+{
+  "issue": 175,
+  "role": "foreman-cloud",
+  "sessionId": "local-521d62667218788097bac19841beb17d46c93ce7b0cd2e67c66650fb17dc35fb",
+  "provider": "openai-codex",
+  "model": "gpt-6.1-sol",
+  "apiCalls": 1,
+  "toolCalls": 0,
+  "inputTokens": 5851,
+  "outputTokens": 3186,
+  "costStatus": "included",
+  "promptSha256": "a3fdd0e05317ddcec7bf617e4accdf7e23ae1e6230456fc85c89411891d0ba30",
+  "responseSha256": "ad5ce31f31b456b2ea599aea40ba6527019b6186f9fed690d449c6af2c83e3fd",
+  "originalFiles": [
+    {
+      "path": "tools/desktop-probe/src-tauri/src/contracts.rs",
+      "sha256": "8e52121f4919849ca479dda0ed21855e2f95ed32c582b5c33145f8bfa08c0bc9"
+    },
+    {
+      "path": "tools/desktop-probe/src-tauri/src/domain.rs",
+      "sha256": "ea64eeb76657bb6a9e8d0659b381224720d5e6783253ade101bbbf560df5e1f3"
+    },
+    {
+      "path": "tools/desktop-probe/src-tauri/src/domain_tests.rs",
+      "sha256": "6cdb840ee00e5df4f3abdca2ece59ced0edda6715466d7405efc2dd97841acfc"
+    }
+  ],
+  "hostCorrections": [
+    "Converted unit enum variants to empty struct variants so serde rejects unknown fields; retained the failing regression.",
+    "Applied cargo fmt and composed the native command/event adapter, generator and static frontend."
+  ],
+  "scope": "Source contribution reviewed and applied by Codex; no autonomous worker qualification claimed."
+}
