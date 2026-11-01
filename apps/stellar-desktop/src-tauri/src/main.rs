@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_info;
 mod commands;
 mod contracts;
 mod shell;
@@ -18,7 +19,10 @@ fn main() {
     #[cfg(feature = "native-smoke")]
     let builder = smoke::configure(builder);
     #[cfg(not(feature = "native-smoke"))]
-    let builder = builder.invoke_handler(tauri::generate_handler![commands::shell_status]);
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        commands::shell_status,
+        app_info::app_info
+    ]);
     builder
         .run(tauri::generate_context!())
         .expect("Stellar desktop failed to launch");

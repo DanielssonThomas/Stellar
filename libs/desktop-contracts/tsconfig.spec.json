@@ -8,7 +8,9 @@
       "vite/client",
       "node",
       "vitest"
-    ]
+    ],
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "vite.config.ts",

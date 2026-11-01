@@ -72,7 +72,13 @@ if (action === 'smoke') {
           {
             identifier: 'desktop-smoke',
             windows: ['main'],
-            permissions: ['allow-shell-status', 'allow-smoke-result'],
+            permissions: [
+              'allow-shell-status',
+              'allow-app-info',
+              'core:event:allow-listen',
+              'core:event:allow-unlisten',
+              'allow-smoke-result',
+            ],
           },
         ],
       },
@@ -131,6 +137,10 @@ if (action === 'smoke') {
         styledShell: true,
         runtimeStyleNonce: true,
         versionedIpc: true,
+        typedAppInfo: true,
+        eventSubscription: true,
+        u64Precision: true,
+        malformedInputRejected: true,
         invalidVersionRejected: true,
       };
       mkdirSync(resolve(root, 'artifacts/native'), { recursive: true });
@@ -154,13 +164,29 @@ if (action === 'smoke') {
   });
 } else {
   if (!args[action]) throw new Error(`Unknown native action: ${action}`);
-  const text = cargo(args[action], action.startsWith('contract-'));
+  if (action === 'contract-check') {
+    const { verifyBindings } = await import('./contracts.mjs');
+    verifyBindings((variant) =>
+      cargo(
+        [
+          ...args[action],
+          ...(variant ? ['--features', 'contract-variant-fixture'] : []),
+        ],
+        true,
+      ),
+    );
+  }
+  const text =
+    action === 'contract-check'
+      ? ''
+      : cargo(args[action], action.startsWith('contract-'));
   if (action.startsWith('contract-')) {
     const file = resolve(root, 'libs/desktop-contracts/src/generated.ts');
     if (action === 'contract-generate') writeFileSync(file, text);
     else if (
+      action !== 'contract-check' &&
       readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !==
-      text.replaceAll('\r\n', '\n')
+        text.replaceAll('\r\n', '\n')
     )
       throw new Error(
         'Rust bindings drifted; run node tools/native/cargo.mjs contract-generate',

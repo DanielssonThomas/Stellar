@@ -115,7 +115,8 @@
       "options": {
         "command": "node tools/native/cargo.mjs test"
       },
-      "outputs": []
+      "outputs": [],
+      "dependsOn": ["build"]
     },
     "native-build": {
       "executor": "nx:run-commands",
@@ -179,14 +180,15 @@
       "{workspaceRoot}/rust-toolchain.toml",
       "{projectRoot}/src-tauri/**/*",
       "{workspaceRoot}/tools/native/**/*",
-      "{workspaceRoot}/libs/desktop-contracts/src/**/*",
+      "{workspaceRoot}/libs/desktop-contracts/**/*",
       "{workspaceRoot}/docs/architecture/rust-tauri.md",
       {
         "runtime": "node -p process.platform"
       },
       {
         "runtime": "cargo --version"
-      }
+      },
+      "{workspaceRoot}/pnpm-lock.yaml"
     ]
   }
 }

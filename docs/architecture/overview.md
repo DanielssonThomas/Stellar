@@ -16,7 +16,7 @@ Repository-owned Nx generators scaffold Angular applications and their mirrored 
 
 ## Native desktop boundary
 
-`apps/stellar-desktop` is a separate Windows-first Angular/Tauri shell, with a mirrored Playwright project. Rust-owned readiness contracts are generated into `libs/desktop-contracts`; native Nx targets enforce formatting, Clippy, tests, binding drift, AST-based Rust size checks and an actual Windows WebView smoke. Native decorations and explicit local CSP/capabilities keep the blank shell minimal. The [Rust/Tauri rules](rust-tauri.md) govern native boundaries; the [desktop guide](../guides/desktop-development.md) documents setup and verification. Microphone integration remains separate work under [Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172).
+`apps/stellar-desktop` is a separate Windows-first Angular/Tauri shell, with a mirrored Playwright project. Rust-owned readiness and app-info command/event contracts are generated into the shared model `libs/desktop-contracts`; a governed shared desktop-adapter service validates the transport and owns disposable subscriptions with a browser fake; native Nx targets enforce formatting, Clippy, tests, binding drift, AST-based Rust size checks and an actual Windows WebView smoke. Native decorations and explicit local CSP/capabilities keep the blank shell minimal. The [Rust/Tauri rules](rust-tauri.md) govern native boundaries; the [desktop guide](../guides/desktop-development.md) documents setup and verification. Microphone integration remains separate work under [Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172).
 
 ## Verification
 

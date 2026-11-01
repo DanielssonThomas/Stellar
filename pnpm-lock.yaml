@@ -171,6 +171,18 @@ importers:
         specifier: 4.1.0
         version: 4.1.0(@types/node@26.6.5)(jsdom@22.1.0)(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(less@4.5.1)(lightningcss@1.33.0)(sass-embedded@1.105.2)(sass@1.105.2)(terser@5.51.2)(yaml@2.9.1))
 
+  libs/desktop-contracts:
+    dependencies:
+      '@nx/vite':
+        specifier: 22.6.1
+        version: 22.6.1(@babel/traverse@7.29.10)(@swc-node/register@1.11.1(@swc/core@1.15.47(@swc/helpers@0.5.23))(@swc/types@0.1.28)(typescript@5.9.3))(@swc/core@1.15.47(@swc/helpers@0.5.23))(nx@22.6.1(@swc-node/register@1.11.1(@swc/core@1.15.47(@swc/helpers@0.5.23))(@swc/types@0.1.28)(typescript@5.9.3))(@swc/core@1.15.47(@swc/helpers@0.5.23)))(typescript@5.9.3)(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(less@4.5.1)(lightningcss@1.33.0)(sass-embedded@1.105.2)(sass@1.105.2)(terser@5.51.2)(yaml@2.9.1))(vitest@4.1.0(@types/node@26.6.5)(jsdom@22.1.0)(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(less@4.5.1)(lightningcss@1.33.0)(sass-embedded@1.105.2)(sass@1.105.2)(terser@5.51.2)(yaml@2.9.1)))
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+      vitest:
+        specifier: 4.1.0
+        version: 4.1.0(@types/node@26.6.5)(jsdom@22.1.0)(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(less@4.5.1)(lightningcss@1.33.0)(sass-embedded@1.105.2)(sass@1.105.2)(terser@5.51.2)(yaml@2.9.1))
+
   libs/desktop-interaction:
     dependencies:
       '@nx/vite':
@@ -188,6 +200,15 @@ importers:
       '@angular/core':
         specifier: ^21.2.0
         version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+
+  libs/services/desktop-adapter:
+    dependencies:
+      '@angular/core':
+        specifier: ^21.2.0
+        version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+      '@stellar/desktop-contracts':
+        specifier: workspace:*
+        version: link:../../desktop-contracts
 
   libs/ui/atoms:
     dependencies:
