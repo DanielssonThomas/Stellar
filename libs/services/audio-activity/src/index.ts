@@ -4,3 +4,4 @@ export * from './lib/activity-detector';
 export * from './lib/audio-activity-controller';
 export * from './lib/web-audio-source';
 export * from './lib/synthetic-audio-source';
+export * from './lib/audio-inputs';

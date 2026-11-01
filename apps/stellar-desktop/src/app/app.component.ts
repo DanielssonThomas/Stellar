@@ -1,10 +1,19 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import {
+  afterNextRender,
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { DesktopExperienceTemplate } from '@stellar/ui-templates/desktop-experience';
+import { DesktopExperience } from './desktop-experience';
 import { DesktopAdapterService } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
 
 @Component({
-  imports: [RouterOutlet],
+  imports: [DesktopExperienceTemplate],
+  providers: [DesktopExperience],
   selector: 'stellar-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
@@ -16,12 +25,17 @@ import { capabilityLabel } from '@stellar/desktop-contracts';
 })
 export class AppComponent {
   readonly title = 'Stellar Desktop';
+  readonly experience = inject(DesktopExperience);
+  private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
   readonly eventSeen = signal(false);
   readonly capabilities = signal('');
   private readonly adapter = inject(DesktopAdapterService);
 
   constructor() {
+    afterNextRender(() =>
+      this.experience.connect((command) => this.view().dispatch(command)),
+    );
     let destroyed = false;
     let unsubscribe: () => void = () => undefined;
     inject(DestroyRef).onDestroy(() => {

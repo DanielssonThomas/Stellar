@@ -32,8 +32,10 @@ export async function atomicComponentGenerator(
   }
 
   const projectName = `ui-${layerOptions.plural}`;
-  const projectRoot = `libs/ui/${layerOptions.plural}`;
+  let projectRoot = `libs/ui/${layerOptions.plural}`;
+  let librarySourceRoot = `${projectRoot}/src`;
   const projects = getProjects(tree);
+  const created = !projects.has(projectName);
 
   if (!projects.has(projectName)) {
     await angularLibraryGenerator(tree, {
@@ -48,16 +50,32 @@ export async function atomicComponentGenerator(
     removeLibraryPlaceholder(tree, projectRoot, projectName);
   } else {
     const project = readProjectConfiguration(tree, projectName);
-    if (project.root !== projectRoot) {
+    const safeRoot = /^libs\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/;
+    const requiredTags = ['scope:shared', 'type:ui', `layer:${layer}`];
+    if (
+      project.projectType !== 'library' ||
+      !requiredTags.every((tag) => project.tags?.includes(tag)) ||
+      project.tags?.some(
+        (tag) =>
+          /^(scope|type|layer):/.test(tag) && !requiredTags.includes(tag),
+      ) ||
+      !safeRoot.test(project.root) ||
+      !project.sourceRoot ||
+      !safeRoot.test(project.sourceRoot) ||
+      !project.sourceRoot.startsWith(`${project.root}/`) ||
+      !tree.exists(`${project.sourceRoot}/index.ts`)
+    ) {
       throw new Error(
-        `Project ${projectName} must live at ${projectRoot}; found ${project.root}.`,
+        `Project ${projectName} requires a safe library root, source entry point and matching shared UI layer tags.`,
       );
     }
+    projectRoot = project.root;
+    librarySourceRoot = project.sourceRoot;
   }
-  if (layer !== 'atom') configureLayerManifest(tree, projectRoot);
+  if (layer !== 'atom') configureLayerManifest(tree, projectRoot, created);
 
   const baseName = `${name}-${layer}`;
-  const sourceRoot = `${projectRoot}/src/lib/${layerOptions.plural}`;
+  const sourceRoot = `${librarySourceRoot}/lib/${layerOptions.plural}`;
   const componentPath = `${sourceRoot}/${baseName}.component.ts`;
   const templatePath = `${sourceRoot}/${baseName}.component.html`;
   const stylePath = `${sourceRoot}/${baseName}.component.css`;
@@ -90,7 +108,7 @@ export async function atomicComponentGenerator(
   );
   appendExport(
     tree,
-    `${projectRoot}/src/index.ts`,
+    `${librarySourceRoot}/index.ts`,
     `./lib/${layerOptions.plural}/${baseName}.component`,
   );
 
@@ -111,7 +129,11 @@ function removeLibraryPlaceholder(
   if (tree.exists(indexPath)) tree.write(indexPath, '');
 }
 
-function configureLayerManifest(tree: Tree, projectRoot: string): void {
+function configureLayerManifest(
+  tree: Tree,
+  projectRoot: string,
+  created: boolean,
+): void {
   const manifestPath = `${projectRoot}/package.json`;
   const atomsManifestPath = 'libs/ui/atoms/package.json';
   const manifest = JSON.parse(readText(tree, manifestPath)) as {
@@ -121,7 +143,7 @@ function configureLayerManifest(tree: Tree, projectRoot: string): void {
     ? (JSON.parse(readText(tree, atomsManifestPath)) as { version?: string })
     : undefined;
   manifest.peerDependencies ??= {};
-  delete manifest.peerDependencies['@angular/common'];
+  if (created) delete manifest.peerDependencies['@angular/common'];
   manifest.peerDependencies['@stellar/ui-atoms'] = atomsManifest?.version
     ? 'workspace:^'
     : '*';

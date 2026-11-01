@@ -27,7 +27,12 @@ export function clampAudioLevel(value: number): number {
 }
 
 export function isExplodedPhase(phase: Phase): boolean {
-  return phase === 'focusing' || phase === 'listening' || phase === 'hangover';
+  return (
+    phase === 'idle' ||
+    phase === 'returning' ||
+    phase === 'suspended' ||
+    phase === 'shutdown'
+  );
 }
 
 export function layerTransform(
@@ -135,6 +140,11 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
   } catch {
     return 'Invalid emblem manifest.';
   }
+}
+
+export function decodeEmblemManifest(value: unknown): EmblemManifest | null {
+  const candidate = value as EmblemManifest | null;
+  return manifestError(candidate) === null ? candidate : null;
 }
 
 function finitePoint(

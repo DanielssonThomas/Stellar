@@ -1,3 +1,5 @@
+import type { EmblemTarget } from '@stellar/desktop-interaction';
+
 export interface StageRect {
   readonly x: number;
   readonly y: number;
@@ -19,6 +21,7 @@ export interface StageLayout {
 export function directStage(
   viewport: Readonly<{ width: number; height: number }>,
   instances: readonly StageLayoutItem[],
+  target?: EmblemTarget,
 ): StageLayout {
   const dimension = (value: number) =>
     Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -28,25 +31,21 @@ export function directStage(
   const visible = instances
     .filter((instance) => !instance.minimized)
     .slice(0, 4);
-  if (!visible.length) {
-    const size = Math.min(280, width - padding * 2, height - padding * 2);
-    return {
-      emblem: {
-        x: (width - size) / 2,
-        y: (height - size) / 2,
-        width: size,
-        height: size,
-      },
-      surfaces: [],
-    };
-  }
-  const size = Math.min(96, width - padding * 2, height * 0.2);
+  const docked = target ? target === 'docked' : visible.length > 0;
+  const size = docked
+    ? Math.min(96, width - padding * 2, height * 0.2)
+    : Math.min(
+        target === 'focused' ? 320 : 280,
+        width - padding * 2,
+        height - padding * 2,
+      );
   const emblem = {
     x: (width - size) / 2,
-    y: height - padding - size,
+    y: docked ? height - padding - size : (height - size) / 2,
     width: size,
     height: size,
   };
+  if (!visible.length) return { emblem, surfaces: [] };
   const columns = width >= 760 && visible.length > 1 ? 2 : 1;
   const rows = Math.ceil(visible.length / columns);
   const availableWidth = width - padding * 2;

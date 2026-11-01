@@ -1,6 +1,23 @@
-<main
-  class="flex min-h-screen items-center justify-center bg-stellar-canvas text-stellar-foreground"
->
-  <h1>{{ title }}</h1>
-  <router-outlet />
+<main class="h-dvh bg-stellar-canvas text-stellar-foreground">
+  <h1 class="sr-only">{{ title }}</h1>
+  <stellar-desktop-experience-template
+    [state]="experience.state()"
+    [manifest]="experience.manifest()"
+    [loading]="experience.loading()"
+    [assetError]="experience.assetError()"
+    [level]="experience.audio.state().activity.level"
+    [statusText]="experience.statusText()"
+    [inputs]="experience.inputs.items()"
+    [inputsVisible]="experience.inputs.visible()"
+    [inputsLoading]="experience.inputs.loading()"
+    [inputError]="experience.inputs.error()"
+    [selectedInputId]="experience.inputs.selectedId()"
+    [selectedInputLabel]="experience.inputs.selectedLabel()"
+    [activityStatus]="experience.activityStatus()"
+    (chooseInputs)="experience.inputs.list()"
+    (selectInput)="experience.selectInput($event)"
+    (action)="experience.dispatch($event)"
+    (stopMicrophone)="experience.session.stopMicrophone()"
+    (restoreSummary)="experience.session.showSummary()"
+  />
 </main>

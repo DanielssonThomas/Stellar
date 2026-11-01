@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, NgZone, inject, signal } from '@angular/core';
 import { AudioActivityController } from '../audio-activity-controller';
 import { WebAudioSource } from '../web-audio-source';
 import type { AudioSource } from '../audio-model';
+import { listAudioInputs } from '../audio-inputs';
 
 @Injectable({ providedIn: 'root' })
 export class AudioActivityService {
@@ -27,6 +28,10 @@ export class AudioActivityService {
 
   startMicrophone(deviceId?: string): Promise<void> {
     return this.start(new WebAudioSource(), deviceId);
+  }
+
+  listInputs() {
+    return listAudioInputs();
   }
 
   start(source: AudioSource, deviceId?: string): Promise<void> {

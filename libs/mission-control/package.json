@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "peerDependencies": {
     "@angular/common": "^21.2.0",
+    "@stellar/desktop-interaction": "workspace:^",
+    "@stellar/ui-molecules": "workspace:^",
+    "@stellar/ui-organisms": "workspace:^",
     "@angular/core": "^21.2.0",
     "@stellar/service-dashboard-status": "^0.0.1",
     "@stellar/ui-atoms": "workspace:^",

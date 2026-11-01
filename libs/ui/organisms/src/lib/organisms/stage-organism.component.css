@@ -14,6 +14,21 @@
   overflow: auto;
   padding: var(--stellar-space-3, 0.75rem);
 }
+.emblem-slot {
+  transition:
+    left 320ms ease,
+    top 320ms ease,
+    width 320ms ease,
+    height 320ms ease;
+}
+:host(.motion-reduced) .emblem-slot {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .emblem-slot {
+    transition: none;
+  }
+}
 .surface:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--stellar-color-primary);
