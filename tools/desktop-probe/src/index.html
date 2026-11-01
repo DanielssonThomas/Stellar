@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Stellar desktop probe</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">STELLAR · WINDOWS FEASIBILITY</p>
+      <h1>Native contract & microphone probe</h1>
+      <p>
+        A bounded engineering probe. Audio stays in memory, is never recorded or
+        uploaded, and starts only when you press Start microphone.
+      </p>
+      <section aria-labelledby="contract-heading">
+        <h2 id="contract-heading">Rust → TypeScript → WebView</h2>
+        <p id="native-status" role="status">Checking native connection…</p>
+        <button id="roundtrip" type="button">Run contract checks</button>
+        <details>
+          <summary>Contract results</summary>
+          <pre id="contract-results" aria-live="polite">Loading…</pre>
+        </details>
+      </section>
+      <section aria-labelledby="microphone-heading">
+        <h2 id="microphone-heading">Sound activity · not speech detection</h2>
+        <p id="microphone-status" role="status">
+          Idle · microphone has not been requested.
+        </p>
+        <label for="input">Microphone input</label>
+        <select id="input">
+          <option value="-1">System default</option>
+        </select>
+        <button id="list-inputs" type="button">List inputs</button>
+        <p id="input-status">
+          Input labels may be hidden until permission is granted.
+        </p>
+        <button id="start" type="button">Start microphone</button>
+        <button id="stop" type="button">Stop & release microphone</button>
+        <button id="resume" type="button" disabled>Resume audio</button>
+        <meter
+          id="level"
+          min="-100"
+          max="0"
+          value="-100"
+          aria-label="Microphone level in dBFS"
+        ></meter>
+        <output id="activity">No microphone samples yet.</output>
+        <pre id="microphone-details">No capture requested.</pre>
+      </section>
+      <details>
+        <summary>Runtime environment</summary>
+        <pre id="environment"></pre>
+      </details>
+    </main>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
