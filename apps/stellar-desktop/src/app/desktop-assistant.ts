@@ -113,7 +113,6 @@ export class DesktopAssistant {
       await this.adapter.submit(value, inputId);
       return true;
     } catch {
-      /* The typed adapter exposes the failure state. */
       return false;
     }
   }
@@ -121,7 +120,7 @@ export class DesktopAssistant {
     try {
       await this.adapter.connect();
     } catch {
-      /* Connection status remains visible. */
+      return;
     }
   }
   async cancel() {
@@ -136,7 +135,7 @@ export class DesktopAssistant {
     try {
       await this.adapter.reconcile();
     } catch {
-      /* The receipt remains authoritative. */
+      return;
     }
   }
 
