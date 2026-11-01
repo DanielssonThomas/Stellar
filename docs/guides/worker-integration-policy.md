@@ -43,3 +43,7 @@ The identity mapping file is trusted policy, not worker input. Each entry has th
 ```
 
 The runner verifies the authenticated integration identity as PR author because the trusted runner creates cross-fork PRs. Worker ownership and fork checks remain separately enforced by the eligibility evaluator.
+
+## Proposed protected-change route
+
+[ADR 0002](../decisions/0002-independent-integration-approval.md) proposes independent technical assessment and human owner authorization for solo-maintained protected changes. It requires a separate CEO decision and later implementation. It does not extend this runner's low-risk eligibility scope, enable protected-path integration, install an App or change the current ruleset.

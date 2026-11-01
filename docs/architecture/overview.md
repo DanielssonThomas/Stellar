@@ -6,11 +6,17 @@ Stellar is an Nx integrated monorepo using Angular 21.2, TypeScript, and pnpm. `
 
 The first UI library is `libs/ui/atoms`. Its components demonstrate conventional atomic-layer naming, Tailwind styling through `libs/design-tokens`, and a reusable skeleton loading primitive. The app imports the component library through its public entry point and the token stylesheet through its global styles.
 
+The application shell composes the Mission Control template from a scoped UI library and a shared status service. A loopback-only Node adapter under `tools/dashboard/` exposes fixed read-only status and character-image routes using selected Hermes profile database columns, paginated public GitHub metadata, and a fixed `Stellar-Design` character production record. See the [local dashboard guide](../guides/operations-dashboard.md) for launch, evidence, freshness, and data boundaries.
+
 ## Dependency direction
 
 Nx project tags and `@nx/enforce-module-boundaries` in `eslint.config.mjs` govern imports. Applications may import shared libraries. Shared libraries may import other shared libraries. UI layer tags constrain dependencies upward from atoms to molecules, organisms, and templates. Cycles and imports that violate these constraints fail linting.
 
 Repository-owned Nx generators scaffold Angular applications and their mirrored Playwright E2E projects, atomic components, and shared Angular services. Their maintained invocation guide is [Generators](../guides/generators.md). Buildable Angular libraries use the Angular unit-test builder with Vitest; non-buildable Angular libraries use Nx's Vitest Analog integration.
+
+## Planned native desktop boundary
+
+[Epic #172](https://github.com/DanielssonThomas/Stellar/issues/172) plans a separate Windows-first Tauri desktop application. It is not part of the current web dashboard implementation. The [Rust/Tauri rules](rust-tauri.md) define modular native code, generated frontend contracts, readability and verification requirements for that work. The application, binding generator, native build targets and automated size checks remain to be introduced through the epic's feasibility and bootstrap issues.
 
 ## Verification
 
