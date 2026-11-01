@@ -1,0 +1,7 @@
+@import 'tailwindcss';
+@import '../../../libs/design-tokens/theme.css';
+
+body {
+  margin: 0;
+  font-family: var(--stellar-font-family);
+}

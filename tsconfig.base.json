@@ -27,7 +27,8 @@
       "@stellar/desktop-interaction": ["libs/desktop-interaction/src/index.ts"],
       "@stellar/service-audio-activity": [
         "libs/services/audio-activity/src/index.ts"
-      ]
+      ],
+      "@stellar/desktop-contracts": ["libs/desktop-contracts/src/index.ts"]
     }
   }
 }
