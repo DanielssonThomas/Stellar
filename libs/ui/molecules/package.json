@@ -3,7 +3,9 @@
   "version": "0.0.1",
   "peerDependencies": {
     "@angular/core": "^21.2.0",
-    "@stellar/ui-atoms": "workspace:^"
+    "@stellar/ui-atoms": "workspace:^",
+    "@stellar/desktop-interaction": "workspace:^",
+    "clsx": "^2.1.1"
   },
   "sideEffects": false
 }

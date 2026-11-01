@@ -39,12 +39,12 @@ const reviewedTextDigests = Object.freeze({
     '425e9cd72c54fe88e19c7531f8a0468993ba8388fc229daf8ad6fcbf510fa15a',
   ]),
   'pnpm-lock.yaml': Object.freeze([
-    '4428c08045dd973b66f15a16f0bb5e977f199d43e800671c16a03ca8137d5f7f',
-    '9f7d2f801be4f1c6bc6b9bea5c6a7a3ffe64e0b7ee69fab9a4a1b3a8cf4b5fc0',
+    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
+    '51614807580c8a90f5124153c2ba05f856dcd5ed29581637554b171f6b0dc9bc',
   ]),
   'pnpm-workspace.yaml': Object.freeze([
-    'a7bce599f23df0a210f951cc11d96e278b5feaeb15fcaab23141e78555ea28f8',
-    '38b19ec0162220facfe1cb4f244b43b236d6fe487a0218fb33216738bbb3e04c',
+    'b8c71989d9486c19da3edf3689c30848b6ef4dde682396ce0736b1ca1c66fa0f',
+    '471a40ce07cfdd62f98f7f10a00edd98957eb515ba8c1908df2c89c611614a1d',
   ]),
 });
 const trustedCacheLockDigest = reviewedTextDigests['pnpm-lock.yaml'][1];
