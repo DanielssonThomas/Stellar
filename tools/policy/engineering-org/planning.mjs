@@ -197,7 +197,7 @@ function taskRecommendation(task, scope, snapshot) {
     tier,
     owner,
     dependencies,
-    after: task.after,
+    after: [...task.after],
     unresolved,
     duplicates,
     capability,
@@ -234,6 +234,7 @@ export function planEngineeringWork(packet, snapshot, { now }) {
       packet.tasks.length > 0 &&
       packet.tasks.length <= 64 &&
       Number.isSafeInteger(packet.epicNumber) &&
+      packet.epicNumber > 0 &&
       snapshot.issues.some(
         (issue) =>
           issue.number === packet.epicNumber &&

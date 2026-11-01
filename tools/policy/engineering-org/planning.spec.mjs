@@ -131,6 +131,8 @@ test('prepares an evidenced bounded assignment without granting execution or mut
   ]);
   assert.deepEqual(value, original);
   assert.equal(result.packetDigest, digest(value.packet));
+  value.packet.tasks[0].after.push('later-input-mutation');
+  assert.deepEqual(result.recommendations[0].after, []);
 });
 
 test('rejects changed repository, revision, policy and snapshot evidence', () => {

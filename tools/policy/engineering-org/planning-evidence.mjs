@@ -73,6 +73,15 @@ export function validateSnapshot(snapshot, now) {
     snapshot.issues.map((issue) => issue.number),
     'Issue identities',
   );
+  requireValue(
+    snapshot.issues.every(
+      (issue) =>
+        Number.isSafeInteger(issue.number) &&
+        issue.number > 0 &&
+        ['OPEN', 'CLOSED'].includes(issue.state),
+    ),
+    'Trusted issue identities or states are invalid.',
+  );
   unique(
     snapshot.scopes.map((scope) => scope.key),
     'Scope identities',
