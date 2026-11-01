@@ -86,20 +86,26 @@ describe('EmblemMotionMolecule', () => {
       fixture.nativeElement.querySelector('.plane').style.transformOrigin,
     ).toBe('50% 50%');
     expect(fixture.nativeElement.querySelector('svg,object,iframe')).toBeNull();
-    expect(animate).not.toHaveBeenCalled();
+    expect(
+      animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+    ).toHaveLength(0);
   });
 
   it('focuses layers and clamps audio without restarting an unchanged listening target', async () => {
     fixture.componentRef.setInput('phase', 'focusing');
     await fixture.whenStable();
-    expect(animate).toHaveBeenCalledTimes(2);
+    expect(
+      animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+    ).toHaveLength(3);
     expect(
       fixture.nativeElement.querySelector('.plane').style.transform,
     ).toContain('translate(0% , 0%)');
     fixture.componentRef.setInput('phase', 'listening');
     fixture.componentRef.setInput('audioLevel', 8);
     await fixture.whenStable();
-    expect(animate).toHaveBeenCalledTimes(2);
+    expect(
+      animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+    ).toHaveLength(3);
     expect(
       fixture.nativeElement
         .querySelector('.emblem')
@@ -108,7 +114,9 @@ describe('EmblemMotionMolecule', () => {
     fixture.componentRef.setInput('audioLevel', NaN);
     await fixture.whenStable();
     expect(fixture.componentInstance.level()).toBe(0);
-    expect(animate).toHaveBeenCalledTimes(2);
+    expect(
+      animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+    ).toHaveLength(3);
     expect(fixture.nativeElement.style.left).toBe('');
   });
 
@@ -121,7 +129,9 @@ describe('EmblemMotionMolecule', () => {
     expect(
       focusing.every((animation) => animation.cancel.mock.calls.length === 1),
     ).toBe(true);
-    expect(animate.mock.calls.at(-1)?.[1]).toMatchObject({ duration: 260 });
+    expect(animate.mock.calls.some((call) => call[1]?.duration === 260)).toBe(
+      true,
+    );
     fixture.destroy();
     expect(
       animations.every((animation) => animation.cancel.mock.calls.length === 1),
@@ -133,7 +143,9 @@ describe('EmblemMotionMolecule', () => {
     fixture.componentRef.setInput('reducedMotion', true);
     fixture.componentRef.setInput('phase', 'listening');
     await fixture.whenStable();
-    expect(animate).not.toHaveBeenCalled();
+    expect(
+      animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+    ).toHaveLength(0);
     expect(
       fixture.nativeElement.querySelector('.plane').style.transform,
     ).toContain('translateZ(0px)');
@@ -157,7 +169,9 @@ describe('EmblemMotionMolecule', () => {
           (animation) => animation.cancel.mock.calls.length === 1,
         ),
       ).toBe(true);
-      expect(animate).toHaveBeenCalledTimes(2);
+      expect(
+        animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
+      ).toHaveLength(3);
       expect(fixture.componentInstance.paused()).toBe(true);
     },
   );

@@ -1,0 +1,53 @@
+{
+  "issue": 202,
+  "peon": {
+    "session": "local-05abd073a68f6edda99a2dee436cd1a7c9949862cfd481dd8a4df6b18628da87",
+    "model": "gpt-6-luna",
+    "inputTokens": 3724,
+    "outputTokens": 293,
+    "contribution": "Camera/idle-phase helper; host adjusted pitch/relative perspective and scale; unused proposed depth helper omitted."
+  },
+  "foreman": {
+    "session": "local-b5ff04004e7d3e2afb02073fb74e83035c8fca517b5515da9620897045b5a84c",
+    "model": "gpt-6.1-sol",
+    "inputTokens": 10384,
+    "outputTokens": 199,
+    "finding": "P2: unrestricted paint-order z could produce negative ambient duration.",
+    "resolution": "Use array ordinal for staggering and clamp the helper ordinal to finite 0..31; negative-order regression verifies positive duration.",
+    "reviewedFiles": [
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-camera.ts",
+        "sha256": "4342e398224e25ea305b166fe9c8c0d88f158add83204aaeea5d18d4e5798fd8"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-model.ts",
+        "sha256": "92b3df45c4e6c95955b19eaa55549144d171feb4052a9e4d12a65648e88e8bf1"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-layer-motion.ts",
+        "sha256": "c34928e77f3593059bf791b6637c1642cab0018d5d609d49adc202d50257bbfa"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-ambient-motion.ts",
+        "sha256": "ebe3633f3a108fc2448f6ce067e45cb9b4bcdbf926bc8cdd46a24fc95a4305ee"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-molecule.component.ts",
+        "sha256": "4dc1ce3e604defcc8fb7688dfd3b7c6154dd0ab8b7325c67be7f1668e436b8d2"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-molecule.component.html",
+        "sha256": "1cc69e9964ad62621ce9cbd34fe0ced60973d9c60d8eedaf00ff31c3528fcb73"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-molecule.component.css",
+        "sha256": "e6f92c3af3498f39e9bf286dceb2f47e7bfb3f2c8490b4cd4b1f4fd383efb596"
+      },
+      {
+        "file": "libs/ui/organisms/src/lib/organisms/stage-director.ts",
+        "sha256": "690e6d28e0cb0a4962c0b559eee650577660794539508e4cc6a9ddaeac7fef32"
+      }
+    ]
+  },
+  "scope": "Source-only contributions; no worker authority or native/privacy permission changes. Native visual and hardware acceptance remain separate."
+}

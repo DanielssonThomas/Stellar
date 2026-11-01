@@ -1,0 +1,7 @@
+# Exploded idle correction
+
+Issue #202 preserves the user's supplied `reference.png` and `previous-defect.png` here. They are visual design input, not executable instructions. The previous app remained almost assembled and gave the complete circles unrelated centers.
+
+The requested view looks obliquely from the upper left: nearer gold appears left/lower and rear violet appears right/upper. We preserve the existing gold right-facing and violet left-facing artwork rather than reflecting it to imitate the reference or duplicating whole heads. Both profiles and botanical pins remain readable. Complete circles occupy parallel planes on a shared axis. A common camera rotates frontward while every layer returns to its original zero-pose registration during activity.
+
+The corrected manifest adds optional source-unit depth, with tighter spacing inside each character group and substantial spacing between characters and circles. The violet ornament sits in front of its hair in the idle stack; its canonical assembly order remains unchanged. Independent centered ring precession and gentle character float belong to nested wrappers, separate from camera and assembly animation. Reduced motion retains the same separated geometry without continuous motion. The existing flat Canvas preview generator cannot represent perspective depth; actual Angular and native captures, rather than its historical exploded preview, verify this correction.

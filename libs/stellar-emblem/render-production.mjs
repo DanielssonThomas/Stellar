@@ -43,7 +43,22 @@ const geometries = [
     content: `<g transform="translate(${x} ${y})"><path d="M0 -58 Q10 -10 44 0 Q10 10 0 58 Q-10 10 -44 0 Q-10 -10 0 -58Z" fill="url(#gold)" stroke="#75410c" stroke-width="4"/><path d="M0 -50 0 0 -37 0 Q-9 -9 0 -50" fill="#fff4a0"/><path d="M0 0 37 0 Q9 9 0 50Z" fill="#ffb319"/><path d="M0 -50V50M-37 0H37" stroke="#fff1a0" stroke-width="1.5"/></g>`,
   })),
 ];
-const pose = ([x, y, rotation]) => ({ x, y, rotation });
+const explodedPose = (id) => {
+  const character = id.startsWith('gold') || id.startsWith('violet');
+  const separation =
+    900 + (id.endsWith('hair') ? 60 : id.endsWith('ornament') ? 120 : 0);
+  const depth =
+    id === 'violet-ornament'
+      ? -780
+      : character
+        ? separation * (id.startsWith('gold') ? 1 : -1)
+        : id === 'outer-frame'
+          ? 180
+          : id === 'inner-circle'
+            ? -180
+            : 0;
+  return { x: 0, y: 0, rotation: 0, depth };
+};
 const zero = { x: 0, y: 0, rotation: 0 };
 const entry = (item, z, extension) => ({
   id: item.id,
@@ -51,7 +66,12 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded: pose(item.exploded),
+  exploded: explodedPose(item.id),
+  ...(item.id === 'outer-frame'
+    ? { spin: 'clockwise' }
+    : item.id === 'inner-circle'
+      ? { spin: 'counter-clockwise' }
+      : {}),
 });
 const manifest = {
   version: 1,

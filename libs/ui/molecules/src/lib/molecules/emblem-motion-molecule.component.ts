@@ -9,11 +9,14 @@ import {
   input,
   signal,
   viewChildren,
+  viewChild,
 } from '@angular/core';
 import type { Phase } from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import clsx from 'clsx';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
+import { cameraTransform, idleMotionEnabled } from './emblem-camera';
+import { createEmblemAmbientMotion } from './emblem-ambient-motion';
 import {
   clampAudioLevel,
   EmblemManifest,
@@ -53,7 +56,12 @@ export class EmblemMotionMolecule {
     base: string;
   } | null>(null);
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
+  private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
+  private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
   private readonly motion = createEmblemLayerMotion(this.document.defaultView);
+  private readonly ambient = createEmblemAmbientMotion(
+    this.document.defaultView,
+  );
 
   readonly unavailable = computed(() => {
     const failed = this.failedAsset();
@@ -84,6 +92,7 @@ export class EmblemMotionMolecule {
     clsx('emblem relative block h-full w-full', {
       'motion-paused': this.paused(),
       'with-environment': this.environment(),
+      'idle-motion': idleMotionEnabled(this.phase(), this.paused()),
     }),
   );
   readonly aspectRatio = computed(() => {
@@ -116,6 +125,7 @@ export class EmblemMotionMolecule {
       this.document.removeEventListener('visibilitychange', visibilityChanged);
       this.media?.removeEventListener('change', preferenceChanged);
       this.motion.dispose();
+      this.ambient.dispose();
     });
     afterRenderEffect(() => {
       const manifest = this.manifest();
@@ -124,26 +134,53 @@ export class EmblemMotionMolecule {
       const reduced = this.motionReduced();
       const paused = this.paused();
       const planes = this.planes();
+      const camera = this.camera();
       this.motion.update(
         manifest
-          ? planes.flatMap((plane, index) => {
-              const layer = layers[index];
-              return layer
+          ? [
+              ...(camera
                 ? [
                     {
-                      element: plane.nativeElement,
-                      transform: layerTransform(
-                        layer,
-                        manifest,
-                        phase,
-                        reduced,
-                      ),
+                      element: camera.nativeElement,
+                      transform: cameraTransform(phase),
                     },
                   ]
-                : [];
-            })
+                : []),
+              ...planes.flatMap((plane, index) => {
+                const layer = layers[index];
+                return layer
+                  ? [
+                      {
+                        element: plane.nativeElement,
+                        transform: layerTransform(
+                          layer,
+                          manifest,
+                          phase,
+                          reduced,
+                        ),
+                      },
+                    ]
+                  : [];
+              }),
+            ]
           : [],
         paused ? 0 : phase === 'returning' ? 260 : 220,
+      );
+      this.ambient.update(
+        this.artwork().flatMap((artwork, index) => {
+          const layer = layers[index];
+          return layer
+            ? [
+                {
+                  element: artwork.nativeElement,
+                  spin: layer.spin,
+                  order: index,
+                },
+              ]
+            : [];
+        }),
+        idleMotionEnabled(phase, paused),
+        paused,
       );
     });
   }

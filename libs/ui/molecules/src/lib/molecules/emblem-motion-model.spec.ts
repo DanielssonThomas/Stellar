@@ -24,6 +24,23 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('keeps explicit separated depth under reduced motion and rejects invalid depth', () => {
+    const spatial = { ...layer, exploded: { ...layer.exploded, depth: 256 } };
+    expect(layerTransform(spatial, manifest, 'idle', true)).toContain(
+      'translateZ(50cqw)',
+    );
+    expect(layerTransform(spatial, manifest, 'listening', true)).toContain(
+      'translateZ(0px)',
+    );
+    for (const depth of [NaN, Infinity, -Infinity, 4097, '256']) {
+      expect(
+        decodeEmblemManifest({
+          ...manifest,
+          layers: [{ ...spatial, exploded: { ...spatial.exploded, depth } }],
+        }),
+      ).toBeNull();
+    }
+  });
   it('decodes imported JSON through the existing geometry and resource checks', () => {
     expect(decodeEmblemManifest(JSON.parse(JSON.stringify(manifest)))).toEqual(
       manifest,

@@ -6,10 +6,11 @@
   position: relative;
   width: 100%;
   height: 100%;
-  perspective: 900px;
+  container-type: inline-size;
   isolation: isolate;
 }
 
+.camera,
 .plane,
 .artwork,
 img {
@@ -19,7 +20,9 @@ img {
   height: 100%;
 }
 
-.plane {
+.camera,
+.plane,
+.artwork {
   transform-style: preserve-3d;
   pointer-events: none;
 }
@@ -40,26 +43,4 @@ img {
   opacity: calc(0.08 + var(--emblem-audio, 0) * 0.14);
   filter: blur(18px);
   pointer-events: none;
-}
-
-.spin-clockwise {
-  animation: emblem-orbit 180s linear infinite;
-}
-.spin-counter {
-  animation: emblem-orbit 210s linear infinite reverse;
-}
-.motion-paused .artwork {
-  animation: none;
-}
-
-@keyframes emblem-orbit {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .artwork {
-    animation: none;
-  }
 }

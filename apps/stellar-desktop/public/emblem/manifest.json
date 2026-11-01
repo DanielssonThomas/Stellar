@@ -7,97 +7,243 @@
       "id": "violet-body",
       "file": "layers/violet-body.png",
       "z": 0,
-      "anchor": { "x": 410, "y": 600 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -45, "y": 4, "rotation": -3 }
+      "anchor": {
+        "x": 410,
+        "y": 600
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": -900
+      }
     },
     {
       "id": "violet-hair",
       "file": "layers/violet-hair.png",
       "z": 1,
-      "anchor": { "x": 450, "y": 450 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -75, "y": -25, "rotation": -5 }
+      "anchor": {
+        "x": 450,
+        "y": 450
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": -960
+      }
     },
     {
       "id": "violet-ornament",
       "file": "layers/violet-ornament.png",
       "z": 2,
-      "anchor": { "x": 460, "y": 455 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -95, "y": -45, "rotation": -7 }
+      "anchor": {
+        "x": 460,
+        "y": 455
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": -780
+      }
     },
     {
       "id": "gold-body",
       "file": "layers/gold-body.png",
       "z": 3,
-      "anchor": { "x": 870, "y": 600 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 38, "y": 4, "rotation": 3 }
+      "anchor": {
+        "x": 870,
+        "y": 600
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 900
+      }
     },
     {
       "id": "gold-hair",
       "file": "layers/gold-hair.png",
       "z": 4,
-      "anchor": { "x": 830, "y": 450 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 68, "y": 22, "rotation": 5 }
+      "anchor": {
+        "x": 830,
+        "y": 450
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 960
+      }
     },
     {
       "id": "gold-ornament",
       "file": "layers/gold-ornament.png",
       "z": 5,
-      "anchor": { "x": 700, "y": 425 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 95, "y": -38, "rotation": 7 }
+      "anchor": {
+        "x": 700,
+        "y": 425
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 1020
+      }
     },
     {
       "id": "outer-frame",
       "file": "layers/outer-frame.svg",
       "z": 6,
-      "anchor": { "x": 640, "y": 640 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -28, "y": 0, "rotation": -2 }
+      "anchor": {
+        "x": 640,
+        "y": 640
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 180
+      },
+      "spin": "clockwise"
     },
     {
       "id": "inner-circle",
       "file": "layers/inner-circle.svg",
       "z": 7,
-      "anchor": { "x": 640, "y": 640 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 28, "y": 0, "rotation": 2 }
+      "anchor": {
+        "x": 640,
+        "y": 640
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": -180
+      },
+      "spin": "counter-clockwise"
     },
     {
       "id": "cardinal-north",
       "file": "layers/cardinal-north.svg",
       "z": 8,
-      "anchor": { "x": 640, "y": 130 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": -61.199999999999996, "rotation": 0 }
+      "anchor": {
+        "x": 640,
+        "y": 130
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 0
+      }
     },
     {
       "id": "cardinal-east",
       "file": "layers/cardinal-east.svg",
       "z": 9,
-      "anchor": { "x": 1150, "y": 640 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 61.199999999999996, "y": 0, "rotation": 0 }
+      "anchor": {
+        "x": 1150,
+        "y": 640
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 0
+      }
     },
     {
       "id": "cardinal-south",
       "file": "layers/cardinal-south.svg",
       "z": 10,
-      "anchor": { "x": 640, "y": 1150 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 61.199999999999996, "rotation": 0 }
+      "anchor": {
+        "x": 640,
+        "y": 1150
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 0
+      }
     },
     {
       "id": "cardinal-west",
       "file": "layers/cardinal-west.svg",
       "z": 11,
-      "anchor": { "x": 130, "y": 640 },
-      "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -61.199999999999996, "y": 0, "rotation": 0 }
+      "anchor": {
+        "x": 130,
+        "y": 640
+      },
+      "assembled": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0
+      },
+      "exploded": {
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "depth": 0
+      }
     }
   ]
 }
