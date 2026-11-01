@@ -1,0 +1,52 @@
+@if (loading()) {
+  <div
+    class="flex h-full w-full items-center justify-center"
+    role="status"
+    aria-label="Loading emblem"
+  >
+    <stellar-skeleton-atom shape="control" />
+  </div>
+} @else if (unavailable()) {
+  <span
+    class="flex h-full items-center justify-center text-stellar-foreground"
+    role="status"
+    >Emblem unavailable</span
+  >
+} @else {
+  <div
+    [class]="classes()"
+    [style.aspect-ratio]="aspectRatio()"
+    [style.--emblem-audio]="level()"
+    role="img"
+    [attr.aria-label]="label()"
+  >
+    @if (environment()) {
+      <div class="ambience" aria-hidden="true"></div>
+    }
+    @for (layer of layers(); track layer.id) {
+      <div
+        #plane
+        class="plane"
+        [style.z-index]="layer.z"
+        [style.transform-origin]="layer.origin"
+        aria-hidden="true"
+      >
+        <div
+          class="artwork"
+          [class.spin-clockwise]="layer.spin === 'clockwise' && environment()"
+          [class.spin-counter]="
+            layer.spin === 'counter-clockwise' && environment()
+          "
+          [style.transform-origin]="layer.origin"
+        >
+          <img
+            [src]="layer.src"
+            alt=""
+            draggable="false"
+            (error)="assetFailed()"
+          />
+        </div>
+      </div>
+    }
+  </div>
+}

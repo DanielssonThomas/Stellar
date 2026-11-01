@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+
+.emblem {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 900px;
+  isolation: isolate;
+}
+
+.plane,
+.artwork,
+img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.plane {
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+img {
+  object-fit: contain;
+}
+
+.ambience {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    var(--stellar-color-primary) 0,
+    transparent 68%
+  );
+  opacity: calc(0.08 + var(--emblem-audio, 0) * 0.14);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.spin-clockwise {
+  animation: emblem-orbit 180s linear infinite;
+}
+.spin-counter {
+  animation: emblem-orbit 210s linear infinite reverse;
+}
+.motion-paused .artwork {
+  animation: none;
+}
+
+@keyframes emblem-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artwork {
+    animation: none;
+  }
+}
