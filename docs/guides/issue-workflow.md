@@ -39,6 +39,8 @@ GitHub assignees may identify a human maintainer. The owner label is the worker 
 
 Every actionable issue includes an objective, context, expected outcome, observable unchecked acceptance criteria, constraints, dependencies, and verification expectations. Dependencies say `None` or list issue numbers in the `Dependencies` section. Maintain the matching native GitHub blocked-by relationships; the issue validator compares both forms and verifies referenced issues.
 
+Dependencies must be issues in the configured repository. A local issue number alone does not establish identity: readers retain the native dependency's global GitHub issue ID and repository URL, then require the fetched issue to match both before using its state or labels. Foreign dependencies, pull requests, duplicate identities, missing identity fields and incomplete enumeration stop validation or admission. For example, a foreign open issue numbered `23` cannot be satisfied by this repository's closed issue `23`. This contract applies to readiness, claims, status changes, PR preflight, host admission and integration evidence.
+
 Use GitHub sub-issues for Epic membership. Use native dependencies for blocking order. Avoid creating a separate blocker for each local test failure. A capability blocker may be reported on the existing issue without inventing a dependency.
 
 ## Implementation path

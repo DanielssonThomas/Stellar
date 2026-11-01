@@ -10,6 +10,11 @@ import {
   transferClaim,
 } from './issue-worktree.mjs';
 import { validateIssue } from './validate-issue.mjs';
+import {
+  parseGitHubRestResponse,
+  readIssueDependenciesSync,
+  gitHubCliHostname,
+} from './issue-dependency-reader.mjs';
 
 const repository = process.env.GITHUB_REPOSITORY ?? 'DanielssonThomas/Stellar';
 
@@ -37,51 +42,50 @@ function options(argv) {
   return result;
 }
 
-export function loadIssue(number) {
-  const issue = JSON.parse(
-    run(
-      'gh',
-      [
-        'issue',
-        'view',
-        String(number),
-        '--repo',
-        repository,
-        '--json',
-        'number,title,body,state,labels',
-      ],
-      process.cwd(),
-    ),
-  );
-  const native = JSON.parse(
-    run(
-      'gh',
-      ['api', `repos/${repository}/issues/${number}/dependencies/blocked_by`],
-      process.cwd(),
-    ),
-  );
-  issue.dependencies = native.map((dependency) => {
-    const data = JSON.parse(
-      run(
-        'gh',
-        [
-          'issue',
-          'view',
-          String(dependency.number),
-          '--repo',
-          repository,
-          '--json',
-          'number,state,labels',
-        ],
-        process.cwd(),
+export function loadIssue(
+  number,
+  {
+    repository: configuredRepository = repository,
+    apiUrl = process.env.GITHUB_API_URL ?? 'https://api.github.com',
+    runCommand = run,
+  } = {},
+) {
+  const hostname = gitHubCliHostname(apiUrl);
+  const issue = readIssueDependenciesSync(
+    (route) =>
+      parseGitHubRestResponse(
+        runCommand(
+          'gh',
+          [
+            'api',
+            '--include',
+            '--hostname',
+            hostname,
+            '--method',
+            'GET',
+            `repos/${configuredRepository}${route}`,
+          ],
+          process.cwd(),
+        ),
       ),
-    );
-    const status = data.labels.find((label) =>
-      label.name.startsWith('status:'),
-    )?.name;
-    return { number: data.number, state: data.state, status };
-  });
-  return issue;
+    number,
+    { repository: configuredRepository, apiUrl },
+    { requireBodyAgreement: false },
+  );
+  return {
+    ...issue,
+    body: issue.body ?? '',
+    state: issue.state.toUpperCase(),
+    dependencies: issue.dependencies.map((dependency) => ({
+      id: dependency.id,
+      repository_url: dependency.repository_url,
+      number: dependency.number,
+      state: dependency.state.toUpperCase(),
+      status: dependency.labels
+        .map((label) => (typeof label === 'string' ? label : label.name))
+        .find((label) => label.startsWith('status:')),
+    })),
+  };
 }
 
 function issueLabels(issue) {
