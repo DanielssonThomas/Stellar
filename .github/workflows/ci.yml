@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -54,19 +54,15 @@ jobs:
           else
             pnpm exec nx format:check --base="$NX_BASE" --head="$NX_HEAD"
           fi
-      - name: Check whether the E2E project is affected
+      - name: Check affected projects with E2E targets
         id: e2e
         shell: bash
         run: |
           if [[ "$NX_BASE" =~ ^0+$ ]]; then
             run_e2e=true
           else
-            projects="$(pnpm exec nx show projects --affected --base="$NX_BASE" --head="$NX_HEAD" --json)"
-            if echo "$projects" | jq -e 'index("stellar-web-e2e") != null' >/dev/null; then
-              run_e2e=true
-            else
-              run_e2e=false
-            fi
+            projects="$(pnpm exec nx show projects --affected --with-target=e2e --base="$NX_BASE" --head="$NX_HEAD" --json)"
+            run_e2e="$(printf '%s' "$projects" | node tools/native/ci.mjs e2e)"
           fi
           echo "run=$run_e2e" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright Chromium
@@ -92,4 +88,47 @@ jobs:
           fi
       - run: pnpm run policy:test
       - run: node --test tools/live/*.spec.mjs
+      - run: node --test tools/native/*.spec.mjs
       - run: pnpm run policy:docs
+
+  native:
+    runs-on: windows-latest
+    env:
+      NX_DAEMON: 'false'
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-stellar-native-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+      - name: Native format, lint, tests, contracts, size and WebView smoke
+        run: pnpm exec nx run-many -t native-fmt native-clippy native-test contract-check rust-size-check native-smoke --projects=stellar-desktop --parallel=1
+
+  verify:
+    if: always()
+    needs: [quality, native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Require both quality and Windows native success
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: node tools/native/ci.mjs gate
