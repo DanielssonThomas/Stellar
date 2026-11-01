@@ -1,6 +1,6 @@
 # Embedded hybrid emblem
 
-Runtime files are byte-identical copies from [the reviewed production-v1 source pack](../../../../libs/stellar-emblem/production-v1/README.md), merged in develop at 7943827073b15084bf4f457d4dcead8a61ef07fd for issue #176. The manifest retains its production-candidate status. Twelve meaningful raster/SVG layers share a 1280 square origin; all assembled transforms are zero. The motion component selects the exploded idle pose and assembled activity pose.
+Runtime files are byte-identical copies from [the reviewed production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/7943827073b15084bf4f457d4dcead8a61ef07fd/libs/stellar-emblem/production-v1/README.md), merged in develop at 7943827073b15084bf4f457d4dcead8a61ef07fd for issue #176. The manifest retains its production-candidate status. Twelve meaningful raster/SVG layers share a 1280 square origin; all assembled transforms are zero. The motion component selects the exploded idle pose and assembled activity pose.
 
 The runtime payload is 2,742,704 bytes. Original reference, generated masters, registration, history and previews remain in the source library and are not copied into the application. Imagegen supplied the raster artwork; this copy does not attribute it to the earlier Hermes SVG study. Independent source/visual acceptance does not qualify physical microphones or native performance.
 
