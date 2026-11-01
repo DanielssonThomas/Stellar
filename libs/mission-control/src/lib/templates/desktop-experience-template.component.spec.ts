@@ -66,4 +66,33 @@ describe('DesktopExperienceTemplate', () => {
     ).not.toBeNull();
     expect(fixture.nativeElement.getAttribute('aria-busy')).toBe('true');
   });
+
+  it('renders explicit input choices and the already normalized real level independently of detection', async () => {
+    const selected = vi.fn();
+    fixture.componentInstance.selectInput.subscribe(selected);
+    fixture.componentRef.setInput('inputsVisible', true);
+    fixture.componentRef.setInput('inputs', [
+      { deviceId: 'usb', label: 'USB microphone' },
+    ]);
+    fixture.componentRef.setInput('selectedInputId', 'usb');
+    fixture.componentRef.setInput('selectedInputLabel', 'USB microphone');
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      microphone: { status: 'capturing', requestId: 1 },
+    });
+    fixture.componentRef.setInput('level', 0.33);
+    fixture.componentRef.setInput('activityStatus', 'Quiet');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.inputMeter()).toBe(33);
+    expect(fixture.nativeElement.querySelector('meter').value).toBeGreaterThan(
+      0,
+    );
+    expect(fixture.nativeElement.textContent).toContain('Quiet');
+    const select: HTMLSelectElement =
+      fixture.nativeElement.querySelector('select');
+    expect(select.value).toBe('usb');
+    select.value = '';
+    select.dispatchEvent(new Event('change'));
+    expect(selected).toHaveBeenCalledExactlyOnceWith('');
+  });
 });

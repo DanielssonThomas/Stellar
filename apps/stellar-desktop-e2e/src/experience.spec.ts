@@ -4,8 +4,29 @@ test('microphone frames pass through the real detector to one summary and releas
   page,
 }) => {
   await page.addInitScript(() => {
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+    Object.defineProperty(navigator.mediaDevices, 'enumerateDevices', {
       value: async () => {
+        document.documentElement.dataset['inputsListed'] = 'true';
+        return [
+          {
+            kind: 'audioinput',
+            deviceId: 'usb',
+            label: 'USB microphone',
+            groupId: '',
+          },
+          {
+            kind: 'audioinput',
+            deviceId: 'built-in',
+            label: 'Built-in microphone',
+            groupId: '',
+          },
+        ];
+      },
+    });
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      value: async (constraints: MediaStreamConstraints) => {
+        document.documentElement.dataset['captureConstraints'] =
+          JSON.stringify(constraints);
         const context = new AudioContext();
         const oscillator = context.createOscillator();
         const gain = context.createGain();
@@ -20,6 +41,11 @@ test('microphone frames pass through the real detector to one summary and releas
           const stop = track.stop.bind(track);
           track.stop = () => {
             document.documentElement.dataset['captureStopped'] = 'true';
+            document.documentElement.dataset['captureStopCount'] = String(
+              Number(
+                document.documentElement.dataset['captureStopCount'] ?? 0,
+              ) + 1,
+            );
             stop();
             void context.close();
           };
@@ -30,8 +56,43 @@ test('microphone frames pass through the real detector to one summary and releas
   });
   await page.goto('/');
   const experience = page.locator('stellar-desktop-experience-template');
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-inputs-listed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Choose microphone' }).click();
+  await page
+    .getByRole('combobox', { name: 'Microphone', exact: true })
+    .selectOption('usb');
+  await expect(page.locator('html')).not.toHaveAttribute(
+    'data-capture-constraints',
+  );
   await page.getByRole('button', { name: 'Enable microphone' }).click();
+  await expect(
+    page.getByRole('meter', { name: 'Microphone input level' }),
+  ).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-capture-constraints',
+    /"exact":"usb"/,
+  );
+  await page
+    .getByRole('combobox', { name: 'Microphone', exact: true })
+    .selectOption('built-in');
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-capture-constraints',
+    /"exact":"built-in"/,
+  );
   await expect(experience).toHaveAttribute('data-phase', 'listening');
+  await expect
+    .poll(async () =>
+      page
+        .getByRole('meter', { name: 'Microphone input level' })
+        .evaluate((element) => (element as HTMLMeterElement).value),
+    )
+    .toBeGreaterThan(0);
+  await expect(
+    page.getByText('Activity detected', { exact: true }),
+  ).toBeVisible();
   await expect(experience).toHaveAttribute('data-phase', 'presenting', {
     timeout: 10000,
   });
@@ -45,6 +106,10 @@ test('microphone frames pass through the real detector to one summary and releas
   await expect(page.locator('html')).toHaveAttribute(
     'data-capture-stopped',
     'true',
+  );
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-capture-stop-count',
+    '2',
   );
 });
 

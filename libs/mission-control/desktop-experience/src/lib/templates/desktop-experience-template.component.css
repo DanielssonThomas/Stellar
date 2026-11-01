@@ -92,6 +92,46 @@ button:focus-visible,
   accent-color: var(--stellar-color-foreground);
 }
 
+.input-choice,
+.input-level {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--stellar-color-muted);
+}
+.input-choice label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.input-choice select {
+  max-width: min(22rem, 65vw);
+  min-height: 2.5rem;
+  border-radius: var(--stellar-radius-control);
+  border: 1px solid var(--stellar-color-line);
+  padding: 0.35rem;
+  color: var(--stellar-color-foreground);
+  background: var(--stellar-color-panel);
+}
+.input-choice select:focus-visible {
+  outline: 2px solid var(--stellar-color-primary);
+}
+.input-choice p {
+  margin: 0;
+}
+.input-level meter {
+  width: 8rem;
+  height: 0.75rem;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

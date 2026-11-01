@@ -11,6 +11,11 @@ import {
 import { StageOrganism } from '@stellar/ui-organisms';
 import clsx from 'clsx';
 
+export interface MicrophoneOption {
+  readonly deviceId: string;
+  readonly label: string;
+}
+
 @Component({
   selector: 'stellar-desktop-experience-template',
   standalone: true,
@@ -30,6 +35,26 @@ export class DesktopExperienceTemplate {
   readonly assetError = input<string | null>(null);
   readonly level = input(0);
   readonly statusText = input('Ready');
+  readonly inputs = input<readonly MicrophoneOption[]>([]);
+  readonly inputsVisible = input(false);
+  readonly inputsLoading = input(false);
+  readonly inputError = input<string | null>(null);
+  readonly selectedInputId = input('');
+  readonly selectedInputLabel = input('System default microphone');
+  readonly activityStatus = input('Quiet');
+  readonly chooseInputs = output<void>();
+  readonly selectInput = output<string>();
+  readonly inputMissing = computed(
+    () =>
+      this.selectedInputId() &&
+      !this.inputs().some(
+        (device) => device.deviceId === this.selectedInputId(),
+      ),
+  );
+  readonly inputMeter = computed(() => {
+    const level = this.level();
+    return Number.isFinite(level) ? Math.min(100, Math.max(0, level * 100)) : 0;
+  });
   readonly action = output<InteractionEvent>();
   readonly stopMicrophone = output<void>();
   readonly restoreSummary = output<void>();
@@ -50,5 +75,10 @@ export class DesktopExperienceTemplate {
     const target = event.target;
     if (target instanceof HTMLInputElement)
       this.action.emit({ type: 'reduced-motion', enabled: target.checked });
+  }
+
+  chooseInput(event: Event) {
+    if (event.target instanceof HTMLSelectElement)
+      this.selectInput.emit(event.target.value);
   }
 }

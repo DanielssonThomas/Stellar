@@ -16,10 +16,21 @@ import { AudioActivityService } from '@stellar/service-audio-activity';
 import { decodeEmblemManifest } from '@stellar/ui-molecules';
 import type { StageResult } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
+import { MicrophoneInputs } from './microphone-inputs';
 
 @Injectable()
 export class DesktopExperience {
   readonly audio = inject(AudioActivityService);
+  readonly inputs = new MicrophoneInputs(this.audio);
+  readonly activityStatus = computed(() => {
+    const activity = this.audio.state().activity;
+    return activity.calibrating
+      ? 'Calibrating'
+      : activity.active
+        ? 'Activity detected'
+        : 'Quiet';
+  });
+  private readonly capturePaused = signal(false);
   readonly state = signal(initialState);
   readonly manifest = signal(decodeEmblemManifest(studyManifest));
   readonly loading = signal(false);
@@ -30,7 +41,11 @@ export class DesktopExperience {
   );
   private stage: ((command: unknown) => StageResult) | undefined;
   readonly session = new DesktopSession({
-    audio: this.audio,
+    audio: {
+      startMicrophone: () =>
+        this.audio.startMicrophone(this.inputs.selectedId() || undefined),
+      stop: () => this.audio.stop(),
+    },
     now: () => performance.now(),
     clock: {
       schedule: (callback, delayMs) => {
@@ -52,6 +67,8 @@ export class DesktopExperience {
       return 'Microphone unavailable. You can still start activity manually.';
     if (audio.status === 'requesting')
       return 'Waiting for microphone permission';
+    if (this.capturePaused())
+      return 'Microphone paused when the window lost focus. Enable microphone to resume.';
     if (audio.status === 'capturing' && audio.activity.calibrating)
       return 'Calibrating microphone';
     if (state.phase === 'presenting') return 'Activity ready';
@@ -69,7 +86,11 @@ export class DesktopExperience {
         type: this.document.hidden ? 'hidden' : 'resume',
       });
     const pagehide = () => this.session.dispatch({ type: 'hidden' });
-    const blur = () => this.session.dispatch({ type: 'minimized' });
+    const blur = () => {
+      if (this.state().microphone.requestId !== null)
+        this.capturePaused.set(true);
+      this.session.dispatch({ type: 'minimized' });
+    };
     const focus = () => this.session.dispatch({ type: 'resume' });
     const preference = () =>
       this.session.dispatch({
@@ -83,6 +104,7 @@ export class DesktopExperience {
     this.document.defaultView?.addEventListener('focus', focus);
     this.media?.addEventListener('change', preference);
     inject(DestroyRef).onDestroy(() => {
+      this.inputs.dispose();
       this.document.removeEventListener('visibilitychange', visibility);
       this.document.defaultView?.removeEventListener('pagehide', pagehide);
       this.document.defaultView?.removeEventListener('blur', blur);
@@ -98,10 +120,23 @@ export class DesktopExperience {
   }
 
   dispatch(event: InteractionEvent) {
+    if (
+      event.type === 'capture-request' ||
+      event.type === 'manual-start' ||
+      event.type === 'dismiss'
+    )
+      this.capturePaused.set(false);
     this.session.dispatch(
       event.type === 'reduced-motion'
         ? { ...event, enabled: event.enabled || (this.media?.matches ?? false) }
         : event,
     );
+  }
+
+  selectInput(deviceId: string) {
+    if (!this.inputs.select(deviceId)) return;
+    const enabled = this.state().microphone.requestId !== null;
+    this.session.stopMicrophone();
+    if (enabled) this.dispatch({ type: 'capture-request' });
   }
 }

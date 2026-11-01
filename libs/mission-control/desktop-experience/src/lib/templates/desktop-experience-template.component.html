@@ -55,6 +55,20 @@
         </button>
       }
 
+      <button
+        type="button"
+        [disabled]="inputsLoading()"
+        (click)="chooseInputs.emit()"
+      >
+        {{
+          inputsLoading()
+            ? 'Finding inputs…'
+            : inputsVisible()
+              ? 'Refresh inputs'
+              : 'Choose microphone'
+        }}
+      </button>
+
       @if (state().phase !== 'idle') {
         <button type="button" (click)="action.emit({ type: 'dismiss' })">
           Dismiss
@@ -75,5 +89,45 @@
       />
       <span>Reduce motion</span>
     </label>
+    @if (inputsVisible()) {
+      <div class="input-choice">
+        <label>
+          Microphone
+          <select [value]="selectedInputId()" (change)="chooseInput($event)">
+            <option value="" [selected]="selectedInputId() === ''">
+              System default microphone
+            </option>
+            @if (inputMissing()) {
+              <option [value]="selectedInputId()" selected disabled>
+                {{ selectedInputLabel() }}
+              </option>
+            }
+            @for (device of inputs(); track device.deviceId) {
+              <option
+                [value]="device.deviceId"
+                [selected]="selectedInputId() === device.deviceId"
+              >
+                {{ device.label }}
+              </option>
+            }
+          </select>
+        </label>
+        @if (inputError()) {
+          <p role="status">{{ inputError() }}</p>
+        }
+      </div>
+    }
+    @if (state().microphone.status === 'capturing') {
+      <div class="input-level">
+        <span>{{ selectedInputLabel() }}</span>
+        <meter
+          min="0"
+          max="100"
+          [value]="inputMeter()"
+          aria-label="Microphone input level"
+        ></meter>
+        <span>{{ activityStatus() }}</span>
+      </div>
+    }
   </section>
 </div>

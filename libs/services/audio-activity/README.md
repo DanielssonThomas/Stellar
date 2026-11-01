@@ -14,6 +14,8 @@ The Angular facade runs source creation and sampling outside `NgZone`; signal pu
 
 ## Detector semantics
 
+`listInputs()` enumerates audio input descriptors only when its caller explicitly requests it. It does not acquire a stream or change capture state. The detached descriptors contain device ID and label, with a neutral fallback for names hidden before permission; callers must not persist them. Missing enumeration support and browser failures reject, while an empty list remains distinguishable. The desktop's chooser passes a selected ID to the existing `startMicrophone(deviceId)` boundary.
+
 The first **600 ms of continuous valid frames** calibrate a fixed median noise floor from at most 256 samples. The user should remain quiet during calibration. A gap over 100 ms restarts unfinished calibration and cancels activity/candidates; missing time is never counted as activity. The floor stays fixed until the session resets. Continuous background noise can prevent detection; the detector never lowers a noisy baseline merely to force a result.
 
 Activation requires RMS above `max(0.015, noiseFloor × 3)` for **120 ms**. Release requires RMS below `max(0.008, noiseFloor × 1.8)` for a **600 ms silence hangover**. Levels between those thresholds preserve an active state. This is amplitude activity, including possible keyboard or environmental noise, not voice recognition.

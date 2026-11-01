@@ -10,6 +10,59 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopExperience } from './desktop-experience';
 
 describe('desktop experience status', () => {
+  it('selects without capture, then stops the active source before changing input', async () => {
+    const calls: string[] = [];
+    const current = signal<AudioActivityState>({
+      status: 'idle',
+      activity: {
+        active: false,
+        calibrating: false,
+        level: 0,
+        peakLevel: 0,
+        durationMs: 0,
+        noiseFloor: 0,
+        clipped: false,
+      },
+    });
+    const audio = {
+      state: current,
+      listInputs: async () => [
+        { deviceId: 'usb', label: 'USB mic' },
+        { deviceId: 'built-in', label: 'Built-in' },
+      ],
+      startMicrophone: vi.fn(async (deviceId?: string) => {
+        calls.push(`start:${deviceId}`);
+        current.update((state) => ({ ...state, status: 'capturing' }));
+      }),
+      stop: vi.fn(async () => {
+        calls.push('stop');
+        current.update((state) => ({ ...state, status: 'idle' }));
+      }),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        DesktopExperience,
+        { provide: AudioActivityService, useValue: audio },
+      ],
+    });
+    const experience = TestBed.inject(DesktopExperience);
+    TestBed.tick();
+    await experience.inputs.list();
+    experience.selectInput('usb');
+    expect(audio.startMicrophone).not.toHaveBeenCalled();
+    experience.dispatch({ type: 'capture-request' });
+    TestBed.tick();
+    experience.selectInput('built-in');
+    TestBed.tick();
+    expect(calls).toEqual(['start:usb', 'stop', 'start:built-in']);
+    expect(experience.inputs.selectedLabel()).toBe('Built-in');
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+    TestBed.tick();
+    expect(experience.statusText()).toContain('Microphone paused');
+    expect(audio.startMicrophone).toHaveBeenCalledTimes(2);
+    TestBed.resetTestingModule();
+  });
   it('releases a late microphone grant after suspension and resumes only manual activity', async () => {
     let grant: (stream: MediaStream) => void = () => undefined;
     const acquire = vi.fn(
