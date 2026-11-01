@@ -5,18 +5,68 @@ test('settled face assembly is pixel-identical to the original unclipped image s
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  const menu = page.getByRole('button', {
+    name: 'Experience menu',
+    exact: true,
+  });
   for (const viewport of [
     { width: 1100, height: 760 },
     { width: 480, height: 360 },
   ]) {
     await page.setViewportSize(viewport);
+    await menu.click();
     await page
       .getByRole('button', { name: 'Start activity', exact: true })
       .click();
+    await menu.click();
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await expect(
+      page.locator('stellar-desktop-experience-template'),
+    ).toHaveAttribute('data-phase', 'listening');
     const camera = page.locator('.camera:not([data-original-baseline])');
+    await expect
+      .poll(() =>
+        camera.evaluate((element) => {
+          const matrix = new DOMMatrix(getComputedStyle(element).transform);
+          if (!Number.isFinite(matrix.m34) || matrix.m34 >= 0) return false;
+          // Perspective remains active in the front view; rotation, scale and translation must be identity.
+          matrix.m34 = 0;
+          return matrix.isIdentity;
+        }),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        camera
+          .locator('.plane')
+          .evaluateAll(
+            (planes) =>
+              planes.length === 15 &&
+              planes.every(
+                (plane) =>
+                  new DOMMatrix(getComputedStyle(plane).transform).isIdentity,
+              ),
+          ),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        camera.locator('img').evaluateAll((images) => {
+          const seen = new Set<string>();
+          return (
+            images.length === 15 &&
+            images.every((image) => {
+              const first = !seen.has((image as HTMLImageElement).src);
+              seen.add((image as HTMLImageElement).src);
+              return (
+                getComputedStyle(image).clipPath ===
+                (first ? 'none' : 'inset(100%)')
+              );
+            })
+          );
+        }),
+      )
+      .toBe(true);
     await expect
       .poll(() =>
         camera.evaluate(
@@ -24,15 +74,13 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         ),
       )
       .toBe(0);
-    await expect
-      .poll(() =>
-        camera
-          .locator('img')
-          .evaluateAll((images) =>
-            images.every((image) => (image as HTMLImageElement).complete),
-          ),
-      )
-      .toBe(true);
+    await camera
+      .locator('img')
+      .evaluateAll((images) =>
+        Promise.all(
+          images.map((image) => (image as HTMLImageElement).decode()),
+        ),
+      );
     const assembled = await camera.screenshot();
     await camera.evaluate((element) => {
       const original = element.cloneNode(true) as HTMLElement;
@@ -50,9 +98,15 @@ test('settled face assembly is pixel-identical to the original unclipped image s
       element.after(original);
       (element as HTMLElement).style.visibility = 'hidden';
     });
-    const original = await page
-      .locator('[data-original-baseline]')
-      .screenshot();
+    const baseline = page.locator('[data-original-baseline]');
+    await baseline
+      .locator('img')
+      .evaluateAll((images) =>
+        Promise.all(
+          images.map((image) => (image as HTMLImageElement).decode()),
+        ),
+      );
+    const original = await baseline.screenshot();
     expect(assembled.equals(original)).toBe(true);
     await camera.evaluate((element) => {
       element.parentElement
@@ -60,7 +114,9 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         ?.remove();
       (element as HTMLElement).style.visibility = '';
     });
+    await menu.click();
     await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+    await menu.click();
   }
 });
 
