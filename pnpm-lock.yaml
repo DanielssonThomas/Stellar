@@ -197,6 +197,9 @@ importers:
       '@angular/core':
         specifier: ^21.2.0
         version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+      '@stellar/desktop-interaction':
+        specifier: workspace:^
+        version: link:../../desktop-interaction
       '@stellar/ui-atoms':
         specifier: workspace:^
         version: link:../atoms
