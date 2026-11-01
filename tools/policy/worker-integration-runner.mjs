@@ -2,153 +2,18 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateIssue } from './validate-issue.mjs';
-import { evaluateWorkerPullRequest } from './worker-integration-gate.mjs';
-
-const apiVersion = '2026-03-10';
-const requiredChecks = ['verify'];
+import { captureIntegrationEvidence } from './integration-evidence.mjs';
+import { readJson, readAll, issueContext } from './integration-github.mjs';
+import {
+  apiVersion,
+  createGitHubRequest,
+  normalizeWorkerConfig,
+} from './integration-client.mjs';
 
 function labelsOf(issue) {
   return (issue.labels ?? []).map((label) =>
     typeof label === 'string' ? label : (label?.name ?? ''),
   );
-}
-
-function jsonApi({ token, apiUrl = 'https://api.github.com', repository }) {
-  if (typeof token !== 'string' || !token)
-    throw new Error('STELLAR_INTEGRATION_TOKEN is required.');
-  if (!/^[^/]+\/[^/]+$/.test(repository ?? ''))
-    throw new Error('GITHUB_REPOSITORY must be owner/repository.');
-
-  return async function request(
-    path,
-    { method = 'GET', body, allow404 = false, allowStatuses = [] } = {},
-  ) {
-    const url = path.startsWith('/@root/')
-      ? `${apiUrl}/${path.slice('/@root/'.length)}`
-      : `${apiUrl}/repos/${repository}${path}`;
-    const response = await fetch(url, {
-      method,
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${token}`,
-        'X-GitHub-Api-Version': apiVersion,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    if (
-      !response.ok &&
-      !(allow404 && response.status === 404) &&
-      !allowStatuses.includes(response.status)
-    )
-      throw new Error(
-        `GitHub API ${method} ${path} returned ${response.status}.`,
-      );
-    return response;
-  };
-}
-
-async function readJson(request, path, options) {
-  const response = await request(path, options);
-  return response.status === 404 ? null : response.json();
-}
-
-async function readAll(request, path) {
-  const result = [];
-  for (let page = 1; page <= 10; page += 1) {
-    const separator = path.includes('?') ? '&' : '?';
-    const response = await request(
-      `${path}${separator}per_page=100&page=${page}`,
-    );
-    if (!response.ok)
-      throw new Error(`GitHub list request returned ${response.status}.`);
-    const items = await response.json();
-    if (!Array.isArray(items))
-      throw new Error(`GitHub API ${path} returned an invalid list.`);
-    result.push(...items);
-    if (items.length < 100) return result;
-  }
-  throw new Error(`GitHub API ${path} exceeded the bounded pagination limit.`);
-}
-
-async function readCheckRuns(request, sha) {
-  const checks = [];
-  for (let page = 1; page <= 10; page += 1) {
-    const result = await readJson(
-      request,
-      `/commits/${sha}/check-runs?per_page=100&page=${page}`,
-    );
-    if (!Array.isArray(result?.check_runs))
-      throw new Error('GitHub returned invalid exact-head check evidence.');
-    checks.push(...result.check_runs);
-    if (result.check_runs.length < 100) return checks;
-  }
-  throw new Error('GitHub check runs exceeded the bounded pagination limit.');
-}
-
-function normalizeWorkerConfig(value) {
-  if (!Array.isArray(value))
-    throw new Error('Worker identity policy is invalid.');
-  const ids = new Set();
-  const workers = new Map();
-  for (const entry of value) {
-    if (
-      !entry ||
-      typeof entry.id !== 'string' ||
-      !/^[a-z0-9][a-z0-9-]*$/.test(entry.id) ||
-      typeof entry.forkFullName !== 'string' ||
-      !/^[^/]+\/[^/]+$/.test(entry.forkFullName) ||
-      (entry.pullRequestActor !== undefined &&
-        typeof entry.pullRequestActor !== 'string')
-    )
-      throw new Error('Worker identity policy contains an invalid entry.');
-    if (ids.has(entry.id))
-      throw new Error('Worker identity policy has duplicate IDs.');
-    ids.add(entry.id);
-    workers.set(entry.id, entry);
-  }
-  return { ids: [...ids], workers };
-}
-
-function dependenciesFromBody(body) {
-  const section =
-    body.match(
-      /^#{1,6}\s+Dependencies\s*\r?\n([\s\S]*?)(?=^#{1,6}\s|\s*$)/im,
-    )?.[1] ?? '';
-  if (/^\s*(?:none|n\/a)\s*$/i.test(section)) return [];
-  return [...section.matchAll(/#([1-9][0-9]*)/g)].map((match) =>
-    Number(match[1]),
-  );
-}
-
-async function issueContext(request, number) {
-  const issue = await readJson(request, `/issues/${number}`);
-  if (!issue || issue.pull_request)
-    throw new Error(`Issue #${number} was not found.`);
-  const expected = dependenciesFromBody(issue.body ?? '');
-  const native = await readAll(
-    request,
-    `/issues/${number}/dependencies/blocked_by`,
-  );
-  if (
-    expected.length !== native.length ||
-    expected.some(
-      (id) => !native.some((dependency) => dependency.number === id),
-    )
-  )
-    throw new Error(`Issue #${number} dependency records do not match.`);
-  const dependencies = [];
-  for (const id of expected) {
-    const dependency = await readJson(request, `/issues/${id}`);
-    if (!dependency || dependency.pull_request)
-      throw new Error(`Dependency #${id} is missing or is a pull request.`);
-    dependencies.push({
-      number: dependency.number,
-      state: dependency.state,
-      labels: dependency.labels,
-    });
-  }
-  return { ...issue, dependencies };
 }
 
 async function appendComment(request, issueNumber, comment) {
@@ -158,8 +23,8 @@ async function appendComment(request, issueNumber, comment) {
   });
 }
 
-async function replaceStatus(request, issue, expected, next) {
-  const fresh = await issueContext(request, issue.number);
+async function replaceStatus(request, issue, expected, next, repository) {
+  const fresh = await issueContext(request, issue.number, { repository });
   const labels = labelsOf(fresh);
   if (fresh.state !== 'open' || !labels.includes(expected))
     throw new Error(`Issue #${issue.number} changed before status update.`);
@@ -201,9 +66,9 @@ function integrationBody(issue) {
 
 async function createPullRequest(
   request,
-  { issueNumber, workerConfig, fetchImpl },
+  { issueNumber, workerConfig, fetchImpl, repository },
 ) {
-  const issue = await issueContext(request, issueNumber);
+  const issue = await issueContext(request, issueNumber, { repository });
   validActionableIssue(issue, workerConfig.ids);
   const labels = labelsOf(issue);
   const workerId = labels
@@ -283,7 +148,13 @@ async function createPullRequest(
     throw new Error('PR body does not link the issue.');
 
   if (labels.includes('status:in-progress'))
-    await replaceStatus(request, issue, 'status:in-progress', 'status:review');
+    await replaceStatus(
+      request,
+      issue,
+      'status:in-progress',
+      'status:review',
+      repository,
+    );
   await appendComment(
     request,
     issueNumber,
@@ -293,65 +164,6 @@ async function createPullRequest(
     pullRequest: pullRequest.number,
     headSha: pullRequest.head?.sha ?? null,
   };
-}
-
-async function integrationEvidence(
-  request,
-  issueNumber,
-  pullNumber,
-  workerConfig,
-) {
-  const issue = await issueContext(request, issueNumber);
-  const pull = await readJson(request, `/pulls/${pullNumber}`);
-  if (!issue || issue.pull_request || !pull)
-    throw new Error('Issue or pull request was not found.');
-  const workerId = labelsOf(issue)
-    .find((label) => label.startsWith('worker:'))
-    ?.slice(7);
-  const worker = workerConfig.workers.get(workerId);
-  const commits = await readAll(request, `/pulls/${pullNumber}/commits`);
-  const changedFiles = await readAll(request, `/pulls/${pullNumber}/files`);
-  const checks = await readCheckRuns(request, pull.head.sha);
-  const base = await readJson(request, '/branches/develop');
-  if (!base?.commit?.sha)
-    throw new Error('Could not read the authorized develop head.');
-  const codeowners = await readJson(
-    request,
-    ` /contents/.github/CODEOWNERS?ref=${base.commit.sha}`.trimStart(),
-  );
-  if (!codeowners?.content || codeowners.encoding !== 'base64')
-    throw new Error(
-      'Could not read CODEOWNERS from the authorized develop revision.',
-    );
-  const decision = evaluateWorkerPullRequest({
-    issue,
-    pullRequest: {
-      number: pull.number,
-      state: pull.state,
-      isDraft: pull.draft,
-      body: pull.body,
-      baseRefName: pull.base?.ref,
-      headRefName: pull.head?.ref,
-      headRepoFullName: pull.head?.repo?.full_name,
-      authorLogin: pull.user?.login,
-      headSha: pull.head?.sha,
-    },
-    worker,
-    integrationActor: (await readJson(request, '/@root/user'))?.login,
-    authorizedWorkerIds: workerConfig.ids,
-    commits: commits.map((commit) => ({ message: commit.commit?.message })),
-    checks:
-      checks.map((check) => ({
-        name: check.name,
-        headSha: check.head_sha,
-        conclusion: check.conclusion,
-      })) ?? [],
-    changedFiles,
-    codeowners: Buffer.from(codeowners.content, 'base64').toString('utf8'),
-    requiredChecks,
-    allowedTargets: ['develop'],
-  });
-  return { issue, pull, baseSha: base.commit.sha, decision };
 }
 
 async function recordDenial(request, evidence) {
@@ -371,67 +183,45 @@ async function recordDenial(request, evidence) {
 
 async function integratePullRequest(
   request,
-  { issueNumber, pullNumber, workerConfig },
+  { issueNumber, pullNumber, workerConfig, repository, expectedEvidenceDigest },
 ) {
-  const evidence = await integrationEvidence(
-    request,
+  const evidence = await captureIntegrationEvidence(request, {
     issueNumber,
     pullNumber,
     workerConfig,
-  );
-  if (!evidence.decision.eligible) {
-    await recordDenial(request, evidence);
-    return { merged: false, reasons: evidence.decision.reasons };
-  }
-  const latestPull = await readJson(request, `/pulls/${pullNumber}`);
-  const latestBase = await readJson(request, '/branches/develop');
-  const latestIssue = await issueContext(request, issueNumber);
-  const latestChecks = await readCheckRuns(request, evidence.pull.head.sha);
-  const issueEvidenceMatches =
-    latestIssue.state === evidence.issue.state &&
-    latestIssue.body === evidence.issue.body &&
-    JSON.stringify(labelsOf(latestIssue).sort()) ===
-      JSON.stringify(labelsOf(evidence.issue).sort()) &&
-    JSON.stringify(
-      (latestIssue.dependencies ?? [])
-        .map((dependency) => ({
-          number: dependency.number,
-          state: dependency.state,
-          labels: labelsOf(dependency).sort(),
-        }))
-        .sort((left, right) => left.number - right.number),
-    ) ===
-      JSON.stringify(
-        (evidence.issue.dependencies ?? [])
-          .map((dependency) => ({
-            number: dependency.number,
-            state: dependency.state,
-            labels: labelsOf(dependency).sort(),
-          }))
-          .sort((left, right) => left.number - right.number),
-      );
-  const pullEvidenceMatches =
-    latestPull?.state === 'open' &&
-    latestPull.head?.sha === evidence.decision.headSha &&
-    latestPull.base?.ref === 'develop' &&
-    latestBase?.commit?.sha === evidence.baseSha &&
-    latestChecks.some(
-      (check) =>
-        check.name === 'verify' &&
-        check.head_sha === evidence.decision.headSha &&
-        check.conclusion === 'success',
-    );
-  if (!issueEvidenceMatches || !pullEvidenceMatches) {
-    const stale = {
-      ...evidence,
-      decision: {
+    repository,
+  });
+  if (
+    !evidence.decision.eligible ||
+    (expectedEvidenceDigest && evidence.digest !== expectedEvidenceDigest)
+  ) {
+    if (expectedEvidenceDigest && evidence.digest !== expectedEvidenceDigest)
+      evidence.decision = {
         ...evidence.decision,
         eligible: false,
         reasons: [
-          ...(issueEvidenceMatches
-            ? []
-            : ['issue-evidence-changed-before-merge']),
-          ...(pullEvidenceMatches ? [] : ['evidence-changed-before-merge']),
+          ...evidence.decision.reasons,
+          'integration-evidence-pin-mismatch',
+        ],
+      };
+    await recordDenial(request, evidence);
+    return { merged: false, reasons: evidence.decision.reasons };
+  }
+  const latest = await captureIntegrationEvidence(request, {
+    issueNumber,
+    pullNumber,
+    workerConfig,
+    repository,
+  });
+  if (!latest.decision.eligible || latest.digest !== evidence.digest) {
+    const stale = {
+      ...latest,
+      decision: {
+        ...latest.decision,
+        eligible: false,
+        reasons: [
+          ...latest.decision.reasons,
+          'integration-evidence-changed-before-merge',
         ],
       },
     };
@@ -509,14 +299,21 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument ${key}.`);
     args[key.slice(2)] = argv[++index] ?? '';
   }
-  if (!['create-pr', 'integrate', 'verify-credential'].includes(args.operation))
+  if (
+    !['create-pr', 'inspect', 'integrate', 'verify-credential'].includes(
+      args.operation,
+    )
+  )
     throw new Error(
-      'Operation must be create-pr, integrate, or verify-credential.',
+      'Operation must be create-pr, inspect, integrate, or verify-credential.',
     );
   if (!/^[1-9][0-9]*$/.test(args.issue ?? ''))
     throw new Error('A valid --issue is required.');
-  if (args.operation === 'integrate' && !/^[1-9][0-9]*$/.test(args.pr ?? ''))
-    throw new Error('A valid --pr is required for integrate.');
+  if (
+    ['inspect', 'integrate'].includes(args.operation) &&
+    !/^[1-9][0-9]*$/.test(args.pr ?? '')
+  )
+    throw new Error('A valid --pr is required for inspect or integrate.');
   return {
     ...args,
     issue: Number(args.issue),
@@ -533,16 +330,36 @@ export async function runIntegration({
   apiUrl,
   workerPolicy,
   fetchImpl = fetch,
-  request = jsonApi({ token, repository, apiUrl }),
+  expectedEvidenceDigest,
+  request = createGitHubRequest({ token, repository, apiUrl }),
 }) {
+  if (
+    expectedEvidenceDigest !== undefined &&
+    !/^[a-f0-9]{64}$/.test(expectedEvidenceDigest)
+  )
+    throw new Error('Expected integration evidence must be a full digest.');
   const workerConfig = normalizeWorkerConfig(workerPolicy);
   if (operation === 'create-pr')
-    return createPullRequest(request, { issueNumber, workerConfig, fetchImpl });
+    return createPullRequest(request, {
+      issueNumber,
+      workerConfig,
+      fetchImpl,
+      repository,
+    });
+  if (operation === 'inspect')
+    return captureIntegrationEvidence(request, {
+      issueNumber,
+      pullNumber,
+      workerConfig,
+      repository,
+    });
   if (operation === 'integrate')
     return integratePullRequest(request, {
       issueNumber,
       pullNumber,
       workerConfig,
+      repository,
+      expectedEvidenceDigest,
     });
   if (operation === 'verify-credential')
     return verifyCredentialBoundary(request, issueNumber);

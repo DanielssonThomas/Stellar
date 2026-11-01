@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { digest, isDigest, requireValue } from './planning-evidence.mjs';
-import { assertHostSessionReceipt, runHostSession } from './host-session.mjs';
+import {
+  assertHostSessionReceipt,
+  isHostSessionNotStarted,
+  runHostSession,
+} from './host-session.mjs';
 
 export function createStageRunner({
   store,
@@ -10,6 +14,7 @@ export function createStageRunner({
   recipes,
   timeoutMs,
   faults = {},
+  assertCurrent = () => undefined,
 }) {
   const operations = new WeakMap();
   async function acquire(value) {
@@ -29,6 +34,8 @@ export function createStageRunner({
               'verify',
               'review',
               'reconcile',
+              'pr-review',
+              'architect-approval',
             ].includes(active.phase) &&
             typeof active.nonce === 'string' &&
             /^[a-f0-9-]{36}$/.test(active.nonce) &&
@@ -79,12 +86,21 @@ export function createStageRunner({
     }
   }
   async function refresh(grant) {
+    checkCurrent(grant);
     const current = await admission.inspect(grant.request);
+    checkCurrent(grant);
     requireValue(
       current.digest === grant.contextDigest,
       'Authoritative issue, claim, policy, scope or source changed.',
     );
     return current.facts;
+  }
+
+  function checkCurrent(grant) {
+    requireValue(
+      assertCurrent(grant) === undefined,
+      'The host authority guard must complete synchronously.',
+    );
   }
 
   async function runStage(grant, phase, packet, signal, operation) {
@@ -124,12 +140,14 @@ export function createStageRunner({
     };
     const slot = operation?.slot ?? (await acquire(reservation));
     let consumed = false;
+    let sessionInvoked = false;
     try {
       await refresh(grant);
       await store.create(`${prefix}.reservation`, reservation);
       consumed = true;
       if (operation) operation.uncertain = true;
       await refresh(grant);
+      sessionInvoked = true;
       const receipt = await runHostSession({
         recipe: recipes[phase],
         packet,
@@ -138,6 +156,7 @@ export function createStageRunner({
         timeoutMs,
         signal,
         fault: faults[phase] ?? null,
+        assertBeforeSpawn: () => checkCurrent(grant),
         onSpawn: (launch) =>
           store.create(`${prefix}.launch`, {
             ...launch,
@@ -178,7 +197,25 @@ export function createStageRunner({
       );
       return result;
     } catch (error) {
-      if (!consumed && !operation) await pool.release('active', slot.digest);
+      if (
+        consumed &&
+        (!sessionInvoked ||
+          isHostSessionNotStarted(error, {
+            phase,
+            nonce: reservation.nonce,
+            packetDigest: subjectDigest,
+          }))
+      ) {
+        await store.create(`${prefix}.not-started`, {
+          reservationDigest: digest(reservation),
+          reason: sessionInvoked
+            ? 'host-pre-spawn-guard-rejected'
+            : 'host-pre-session-admission-rejected',
+        });
+        if (operation) operation.uncertain = false;
+        else await pool.release('active', slot.digest);
+      } else if (!consumed && !operation)
+        await pool.release('active', slot.digest);
       throw error;
     }
   }
