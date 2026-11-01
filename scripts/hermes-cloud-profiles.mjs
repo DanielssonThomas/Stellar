@@ -1,7 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  plainEntry,
+  plainParents,
+  plainTree,
+  installIdentityFile,
+} from '../tools/policy/engineering-org/identity-files.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const roles = {
@@ -22,11 +28,21 @@ function hermes(args) {
   const result = spawnSync('hermes', args, {
     encoding: 'utf8',
     windowsHide: true,
+    timeout: 30_000,
+    maxBuffer: 1024 * 1024,
   });
+  if (
+    !result.error &&
+    result.status !== 0 &&
+    args[0] === 'profile' &&
+    args[1] === 'show' &&
+    `${result.stderr}\n${result.stdout}`.includes(
+      `Profile '${args[2]}' does not exist.`,
+    )
+  )
+    throw new Error('Profile does not exist.');
   if (result.error || result.status !== 0)
-    throw new Error(
-      (result.stderr || result.stdout || String(result.error)).trim(),
-    );
+    throw new Error('Hermes offline profile inspection failed.');
   return result.stdout.trim();
 }
 
@@ -38,12 +54,12 @@ export function validateCloudConfig(role, config) {
       `^  default: ${selected.model.replaceAll('.', '\\.')}\\r?$`,
       'm',
     ).test(config) ||
-    !/^  provider: openai-codex\r?$/m.test(config) ||
+    !/^ {2}provider: openai-codex\r?$/m.test(config) ||
     !/^fallback_providers: \[\]\r?$/m.test(config)
   )
     throw new Error(`${role}: unexpected model, provider, or fallback route`);
   if (
-    !/^auxiliary:\r?\n  title_generation:\r?\n    enabled: false\r?$/m.test(
+    !/^auxiliary:\r?\n {2}title_generation:\r?\n {4}enabled: false\r?$/m.test(
       config,
     )
   )
@@ -97,7 +113,12 @@ export async function provisionCloudProfile(
     throw new Error(
       `${selected.profile}: Hermes did not report a profile path`,
     );
-  const destination = path.resolve(match[1].trim());
+  const reportedPath = match[1].trim();
+  if (!path.isAbsolute(reportedPath))
+    throw new Error(
+      `${selected.profile}: Hermes reported a relative profile path`,
+    );
+  const destination = path.resolve(reportedPath);
   if (
     path.basename(destination) !== selected.profile ||
     path.basename(path.dirname(destination)) !== 'profiles'
@@ -105,9 +126,24 @@ export async function provisionCloudProfile(
     throw new Error(
       `${selected.profile}: Hermes reported an unexpected profile path`,
     );
+  const profileRoot = path.dirname(path.dirname(destination));
+  for (const filename of ['config.yaml', 'SOUL.md']) {
+    const file = path.join(destination, filename);
+    await plainParents(profileRoot, file);
+    await plainEntry(file, 'file', true);
+  }
+  for (const skill of selected.skills) {
+    const skillDestination = path.join(destination, 'skills', 'stellar', skill);
+    await plainParents(profileRoot, skillDestination);
+    await plainTree(skillDestination);
+  }
   await mkdir(destination, { recursive: true });
-  await writeFile(path.join(destination, 'config.yaml'), config, 'utf8');
-  await cp(
+  await installIdentityFile(
+    source,
+    path.join(destination, 'config.yaml'),
+    true,
+  );
+  await installIdentityFile(
     path.join(
       root,
       'tools',
@@ -118,7 +154,7 @@ export async function provisionCloudProfile(
       'soul.md',
     ),
     path.join(destination, 'SOUL.md'),
-    { force: true },
+    true,
   );
   for (const skill of selected.skills) {
     const skillDestination = path.join(destination, 'skills', 'stellar', skill);
@@ -150,12 +186,23 @@ export async function provisionCloudProfile(
     'list',
   ]);
   const toolsets = commandRunner(['-p', selected.profile, 'tools', 'list']);
+  const enabledToolsets = [
+    ...toolsets.matchAll(/^\s*✓ enabled\s+([a-z_-]+)/gm),
+  ].map((match) => match[1]);
+  const prompt = JSON.parse(
+    commandRunner(['-p', selected.profile, 'prompt-size', '--json']),
+  );
   if (
     loadedModel !== selected.model ||
     loadedProvider !== 'openai-codex' ||
     !loadedFallback.includes('No fallback providers configured.') ||
-    [...toolsets.matchAll(/^\s*✓ enabled\s+([a-z_]+)/gm)].some(
-      (match) => match[1] !== 'skills',
+    enabledToolsets.length !== 1 ||
+    enabledToolsets[0] !== 'skills' ||
+    !Array.isArray(prompt.toolsets_breakdown) ||
+    prompt.toolsets_breakdown.some((entry) => entry?.toolset !== 'skills') ||
+    !Array.isArray(prompt.skills_breakdown) ||
+    !selected.skills.every((skill) =>
+      prompt.skills_breakdown.some((entry) => entry?.name === skill),
     )
   )
     throw new Error(
