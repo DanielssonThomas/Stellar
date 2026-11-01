@@ -15,6 +15,18 @@ const roles = Object.freeze({
 });
 const receipts = new WeakSet();
 const recipes = new WeakSet();
+const notStarted = new WeakMap();
+
+export function isHostSessionNotStarted(error, expected = {}) {
+  const session = notStarted.get(error);
+  return Boolean(
+    session &&
+      (!expected.phase || session.phase === expected.phase) &&
+      (!expected.nonce || session.nonce === expected.nonce) &&
+      (!expected.packetDigest ||
+        session.packetDigest === expected.packetDigest),
+  );
+}
 const allowedFaults = [
   null,
   'hang',
@@ -111,6 +123,7 @@ export async function runHostSession({
   timeoutMs = 2000,
   fault = null,
   onSpawn = async () => undefined,
+  assertBeforeSpawn = () => undefined,
   signal,
 }) {
   requireValue(
@@ -145,6 +158,21 @@ export async function runHostSession({
     const env = {};
     for (const key of ['SystemRoot', 'SYSTEMROOT', 'WINDIR'])
       if (process.env[key]) env[key] = process.env[key];
+    try {
+      requireValue(
+        assertBeforeSpawn() === undefined,
+        'The host pre-spawn guard must complete synchronously.',
+      );
+    } catch (cause) {
+      const error = new Error(
+        'Host guard rejected the session before launch.',
+        {
+          cause,
+        },
+      );
+      notStarted.set(error, Object.freeze({ phase, nonce, packetDigest }));
+      throw error;
+    }
     const child = spawn(process.execPath, [entryPoint, phase, nonce], {
       cwd: workspace,
       env,
