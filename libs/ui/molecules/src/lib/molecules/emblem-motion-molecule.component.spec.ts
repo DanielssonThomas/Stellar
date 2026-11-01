@@ -129,7 +129,7 @@ describe('EmblemMotionMolecule', () => {
     expect(
       focusing.every((animation) => animation.cancel.mock.calls.length === 1),
     ).toBe(true);
-    expect(animate.mock.calls.some((call) => call[1]?.duration === 260)).toBe(
+    expect(animate.mock.calls.some((call) => call[1]?.duration === 1000)).toBe(
       true,
     );
     fixture.destroy();

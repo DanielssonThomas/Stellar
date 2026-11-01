@@ -20,7 +20,7 @@
 
 Microphone permission/request state is separate from interaction phase. `capture-request` emits a fresh `requestId`; every device result and audio activity event must carry that ID. Denial, missing device, disconnect, mute and stop terminate audio capture. Manual activity continues independently. Starting or ending either activity source twice is harmless. Old device, motion and hangover callbacks cannot restore earlier state.
 
-The initial silence hangover is **900 ms**. This temporal hysteresis absorbs activity jitter before docking. Focus, dock and return motion deadlines are **220, 320 and 260 ms** respectively. A brief activity burst finishes focusing before its hangover begins. `hangoverMs` can be configured through an initial state; motion durations are exported as the initial presentation contract. These values are UI defaults, not speech detection thresholds.
+The initial silence hangover is **900 ms**. This temporal hysteresis absorbs activity jitter before docking. Focus, dock and return motion deadlines are **1000 ms each**. A brief activity burst finishes focusing before its hangover begins. `hangoverMs` can be configured through an initial state; motion durations are exported as the initial presentation contract. These values are UI defaults, not speech detection thresholds.
 
 Reduced motion changes presentation synchronously: no animation callback is needed to reach listening, presenting or idle. Silence hangover remains in effect. Enabling reduced motion during an animation cancels it and immediately reaches its current target.
 

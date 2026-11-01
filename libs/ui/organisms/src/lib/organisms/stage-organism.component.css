@@ -16,10 +16,10 @@
 }
 .emblem-slot {
   transition:
-    left 320ms ease,
-    top 320ms ease,
-    width 320ms ease,
-    height 320ms ease;
+    left var(--emblem-duration) ease,
+    top var(--emblem-duration) ease,
+    width var(--emblem-duration) ease,
+    height var(--emblem-duration) ease;
 }
 :host(.motion-reduced) .emblem-slot {
   transition: none;

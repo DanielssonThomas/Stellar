@@ -1,0 +1,7 @@
+# Uniform plane refinement
+
+Issue #204 refines the [preserved #202 reference and defect screenshots](../idle-correction/README.md). The user now requests visibly independent, evenly spaced fragments rather than tight recognizable idle portraits. Six unchanged raster pieces and five circle planes occupy eleven centered, equal depth intervals. Four stars are part of the outer frame and rotate with it in plane. All circles share an axis, and the three added inner circles overlap exactly at zero assembly.
+
+Camera, assembly, ambient neutralization and Stage movement share the public 1000 ms motion durations. Reduced motion keeps the static separated idle geometry and assembles immediately. Hidden/suspended scenes stop autonomous motion; interruption retains the existing rendered-transform rebasing and cleanup. The complete gold-right/violet-left canonical assembly remains registered.
+
+Actual Angular Playwright coverage checks equal rendered depth intervals, in-plane ring motion, attached star geometry, the 1000 ms camera animation, interrupted return, reduced motion and small viewport fit. Source-only Hermes receipts are preserved in contribution.json; raw responses and rendered screenshots/video remain outside Git in the issue evidence directory. Native screenshots and manual transition verification are a separate review gate; no microphone or physical capture qualification is claimed.

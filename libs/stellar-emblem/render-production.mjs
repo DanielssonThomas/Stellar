@@ -16,7 +16,7 @@ const size = registration.canvas;
 if (size !== 1280) throw new Error('Production canvas must be 1280 square');
 const svg = (id, content) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1280" viewBox="0 0 1280 1280"><defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff6a1"/><stop offset=".24" stop-color="#ffcf4e"/><stop offset=".5" stop-color="#a95708"/><stop offset=".73" stop-color="#ffe890"/><stop offset="1" stop-color="#d87e13"/></linearGradient></defs><g id="${id}">${content}</g></svg>`;
-const geometries = [
+const sourceGeometries = [
   {
     id: 'outer-frame',
     content:
@@ -43,22 +43,35 @@ const geometries = [
     content: `<g transform="translate(${x} ${y})"><path d="M0 -58 Q10 -10 44 0 Q10 10 0 58 Q-10 10 -44 0 Q-10 -10 0 -58Z" fill="url(#gold)" stroke="#75410c" stroke-width="4"/><path d="M0 -50 0 0 -37 0 Q-9 -9 0 -50" fill="#fff4a0"/><path d="M0 0 37 0 Q9 9 0 50Z" fill="#ffb319"/><path d="M0 -50V50M-37 0H37" stroke="#fff1a0" stroke-width="1.5"/></g>`,
   })),
 ];
-const explodedPose = (id) => {
-  const character = id.startsWith('gold') || id.startsWith('violet');
-  const separation =
-    900 + (id.endsWith('hair') ? 60 : id.endsWith('ornament') ? 120 : 0);
-  const depth =
-    id === 'violet-ornament'
-      ? -780
-      : character
-        ? separation * (id.startsWith('gold') ? 1 : -1)
-        : id === 'outer-frame'
-          ? 180
-          : id === 'inner-circle'
-            ? -180
-            : 0;
-  return { x: 0, y: 0, rotation: 0, depth };
-};
+const geometries = [
+  {
+    ...sourceGeometries[0],
+    content:
+      sourceGeometries[0].content +
+      sourceGeometries
+        .slice(2)
+        .map((item) => item.content)
+        .join(''),
+  },
+  sourceGeometries[1],
+  ...[2, 3, 4].map((number) => ({
+    ...sourceGeometries[1],
+    id: 'inner-circle-' + number,
+  })),
+];
+const planeOrder = [
+  'violet-hair',
+  'violet-body',
+  'violet-ornament',
+  'inner-circle',
+  'inner-circle-2',
+  'outer-frame',
+  'inner-circle-3',
+  'inner-circle-4',
+  'gold-body',
+  'gold-hair',
+  'gold-ornament',
+];
 const zero = { x: 0, y: 0, rotation: 0 };
 const entry = (item, z, extension) => ({
   id: item.id,
@@ -66,10 +79,11 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded: explodedPose(item.id),
+  exploded: zero,
+  planeIndex: planeOrder.indexOf(item.id),
   ...(item.id === 'outer-frame'
     ? { spin: 'clockwise' }
-    : item.id === 'inner-circle'
+    : item.id.startsWith('inner-circle')
       ? { spin: 'counter-clockwise' }
       : {}),
 });
@@ -77,6 +91,7 @@ const manifest = {
   version: 1,
   status: 'production-candidate',
   viewBox: [0, 0, size, size],
+  planeSpacing: 240,
   layers: [
     ...registration.layers.map((item, z) => entry(item, z, 'png')),
     ...geometries.map((item, z) =>
@@ -248,7 +263,7 @@ try {
   );
   const layers = manifest.layers.map((layer) => {
     if (
-      !/^layers\/[a-z-]+\.(png|svg)$/.test(layer.file) ||
+      !/^layers\/[a-z0-9-]+\.(png|svg)$/.test(layer.file) ||
       layer.assembled.x ||
       layer.assembled.y ||
       layer.assembled.rotation
@@ -316,7 +331,7 @@ try {
       Buffer.from(url.split(',')[1], 'base64'),
     );
   await page.setContent(
-    `<style>body{margin:24px;background:#0b0812;color:#ede1fa;font:14px system-ui}h1{font-size:20px}main,footer{display:flex;gap:28px;align-items:center}h2{font-size:14px;font-weight:400}img{display:block}footer{margin-top:24px}</style><h1>Stellar production candidate v1 — registered hybrid layers</h1><main><section><h2>Canonical assembled · 512 px</h2><img src="${renders.assembled512}"></section><section><h2>Exploded · 512 px</h2><img src="${renders.exploded512}"></section></main><footer>${[48, 64, 96].map((n) => `<section><h2>${n} px</h2><img src="${renders['dock' + n]}"></section>`).join('')}<p>12 independently compositable layers.<br>Profiles and colour masses survive at 48 px;<br>leaf facets and individual strands need larger sizes.</p></footer>`,
+    `<style>body{margin:24px;background:#0b0812;color:#ede1fa;font:14px system-ui}h1{font-size:20px}main,footer{display:flex;gap:28px;align-items:center}h2{font-size:14px;font-weight:400}img{display:block}footer{margin-top:24px}</style><h1>Stellar production candidate v1 — registered hybrid layers</h1><main><section><h2>Canonical assembled · 512 px</h2><img src="${renders.assembled512}"></section><section><h2>Flat registration · 512 px (camera omitted)</h2><img src="${renders.exploded512}"></section></main><footer>${[48, 64, 96].map((n) => `<section><h2>${n} px</h2><img src="${renders['dock' + n]}"></section>`).join('')}<p>${layers.length} independently compositable planes.<br>Profiles and colour masses survive at 48 px;<br>leaf facets and individual strands need larger sizes.</p></footer>`,
   );
   await page.screenshot({
     path: path.join(root, 'previews', 'contact-sheet.png'),
