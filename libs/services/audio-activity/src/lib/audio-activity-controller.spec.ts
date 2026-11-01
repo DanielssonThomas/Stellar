@@ -24,6 +24,83 @@ function fixtureSource() {
 }
 
 describe('audio lifecycle owner', () => {
+  it.each(['start', 'stop'] as const)(
+    'preserves a replacement started synchronously by cleanup during %s',
+    async (action) => {
+      const owner = new AudioActivityController(() => undefined);
+      const first = fixtureSource();
+      const obsolete = fixtureSource();
+      const replacement = fixtureSource();
+      await owner.start(first.source);
+      vi.mocked(first.source.stop).mockImplementationOnce(async () => {
+        void owner.start(replacement.source);
+      });
+      if (action === 'start') await owner.start(obsolete.source);
+      else await owner.stop();
+      expect(obsolete.source.start).not.toHaveBeenCalled();
+      expect(replacement.source.start).toHaveBeenCalledTimes(1);
+      expect(replacement.source.stop).not.toHaveBeenCalled();
+      expect(owner.snapshot().status).toBe('capturing');
+      await owner.dispose();
+    },
+  );
+  it.each(['stop', 'dispose'] as const)(
+    'does not launch capture after a requesting listener calls %s',
+    async (action) => {
+      const source = fixtureSource();
+      const owner = new AudioActivityController((state) => {
+        if (state.status === 'requesting') void owner[action]();
+      });
+      await owner.start(source.source);
+      expect(source.source.start).not.toHaveBeenCalled();
+      expect(source.source.stop).toHaveBeenCalledTimes(1);
+      expect(owner.snapshot().status).toBe('idle');
+    },
+  );
+
+  it('launches only the replacement chosen by a synchronous requesting listener', async () => {
+    const first = fixtureSource();
+    const replacement = fixtureSource();
+    let replaced = false;
+    const owner = new AudioActivityController((state) => {
+      if (state.status === 'requesting' && !replaced) {
+        replaced = true;
+        void owner.start(replacement.source);
+      }
+    });
+    await owner.start(first.source);
+    expect(first.source.start).not.toHaveBeenCalled();
+    expect(first.source.stop).toHaveBeenCalledTimes(1);
+    expect(replacement.source.start).toHaveBeenCalledTimes(1);
+    expect(replacement.source.stop).not.toHaveBeenCalled();
+    expect(owner.snapshot().status).toBe('capturing');
+    await owner.dispose();
+    expect(replacement.source.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the old session before a terminal listener restarts the same source', async () => {
+    const source = new SyntheticAudioSource();
+    let restart = false;
+    const owner = new AudioActivityController(
+      (state) => {
+        if (state.status === 'idle' && restart) {
+          restart = false;
+          void owner.start(source);
+        }
+      },
+      { calibrationMs: 0, minActiveMs: 0 },
+    );
+    await owner.start(source);
+    restart = true;
+    await owner.stop();
+    source.push({ timestampMs: 0, rms: 0, peak: 0, clipped: false });
+    source.push({ timestampMs: 30, rms: 0.1, peak: 0.1, clipped: false });
+    expect(owner.snapshot()).toMatchObject({
+      status: 'capturing',
+      activity: { active: true },
+    });
+    await owner.dispose();
+  });
   it('clears activity on audio-context suspension and requires fresh activity after resume', async () => {
     const owner = new AudioActivityController(() => undefined, {
       calibrationMs: 0,

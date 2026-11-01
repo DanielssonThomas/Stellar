@@ -69,6 +69,30 @@ function fixture() {
 }
 
 describe('opt-in Web Audio source', () => {
+  it('releases capture even when a terminal status subscriber throws', async () => {
+    const f = fixture();
+    await f.capture.start({
+      frame: f.sink.frame,
+      status: (status) => {
+        if (status === 'idle') throw Error('subscriber failed');
+      },
+    });
+    await expect(f.capture.stop()).rejects.toThrow('subscriber failed');
+    await f.capture.stop();
+    for (const resource of [
+      f.cancel,
+      f.source.disconnect,
+      f.analyser.disconnect,
+      f.track.stop,
+      f.extra.stop,
+      f.context.close,
+    ])
+      expect(resource).toHaveBeenCalledTimes(1);
+    expect(f.removeTrack.mock.calls).toEqual(f.addTrack.mock.calls);
+    expect(f.removeContext.mock.calls).toEqual(f.addContext.mock.calls);
+    f.sample();
+    expect(f.sink.frame).not.toHaveBeenCalled();
+  });
   it('does not acquire before start, resumes within the gesture, emits only bounded summaries and releases all resources', async () => {
     const f = fixture();
     expect(f.acquire).not.toHaveBeenCalled();

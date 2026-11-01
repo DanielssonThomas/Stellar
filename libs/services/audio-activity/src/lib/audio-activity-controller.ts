@@ -38,10 +38,12 @@ export class AudioActivityController {
     const generation = ++this.generation;
     const previous = this.source;
     this.source = source;
-    void previous?.stop().catch(() => undefined);
+    void this.release(previous);
+    if (!this.owns(generation, source)) return;
     this.detector.reset();
     this.lastPublished = undefined;
     this.publish('requesting', this.detector.snapshot());
+    if (!this.owns(generation, source)) return;
     try {
       await source.start(
         {
@@ -70,19 +72,17 @@ export class AudioActivityController {
   }
 
   async stop(status: AudioStatus = 'idle'): Promise<void> {
-    this.generation += 1;
+    const generation = ++this.generation;
     const source = this.source;
     this.source = undefined;
-    this.publish(status, {
-      ...this.detector.snapshot(),
-      active: false,
-      level: 0,
-    });
-    try {
-      await source?.stop();
-    } catch {
-      // Adapter cleanup failure must not reactivate an invalidated session.
-    }
+    const cleanup = this.release(source);
+    if (generation === this.generation)
+      this.publish(status, {
+        ...this.detector.snapshot(),
+        active: false,
+        level: 0,
+      });
+    await cleanup;
   }
 
   suspend(): Promise<void> {
@@ -138,6 +138,20 @@ export class AudioActivityController {
     activity: ActivitySnapshot,
   ): AudioActivityState {
     return Object.freeze({ status, activity: Object.freeze({ ...activity }) });
+  }
+
+  private async release(source: AudioSource | undefined): Promise<void> {
+    try {
+      await source?.stop();
+    } catch {
+      // Adapter cleanup failure must not reactivate an invalidated session.
+    }
+  }
+
+  private owns(generation: number, source: AudioSource): boolean {
+    return (
+      !this.disposed && generation === this.generation && this.source === source
+    );
   }
 
   private publish(status: AudioStatus, activity: ActivitySnapshot): void {

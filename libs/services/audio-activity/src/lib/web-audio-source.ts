@@ -122,8 +122,8 @@ export class WebAudioSource implements AudioSource {
     }
   }
 
-  private finish(session: Session, status: AudioStatus): Promise<void> {
-    if (!this.isCurrent(session)) return Promise.resolve();
+  private async finish(session: Session, status: AudioStatus): Promise<void> {
+    if (!this.isCurrent(session)) return;
     try {
       this.emit(session, status);
     } finally {
@@ -132,8 +132,8 @@ export class WebAudioSource implements AudioSource {
         this.current = undefined;
         ++this.generation;
       }
+      await this.release(session);
     }
-    return this.release(session);
   }
 
   stop(): Promise<void> {
@@ -145,7 +145,7 @@ export class WebAudioSource implements AudioSource {
   async start(sink: AudioSink, deviceId?: string): Promise<void> {
     // Teardown is synchronous except closing the old context; never await it here.
     const previousGeneration = this.generation;
-    void this.stop();
+    void this.stop().catch(() => undefined);
     if (this.current || this.generation > previousGeneration + 1) return;
     const session: Session = {
       generation: ++this.generation,
@@ -166,7 +166,7 @@ export class WebAudioSource implements AudioSource {
       // Invoke resume in the initiating gesture, without waiting for permission.
       const resumed = context.resume();
       void Promise.resolve(resumed).catch(() => {
-        void this.finish(session, 'unavailable');
+        void this.finish(session, 'unavailable').catch(() => undefined);
       });
       this.emit(session, 'requesting');
       if (!this.isCurrent(session)) return;
@@ -190,10 +190,10 @@ export class WebAudioSource implements AudioSource {
       }
       for (const track of tracks) {
         const ended = (): void => {
-          void this.finish(session, 'disconnected');
+          void this.finish(session, 'disconnected').catch(() => undefined);
         };
         const muted = (): void => {
-          void this.finish(session, 'muted');
+          void this.finish(session, 'muted').catch(() => undefined);
         };
         track.addEventListener('ended', ended);
         track.addEventListener('mute', muted);
@@ -220,7 +220,7 @@ export class WebAudioSource implements AudioSource {
       const stateChanged = (): void => {
         if (!this.isCurrent(session)) return;
         if (context.state === 'closed') {
-          void this.finish(session, 'unavailable');
+          void this.finish(session, 'unavailable').catch(() => undefined);
         } else {
           this.emit(
             session,
@@ -253,7 +253,7 @@ export class WebAudioSource implements AudioSource {
           timestampMs = this.now();
           if (!Number.isFinite(timestampMs) || !Number.isFinite(rms)) return;
         } catch {
-          void this.finish(session, 'unavailable');
+          void this.finish(session, 'unavailable').catch(() => undefined);
           return;
         }
         if (this.isCurrent(session) && context.state === 'running') {

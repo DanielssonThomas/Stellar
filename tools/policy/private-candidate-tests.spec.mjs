@@ -284,9 +284,21 @@ test('unreviewed package scripts remain rejected in both checkout byte forms', a
 });
 
 test('reviewed lockfile and package inputs are required before any execution', async () => {
+  const canonicalLockDigest = createHash('sha256')
+    .update(
+      readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8').replaceAll(
+        '\r\n',
+        '\n',
+      ),
+    )
+    .digest('hex');
   assert.equal(
     validateReviewedDependencyInputs(candidate),
-    '51614807580c8a90f5124153c2ba05f856dcd5ed29581637554b171f6b0dc9bc',
+    canonicalLockDigest,
+  );
+  assert.equal(
+    validateReviewedDependencyInputs(candidate),
+    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
   );
   const lfCandidate = {
     ...candidate,
@@ -304,7 +316,11 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(lfCandidate),
-    '51614807580c8a90f5124153c2ba05f856dcd5ed29581637554b171f6b0dc9bc',
+    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
+  );
+  assert.equal(
+    validateReviewedDependencyInputs(lfCandidate),
+    canonicalLockDigest,
   );
   const crlfCandidate = {
     ...candidate,
@@ -321,7 +337,11 @@ test('reviewed lockfile and package inputs are required before any execution', a
   };
   assert.equal(
     validateReviewedDependencyInputs(crlfCandidate),
-    '51614807580c8a90f5124153c2ba05f856dcd5ed29581637554b171f6b0dc9bc',
+    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
+  );
+  assert.equal(
+    validateReviewedDependencyInputs(crlfCandidate),
+    canonicalLockDigest,
   );
   await assert.rejects(
     runPrivateCandidateChecks(options, {
