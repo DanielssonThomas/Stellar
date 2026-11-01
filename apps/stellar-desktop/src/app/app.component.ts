@@ -9,6 +9,7 @@ import {
 import { DesktopExperienceTemplate } from '@stellar/ui-templates/desktop-experience';
 import { DesktopExperience } from './desktop-experience';
 import { DesktopAssistant } from './desktop-assistant';
+import { DesktopVoice } from './desktop-voice';
 import {
   DesktopAdapterService,
   IvyAdapterService,
@@ -17,7 +18,7 @@ import { capabilityLabel } from '@stellar/desktop-contracts';
 
 @Component({
   imports: [DesktopExperienceTemplate],
-  providers: [DesktopExperience, DesktopAssistant],
+  providers: [DesktopExperience, DesktopAssistant, DesktopVoice],
   selector: 'stellar-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
@@ -31,6 +32,7 @@ export class AppComponent {
   readonly title = 'Stellar Desktop';
   readonly experience = inject(DesktopExperience);
   readonly assistant = inject(DesktopAssistant);
+  readonly voice = inject(DesktopVoice);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
   readonly eventSeen = signal(false);
