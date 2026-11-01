@@ -43,6 +43,7 @@ const finding = (kind, criterionId, summary, impact, suggestion, line = 3) => ({
   kind,
   criterionId,
   path: 'src/level.mjs',
+  side: 'head',
   line,
   summary,
   impact,
@@ -206,7 +207,9 @@ export function fixtureContext(fixture, observedProbes) {
     changedFiles: [
       {
         path: 'src/level.mjs',
-        lineCount: fixture.candidate.toString().split('\n').length,
+        status: 'modified',
+        baseLineCount: fixture.baseline.toString().split('\n').length,
+        headLineCount: fixture.candidate.toString().split('\n').length,
       },
     ],
     verification: [

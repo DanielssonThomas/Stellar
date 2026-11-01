@@ -40,6 +40,31 @@ function repositoryPath(value) {
   );
 }
 
+function changedFile(file) {
+  return (
+    repositoryPath(file?.path) &&
+    ['added', 'modified', 'deleted'].includes(file.status) &&
+    [file.baseLineCount, file.headLineCount].every(
+      (count) => Number.isSafeInteger(count) && count >= 0,
+    ) &&
+    (file.status !== 'added' || file.baseLineCount === 0) &&
+    (file.status !== 'deleted' || file.headLineCount === 0)
+  );
+}
+
+function findingLocation(finding, file) {
+  if (!file) return false;
+  if (finding.side === 'file') return finding.line === undefined;
+  if (!['base', 'head'].includes(finding.side)) return false;
+  const lineCount =
+    finding.side === 'base' ? file.baseLineCount : file.headLineCount;
+  return (
+    Number.isSafeInteger(finding.line) &&
+    finding.line > 0 &&
+    finding.line <= lineCount
+  );
+}
+
 export function validateReviewReport(report, context) {
   requireValue(
     context &&
@@ -57,12 +82,7 @@ export function validateReviewReport(report, context) {
       unique(context.criteria) &&
       list(context.changedFiles) &&
       context.changedFiles.length > 0 &&
-      context.changedFiles.every(
-        (file) =>
-          repositoryPath(file?.path) &&
-          Number.isSafeInteger(file.lineCount) &&
-          file.lineCount > 0,
-      ) &&
+      context.changedFiles.every(changedFile) &&
       unique(context.changedFiles.map((file) => file.path)) &&
       list(context.verification) &&
       context.verification.length > 0 &&
@@ -135,6 +155,7 @@ export function validateReviewReport(report, context) {
             'kind',
             'criterionId',
             'path',
+            'side',
             'line',
             'summary',
             'impact',
@@ -155,10 +176,7 @@ export function validateReviewReport(report, context) {
             'verification',
           ].includes(finding.kind) &&
           context.criteria.includes(finding.criterionId) &&
-          file &&
-          Number.isSafeInteger(finding.line) &&
-          finding.line > 0 &&
-          finding.line <= file.lineCount &&
+          findingLocation(finding, file) &&
           [finding.summary, finding.impact, finding.suggestion].every(text) &&
           (finding.kind === 'verification'
             ? context.verification.some(

@@ -74,9 +74,36 @@ test('rejects incomplete context rather than trusting matching missing fields', 
     { criteria: ['same', 'same'] },
     { criteria: new Array(1) },
     { changedFiles: [] },
-    { changedFiles: [{ path: '../file', lineCount: 1 }] },
-    { changedFiles: [{ path: '/file', lineCount: 1 }] },
-    { changedFiles: [{ path: 'src/file', lineCount: 0 }] },
+    {
+      changedFiles: [
+        {
+          path: '../file',
+          status: 'modified',
+          baseLineCount: 1,
+          headLineCount: 1,
+        },
+      ],
+    },
+    {
+      changedFiles: [
+        {
+          path: '/file',
+          status: 'modified',
+          baseLineCount: 1,
+          headLineCount: 1,
+        },
+      ],
+    },
+    {
+      changedFiles: [
+        {
+          path: 'src/file',
+          status: 'modified',
+          baseLineCount: 1,
+          headLineCount: -1,
+        },
+      ],
+    },
     { verification: [] },
     { verification: [{ id: 'test', command: 'test', status: 'claimed' }] },
   ];
@@ -165,6 +192,8 @@ test('requires actionable findings within the supplied candidate file evidence',
     { kind: 'warning' },
     { criterionId: 'invented' },
     { path: 'src/other.mjs' },
+    { side: 'unknown' },
+    { side: 'file' },
     { line: 0 },
     { line: 500 },
     { line: 1.5 },
