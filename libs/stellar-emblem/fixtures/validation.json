@@ -1,0 +1,21 @@
+{
+  "status": "unapproved-study",
+  "documents": 13,
+  "layerIds": [
+    "outer-ring",
+    "inner-ring",
+    "cardinal-stars",
+    "violet-hair-back",
+    "violet-hair-front",
+    "violet-silhouette",
+    "violet-botanical",
+    "violet-gem",
+    "gold-hair",
+    "gold-silhouette",
+    "gold-botanical",
+    "gold-gem"
+  ],
+  "activeContent": false,
+  "runtimeBytes": 28432,
+  "budgetBytes": 102400
+}
