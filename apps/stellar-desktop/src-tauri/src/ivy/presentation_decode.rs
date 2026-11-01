@@ -33,6 +33,9 @@ pub fn parse_presentation(text: &str) -> Result<Vec<IvyPresentation>, Presentati
     if text.len() > MAX_TEXT {
         return Err(PresentationError::Oversized);
     }
+    if text.trim().is_empty() {
+        return Ok(vec![]);
+    }
     let ordinary = || {
         vec![IvyPresentation::Text {
             text: text.to_owned(),

@@ -29,6 +29,7 @@ const turns: Record<IvyTurnState, true> = {
   completed: true,
   cancelled: true,
   uncertain: true,
+  failed: true,
 };
 const errors: Record<IvyErrorCode, true> = {
   malformed_request: true,
@@ -39,6 +40,7 @@ const errors: Record<IvyErrorCode, true> = {
   uncertain: true,
   storage: true,
   approval_required: true,
+  turn_failed: true,
 };
 
 const components: Record<IvyComponent, true> = { assistant_message: true };

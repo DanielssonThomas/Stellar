@@ -21,6 +21,7 @@ pub enum IvyTurnState {
     Submitting,
     Admitted,
     Completed,
+    Failed,
     Cancelled,
     Uncertain,
 }
@@ -36,6 +37,7 @@ pub enum IvyErrorCode {
     Uncertain,
     Storage,
     ApprovalRequired,
+    TurnFailed,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

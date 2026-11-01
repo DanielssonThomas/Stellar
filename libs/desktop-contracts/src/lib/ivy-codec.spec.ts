@@ -19,6 +19,19 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('accepts settled failure and empty cancellation snapshots without a fake text item', () => {
+    expect(
+      decodeIvySnapshot({
+        ...snapshot(),
+        turn: 'failed',
+        items: [],
+        error: 'turn_failed',
+      }),
+    ).toMatchObject({ turn: 'failed', error: 'turn_failed', items: [] });
+    expect(
+      decodeIvySnapshot({ ...snapshot(), turn: 'cancelled', items: [] }),
+    ).toMatchObject({ turn: 'cancelled', items: [] });
+  });
   it('preserves u64 precision and keeps reply and presentation separate', () => {
     expect(decodeIvySnapshot(snapshot())).toEqual(snapshot());
   });

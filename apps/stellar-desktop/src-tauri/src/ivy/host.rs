@@ -93,6 +93,7 @@ impl IvyHost {
                             Action::Reconcile => session.reconcile(),
                             Action::Disconnect => {
                                 session.broker = None;
+                                session.restore_admission_state();
                                 Ok(())
                             }
                         };
@@ -243,6 +244,7 @@ fn connect(session: &mut Session, child: OwnedChild) -> Result<(), IvyErrorCode>
             view.turn = IvyTurnState::Uncertain;
         }
     });
+    session.restore_admission_state();
     Ok(())
 }
 

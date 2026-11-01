@@ -17,6 +17,21 @@ pub struct Session {
 }
 
 impl Session {
+    pub fn restore_admission_state(&self) {
+        self.shared.update(self.epoch, |view| {
+            if self.record.unsettled {
+                view.turn = IvyTurnState::Uncertain;
+            } else if matches!(
+                view.turn,
+                IvyTurnState::Submitting | IvyTurnState::Admitted | IvyTurnState::Uncertain
+            ) || view.turn_id != self.record.input_id
+            {
+                view.turn = IvyTurnState::Idle;
+                view.items.clear();
+            }
+            view.turn_id = self.record.input_id.clone();
+        });
+    }
     pub fn call(&mut self, method: &str, params: Value) -> Result<Value, IvyErrorCode> {
         if !self.shared.current(self.epoch) {
             return Err(IvyErrorCode::Unavailable);
@@ -51,6 +66,7 @@ impl Session {
         );
         let params = json!({"session_id":sid,"input_id":request.input_id,"text":text});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
+        let previous = self.record.clone();
         self.record = Record {
             session_id: Some(sid.clone()),
             input_id: Some(request.input_id.clone()),
@@ -60,7 +76,16 @@ impl Session {
         };
         self.journal.save(&self.record)?;
         self.replay = None;
-        let receipt = self.call("prompt.submit", params)?;
+        if !self.shared.current(self.epoch) {
+            self.record = previous;
+            self.journal.save(&self.record)?;
+            return Err(IvyErrorCode::Unavailable);
+        }
+        let receipt = self
+            .broker
+            .as_mut()
+            .ok_or(IvyErrorCode::Unavailable)?
+            .call("prompt.submit", params, &mut self.buffered)?;
         self.accept_receipt(&receipt)?;
         self.shared.update(self.epoch, |snapshot| {
             snapshot.turn = IvyTurnState::Admitted;
@@ -99,6 +124,7 @@ impl Session {
 
     pub fn reconcile(&mut self) -> Result<(), IvyErrorCode> {
         let Some(sid) = self.record.session_id.clone() else {
+            self.restore_admission_state();
             return Ok(());
         };
         let resumed = self.call("session.resume", json!({"session_id":sid}))?;
@@ -223,18 +249,28 @@ impl Session {
     fn complete(&mut self, outcome: &str, text: &str) -> Result<(), IvyErrorCode> {
         let turn = match outcome {
             "completed" => IvyTurnState::Completed,
+            "failed" => IvyTurnState::Failed,
             "cancelled" | "interrupted" => IvyTurnState::Cancelled,
             _ => return Err(IvyErrorCode::Uncertain),
         };
-        let items = super::presentation_decode::parse_presentation(text)
-            .map_err(|_| IvyErrorCode::Protocol)?;
+        let failed = turn == IvyTurnState::Failed;
+        let items = if failed {
+            vec![]
+        } else {
+            super::presentation_decode::parse_presentation(text)
+                .map_err(|_| IvyErrorCode::Protocol)?
+        };
         self.record.unsettled = false;
         self.journal.save(&self.record)?;
         self.shared.update(self.epoch, |view| {
             view.turn = turn;
             view.turn_id = self.record.input_id.clone();
             view.items = items;
-            view.error = None;
+            view.error = if failed {
+                Some(IvyErrorCode::TurnFailed)
+            } else {
+                None
+            };
         });
         Ok(())
     }

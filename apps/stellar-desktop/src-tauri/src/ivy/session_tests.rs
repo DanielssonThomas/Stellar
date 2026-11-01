@@ -121,12 +121,17 @@ fn malformed_user_turns_cannot_be_admitted() {
 
 #[cfg(windows)]
 fn inert_broker(terminal: bool) -> super::process::Broker {
+    inert_outcome(terminal, "completed", "canonical recovered answer")
+}
+
+#[cfg(windows)]
+fn inert_outcome(terminal: bool, outcome: &str, text: &str) -> super::process::Broker {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let template = r#"
 while ($line = [Console]::ReadLine()) {
   $request = $line | ConvertFrom-Json
-  $receipt = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3;status='STATUS';outcome='completed';result=@{final_response='canonical recovered answer'}}
+  $receipt = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3;status='STATUS';outcome='OUTCOME';result=@{final_response='FINAL_TEXT'}}
   $result = switch ($request.method) {
     'session.create' { @{session_id='session'} }
     'prompt.submit' { $receipt }
@@ -141,7 +146,10 @@ while ($line = [Console]::ReadLine()) {
   [Console]::WriteLine((@{id=$request.id;result=$result}|ConvertTo-Json -Compress -Depth 6))
 }
 "#;
-    let script = template.replace("STATUS", if terminal { "terminal" } else { "started" });
+    let script = template
+        .replace("STATUS", if terminal { "terminal" } else { "started" })
+        .replace("OUTCOME", outcome)
+        .replace("FINAL_TEXT", text);
     let mut command = Command::new("powershell.exe");
     command
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
@@ -214,4 +222,50 @@ fn completion_before_admission_reply_is_bound_after_the_receipt() {
     );
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn canonical_failed_and_empty_cancelled_events_settle_without_invalid_text() {
+    for (outcome, expected) in [
+        ("failed", IvyTurnState::Failed),
+        ("cancelled", IvyTurnState::Cancelled),
+    ] {
+        let (mut session, directory) = fixture();
+        let mut event = completion("admission", 3, " \n\t");
+        event["data"]["params"]["payload"]["outcome"] = outcome.into();
+        session.event(event).unwrap();
+        let snapshot = session.shared.view.lock().unwrap().snapshot.clone();
+        assert_eq!(snapshot.turn, expected);
+        assert!(snapshot.items.is_empty());
+        assert_eq!(
+            snapshot.error,
+            if outcome == "failed" {
+                Some(IvyErrorCode::TurnFailed)
+            } else {
+                None
+            }
+        );
+        drop(session);
+        assert!(!Journal::open(&directory).unwrap().1.unsettled);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn terminal_failed_and_empty_cancelled_receipts_release_the_logical_turn() {
+    for (outcome, expected) in [
+        ("failed", IvyTurnState::Failed),
+        ("cancelled", IvyTurnState::Cancelled),
+    ] {
+        let (mut session, directory) = fixture();
+        session.broker = Some(inert_outcome(true, outcome, ""));
+        session.reconcile().unwrap();
+        let snapshot = session.shared.view.lock().unwrap().snapshot.clone();
+        assert_eq!(snapshot.turn, expected);
+        assert!(snapshot.items.is_empty());
+        drop(session);
+        assert!(!Journal::open(&directory).unwrap().1.unsettled);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 }
