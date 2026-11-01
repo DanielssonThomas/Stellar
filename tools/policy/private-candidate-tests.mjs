@@ -39,8 +39,8 @@ const reviewedTextDigests = Object.freeze({
     '425e9cd72c54fe88e19c7531f8a0468993ba8388fc229daf8ad6fcbf510fa15a',
   ]),
   'pnpm-lock.yaml': Object.freeze([
-    'a812e60a99b78f9a916384ad4d47636f94bfafcbefd9368702eb445816777ea0',
-    'eb316ca77019432e548d32bfd192d921b86ed846f7613b61749d415df5ab3182',
+    '51614807580c8a90f5124153c2ba05f856dcd5ed29581637554b171f6b0dc9bc',
+    '16071857931526ea09d7a33d4a5a75af66029a0cf9ddd706b4d9bc2a724ba9a7',
   ]),
   'pnpm-workspace.yaml': Object.freeze([
     'b8c71989d9486c19da3edf3689c30848b6ef4dde682396ce0736b1ca1c66fa0f',
