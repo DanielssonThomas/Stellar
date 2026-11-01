@@ -13,7 +13,10 @@ import {
   signal,
   viewChildren,
 } from '@angular/core';
-import type { InteractionEvent } from '@stellar/desktop-interaction';
+import type {
+  EmblemTarget,
+  InteractionEvent,
+} from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import clsx from 'clsx';
 import { STAGE_CATALOGUE } from './stage-catalogue';
@@ -29,11 +32,14 @@ import { createStageRegistry } from './stage-registry';
   styleUrl: './stage-organism.component.css',
   host: {
     '[attr.aria-busy]': 'loading()',
+    '[class.motion-reduced]': 'reducedMotion()',
     '(keydown.escape)': 'escape($event)',
   },
 })
 export class StageOrganism {
   readonly loading = input(false);
+  readonly emblemTarget = input<EmblemTarget>();
+  readonly reducedMotion = input(false);
   readonly interaction = output<InteractionEvent>();
   private readonly catalogue = Object.freeze({ ...inject(STAGE_CATALOGUE) });
   private readonly registry = createStageRegistry<Record<string, unknown>>(
@@ -52,7 +58,7 @@ export class StageOrganism {
   private readonly viewport = signal({ width: 0, height: 0 });
   private readonly instances = signal(this.registry.snapshot());
   readonly layout = computed(() =>
-    directStage(this.viewport(), this.instances()),
+    directStage(this.viewport(), this.instances(), this.emblemTarget()),
   );
   readonly surfaces = computed(() =>
     this.layout().surfaces.flatMap((rect) => {

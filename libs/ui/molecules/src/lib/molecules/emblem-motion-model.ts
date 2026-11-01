@@ -27,7 +27,12 @@ export function clampAudioLevel(value: number): number {
 }
 
 export function isExplodedPhase(phase: Phase): boolean {
-  return phase === 'focusing' || phase === 'listening' || phase === 'hangover';
+  return (
+    phase === 'idle' ||
+    phase === 'returning' ||
+    phase === 'suspended' ||
+    phase === 'shutdown'
+  );
 }
 
 export function layerTransform(

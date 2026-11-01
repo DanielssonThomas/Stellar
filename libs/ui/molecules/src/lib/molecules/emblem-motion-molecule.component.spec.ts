@@ -95,7 +95,7 @@ describe('EmblemMotionMolecule', () => {
     expect(animate).toHaveBeenCalledTimes(2);
     expect(
       fixture.nativeElement.querySelector('.plane').style.transform,
-    ).toContain('-25%');
+    ).toContain('translate(0% , 0%)');
     fixture.componentRef.setInput('phase', 'listening');
     fixture.componentRef.setInput('audioLevel', 8);
     await fixture.whenStable();

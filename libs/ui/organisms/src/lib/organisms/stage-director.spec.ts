@@ -13,6 +13,16 @@ const overlaps = (a: StageRect, b: StageRect) =>
   a.y + a.height > b.y;
 
 describe('Stage director', () => {
+  it('honors controller targets before surface creation and during resumed activity', () => {
+    const viewport = { width: 1000, height: 800 };
+    const dock = directStage(viewport, [], 'docked');
+    expect(dock.emblem).toEqual({ x: 452, y: 680, width: 96, height: 96 });
+    const focused = directStage(viewport, instances, 'focused');
+    expect(focused.emblem).toEqual({ x: 340, y: 240, width: 320, height: 320 });
+    for (const rect of focused.surfaces)
+      expect(overlaps(rect, focused.emblem)).toBe(false);
+    expect(directStage(viewport, [], 'center').emblem.width).toBe(280);
+  });
   it.each([
     { width: 1440, height: 900 },
     { width: 320, height: 600 },

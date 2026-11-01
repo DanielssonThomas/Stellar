@@ -25,13 +25,13 @@ const manifest: EmblemManifest = {
 describe('emblem motion model', () => {
   it('preserves assembled geometry and expresses exploded motion in relative coordinates', () => {
     expect(manifestError(manifest)).toBeNull();
-    expect(layerTransform(layer, manifest, 'idle', false)).toContain(
+    expect(layerTransform(layer, manifest, 'listening', false)).toContain(
       'translateZ(0px) rotate(0deg)',
     );
-    expect(layerTransform(layer, manifest, 'listening', false)).toContain(
+    expect(layerTransform(layer, manifest, 'idle', false)).toContain(
       'translate(25% , -12.5%) translateZ(9px) rotate(5deg)',
     );
-    expect(layerTransform(layer, manifest, 'listening', true)).toContain(
+    expect(layerTransform(layer, manifest, 'idle', true)).toContain(
       'translateZ(0px)',
     );
     expect(layerOrigin(layer, manifest)).toBe('50% 50%');
@@ -39,9 +39,13 @@ describe('emblem motion model', () => {
   });
 
   it('selects semantic poses and clamps invalid audio values', () => {
-    expect(isExplodedPhase('focusing')).toBe(true);
-    expect(isExplodedPhase('listening')).toBe(true);
-    expect(isExplodedPhase('hangover')).toBe(true);
+    expect(isExplodedPhase('idle')).toBe(true);
+    expect(isExplodedPhase('returning')).toBe(true);
+    expect(isExplodedPhase('suspended')).toBe(true);
+    expect(isExplodedPhase('focusing')).toBe(false);
+    expect(isExplodedPhase('listening')).toBe(false);
+    expect(isExplodedPhase('hangover')).toBe(false);
+    expect(isExplodedPhase('docking')).toBe(false);
     expect(isExplodedPhase('presenting')).toBe(false);
     expect([-2, 0, 0.4, 2, NaN, Infinity].map(clampAudioLevel)).toEqual([
       0, 0, 0.4, 1, 0, 0,

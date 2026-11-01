@@ -1,4 +1,5 @@
 import { DOCUMENT } from '@angular/common';
+import { provideHttpClient } from '@angular/common/http';
 import {
   ApplicationConfig,
   CSP_NONCE,
@@ -11,6 +12,7 @@ import { appRoutes } from './app.routes';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    provideHttpClient(),
     provideRouter(appRoutes),
     {
       provide: CSP_NONCE,

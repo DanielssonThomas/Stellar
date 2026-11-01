@@ -87,4 +87,90 @@ describe('atomicComponentGenerator', () => {
       }),
     ).rejects.toThrow('Layer must be atom, molecule, organism, or template.');
   });
+
+  it('uses the validated existing template root without migrating other components', async () => {
+    tree.write(
+      'libs/mission-control/project.json',
+      JSON.stringify({
+        name: 'ui-templates',
+        projectType: 'library',
+        sourceRoot: 'libs/mission-control/source',
+        tags: ['scope:shared', 'type:ui', 'layer:template'],
+      }),
+    );
+    tree.write(
+      'libs/mission-control/source/index.ts',
+      'export const retained = true;\n',
+    );
+    tree.write(
+      'libs/mission-control/package.json',
+      JSON.stringify({ name: '@stellar/ui-templates', peerDependencies: {} }),
+    );
+    await atomicComponentGenerator(tree, {
+      name: 'desktop-experience',
+      layer: 'template',
+    });
+    expect(
+      tree.exists(
+        'libs/mission-control/source/lib/templates/desktop-experience-template.component.ts',
+      ),
+    ).toBe(true);
+    expect(tree.read('libs/mission-control/source/index.ts', 'utf8')).toContain(
+      'retained',
+    );
+    expect(tree.exists('libs/ui/templates/project.json')).toBe(false);
+  });
+
+  it.each([
+    {
+      root: 'apps/unsafe',
+      sourceRoot: 'apps/unsafe/src',
+      tags: ['scope:shared', 'type:ui', 'layer:template'],
+    },
+    {
+      root: 'libs/legacy',
+      sourceRoot: 'libs/legacy/../other/src',
+      tags: ['scope:shared', 'type:ui', 'layer:template'],
+    },
+    {
+      root: 'libs/legacy',
+      sourceRoot: 'libs/other/src',
+      tags: ['scope:shared', 'type:ui', 'layer:template'],
+    },
+    {
+      root: 'libs/legacy',
+      sourceRoot: 'libs/legacy/src',
+      tags: ['scope:shared', 'type:ui', 'layer:organism'],
+    },
+    {
+      root: 'libs/legacy',
+      sourceRoot: 'libs/legacy/src',
+      tags: ['scope:app', 'scope:shared', 'type:ui', 'layer:template'],
+    },
+  ])(
+    'rejects unsafe or mismatched registered libraries: %j',
+    async ({ root, sourceRoot, tags }) => {
+      tree.write(
+        `${root}/project.json`,
+        JSON.stringify({
+          name: 'ui-templates',
+          projectType: 'library',
+          sourceRoot,
+          tags,
+        }),
+      );
+      tree.write(`${sourceRoot}/index.ts`, '');
+      await expect(
+        atomicComponentGenerator(tree, {
+          name: 'desktop-experience',
+          layer: 'template',
+        }),
+      ).rejects.toThrow('requires a safe library root');
+      expect(
+        tree.exists(
+          `${root}/src/lib/templates/desktop-experience-template.component.ts`,
+        ),
+      ).toBe(false);
+    },
+  );
 });

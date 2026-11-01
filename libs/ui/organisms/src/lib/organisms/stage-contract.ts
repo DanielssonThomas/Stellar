@@ -75,35 +75,35 @@ export function decodeActivitySummary(
   )
     return null;
   if (
-    typeof value.durationMs !== 'number' ||
-    !Number.isFinite(value.durationMs) ||
-    value.durationMs < 0 ||
-    value.durationMs > 86400000
+    typeof value['durationMs'] !== 'number' ||
+    !Number.isFinite(value['durationMs']) ||
+    value['durationMs'] < 0 ||
+    value['durationMs'] > 86400000
   )
     return null;
   if (
-    typeof value.peakLevel !== 'number' ||
-    !Number.isFinite(value.peakLevel) ||
-    value.peakLevel < 0 ||
-    value.peakLevel > 1
+    typeof value['peakLevel'] !== 'number' ||
+    !Number.isFinite(value['peakLevel']) ||
+    value['peakLevel'] < 0 ||
+    value['peakLevel'] > 1
   )
     return null;
   if (
     Object.hasOwn(value, 'inputLabel') &&
-    (typeof value.inputLabel !== 'string' ||
-      value.inputLabel.length < 1 ||
-      value.inputLabel.length > 80 ||
-      [...value.inputLabel].some(
+    (typeof value['inputLabel'] !== 'string' ||
+      value['inputLabel'].length < 1 ||
+      value['inputLabel'].length > 80 ||
+      [...value['inputLabel']].some(
         (character) =>
           character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
       ))
   )
     return null;
   return Object.freeze({
-    durationMs: value.durationMs,
-    peakLevel: value.peakLevel,
-    ...(typeof value.inputLabel === 'string'
-      ? { inputLabel: value.inputLabel }
+    durationMs: value['durationMs'],
+    peakLevel: value['peakLevel'],
+    ...(typeof value['inputLabel'] === 'string'
+      ? { inputLabel: value['inputLabel'] }
       : {}),
   });
 }
@@ -141,27 +141,27 @@ export function decodeStageCommand<P extends object>(
     )
       return null;
     if (
-      typeof input.surface !== 'string' ||
-      !Object.hasOwn(decoders, input.surface) ||
-      !boundedJson(input.payload, 2048)
+      typeof input['surface'] !== 'string' ||
+      !Object.hasOwn(decoders, input['surface']) ||
+      !boundedJson(input['payload'], 2048)
     )
       return null;
     if (
       action === 'open' &&
-      input.prominence !== 'primary' &&
-      input.prominence !== 'secondary'
+      input['prominence'] !== 'primary' &&
+      input['prominence'] !== 'secondary'
     )
       return null;
-    const decode = decoders[input.surface as Surface<P>];
-    const payload = decode(input.payload);
+    const decode = decoders[input['surface'] as Surface<P>];
+    const payload = decode(input['payload']);
     if (payload === null || !boundedJson(payload, 2048)) return null;
     const detached = freezeJson(JSON.parse(canonicalJson(payload)));
     return Object.freeze({
       ...shared,
       action,
-      surface: input.surface,
+      surface: input['surface'],
       payload: detached,
-      ...(action === 'open' ? { prominence: input.prominence } : {}),
+      ...(action === 'open' ? { prominence: input['prominence'] } : {}),
     }) as StageCommand<P>;
   } catch {
     return null;
