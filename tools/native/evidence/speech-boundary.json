@@ -17,7 +17,8 @@
     "Verified installed transcription helper exports and configuration schema.",
     "Emit bounded UTF-8 rather than expanding Unicode to ASCII escapes.",
     "Explicitly pin Kokoro and af_heart when calling the installed engine.",
-    "Native host owns deadlines, child termination, typed IPC and temporary output cleanup."
+    "Native host owns deadlines, child termination, typed IPC and temporary output cleanup.",
+    "Native integration found sounddevice absent from the voice environment; host replaced playback with synchronous standard-library winsound, preserving bounds and owned-process cancellation."
   ],
   "qualification": "Source contribution only; actual audio and conversation qualification is recorded separately."
 }

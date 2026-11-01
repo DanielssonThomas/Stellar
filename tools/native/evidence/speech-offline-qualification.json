@@ -3,6 +3,7 @@
   "microphoneUsed": false,
   "llmRequests": 0,
   "audiblePlayback": false,
+  "playbackQualification": "Original sounddevice playback was stubbed. Later native integration found sounddevice missing in the voice interpreter. This receipt proves model synthesis only; corrected winsound playback requires separate native verification.",
   "workerSha256": "ed810e421a868042aff4669284ea81554164edfee228b2e858847864a74d1cfd",
   "sample": "D:\\Hermes\\profiles\\ivy\\voice\\samples-local\\kokoro-af_heart-friendly.wav",
   "sampleSha256": "10118fd24c5db215b0c3945507d4edec32463e3f44219df0c55e8b361d4f06df",

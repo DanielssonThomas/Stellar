@@ -226,6 +226,10 @@ def speak(req, protocol):
     emit(protocol, {'state': 'synthesizing'})
     module.Engine().synthesize({'text': text, 'output': str(target),
                                'engine': 'kokoro', 'voice': 'af_heart'})
+    playback(target, protocol)
+
+
+def playback(target, protocol):
     if not target.is_file() or target.stat().st_size > MAX_WAV:
         reject('unavailable')
     with wave.open(str(target), 'rb') as wav:
@@ -237,14 +241,13 @@ def speak(req, protocol):
         audio = wav.readframes(frames)
         if len(audio) != frames * 2:
             reject('unavailable')
-    import numpy as np
-    import sounddevice as sd
+    import winsound
     try:
         emit(protocol, {'state': 'speaking'})
-        sd.play(np.frombuffer(audio, dtype='<i2'), samplerate=rate, blocking=False)
-        sd.wait()
+        # Synchronous playback is the default; Python 3.12 has no named SND_SYNC.
+        winsound.PlaySound(str(target), winsound.SND_FILENAME | winsound.SND_NODEFAULT)
     finally:
-        sd.stop()
+        winsound.PlaySound(None, 0)
     emit(protocol, {'done': True})
 
 

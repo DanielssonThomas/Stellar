@@ -40,14 +40,16 @@ folder = ROOT/'offline-tts'
 folder.mkdir(exist_ok=False)
 wrapper = '''import contextlib,importlib.util,io,json,sys,types,wave
 from pathlib import Path
+import winsound
+playback_backend={'module':'winsound','available':True,'filenameFlag':winsound.SND_FILENAME,'noDefaultFlag':winsound.SND_NODEFAULT,'synchronousDefault':True,'python':sys.version.split()[0]}
 spec=importlib.util.spec_from_file_location('speech_worker',sys.argv[1]);worker=importlib.util.module_from_spec(spec);spec.loader.exec_module(worker)
 calls=[]
-def play(pcm,samplerate,blocking):calls.append({'frames':len(pcm),'sampleRate':samplerate,'blocking':blocking})
-sys.modules['sounddevice']=types.SimpleNamespace(play=play,wait=lambda:calls.append('wait'),stop=lambda:calls.append('stop'))
+def play(path,flags):calls.append({'pathProvided':path is not None,'flags':flags})
+sys.modules['winsound']=types.SimpleNamespace(PlaySound=play,SND_FILENAME=0x20000,SND_NODEFAULT=2)
 protocol=io.BytesIO()
 with contextlib.redirect_stdout(sys.stderr):worker.speak({'text':'Stellar local speech qualification.','output':sys.argv[2]},protocol)
 with wave.open(sys.argv[2],'rb') as wav:metadata={'frames':wav.getnframes(),'sampleRate':wav.getframerate(),'channels':wav.getnchannels(),'sampleWidth':wav.getsampwidth()}
-print(json.dumps({'frames':[json.loads(line) for line in protocol.getvalue().splitlines()],'playbackStubCalls':calls,'wav':metadata}))
+print(json.dumps({'frames':[json.loads(line) for line in protocol.getvalue().splitlines()],'playbackBackend':playback_backend,'playbackStubCalls':calls,'wav':metadata}))
 '''
 start = time.monotonic()
 try:

@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import types
 import unittest
+import tempfile
+import wave
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
@@ -21,6 +23,46 @@ def config():
 
 
 class SpeechWorkerTests(unittest.TestCase):
+    def test_windows_playback_is_synchronous_and_stops_without_fallback(self):
+        with tempfile.TemporaryDirectory(prefix='stellar-playback-') as folder:
+            target = Path(folder) / 'fixture.wav'
+            with wave.open(str(target), 'wb') as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b'\x00\x00' * 160)
+            for fail in [False, True]:
+                calls = []
+                def play(path, flags):
+                    calls.append((path, flags))
+                    if fail and path is not None:
+                        raise RuntimeError('simulated device failure')
+                module = types.SimpleNamespace(PlaySound=play, SND_FILENAME=0x20000,
+                                               SND_NODEFAULT=2)
+                output = io.BytesIO()
+                with patch.dict(sys.modules, {'winsound': module}):
+                    if fail:
+                        with self.assertRaises(RuntimeError):
+                            worker.playback(target, output)
+                    else:
+                        worker.playback(target, output)
+                self.assertEqual(calls, [(str(target), 0x20002), (None, 0)])
+                frames = [json.loads(line) for line in output.getvalue().splitlines()]
+                self.assertEqual(frames[0], {'state': 'speaking'})
+                self.assertEqual({'done': True} in frames, not fail)
+
+    def test_invalid_wav_never_reaches_windows_player(self):
+        with tempfile.TemporaryDirectory(prefix='stellar-playback-invalid-') as folder:
+            target = Path(folder) / 'fixture.wav'
+            with wave.open(str(target), 'wb') as audio:
+                audio.setnchannels(2)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b'\x00' * 64)
+            with patch.dict(sys.modules, {'winsound': None}):
+                with self.assertRaises(worker.Failure):
+                    worker.playback(target, io.BytesIO())
+
     def test_speech_rejects_arbitrary_options_and_nonlocal_persona(self):
         for request in [{'text': 'hello', 'output': 'relative.wav'},
                         {'text': 'hello', 'output': 'unused.wav', 'engine': 'cloud'},
