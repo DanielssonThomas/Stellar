@@ -1,4 +1,4 @@
-import studyManifest from '../../public/emblem/manifest.json';
+import emblemManifest from '../../public/emblem/manifest.json';
 import {
   computed,
   DestroyRef,
@@ -32,7 +32,7 @@ export class DesktopExperience {
   });
   private readonly capturePaused = signal(false);
   readonly state = signal(initialState);
-  readonly manifest = signal(decodeEmblemManifest(studyManifest));
+  readonly manifest = signal(decodeEmblemManifest(emblemManifest));
   readonly loading = signal(false);
   readonly assetError = signal<string | null>(null);
   private readonly document = inject(DOCUMENT);
