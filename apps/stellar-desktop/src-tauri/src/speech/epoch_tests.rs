@@ -76,6 +76,7 @@ fn stale_or_future_stop_cannot_cancel_the_new_epoch_owner() {
     ));
     assert!(current(&host.inner.view.lock().unwrap(), &operation));
     assert!(!operation.cancelled.load(Ordering::SeqCst));
+    assert_eq!(host.snapshot().unwrap().state, SpeechState::Transcribing);
     assert_eq!(host.stop_epoch("1").unwrap().epoch, "2");
     assert!(operation.cancelled.load(Ordering::SeqCst));
     assert_eq!(host.stop_epoch("1").unwrap().epoch, "2");
@@ -84,6 +85,38 @@ fn stale_or_future_stop_cannot_cancel_the_new_epoch_owner() {
         .unwrap();
     assert!(!replacement.cancelled.load(Ordering::SeqCst));
     host.shutdown().unwrap();
+}
+
+#[test]
+fn current_stop_clears_settled_failure_and_allows_fresh_admission() {
+    for error in [
+        SpeechError::ModelMissing,
+        SpeechError::Unavailable,
+        SpeechError::Timeout,
+        SpeechError::Protocol,
+    ] {
+        let host = fixture();
+        let operation = host
+            .reserve(ID.into(), "0", SpeechState::Transcribing)
+            .unwrap();
+        assert_eq!(
+            host.settle(&operation, Err(error.clone())),
+            Err(error.clone())
+        );
+        assert_eq!(host.snapshot().unwrap().state, SpeechState::Unavailable);
+        assert_eq!(host.snapshot().unwrap().error, Some(error));
+        assert!(host.inner.view.lock().unwrap().active.is_none());
+        let stopped = host.stop_epoch("0").unwrap();
+        assert_eq!(stopped.epoch, "1");
+        assert_eq!(stopped.state, SpeechState::Idle);
+        assert_eq!(stopped.error, None);
+        let fresh = host
+            .reserve(ID.into(), "1", SpeechState::Transcribing)
+            .unwrap();
+        assert!(current(&host.inner.view.lock().unwrap(), &fresh));
+        assert!(!fresh.cancelled.load(Ordering::SeqCst));
+        host.shutdown().unwrap();
+    }
 }
 
 #[test]
@@ -108,11 +141,18 @@ fn failed_cleanup_requires_current_epoch_retry_and_keeps_admission_occupied() {
         Err(SpeechError::Unavailable)
     ));
     assert_eq!(host.snapshot().unwrap().epoch, "1");
+    assert_eq!(host.snapshot().unwrap().state, SpeechState::Unavailable);
+    assert_eq!(
+        host.snapshot().unwrap().error,
+        Some(SpeechError::Unavailable)
+    );
     assert!(matches!(
         host.reserve(ID.into(), "1", SpeechState::Transcribing),
         Err(SpeechError::Busy)
     ));
-    host.stop_epoch("0").unwrap();
+    let stale = host.stop_epoch("0").unwrap();
+    assert_eq!(stale.state, SpeechState::Unavailable);
+    assert_eq!(stale.error, Some(SpeechError::Unavailable));
     assert!(current(&host.inner.view.lock().unwrap(), &operation));
     std::fs::remove_file(blocked).unwrap();
     assert_eq!(host.stop_epoch("1").unwrap().epoch, "2");

@@ -245,6 +245,9 @@ impl SpeechHost {
             }
             if let Some(operation) = &view.active {
                 operation.cancelled.store(true, Ordering::SeqCst);
+            } else if epoch.is_some() {
+                view.snapshot.state = SpeechState::Idle;
+                view.snapshot.error = None;
             }
             (view.active.clone(), advance(&mut view))
         };
