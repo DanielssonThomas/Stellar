@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initialState } from '@stellar/desktop-interaction';
-import { DesktopExperienceTemplate } from './desktop-experience-template.component';
+import { DesktopExperienceTemplate } from '../../../desktop-experience/src/lib/templates/desktop-experience-template.component';
 
 describe('DesktopExperienceTemplate', () => {
   let fixture: ComponentFixture<DesktopExperienceTemplate>;
