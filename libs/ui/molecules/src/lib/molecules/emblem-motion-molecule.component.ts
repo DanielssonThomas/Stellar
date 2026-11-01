@@ -11,7 +11,7 @@ import {
   viewChildren,
   viewChild,
 } from '@angular/core';
-import type { Phase } from '@stellar/desktop-interaction';
+import { motionDurations, type Phase } from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import clsx from 'clsx';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
@@ -164,7 +164,11 @@ export class EmblemMotionMolecule {
               }),
             ]
           : [],
-        paused ? 0 : phase === 'returning' ? 260 : 220,
+        paused
+          ? 0
+          : phase === 'returning'
+            ? motionDurations.return
+            : motionDurations.focus,
       );
       this.ambient.update(
         this.artwork().flatMap((artwork, index) => {

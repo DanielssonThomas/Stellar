@@ -24,6 +24,42 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('uses validated plane indices instead of paint order and retains equal depth under reduced motion', () => {
+    const spaced: EmblemManifest = {
+      ...manifest,
+      planeSpacing: 240,
+      layers: [
+        { ...layer, id: 'front', z: 0, planeIndex: 1 },
+        { ...layer, id: 'back', z: 5, planeIndex: 0 },
+      ],
+    };
+    expect(manifestError(spaced)).toBeNull();
+    expect(layerTransform(spaced.layers[0], spaced, 'idle', true)).toContain(
+      'translateZ(23.4375cqw)',
+    );
+    expect(layerTransform(spaced.layers[1], spaced, 'idle', false)).toContain(
+      'translateZ(-23.4375cqw)',
+    );
+    expect(
+      layerTransform(spaced.layers[0], spaced, 'listening', false),
+    ).toContain('translateZ(0px)');
+    for (const indices of [
+      [0, 0],
+      [0, 2],
+      [0, undefined],
+      [0, NaN],
+    ])
+      expect(
+        manifestError({
+          ...spaced,
+          layers: spaced.layers.map((item, index) => ({
+            ...item,
+            planeIndex: indices[index],
+          })),
+        }),
+      ).not.toBeNull();
+    expect(manifestError({ ...spaced, planeSpacing: Infinity })).not.toBeNull();
+  });
   it('keeps explicit separated depth under reduced motion and rejects invalid depth', () => {
     const spatial = { ...layer, exploded: { ...layer.exploded, depth: 256 } };
     expect(layerTransform(spatial, manifest, 'idle', true)).toContain(

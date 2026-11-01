@@ -1,4 +1,5 @@
 import type { Phase } from '@stellar/desktop-interaction';
+import { planeDepth } from './emblem-stack';
 
 export interface EmblemPose {
   readonly x: number;
@@ -11,6 +12,7 @@ export interface EmblemLayer {
   readonly id: string;
   readonly file: string;
   readonly z: number;
+  readonly planeIndex?: number;
   readonly anchor: { readonly x: number; readonly y: number };
   readonly assembled: EmblemPose;
   readonly exploded: EmblemPose;
@@ -21,6 +23,7 @@ export interface EmblemManifest {
   readonly version: 1;
   readonly viewBox: readonly [number, number, number, number];
   readonly layers: readonly EmblemLayer[];
+  readonly planeSpacing?: number;
 }
 
 export function clampAudioLevel(value: number): number {
@@ -47,8 +50,12 @@ export function layerTransform(
   const zs = layers.map((item) => item?.z).filter(Number.isFinite);
   const minZ = zs.length ? Math.min(...zs) : layer.z;
   const maxZ = zs.length ? Math.max(...zs) : layer.z;
+  const planeIndex = layer.planeIndex;
+  const stacked = planeIndex !== undefined && isExplodedPhase(phase);
   const depth =
-    pose.depth ??
+    (stacked
+      ? planeDepth(planeIndex, layers.length, manifest.planeSpacing)
+      : pose.depth) ??
     (reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
       ? 0
       : ((layer.z - (minZ + maxZ) / 2) / (maxZ - minZ)) * 18);
@@ -58,7 +65,7 @@ export function layerTransform(
   const y =
     Number.isFinite(height) && height !== 0 ? (pose.y / height) * 100 : 0;
   const depthTransform =
-    pose.depth === undefined
+    pose.depth === undefined && !stacked
       ? `translateZ(${depth}px)`
       : `translateZ(${(depth / width) * 100}cqw)`;
   return `translate(${x}% , ${y}%) ${depthTransform} rotate(${pose.rotation}deg)`;
@@ -103,6 +110,7 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       return 'Emblem manifest must contain between 1 and 32 layers.';
     }
     const ids = new Set<string>();
+    const planeIndices = new Set<number>();
     for (const candidate of layers as readonly unknown[]) {
       if (!candidate || typeof candidate !== 'object')
         return 'Invalid emblem layer.';
@@ -115,6 +123,12 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
         return 'Emblem layers require unique, nonempty ids.';
       }
       ids.add(layer.id);
+      if (layer.planeIndex !== undefined) {
+        planeDepth(layer.planeIndex, layers.length, manifest.planeSpacing);
+        if (planeIndices.has(layer.planeIndex))
+          return 'Emblem plane indices must be unique.';
+        planeIndices.add(layer.planeIndex);
+      }
       if (
         typeof layer.file !== 'string' ||
         !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:svg|png|webp)$/.test(
@@ -142,6 +156,11 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       )
         return 'Emblem layer has invalid spin.';
     }
+    if (
+      (planeIndices.size || manifest.planeSpacing !== undefined) &&
+      planeIndices.size !== layers.length
+    )
+      return 'Every spaced emblem plane requires an index.';
     return null;
   } catch {
     return 'Invalid emblem manifest.';

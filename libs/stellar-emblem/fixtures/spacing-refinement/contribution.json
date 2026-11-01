@@ -1,0 +1,57 @@
+{
+  "issue": 204,
+  "peon": {
+    "session": "local-3850f1cef6e1c15b614ef04b9f709a576f0dd3d73e025d186d36cd741740dc8d",
+    "model": "gpt-6-luna",
+    "inputTokens": 3631,
+    "outputTokens": 295,
+    "contribution": "Bounded centered planeDepth helper. Host decoded escaped source and omitted duplicate timing declarations in favor of existing motionDurations."
+  },
+  "foreman": {
+    "session": "local-4f2176e451db8127074c35c507db78a3b48d5bfa635b8c55ad4b4ecf1f8a6ad0",
+    "model": "gpt-6.1-sol",
+    "inputTokens": 12525,
+    "outputTokens": 131,
+    "finding": "No actionable findings.",
+    "reviewedFiles": [
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-stack.ts",
+        "sha256": "b311cfe83c8f8ac2815953b9a0234f620a7e1dd71f5f16c6c4d98b161ebf3e95"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-model.ts",
+        "sha256": "8683e5484418d13e59544fcfe76487dd6162bf6bb0ee32792267c2e4c8e3be75"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-ambient-motion.ts",
+        "sha256": "41c1a187f9ce89c2c2aeb4bf106068972bd31f06bb214f97f6101bc85040ddef"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-layer-motion.ts",
+        "sha256": "c34928e77f3593059bf791b6637c1642cab0018d5d609d49adc202d50257bbfa"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-motion-molecule.component.ts",
+        "sha256": "5e50b89e8c74b08677f8affcb68a61b5b21b662032a0c04ef67beed63fcee6a0"
+      },
+      {
+        "file": "libs/ui/molecules/src/lib/molecules/emblem-camera.ts",
+        "sha256": "4342e398224e25ea305b166fe9c8c0d88f158add83204aaeea5d18d4e5798fd8"
+      },
+      {
+        "file": "libs/desktop-interaction/src/lib/interaction-model.ts",
+        "sha256": "6553950066d37eb880f6558f2a4553cddc6e69c129171bd867b3078d8799b9ba"
+      },
+      {
+        "file": "libs/ui/organisms/src/lib/organisms/stage-organism.component.ts",
+        "sha256": "f2bff78c21295634738439b815a1abe0aeec1184fabb80b4b52f593ffacc1385"
+      },
+      {
+        "file": "libs/ui/organisms/src/lib/organisms/stage-organism.component.css",
+        "sha256": "beeaff6e85b41db4f755ed9913e068a5a70d325c6080d94f8d7941af969548c7"
+      }
+    ],
+    "scope": "Source-only motion/timing review; no visual inspection claim. Subsequent approved manifest plane-order swap and deterministic asset export are host-owned."
+  },
+  "scope": "One bounded Peon source contribution and one bounded Foreman source review; no worker authority, runtime policy, native permissions or inference adapter changes."
+}
