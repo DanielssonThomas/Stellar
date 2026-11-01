@@ -84,6 +84,8 @@ The suite verifies the supplied review contract and the expected outcomes of the
 
 ## Current implementation boundary
 
+The [controlled integration guide](worker-integration-policy.md#offline-architect-decisions) describes the offline exact-PR review and Architect decision host. It keeps source snapshot review, actual PR-head review, management judgment and merge authorization separate. Its inert decisions cannot activate integration, and the existing manual runner requires complete fresh protection evidence. The shared dependency-identity correction in [#190](https://github.com/DanielssonThomas/Stellar/issues/190) is an additional live-qualification prerequisite.
+
 Epic [#95](https://github.com/DanielssonThomas/Stellar/issues/95) coordinates this work. Issue [#96](https://github.com/DanielssonThomas/Stellar/issues/96) covers identity templates, provisioning, and offline authorization. Existing `worker:peon` compatibility and Mira escalation paths remain in place. This slice does not activate Architect inference, Foreman inference, live Peon runs, multi-instance inference concurrency, or fallback merging. A live pilot requires a separate CEO decision after offline qualification and governance review.
 
 To run focused offline policy tests:

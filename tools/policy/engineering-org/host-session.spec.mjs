@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   assertHostSessionReceipt,
   inertRecipe,
+  isHostSessionNotStarted,
   liveRecipe,
   registerHostRecipe,
   runHostSession,
@@ -39,6 +40,63 @@ async function customRecipe(root, source, overrides = {}) {
 
 const echo =
   "process.once('message', ({nonce,packet}) => { process.send({nonce,result:packet}); setImmediate(() => process.disconnect()); });";
+
+test('synchronous host guard rejects after asynchronous preparation without starting a child', async (t) => {
+  const root = await workspace(t);
+  const recipe = await inertRecipe('dispatch');
+  const nonce = randomUUID();
+  let expired = false;
+  let spawned = false;
+  const execution = runHostSession({
+    recipe,
+    packet: {},
+    nonce,
+    workspace: join(root, 'session'),
+    assertBeforeSpawn: () => {
+      assert.equal(expired, true);
+      throw new Error('expired');
+    },
+    onSpawn: () => {
+      spawned = true;
+    },
+  });
+  expired = true;
+  await assert.rejects(execution, (error) => {
+    assert.equal(isHostSessionNotStarted(error), true);
+    assert.equal(isHostSessionNotStarted({ ...error }), false);
+    assert.equal(
+      isHostSessionNotStarted(error, { nonce: randomUUID() }),
+      false,
+    );
+    assert.equal(isHostSessionNotStarted(error, { phase: 'review' }), false);
+    assert.equal(
+      isHostSessionNotStarted(error, { packetDigest: digest({ other: true }) }),
+      false,
+    );
+    assert.equal(
+      isHostSessionNotStarted(error, {
+        phase: 'dispatch',
+        nonce,
+        packetDigest: digest({}),
+      }),
+      true,
+    );
+    assert.equal(error.cause.message, 'expired');
+    return true;
+  });
+  assert.equal(spawned, false);
+  await assert.rejects(
+    runHostSession({
+      recipe,
+      packet: {},
+      workspace: root,
+      assertBeforeSpawn: async () => undefined,
+    }),
+    (error) =>
+      isHostSessionNotStarted(error) &&
+      /synchronously/.test(error.cause.message),
+  );
+});
 
 test('attributes a real child to its host recipe, ignoring role claims in its output', async (t) => {
   const root = await workspace(t);

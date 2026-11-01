@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { runIntegration } from './worker-integration-runner.mjs';
+import { createIntegrationFixture } from './integration-fixtures.mjs';
 
 const response = (status, value = {}) =>
   new Response(JSON.stringify(value), {
@@ -76,6 +77,8 @@ describe('trusted worker integration runner', () => {
 
   it('creates a linked PR from exactly one authorized fork branch and advances the issue after creation', async () => {
     const issue = {
+      id: 1024,
+      repository_url: 'https://api.github.com/repos/DanielssonThomas/Stellar',
       number: 24,
       state: 'open',
       title: '[FEATURE] Add a loading status atom',
@@ -179,95 +182,137 @@ describe('trusted worker integration runner', () => {
     assert.equal(writes.length, 0);
   });
 
-  it('merges only after exact-head policy evidence, metadata, dependencies, and checks are re-fetched', async () => {
-    const headSha = 'a'.repeat(40);
-    const baseSha = 'b'.repeat(40);
-    const issue = {
-      number: 24,
-      state: 'open',
-      title: '[FEATURE] Add a loading status atom',
-      body: `## Objective\nAdd a reusable status atom.\n\n## Context\nA small trial.\n\n## Expected outcome\nA reusable loading-aware status atom.\n\n## Acceptance criteria\n- [ ] Add the atom and its tests.\n\n## Constraints\nOnly the scoped component files.\n\n## Dependencies\nNone\n\n## Agent integration scope\nRisk: low\nAllowed files:\n- \`libs/ui/atoms/src/lib/status-label-atom.component.ts\`\n\n## Verification expectations\nRun focused tests.`,
-      labels: [
-        'priority:medium',
-        'target:develop',
-        'type:feature',
-        'status:review',
-        'worker:peon',
-        'agent:automerge',
-      ].map((name) => ({ name })),
-    };
-    const pull = {
-      number: 300,
-      state: 'open',
-      draft: false,
-      body: 'Fixes #24',
-      base: { ref: 'develop' },
-      head: {
-        ref: 'issue/24-loading-status-atom',
-        sha: headSha,
-        repo: { full_name: 'Stellar-AI-Corp/Stellar' },
+  it('merges only after complete protected exact-head evidence is fetched twice', async () => {
+    const fixture = createIntegrationFixture({
+      onRequest: (route, options) => {
+        if (route === '/pulls/300/merge' && options.method === 'PUT')
+          return response(200, { merged: true, sha: 'c'.repeat(40) });
+        if (route.endsWith('/comments') && options.method === 'POST')
+          return response(201, { id: 301 });
       },
-      user: { login: 'integration-bot' },
-    };
-    const codeowners =
-      '/tools/policy/ @DanielssonThomas\n/.github/workflows/ @DanielssonThomas';
-    const mergeSha = 'c'.repeat(40);
-    const calls = [];
-    const request = async (path, options = {}) => {
-      calls.push({ path, method: options.method ?? 'GET', body: options.body });
-      if (path.startsWith('/issues/24/dependencies/blocked_by'))
-        return response(200, []);
-      if (path === '/issues/24') return response(200, issue);
-      if (path === '/pulls/300') return response(200, pull);
-      if (path.startsWith('/pulls/300/commits'))
-        return response(200, [
-          { commit: { message: '[#24] feat(atom): add loading status atom' } },
-        ]);
-      if (path.startsWith('/pulls/300/files'))
-        return response(200, [
-          {
-            status: 'added',
-            filename: 'libs/ui/atoms/src/lib/status-label-atom.component.ts',
-          },
-        ]);
-      if (path.startsWith(`/commits/${headSha}/check-runs`))
-        return response(200, {
-          check_runs: [
-            { name: 'verify', head_sha: headSha, conclusion: 'success' },
-          ],
-        });
-      if (path === '/branches/develop')
-        return response(200, { commit: { sha: baseSha } });
-      if (path.startsWith('/contents/.github/CODEOWNERS'))
-        return response(200, {
-          encoding: 'base64',
-          content: Buffer.from(codeowners).toString('base64'),
-        });
-      if (path === '/@root/user')
-        return response(200, { login: 'integration-bot' });
-      if (path === '/pulls/300/merge' && options.method === 'PUT')
-        return response(200, { merged: true, sha: mergeSha });
-      if (path === '/issues/24/comments' && options.method === 'POST')
-        return response(201, { id: 301 });
-      throw new Error(`Unexpected mock request ${path}`);
-    };
-
-    const result = await runIntegration({
-      operation: 'integrate',
-      issueNumber: 24,
-      pullNumber: 300,
-      repository: 'DanielssonThomas/Stellar',
-      workerPolicy: [{ id: 'peon', forkFullName: 'Stellar-AI-Corp/Stellar' }],
-      request,
     });
-
-    assert.deepEqual(result, { merged: true, headSha, mergeSha });
-    const merge = calls.find((call) => call.path === '/pulls/300/merge');
-    assert.deepEqual(merge.body, { sha: headSha, merge_method: 'squash' });
+    const result = await runIntegration({
+      ...fixture.options,
+      workerPolicy: fixture.workerPolicy,
+      request: fixture.request,
+      operation: 'integrate',
+    });
+    assert.deepEqual(result, {
+      merged: true,
+      headSha: 'a'.repeat(40),
+      mergeSha: 'c'.repeat(40),
+    });
+    for (const route of [
+      '',
+      '/branches/develop',
+      '/branches/develop/protection',
+      '/issues/24',
+    ])
+      assert.equal(
+        fixture.calls.filter((call) => call.path === route).length,
+        2,
+      );
     assert.equal(
-      calls.filter((call) => call.path === '/branches/develop').length,
+      fixture.calls.filter((call) =>
+        call.path.startsWith('/contents/.github/CODEOWNERS'),
+      ).length,
       2,
     );
-    assert.equal(calls.filter((call) => call.path === '/issues/24').length, 2);
+    assert.equal(
+      fixture.calls.filter((call) => call.path.startsWith('/pulls/300/files'))
+        .length,
+      2,
+    );
+    assert.deepEqual(fixture.calls.find((call) => call.method === 'PUT').body, {
+      sha: 'a'.repeat(40),
+      merge_method: 'squash',
+    });
+  });
+  for (const [name, mutate] of Object.entries({
+    head: (state) => {
+      state.pull.head.sha = 'd'.repeat(40);
+      state.commits[0].sha = state.pull.head.sha;
+      state.checks[0].head_sha = state.pull.head.sha;
+    },
+    scope: (state) => {
+      state.issue.body += '\nChanged scope.';
+    },
+    policy: (state) => {
+      state.protection.required_conversation_resolution.enabled = true;
+    },
+    checks: (state) => {
+      state.checks[0].app.id = 999;
+    },
+    requiredChecks: (state) => {
+      state.protection.required_status_checks.checks.push({
+        context: 'security',
+        app_id: 15368,
+      });
+      state.protection.required_status_checks.contexts.push('security');
+    },
+    dependencies: (state) => {
+      state.issue.body = state.issue.body.replace(
+        '## Dependencies\nNone',
+        '## Dependencies\n#20',
+      );
+      state.dependencies = [
+        {
+          number: 20,
+          id: 120,
+          repository_url:
+            'https://api.github.com/repos/DanielssonThomas/Stellar',
+        },
+      ];
+      state.dependencyIssues[20] = {
+        number: 20,
+        id: 120,
+        repository_url: 'https://api.github.com/repos/DanielssonThomas/Stellar',
+        state: 'open',
+        labels: [{ name: 'status:in-progress' }],
+      };
+    },
+  }))
+    it('denies final-refresh changes to ' + name, async () => {
+      let captures = 0;
+      const fixture = createIntegrationFixture({
+        onRequest: (route, options, state) => {
+          if (route === '' && ++captures === 2) mutate(state);
+          if (route.endsWith('/comments') && options.method === 'POST')
+            return response(201, { id: 301 });
+        },
+      });
+      const result = await runIntegration({
+        ...fixture.options,
+        workerPolicy: fixture.workerPolicy,
+        request: fixture.request,
+        operation: 'integrate',
+      });
+      assert.equal(result.merged, false);
+      assert.equal(
+        fixture.calls.some((call) => call.method === 'PUT'),
+        false,
+      );
+    });
+  it('rejects invalid credentials and unknown protection rather than merging', async () => {
+    for (const status of [401, 403, 404]) {
+      const fixture = createIntegrationFixture({
+        onRequest: (route) =>
+          route === '/branches/develop/protection'
+            ? response(status)
+            : undefined,
+      });
+      await assert.rejects(
+        runIntegration({
+          ...fixture.options,
+          workerPolicy: fixture.workerPolicy,
+          request: fixture.request,
+          operation: 'integrate',
+        }),
+      );
+      assert.equal(
+        fixture.calls.some((call) => call.method === 'PUT'),
+        false,
+      );
+    }
   });
 });
