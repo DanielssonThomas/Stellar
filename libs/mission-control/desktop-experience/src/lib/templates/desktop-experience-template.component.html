@@ -47,6 +47,20 @@
       aria-label="Experience controls"
     >
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
+      <button
+        type="button"
+        [disabled]="assistantBusy()"
+        (click)="retryIvy.emit()"
+      >
+        Connect Ivy
+      </button>
+      @if (assistantUncertain()) {
+        <button type="button" (click)="reconcileIvy.emit()">
+          Check response
+        </button>
+      } @else if (assistantBusy()) {
+        <button type="button" (click)="cancelIvy.emit()">Cancel request</button>
+      }
       <form class="assistant-input" (submit)="send($event)">
         <label for="ivy-input">Message Ivy</label>
         <textarea
@@ -57,9 +71,15 @@
           (input)="editDraft($event)"
           placeholder="Type a message"
         ></textarea>
-        <button type="submit" [disabled]="assistantBusy() || !draft().trim()">
+        <button
+          type="submit"
+          [disabled]="assistantBusy() || !draft().trim() || draftTooLong()"
+        >
           Send
         </button>
+        @if (draftTooLong()) {
+          <p role="status">Message exceeds the 8 KiB text limit.</p>
+        }
       </form>
       @if (assistantReply()) {
         <p class="assistant-reply" aria-live="polite">{{ assistantReply() }}</p>

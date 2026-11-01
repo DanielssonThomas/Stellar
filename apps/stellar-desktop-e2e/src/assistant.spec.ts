@@ -16,6 +16,12 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   await expect(trigger).toBeFocused();
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await trigger.click();
+  await page.locator('.emblem-slot').evaluate((element) => {
+    element.setAttribute('tabindex', '0');
+    (element as HTMLElement).focus();
+  });
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await trigger.click();
   await page.getByLabel('Reduce motion').check();
   await page.mouse.click(1000, 650);
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');

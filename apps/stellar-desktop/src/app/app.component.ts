@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { DesktopExperienceTemplate } from '@stellar/ui-templates/desktop-experience';
 import { DesktopExperience } from './desktop-experience';
+import { DesktopAssistant } from './desktop-assistant';
 import {
   DesktopAdapterService,
   IvyAdapterService,
@@ -16,7 +17,7 @@ import { capabilityLabel } from '@stellar/desktop-contracts';
 
 @Component({
   imports: [DesktopExperienceTemplate],
-  providers: [DesktopExperience],
+  providers: [DesktopExperience, DesktopAssistant],
   selector: 'stellar-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
@@ -29,6 +30,7 @@ import { capabilityLabel } from '@stellar/desktop-contracts';
 export class AppComponent {
   readonly title = 'Stellar Desktop';
   readonly experience = inject(DesktopExperience);
+  readonly assistant = inject(DesktopAssistant);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
   readonly eventSeen = signal(false);
@@ -40,9 +42,14 @@ export class AppComponent {
     afterNextRender(() => {
       void this.ivy.connect().catch(() => undefined);
     });
-    afterNextRender(() =>
-      this.experience.connect((command) => this.view().dispatch(command)),
-    );
+    afterNextRender(() => {
+      this.experience.connect((command) => this.view().dispatch(command));
+      this.assistant.bind(
+        (command) => this.experience.present(command),
+        () =>
+          !['suspended', 'shutdown'].includes(this.experience.state().phase),
+      );
+    });
     let destroyed = false;
     let unsubscribe: () => void = () => undefined;
     inject(DestroyRef).onDestroy(() => {

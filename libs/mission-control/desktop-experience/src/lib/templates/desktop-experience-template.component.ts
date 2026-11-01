@@ -37,6 +37,7 @@ export interface MicrophoneOption {
     '[attr.data-phase]': 'state().phase',
     '(keydown.escape)': 'dismiss($event)',
     '(document:pointerdown)': 'menu.outside($event)',
+    '(document:focusin)': 'menu.outside($event)',
   },
 })
 export class DesktopExperienceTemplate {
@@ -49,8 +50,15 @@ export class DesktopExperienceTemplate {
   readonly assistantStatus = input('Ivy disconnected');
   readonly assistantReply = input('');
   readonly assistantBusy = input(false);
+  readonly assistantUncertain = input(false);
+  readonly retryIvy = output<void>();
+  readonly cancelIvy = output<void>();
+  readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly draft = signal('');
+  readonly draftTooLong = computed(
+    () => new TextEncoder().encode(this.draft().trim()).length > 8192,
+  );
   readonly requestedContent = signal(false);
   readonly state = input<InteractionState>(initialState);
   readonly manifest = input<EmblemManifest | null>(null);
@@ -121,8 +129,7 @@ export class DesktopExperienceTemplate {
   send(event: Event) {
     event.preventDefault();
     const text = this.draft().trim();
-    if (!text || text.length > 8000 || this.assistantBusy()) return;
+    if (!text || this.draftTooLong() || this.assistantBusy()) return;
     this.submitText.emit(text);
-    this.draft.set('');
   }
 }
