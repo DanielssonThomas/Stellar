@@ -1,6 +1,10 @@
 import type { Phase } from '@stellar/desktop-interaction';
 import { planeDepth } from './emblem-stack';
-import { validEmblemClip, type EmblemClip } from './emblem-clip';
+import {
+  completeClipFiles,
+  validEmblemClip,
+  type EmblemClip,
+} from './emblem-clip';
 
 export interface EmblemPose {
   readonly x: number;
@@ -26,6 +30,37 @@ export interface EmblemManifest {
   readonly viewBox: readonly [number, number, number, number];
   readonly layers: readonly EmblemLayer[];
   readonly planeSpacing?: number;
+}
+
+export function consolidatedClipFiles(
+  manifest: EmblemManifest,
+): ReadonlySet<string> {
+  const files = new Set(completeClipFiles(manifest.layers, manifest.viewBox));
+  const painted = manifest.layers
+    .map((layer, index) => ({ layer, index }))
+    .sort((a, b) => a.layer.z - b.layer.z || a.index - b.index);
+  for (const file of files) {
+    const group = manifest.layers.filter((layer) => layer.file === file);
+    const anchor = group[0].anchor;
+    const positions = painted.flatMap(({ layer }, index) =>
+      layer.file === file ? [index] : [],
+    );
+    const registered = group.every(
+      (layer) =>
+        layer.assembled.x === 0 &&
+        layer.assembled.y === 0 &&
+        layer.assembled.rotation === 0 &&
+        (layer.assembled.depth ?? 0) === 0 &&
+        layer.anchor.x === anchor.x &&
+        layer.anchor.y === anchor.y,
+    );
+    if (
+      !registered ||
+      positions[positions.length - 1] - positions[0] + 1 !== group.length
+    )
+      files.delete(file);
+  }
+  return files;
 }
 
 export function clampAudioLevel(value: number): number {

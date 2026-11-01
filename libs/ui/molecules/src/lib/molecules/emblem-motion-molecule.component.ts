@@ -17,7 +17,7 @@ import clsx from 'clsx';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
-import { completeClipFiles, emblemClipPath } from './emblem-clip';
+import { emblemClipPath } from './emblem-clip';
 import {
   clampAudioLevel,
   EmblemManifest,
@@ -25,6 +25,7 @@ import {
   layerTransform,
   manifestError,
   isExplodedPhase,
+  consolidatedClipFiles,
 } from './emblem-motion-model';
 
 @Component({
@@ -115,7 +116,7 @@ export class EmblemMotionMolecule {
       this.settledPhase() === this.phase() && !isExplodedPhase(this.phase());
     const drawn = new Set<string>();
     const completeFiles = unified
-      ? completeClipFiles(manifest.layers, manifest.viewBox)
+      ? consolidatedClipFiles(manifest)
       : new Set<string>();
     return manifest.layers.map((layer) => {
       let clipPath = emblemClipPath(layer.clip, manifest.viewBox);

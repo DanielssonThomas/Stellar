@@ -7,6 +7,7 @@ import {
   layerOrigin,
   layerTransform,
   manifestError,
+  consolidatedClipFiles,
 } from './emblem-motion-model';
 
 const layer = {
@@ -24,6 +25,44 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('consolidates only registered zero-pose clips without interleaved paint', () => {
+    const fragments: EmblemManifest = {
+      ...manifest,
+      viewBox: [0, 0, 512, 512],
+      layers: [
+        { ...layer, id: 'top', z: 0, clip: [0, 0, 512, 256] },
+        { ...layer, id: 'bottom', z: 2, clip: [0, 256, 512, 256] },
+      ],
+    };
+    expect(consolidatedClipFiles(fragments).has(layer.file)).toBe(true);
+    const moved: EmblemManifest = {
+      ...fragments,
+      layers: [
+        fragments.layers[0],
+        { ...fragments.layers[1], assembled: { x: 20, y: 0, rotation: 0 } },
+      ],
+    };
+    expect(decodeEmblemManifest(moved)).not.toBeNull();
+    expect(consolidatedClipFiles(moved).size).toBe(0);
+    const interleaved: EmblemManifest = {
+      ...fragments,
+      layers: [
+        fragments.layers[0],
+        { ...layer, id: 'other', file: 'layers/other.svg', z: 1 },
+        fragments.layers[1],
+      ],
+    };
+    expect(decodeEmblemManifest(interleaved)).not.toBeNull();
+    expect(consolidatedClipFiles(interleaved).size).toBe(0);
+    const otherOrigin: EmblemManifest = {
+      ...fragments,
+      layers: [
+        fragments.layers[0],
+        { ...fragments.layers[1], anchor: { x: 20, y: 30 } },
+      ],
+    };
+    expect(consolidatedClipFiles(otherOrigin).size).toBe(0);
+  });
   it('uses validated plane indices instead of paint order and retains equal depth under reduced motion', () => {
     const spaced: EmblemManifest = {
       ...manifest,
