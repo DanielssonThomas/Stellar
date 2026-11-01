@@ -1,6 +1,6 @@
 # ADR 0003: Desktop native contracts and capture feasibility
 
-**Status:** Partially verified, 1 November 2026. Native contract generation and both Windows content origins are verified. Physical microphone acceptance remains pending; this decision does not claim completion of every #175 hardware scenario.
+**Status:** Partially verified, 1 November 2026. Native contract generation and both Windows content origins are verified. The user observed microphone activity in the embedded diagnostic build. The full device/permission matrix remains pending; this decision does not claim completion of every #175 hardware scenario.
 
 ## Context
 
@@ -10,7 +10,7 @@ Stellar needs a genuine Windows desktop host with extensible Rust-to-TypeScript 
 
 Use Tauri 2 with an Angular frontend for the desktop host. Rust owns native wire contracts; use pinned `ts-rs` generation for their TypeScript representations, with separate runtime validation at both boundaries. Keep interaction and presentation state in reusable TypeScript libraries.
 
-Use Web Audio as the candidate capture adapter for the first sound-activity milestone. The Windows WebView exposes a secure context, `mediaDevices` and `AudioContext` in both tested origins. Availability of these APIs is not evidence that microphone permission, acquisition or device removal works. Keep capture opt-in and isolated behind an adapter until physical checks establish those behaviors. Do not introduce a Rust audio dependency merely to compensate for an unperformed hardware test.
+Use Web Audio for the first sound-activity adapter, retaining explicit permission and device-error acceptance before milestone completion. The user observed its level meter responding in the embedded Windows build. The WebView also exposes a secure context, `mediaDevices` and `AudioContext` in both tested origins; API availability alone does not establish permission or device-removal behavior. Keep capture opt-in and isolated behind an adapter. Current evidence does not warrant adding a Rust audio dependency.
 
 ## Evidence
 
@@ -35,9 +35,11 @@ Keep JavaScript-unsafe integers serialized as decimal strings. Optional fields, 
 
 ## Remaining acceptance
 
-The first user-driven microphone attempt reported no visible activity while speaking and an unwanted console window. The debug GUI subsystem setting was corrected. The audio cause is still unconfirmed: the revised probe exposes dBFS, precise RMS, peak, frame count, context and track state, plus explicit input selection. Context resume begins within the Start gesture. The first attempt is a failed activity observation, not a successful capture qualification.
+The first user-driven microphone attempt reported no visible activity while speaking and an unwanted console window. The debug GUI subsystem setting was corrected. The revised probe exposes dBFS, precise RMS, peak, frame count, context and track state, plus explicit input selection. Context resume begins within the Start gesture. On the embedded diagnostic retest, the user reported that the meter now responds. The individual cause of the earlier failure was not isolated.
 
-User-driven opt-in, permission denial, device absence/removal, retry and release of the operating-system microphone indicator still require observation in the embedded and development windows. No audio is recorded or transmitted by the probe. Tests using synthetic sources cannot establish physical device behavior.
+After that retest, native UI inspection showed `Microphone: idle`, an absent track and audio context, and 28 retained analyser-poll observations. That verifies the application's stopped state; the operating-system microphone indicator was not independently inspected.
+
+Permission denial, device absence/removal, retry, the operating-system microphone indicator and physical capture in development mode still require observation. No audio is recorded or transmitted by the probe. Tests using synthetic sources cannot establish physical device behavior.
 
 The desktop bootstrap must carry the verified modular boundaries into the governed Angular application, add native CI and size enforcement, and keep the isolated probe out of the product interface. Browser Playwright remains useful for deterministic UI behavior; actual Windows native inspection remains required for capabilities, IPC and capture changes. A release installer was not built or qualified by this probe.
 
