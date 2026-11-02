@@ -51,9 +51,6 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = if let Some(sid) = self.record.session_id.clone() {
-            if !self.record.route_verified {
-                return Err(IvyErrorCode::Unavailable);
-            }
             let resumed = self.call("session.resume", json!({"session_id":sid}))?;
             if resumed.get("session_id").and_then(Value::as_str) != Some(&sid) {
                 return Err(IvyErrorCode::Protocol);
@@ -73,7 +70,6 @@ impl Session {
             {
                 return Err(IvyErrorCode::Unavailable);
             }
-            self.record.route_verified = true;
             sid
         };
         let text = format!(
@@ -83,16 +79,17 @@ impl Session {
         let params = json!({"session_id":sid,"input_id":request.input_id,"text":text});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();
-        self.record = Record {
+        let next = Record {
             session_id: Some(sid.clone()),
             input_id: Some(request.input_id.clone()),
             admission_id: None,
             generation: None,
             unsettled: true,
             model: self.record.model,
-            route_verified: self.record.route_verified,
+            route_verified: true,
         };
-        self.journal.save(&self.record)?;
+        self.journal.save(&next)?;
+        self.record = next;
         self.replay = None;
         if !self.shared.current(self.epoch) {
             self.record = previous;
@@ -129,10 +126,7 @@ impl Session {
         if self.record.unsettled {
             return Err(IvyErrorCode::Uncertain);
         }
-        if !force
-            && self.record.model == model
-            && (self.record.session_id.is_none() || self.record.route_verified)
-        {
+        if !force && self.record.model == model {
             return Ok(());
         }
         let next = Record {
