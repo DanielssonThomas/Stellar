@@ -209,6 +209,21 @@ export class VoiceConversation {
     });
   }
 
+  initializeSession(model: VoiceModel) {
+    if (
+      !this.disposed &&
+      !this.sessionPending &&
+      this.composition.status !== 'finalizing'
+    )
+      this.setComposition({ ...this.composition, model });
+  }
+
+  async resetConversation(): Promise<boolean> {
+    if (this.disposed || this.sessionPending || this.phase !== null)
+      return false;
+    return this.clearConversation(this.generation);
+  }
+
   private setComposition(state: VoiceComposition) {
     this.composition = Object.freeze(state);
     this.ports.onComposition?.(this.composition);
@@ -221,8 +236,13 @@ export class VoiceConversation {
     this.publish();
   }
 
-  reconcileSession(model: VoiceModel) {
-    if (this.disposed || this.sessionPending) return;
+  reconcileSession(model: VoiceModel): boolean {
+    if (
+      this.disposed ||
+      this.sessionPending ||
+      this.composition.status === 'finalizing'
+    )
+      return false;
     this.routeUncertain = false;
     this.setComposition({
       ...this.composition,
@@ -231,6 +251,7 @@ export class VoiceConversation {
       error: 'Conversation state refreshed. Your text is retained.',
     });
     this.publish();
+    return true;
   }
 
   private async mutateSession(
@@ -283,32 +304,7 @@ export class VoiceConversation {
       return;
     }
     if (command === 'clear' || command === 'done') {
-      if (!this.ports.clearConversation) {
-        this.compositionError('Conversation could not be cleared.');
-        return;
-      }
-      try {
-        const cleared = await this.mutateSession(
-          this.ports.clearConversation,
-          generation,
-        );
-        if (!this.current(generation)) return;
-        if (!cleared) throw new Error();
-        this.dispatchUncertain = false;
-        this.routeUncertain = false;
-        this.phase = null;
-        this.setComposition({
-          raw: '',
-          lastSubmittedRaw: '',
-          model: 'terra',
-          status: 'idle',
-          error: '',
-        });
-        this.publish();
-      } catch {
-        if (this.current(generation))
-          this.compositionError('Conversation could not be cleared.');
-      }
+      await this.clearConversation(generation);
       return;
     }
     if (command === 'end prompt') {
@@ -361,6 +357,34 @@ export class VoiceConversation {
           'Could not select the conversation. Your text is retained.',
         );
     }
+  }
+
+  private async clearConversation(generation: number): Promise<boolean> {
+    if (!this.ports.clearConversation) {
+      this.compositionError('Conversation could not be cleared.');
+      return false;
+    }
+    const cleared = await this.mutateSession(
+      this.ports.clearConversation,
+      generation,
+    );
+    if (!this.current(generation)) return false;
+    if (!cleared) {
+      this.compositionError('Conversation could not be cleared.');
+      return false;
+    }
+    this.dispatchUncertain = false;
+    this.routeUncertain = false;
+    this.phase = null;
+    this.setComposition({
+      raw: '',
+      lastSubmittedRaw: '',
+      model: 'terra',
+      status: 'idle',
+      error: '',
+    });
+    this.publish();
+    return true;
   }
 
   private async finalize(id: string, generation: number) {

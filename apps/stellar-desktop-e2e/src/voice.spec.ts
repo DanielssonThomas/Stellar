@@ -83,7 +83,10 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
                 capabilities: [],
                 build_revision: null,
               };
-            if (command === 'ivy_connect') return ivy();
+            if (command === 'ivy_connect' || command === 'ivy_snapshot')
+              return ivy();
+            if (command === 'ivy_select_session')
+              return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
             if (command === 'speech_transcribe') {
               results.speechId = String(request['utterance_id']);

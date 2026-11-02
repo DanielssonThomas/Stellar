@@ -117,6 +117,25 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('voice conversation ownership', () => {
+  it('resets the foreground only after confirmation and retains a refused draft', async () => {
+    const clearConversation = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    let composition!: VoiceComposition;
+    const f = fixture({
+      clearConversation,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('retain this');
+    expect(await f.controller.resetConversation()).toBe(false);
+    expect(composition.raw).toBe('retain this');
+    expect(await f.controller.resetConversation()).toBe(true);
+    expect(composition.raw).toBe('');
+    expect(composition.model).toBe('terra');
+  });
   it('does not infer on startup, calibration, quiet samples or empty recognition', async () => {
     const f = fixture();
     expect(f.ports.transcribe).not.toHaveBeenCalled();
