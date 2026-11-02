@@ -9,6 +9,7 @@ import type {
   IvyRequest,
   IvySubmitRequest,
   IvySnapshot,
+  WorkspaceToolsState,
 } from '../generated';
 import {
   record,
@@ -46,6 +47,10 @@ const errors: Record<IvyErrorCode, true> = {
 };
 
 const models: Record<IvyModel, true> = { terra: true, sol: true };
+const workspaceStates: Record<WorkspaceToolsState, true> = {
+  unavailable: true,
+  available: true,
+};
 
 const components: Record<IvyComponent, true> = { assistant_message: true };
 const kinds: Record<IvyPresentation['kind'], true> = {
@@ -131,6 +136,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     'turn_id',
     'model',
     'verified_model',
+    'workspace_tools',
+    'workspace_epoch',
     'connection',
     'turn',
     'items',
@@ -153,6 +160,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
       data['verified_model'] === null
         ? null
         : variant(data['verified_model'], models),
+    workspace_tools: variant(data['workspace_tools'], workspaceStates),
+    workspace_epoch: sequence(data['workspace_epoch']),
     connection: variant(data['connection'], connections),
     turn: variant(data['turn'], turns),
     items: decoded,

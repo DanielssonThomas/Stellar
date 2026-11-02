@@ -11,6 +11,22 @@ use std::{
 };
 
 pub type OwnedChild = Arc<Mutex<Option<Child>>>;
+pub type SharedInput = Arc<Mutex<ChildStdin>>;
+pub type WorkspaceCallback = Arc<dyn Fn(Value) -> Result<(), IvyErrorCode> + Send + Sync>;
+
+pub fn control(input: &SharedInput, frame: &Value) -> Result<(), IvyErrorCode> {
+    let mut line = serde_json::to_vec(frame).map_err(|_| IvyErrorCode::Protocol)?;
+    line.push(b'\n');
+    if line.len() > 16_384 {
+        return Err(IvyErrorCode::MalformedRequest);
+    }
+    let mut writer = input.lock().map_err(|_| IvyErrorCode::Unavailable)?;
+    writer
+        .write_all(&line)
+        .and_then(|_| writer.flush())
+        .map_err(|_| IvyErrorCode::Unavailable)
+}
+
 pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u8>, IvyErrorCode> {
     let mut line = serde_json::to_vec(&json!({"id":sequence,"method":method,"params":params}))
         .map_err(|_| IvyErrorCode::Protocol)?;
@@ -21,11 +37,13 @@ pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u
     Ok(line)
 }
 pub struct Broker {
-    input: ChildStdin,
+    input: SharedInput,
     frames: Receiver<Result<Value, IvyErrorCode>>,
     child: OwnedChild,
     sequence: u64,
     deadline: Duration,
+    workspace: Option<WorkspaceCallback>,
+    image_endpoint: Option<super::workspace_data::SharedImageEndpoint>,
 }
 
 pub fn stop(child: &OwnedChild) {
@@ -39,9 +57,32 @@ pub fn stop(child: &OwnedChild) {
 
 impl Broker {
     pub fn launch(child: OwnedChild) -> Result<Self, IvyErrorCode> {
+        let modules = [
+            (
+                "stellar_workspace_credentials",
+                include_str!("workspace_credentials.py"),
+            ),
+            (
+                "stellar_workspace_protocol",
+                include_str!("workspace_protocol.py"),
+            ),
+            ("stellar_workspace_mcp", include_str!("workspace_mcp.py")),
+            (
+                "stellar_workspace_service",
+                include_str!("workspace_service.py"),
+            ),
+        ];
+        let mut program = String::from("import sys,types,contextlib\n");
+        for (name, source) in modules {
+            let quoted = serde_json::to_string(source).map_err(|_| IvyErrorCode::Protocol)?;
+            program.push_str(&format!("_m=types.ModuleType('{name}');sys.modules['{name}']=_m\nwith contextlib.redirect_stdout(sys.stderr):\n exec({quoted},_m.__dict__)\n"));
+        }
+        let bridge = serde_json::to_string(include_str!("ivy_bridge.py"))
+            .map_err(|_| IvyErrorCode::Protocol)?;
+        program.push_str(&format!("exec({bridge},globals())\n"));
         let mut command = Command::new(super::runtime::python()?);
         command
-            .args(["-I", "-u", "-c", include_str!("ivy_bridge.py")])
+            .args(["-I", "-u", "-c", "import sys;n=int(sys.stdin.buffer.readline());exec(compile(sys.stdin.buffer.read(n),'<stellar>','exec'),globals())"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -52,7 +93,15 @@ impl Broker {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x08000000);
         }
-        Self::spawn(command, child)
+        let broker = Self::spawn(command, child)?;
+        let mut writer = broker.input.lock().map_err(|_| IvyErrorCode::Unavailable)?;
+        writer
+            .write_all(format!("{}\n", program.len()).as_bytes())
+            .and_then(|_| writer.write_all(program.as_bytes()))
+            .and_then(|_| writer.flush())
+            .map_err(|_| IvyErrorCode::Unavailable)?;
+        drop(writer);
+        Ok(broker)
     }
 
     pub(super) fn spawn(mut command: Command, child: OwnedChild) -> Result<Self, IvyErrorCode> {
@@ -80,17 +129,59 @@ impl Broker {
             }
         });
         Ok(Self {
-            input,
+            input: Arc::new(Mutex::new(input)),
             frames,
             child,
             sequence: 0,
             deadline: Duration::from_secs(18),
+            workspace: None,
+            image_endpoint: None,
         })
+    }
+
+    pub fn set_workspace(
+        &mut self,
+        callback: WorkspaceCallback,
+        endpoint: super::workspace_data::SharedImageEndpoint,
+    ) {
+        self.workspace = Some(callback);
+        self.image_endpoint = Some(endpoint);
+    }
+
+    pub fn configure_workspace(
+        &self,
+        value: Value,
+    ) -> Result<super::journal::WorkspaceDescriptor, IvyErrorCode> {
+        super::workspace_data::configure(
+            value,
+            self.image_endpoint
+                .as_ref()
+                .ok_or(IvyErrorCode::Unavailable)?,
+        )
+    }
+
+    pub fn input(&self) -> SharedInput {
+        self.input.clone()
+    }
+
+    fn workspace_event(&self, frame: &Value) -> Result<bool, IvyErrorCode> {
+        if frame.get("event").and_then(Value::as_str) != Some("workspace_tool") {
+            return Ok(false);
+        }
+        self.workspace.as_ref().ok_or(IvyErrorCode::Unavailable)?(frame.clone())?;
+        Ok(true)
     }
 
     pub fn poll(&self) -> Result<Option<Value>, IvyErrorCode> {
         match self.frames.try_recv() {
-            Ok(frame) => frame.map(Some),
+            Ok(frame) => {
+                let frame = frame?;
+                if self.workspace_event(&frame)? {
+                    Ok(None)
+                } else {
+                    Ok(Some(frame))
+                }
+            }
             Err(mpsc::TryRecvError::Empty) => Ok(None),
             Err(mpsc::TryRecvError::Disconnected) => Err(IvyErrorCode::Unavailable),
         }
@@ -104,10 +195,13 @@ impl Broker {
     ) -> Result<Value, IvyErrorCode> {
         self.sequence = self.sequence.checked_add(1).ok_or(IvyErrorCode::Protocol)?;
         let line = request_line(self.sequence, method, &params)?;
-        self.input
-            .write_all(&line)
-            .and_then(|_| self.input.flush())
-            .map_err(|_| IvyErrorCode::Unavailable)?;
+        {
+            let mut writer = self.input.lock().map_err(|_| IvyErrorCode::Unavailable)?;
+            writer
+                .write_all(&line)
+                .and_then(|_| writer.flush())
+                .map_err(|_| IvyErrorCode::Unavailable)?;
+        }
         let deadline = Instant::now() + self.deadline;
         loop {
             let remaining = deadline.saturating_duration_since(Instant::now());
@@ -118,6 +212,9 @@ impl Broker {
                     mpsc::RecvTimeoutError::Timeout => IvyErrorCode::Timeout,
                     mpsc::RecvTimeoutError::Disconnected => IvyErrorCode::Unavailable,
                 })??;
+            if self.workspace_event(&frame)? {
+                continue;
+            }
             if frame.get("id").and_then(Value::as_u64) == Some(self.sequence) {
                 if frame.get("error").is_some() {
                     return Err(IvyErrorCode::Uncertain);

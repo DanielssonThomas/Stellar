@@ -47,6 +47,8 @@ export function initialIvySnapshot(): IvySnapshot {
     turn_id: null,
     model: 'terra',
     verified_model: null,
+    workspace_tools: 'unavailable',
+    workspace_epoch: '0',
     connection: 'disconnected',
     turn: 'idle',
     items: [],

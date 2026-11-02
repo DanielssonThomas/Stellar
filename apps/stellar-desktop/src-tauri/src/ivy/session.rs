@@ -1,6 +1,6 @@
 use super::{
     contracts::*,
-    journal::{Journal, Record},
+    journal::{Journal, Record, WorkspaceDescriptor},
     process::Broker,
     state::Shared,
 };
@@ -12,6 +12,7 @@ pub struct Session {
     pub broker: Option<Broker>,
     pub shared: Shared,
     pub epoch: u64,
+    pub workspace_epoch: u64,
     pub buffered: Vec<Value>,
     pub replay: Option<(String, u64)>,
 }
@@ -50,6 +51,30 @@ impl Session {
         if self.record.unsettled {
             return Err(IvyErrorCode::Uncertain);
         }
+        if self.record.session_id.is_none() && self.record.workspace.is_none() {
+            let created = self.call(
+                "workspace.setup",
+                json!({"descriptor":null, "session_id":null}),
+            )?;
+            let descriptor: WorkspaceDescriptor = self
+                .broker
+                .as_ref()
+                .ok_or(IvyErrorCode::Unavailable)?
+                .configure_workspace(created)?;
+            if descriptor.port == 0
+                || descriptor.credential_ref.len() != 32
+                || !descriptor
+                    .credential_ref
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(IvyErrorCode::Protocol);
+            }
+            let mut next = self.record.clone();
+            next.workspace = Some(descriptor);
+            self.journal.save(&next)?;
+            self.record = next;
+        }
         let sid = if let Some(sid) = self.record.session_id.clone() {
             let resumed = self.call("session.resume", json!({"session_id":sid}))?;
             if resumed.get("session_id").and_then(Value::as_str) != Some(&sid) {
@@ -76,7 +101,7 @@ impl Session {
             "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
             request.text
         );
-        let params = json!({"session_id":sid,"input_id":request.input_id,"text":text});
+        let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();
         let next = Record {
@@ -87,6 +112,7 @@ impl Session {
             unsettled: true,
             model: self.record.model,
             route_verified: true,
+            workspace: self.record.workspace.clone(),
         };
         self.journal.save(&next)?;
         self.record = next;
@@ -129,6 +155,10 @@ impl Session {
         if !force && self.record.model == model {
             return Ok(());
         }
+        if !force && self.record.session_id.is_some() && self.record.workspace.is_none() {
+            return Err(IvyErrorCode::Unavailable);
+        }
+        let had_workspace = self.record.workspace.is_some();
         let next = Record {
             model,
             ..Record::default()
@@ -140,11 +170,15 @@ impl Session {
         self.shared.update_current(|view| {
             view.model = model;
             view.verified_model = None;
+            view.workspace_tools = WorkspaceToolsState::Unavailable;
             view.turn = IvyTurnState::Idle;
             view.turn_id = None;
             view.items.clear();
             view.error = None;
         });
+        if had_workspace && self.broker.is_some() {
+            self.call("workspace.stop", json!({}))?;
+        }
         Ok(())
     }
     pub fn cancel(&mut self) -> Result<(), IvyErrorCode> {
