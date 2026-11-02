@@ -5,6 +5,8 @@ const snapshot = () => ({
   version: 1,
   revision: '18446744073709551615',
   turn_id: id,
+  model: 'terra',
+  verified_model: null,
   connection: 'ready',
   turn: 'completed',
   items: [
@@ -69,6 +71,8 @@ describe('Ivy wire validation', () => {
     },
   );
   it.each([
+    { model: 'other' },
+    { verified_model: 'sol' },
     { connection: 'other' },
     { turn: 'other' },
     { error: 'private failure' },

@@ -1,5 +1,7 @@
 import {
   ivyEvent,
+  ivySelectSessionCommand,
+  ivyClearConversationCommand,
   type IvyCommands,
   type IvySnapshot,
 } from '@stellar/desktop-contracts';
@@ -43,6 +45,8 @@ export function initialIvySnapshot(): IvySnapshot {
     version: 1,
     revision: '0',
     turn_id: null,
+    model: 'terra',
+    verified_model: null,
     connection: 'disconnected',
     turn: 'idle',
     items: [],
@@ -52,7 +56,12 @@ export function initialIvySnapshot(): IvySnapshot {
 
 export function browserIvyTransport(): IvyTransport {
   return {
-    async invoke() {
+    async invoke(command) {
+      if (
+        command === ivySelectSessionCommand ||
+        command === ivyClearConversationCommand
+      )
+        throw 'unavailable';
       return {
         ...initialIvySnapshot(),
         revision: '1',
