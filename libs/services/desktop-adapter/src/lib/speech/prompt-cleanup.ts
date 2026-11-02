@@ -64,8 +64,9 @@ export function createPromptCleanup(
         })
       )
         return fallback;
-      const protectedTokens = raw.match(/(?:[A-Za-z]:\\|\/)[^\s,;]+|\b[\w.-]*\d[\w.-]*\b/g) ?? [];
-      if (protectedTokens.some((token) => !output.includes(token.replace(/[.,;:!?]+$/, '')))) return fallback;
+      const tokens = (text: string) => (text.match(/(?:[A-Za-z]:\\|\/)[^\s,;]+|\b[\w.-]*\d[\w.-]*\b/g) ?? []).map((token) => token.replace(/[.,;:!?]+$/, ''));
+      const outputTokens = new Set(tokens(output));
+      if (tokens(raw).some((token) => !outputTokens.has(token))) return fallback;
       return { raw, text: output, status: 'refined' };
     } catch {
       if (signal.aborted) throw cancelled();

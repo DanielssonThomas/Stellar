@@ -1,29 +1,18 @@
 use std::{
     io::{Read, Write},
-    process::{Command, Stdio},
+    process::Command,
     sync::mpsc,
     time::Duration,
 };
 
-pub fn refine(raw: &str) -> Option<String> {
+pub fn refine(raw: &str, host: &super::host::CleanupHost) -> Option<String> {
     let python = crate::ivy::runtime::python().ok()?;
     let mut command = Command::new(python);
-    command
-        .args(["-I", "-u", "-c", include_str!("cleanup_worker.py")])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
-    let mut child = command.spawn().ok()?;
-    let result = (|| {
-        let mut input = child.stdin.take()?;
+    command.args(["-I", "-u", "-c", include_str!("cleanup_worker.py")]);
+    let (mut input, output) = host.spawn(command)?;
+    (|| {
         input.write_all(raw.as_bytes()).ok()?;
         drop(input);
-        let output = child.stdout.take()?;
         let (tx, rx) = mpsc::sync_channel(1);
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
@@ -32,10 +21,7 @@ pub fn refine(raw: &str) -> Option<String> {
         });
         let bytes = rx.recv_timeout(Duration::from_secs(50)).ok()?.ok()?;
         decode(&bytes)
-    })();
-    let _ = child.kill();
-    let _ = child.wait();
-    result
+    })()
 }
 
 fn decode(bytes: &[u8]) -> Option<String> {

@@ -1,19 +1,14 @@
 pub mod contracts;
 mod process;
 
+mod host;
 use contracts::{CleanupReply, CleanupRequest};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+pub use host::CleanupHost;
 
-#[derive(Default)]
-pub struct CleanupHost(Arc<AtomicBool>);
-
-struct Lease(Arc<AtomicBool>);
+struct Lease(CleanupHost);
 impl Drop for Lease {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
+        self.0.finish();
     }
 }
 
@@ -31,23 +26,17 @@ pub async fn cleanup_refine(
             text: None,
         });
     };
-    if host
-        .0
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
+    if !host.reserve() {
         return Ok(CleanupReply {
             version: 1,
             text: None,
         });
     }
-    let lease = Lease(host.0.clone());
-    let text = tauri::async_runtime::spawn_blocking(move || {
-        let _lease = lease;
-        process::refine(&request.raw)
-    })
-    .await
-    .ok()
-    .flatten();
+    let lease = Lease(host.inner().clone());
+    let text =
+        tauri::async_runtime::spawn_blocking(move || process::refine(&request.raw, &lease.0))
+            .await
+            .ok()
+            .flatten();
     Ok(CleanupReply { version: 1, text })
 }

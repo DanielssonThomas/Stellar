@@ -52,6 +52,11 @@ fn main() {
                 host.shutdown();
             }
             if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<cleanup::CleanupHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<speech::SpeechHost>()
             {
                 let _ = host.shutdown();
@@ -83,6 +88,11 @@ fn main() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<ivy::IvyHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<cleanup::CleanupHost>()
             {
                 host.shutdown();
             }
