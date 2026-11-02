@@ -237,3 +237,46 @@ test('shared edges move together through actual animation frames', async ({
     '1600px',
   );
 });
+
+test('retiring panes keep their measured animation and rapid reopen focuses the current pane', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await openPane(page, 1, 'plan', 'Plan', 'Primary', 'primary');
+  await openPane(page, 2, 'support', 'Reference', 'Supporting content');
+  await expect(page.locator('[data-instance-id="support"]')).toHaveCSS(
+    'opacity',
+    '1',
+  );
+  await controlPane(page, 'close', 'support');
+  const retirement = await page.evaluate(() => {
+    const leaving = document.querySelector(
+      '[data-instance-id="support"].pane-leave',
+    );
+    return leaving
+      ? {
+          inert: leaving.hasAttribute('inert'),
+          frames: leaving
+            .getAnimations()
+            .map((animation) =>
+              (animation.effect as KeyframeEffect).getKeyframes(),
+            ),
+        }
+      : null;
+  });
+  expect(retirement?.inert).toBe(true);
+  expect(
+    retirement?.frames.some(
+      (frames) => frames[0]?.opacity === '1' && frames.at(-1)?.opacity === '0',
+    ),
+  ).toBe(true);
+  await openPane(page, 3, 'support', 'New reference', 'Replacement content');
+  const current = page.locator('[data-instance-id="support"]:not(.pane-leave)');
+  await expect(current).toBeFocused();
+  await expect(current).toContainText('Replacement content');
+  await expect(
+    page.locator('[data-instance-id="support"].pane-leave'),
+  ).toHaveCount(0);
+  await expect(current).toBeFocused();
+});

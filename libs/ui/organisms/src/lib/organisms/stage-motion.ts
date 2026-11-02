@@ -2,6 +2,7 @@ import type { StageRect } from './stage-director';
 
 type Pane = StageRect & { readonly instanceId: string };
 type Target = Pane & { readonly element: HTMLElement };
+type Measured = StageRect & { readonly opacity: number };
 
 export function revealOrigin(
   pane: StageRect,
@@ -40,7 +41,10 @@ export function createStageMotion(
 ) {
   const animations = new Map<HTMLElement, Animation>();
   const retiring = new Set<HTMLElement>();
-  let before = new Map<string, StageRect>();
+  let before = new Map<string, Measured>();
+  let captured = new Map<HTMLElement, Measured>();
+  let batchStart: number | null = null;
+  const pendingRetirements = new Set<Animation>();
   const frame = (rect: StageRect) => ({
     left: `${rect.x}px`,
     top: `${rect.y}px`,
@@ -57,25 +61,30 @@ export function createStageMotion(
   };
   return {
     capture(elements: readonly HTMLElement[]) {
-      before = new Map(
-        elements.flatMap((element) => {
-          const id = element.dataset['instanceId'];
-          if (!id || element.classList.contains('pane-leave') || !view)
-            return [];
-          const style = view.getComputedStyle(element);
-          return [
-            [
-              id,
-              {
-                x: parseFloat(style.left) || 0,
-                y: parseFloat(style.top) || 0,
-                width: parseFloat(style.width) || 0,
-                height: parseFloat(style.height) || 0,
-              },
-            ],
-          ] as const;
-        }),
-      );
+      batchStart = null;
+      const measured = elements.flatMap((element) => {
+        const id = element.dataset['instanceId'];
+        if (!id || element.classList.contains('pane-leave') || !view) return [];
+        const style = view.getComputedStyle(element);
+        const opacity = parseFloat(style.opacity);
+        return [
+          {
+            id,
+            element,
+            rect: {
+              x: parseFloat(style.left) || 0,
+              y: parseFloat(style.top) || 0,
+              width: parseFloat(style.width) || 0,
+              height: parseFloat(style.height) || 0,
+              opacity: Number.isFinite(opacity)
+                ? Math.max(0, Math.min(1, opacity))
+                : 1,
+            },
+          },
+        ];
+      });
+      before = new Map(measured.map((item) => [item.id, item.rect]));
+      captured = new Map(measured.map((item) => [item.element, item.rect]));
     },
     update(targets: readonly Target[], reduced: boolean) {
       const old = before;
@@ -103,7 +112,12 @@ export function createStageMotion(
           continue;
         const animation = target.element.animate(
           [
-            { ...frame(from), opacity: entering ? 0 : 1 },
+            {
+              ...frame(from),
+              opacity: entering
+                ? 0
+                : (old.get(target.instanceId)?.opacity ?? 1),
+            },
             { ...frame(target), opacity: 1 },
           ],
           { duration: 420, easing: 'cubic-bezier(.22,.7,.25,1)' },
@@ -116,8 +130,12 @@ export function createStageMotion(
         started.push(animation);
       }
       const time = started[0]?.timeline?.currentTime;
-      if (typeof time === 'number')
-        for (const animation of started) animation.startTime = time;
+      if (typeof time === 'number') {
+        batchStart = time;
+        for (const animation of [...started, ...pendingRetirements])
+          animation.startTime = time;
+      }
+      pendingRetirements.clear();
     },
     retire(
       element: HTMLElement,
@@ -129,7 +147,8 @@ export function createStageMotion(
       element.setAttribute('inert', '');
       element.setAttribute('aria-hidden', 'true');
       const id = element.dataset['instanceId'];
-      const from = id ? before.get(id) : undefined;
+      const from = captured.get(element) ?? (id ? before.get(id) : undefined);
+      captured.delete(element);
       cancel(element);
       if (reduced || !from || typeof element.animate !== 'function') {
         complete();
@@ -138,15 +157,18 @@ export function createStageMotion(
       retiring.add(element);
       const animation = element.animate(
         [
-          { ...frame(from), opacity: 1 },
+          { ...frame(from), opacity: from.opacity },
           { ...frame(revealOrigin(from, future)), opacity: 0 },
         ],
         { duration: 420, easing: 'cubic-bezier(.22,.7,.25,1)' },
       );
       animations.set(element, animation);
+      if (batchStart !== null) animation.startTime = batchStart;
+      else pendingRetirements.add(animation);
       const finish = () => {
         animations.delete(element);
         retiring.delete(element);
+        pendingRetirements.delete(animation);
         complete();
       };
       animation.onfinish = finish;
@@ -155,6 +177,8 @@ export function createStageMotion(
     dispose() {
       for (const element of animations.keys()) cancel(element);
       before.clear();
+      captured.clear();
+      pendingRetirements.clear();
     },
   };
 }
