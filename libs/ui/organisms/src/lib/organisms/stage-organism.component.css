@@ -84,3 +84,13 @@
     animation: none;
   }
 }
+:host .composer-slot {
+  position: absolute;
+  z-index: 3;
+  min-height: 0;
+}
+
+:host .composition-concealed {
+  visibility: hidden;
+  pointer-events: none;
+}

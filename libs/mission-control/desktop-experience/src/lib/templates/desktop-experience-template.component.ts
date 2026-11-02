@@ -16,6 +16,9 @@ import {
 } from '@stellar/desktop-interaction';
 import {
   EmblemMotionMolecule,
+  PromptComposerMolecule,
+  type ComposerFinalizedText,
+  type PromptComposerStatus,
   type EmblemManifest,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
@@ -29,7 +32,7 @@ export interface MicrophoneOption {
 @Component({
   selector: 'stellar-desktop-experience-template',
   standalone: true,
-  imports: [StageOrganism, EmblemMotionMolecule],
+  imports: [StageOrganism, EmblemMotionMolecule, PromptComposerMolecule],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
   host: {
@@ -55,6 +58,19 @@ export class DesktopExperienceTemplate {
   readonly assistantNarrating = input(false);
   readonly conversationActive = input(false);
   readonly solActive = input(false);
+  readonly promptRaw = input('');
+  readonly promptRefined = input<string | null>(null);
+  readonly promptStatus = input<PromptComposerStatus>('idle');
+  readonly composing = computed(
+    () =>
+      this.solActive() &&
+      ['composing', 'refining', 'finalizing', 'error'].includes(
+        this.promptStatus(),
+      ) &&
+      !['suspended', 'shutdown'].includes(this.state().phase),
+  );
+  readonly emblem = viewChild(EmblemMotionMolecule);
+  readonly promptComposer = viewChild.required(PromptComposerMolecule);
   readonly assistantActive = computed(
     () =>
       !['suspended', 'shutdown'].includes(this.state().phase) &&
@@ -119,6 +135,9 @@ export class DesktopExperienceTemplate {
 
   dispatch(command: unknown) {
     return this.stage().dispatch(command);
+  }
+  presentFinalizedPrompt(text: ComposerFinalizedText, signal: AbortSignal) {
+    return this.promptComposer().presentFinalized(text, signal);
   }
   dismiss(event: Event) {
     if (this.menu.open()) {

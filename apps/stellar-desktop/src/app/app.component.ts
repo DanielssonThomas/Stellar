@@ -60,6 +60,13 @@ export class AppComponent {
         (command) => this.view().dispatch(command),
         () => this.view().stage().nextCommandId(),
       );
+      destroy.onDestroy(
+        this.voice.bindPromptPresentation((text, signal) =>
+          text.model === 'sol'
+            ? this.view().presentFinalizedPrompt(text, signal)
+            : Promise.resolve(),
+        ),
+      );
       const unbind = this.workspace.bind(
         desktopWorkspace({
           stage: this.view().stage(),

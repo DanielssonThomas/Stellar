@@ -8,6 +8,7 @@
     [loading]="loading()"
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
+    [composing]="composing()"
     [dismissOnClose]="false"
     [focusFallback]="menuTrigger"
     (retainedPresentations)="requestedContent.set($event)"
@@ -31,6 +32,15 @@
       [error]="assetError()"
     >
     </stellar-emblem-motion-molecule>
+    <stellar-prompt-composer-molecule
+      stage-composer
+      [raw]="promptRaw()"
+      [refined]="promptRefined()"
+      [status]="promptStatus()"
+      [visible]="composing() && (emblem()?.assembled() ?? false)"
+      [reducedMotion]="state().reducedMotion"
+      [loading]="loading()"
+    />
   </stellar-stage-organism>
 
   <button

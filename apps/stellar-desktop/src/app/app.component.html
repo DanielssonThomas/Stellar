@@ -21,6 +21,9 @@
     [assistantWaiting]="assistant.waiting() || voice.waiting()"
     [assistantNarrating]="voice.narrating()"
     [solActive]="voice.composition().model === 'sol'"
+    [promptRaw]="voice.composition().raw"
+    [promptRefined]="voice.composition().refined"
+    [promptStatus]="voice.composition().status"
     [conversationActive]="
       voice.composition().model === 'sol' || assistant.state().turn_id !== null
     "

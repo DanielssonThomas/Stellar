@@ -113,13 +113,13 @@ export class EmblemMotionMolecule {
       this.visible() &&
       !['suspended', 'shutdown'].includes(this.phase()),
   );
+  readonly assembled = computed(
+    () =>
+      !isExplodedPhase(this.phase()) && this.settledPhase() === this.phase(),
+  );
   readonly showSol = computed(
     () =>
-      this.solActive() &&
-      this.active() &&
-      this.visible() &&
-      !isExplodedPhase(this.phase()) &&
-      this.settledPhase() === this.phase(),
+      this.solActive() && this.active() && this.visible() && this.assembled(),
   );
   readonly classes = computed(() =>
     clsx('emblem relative block h-full w-full', {
