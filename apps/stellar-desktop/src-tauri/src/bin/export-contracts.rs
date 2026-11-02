@@ -29,6 +29,7 @@ use command_name::APP_INFO_COMMAND;
 use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
+use ivy::workspace_contracts::*;
 use speech::*;
 use telemetry::*;
 use ts_rs::TS;
@@ -48,6 +49,7 @@ fn main() {
         AppInfoError::decl(&config),
         AppInfoEvent::decl(&config),
         IvyConnectionState::decl(&config),
+        WorkspaceToolsState::decl(&config),
         IvyTurnState::decl(&config),
         IvyErrorCode::decl(&config),
         IvyModel::decl(&config),
@@ -57,6 +59,13 @@ fn main() {
         IvyComponent::decl(&config),
         IvyPresentation::decl(&config),
         IvySnapshot::decl(&config),
+        WorkspaceSurface::decl(&config),
+        WorkspaceProminence::decl(&config),
+        WorkspaceToolOperation::decl(&config),
+        WorkspaceToolRequest::decl(&config),
+        WorkspacePaneMetadata::decl(&config),
+        WorkspaceToolOutcome::decl(&config),
+        WorkspaceToolReply::decl(&config),
         TelemetryProject::decl(&config),
         TelemetryState::decl(&config),
         TelemetryHealth::decl(&config),
@@ -125,6 +134,14 @@ fn main() {
     println!(
         "export const ivyEvent = {} as const;",
         serde_json::to_string(IVY_EVENT).unwrap()
+    );
+    println!(
+        "export const workspaceToolEvent = {} as const;",
+        serde_json::to_string(WORKSPACE_EVENT).unwrap()
+    );
+    println!(
+        "export const workspaceToolReplyCommand = {} as const;",
+        serde_json::to_string(WORKSPACE_REPLY_COMMAND).unwrap()
     );
     println!(
         "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest }};"
