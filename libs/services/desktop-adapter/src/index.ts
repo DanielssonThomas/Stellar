@@ -39,3 +39,8 @@ export type {
   VoiceView,
   VoicePorts,
 } from './lib/speech/voice-conversation';
+export { createPromptCleanup } from './lib/speech/prompt-cleanup';
+export type {
+  PromptCleanupProvider,
+  PromptCleanupResult,
+} from './lib/speech/prompt-cleanup';
