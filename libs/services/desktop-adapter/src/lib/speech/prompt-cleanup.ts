@@ -67,7 +67,9 @@ export function createPromptCleanup(
         return fallback;
       const tokens = (text: string) =>
         (
-          text.match(/(?:[A-Za-z]:\\|\/)[^\s,;]+|\b[\w.-]*\d[\w.-]*\b/g) ?? []
+          text.match(
+            /[^\s,;()[\]{}"'<>]*[\\/][^\s,;()[\]{}"'<>]*|\b[\w.-]*\d[\w.-]*\b/g,
+          ) ?? []
         ).map((token) => token.replace(/[.,;:!?]+$/, ''));
       const outputTokens = new Set(tokens(output));
       if (tokens(raw).some((token) => !outputTokens.has(token)))

@@ -19,6 +19,10 @@ describe('prompt cleanup', () => {
   it.each([
     ['Keep ID ALPHA-42', 'Keep ID ALPHA-420'],
     ['Read /tmp/input.txt', 'Read /tmp/input.txt.bak'],
+    ['Update src/app/main.ts', 'Update lib/app/main.ts'],
+    ['Read ./config.json', 'Read ../config.json'],
+    ['Read ../config.json', 'Read ./config.json'],
+    ['Update src\\app\\main.ts', 'Update lib\\app\\main.ts'],
   ])(
     'rejects a protected token extended in the rewrite',
     async (raw, output) => {
@@ -30,6 +34,17 @@ describe('prompt cleanup', () => {
       ).toEqual({ raw, text: raw, status: 'fallback' });
     },
   );
+
+  it('accepts an unchanged complete relative path', async () => {
+    const raw = 'Um, update src/app/main.ts.';
+    const text = 'Update src/app/main.ts.';
+    expect(
+      await createPromptCleanup(vi.fn().mockResolvedValue(text))(
+        raw,
+        new AbortController().signal,
+      ),
+    ).toEqual({ raw, text, status: 'refined' });
+  });
 
   it('keeps the exact raw input on unavailable, rejected, empty, or malformed output', async () => {
     const raw = '  keep ABC-42 and C:\\work\\file.ts  ';
