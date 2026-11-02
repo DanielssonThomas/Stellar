@@ -2,9 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   ivyConnectCommand,
   ivySubmitCommand,
+  ivySelectSessionCommand,
+  ivyClearConversationCommand,
 } from '@stellar/desktop-contracts';
 import { IvyAdapter } from './ivy-adapter';
-import { initialIvySnapshot, type IvyTransport } from './ivy-transport';
+import {
+  initialIvySnapshot,
+  browserIvyTransport,
+  type IvyTransport,
+} from './ivy-transport';
 function deferred<T>() {
   let resolve!: (value: T) => void;
   return { promise: new Promise<T>((r) => (resolve = r)), resolve };
@@ -76,5 +82,26 @@ describe('Ivy adapter ownership', () => {
     stop();
     callback(initialIvySnapshot());
     expect(changed).not.toHaveBeenCalled();
+  });
+  it('rejects unsupported model intents and does not fake browser persistence', async () => {
+    const invoke = vi.fn(async () => initialIvySnapshot());
+    const adapter = new IvyAdapter({
+      invoke,
+      listen: async () => () => undefined,
+    });
+    await expect(
+      adapter.request(ivySelectSessionCommand, {
+        version: 1,
+        model: 'other',
+      } as never),
+    ).rejects.toMatchObject({ kind: 'contract' });
+    expect(invoke).not.toHaveBeenCalled();
+    const browser = new IvyAdapter(browserIvyTransport());
+    await expect(
+      browser.request(ivySelectSessionCommand, { version: 1, model: 'terra' }),
+    ).rejects.toMatchObject({ code: 'unavailable' });
+    await expect(
+      browser.request(ivyClearConversationCommand, { version: 1 }),
+    ).rejects.toMatchObject({ code: 'unavailable' });
   });
 });

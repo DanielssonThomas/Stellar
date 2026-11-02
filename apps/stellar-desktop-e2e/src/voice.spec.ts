@@ -33,6 +33,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       version: 1,
       revision: String(++ivyRevision),
       turn_id,
+      model: 'terra',
+      verified_model: null,
       connection: 'ready',
       turn: 'idle',
       items: [],
