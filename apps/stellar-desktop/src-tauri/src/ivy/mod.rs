@@ -4,13 +4,16 @@ mod journal;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+mod rotation;
 pub(crate) mod runtime;
 mod session;
 #[cfg(test)]
 mod session_tests;
 mod state;
 
-use contracts::{IvyErrorCode, IvyRequest, IvySnapshot, IvySubmitRequest};
+use contracts::{
+    IvyErrorCode, IvyModel, IvyRequest, IvySelectRequest, IvySnapshot, IvySubmitRequest,
+};
 use host::Action;
 pub use host::IvyHost;
 
@@ -78,4 +81,32 @@ pub fn ivy_disconnect(
 ) -> Result<IvySnapshot, IvyErrorCode> {
     validate(request)?;
     host.request(Action::Disconnect)
+}
+
+#[tauri::command]
+pub async fn ivy_select_session(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: IvySelectRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    if request.version != 1 {
+        return Err(IvyErrorCode::MalformedRequest);
+    }
+    let pending = host.rotate(request.model, false)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
+}
+#[tauri::command]
+pub async fn ivy_clear_conversation(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    validate(request)?;
+    let pending = host.rotate(IvyModel::Terra, true)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
 }
