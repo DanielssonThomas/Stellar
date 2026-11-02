@@ -7,45 +7,122 @@ export function assessVoiceQualification(trace) {
   const calls = (kind, command) =>
     events.filter((event) => event.kind === kind && event.command === command);
   const recognition = calls('result', 'speech_transcribe');
+  const collected = calls('result', 'speech_collect');
+  const end = (label) =>
+    events.find(
+      (event) => event.kind === 'fixture-ended' && event.label === label,
+    );
+  const finalized = collected.find(
+    (event) =>
+      event.ok &&
+      event.recognized === 'send prompt' &&
+      events.some(
+        (start) =>
+          start.kind === 'fixture-started' &&
+          start.label === 'finalize' &&
+          event.at >= start.at,
+      ),
+  );
+  const commits = events.filter(
+    (event) => event.kind === 'draft-commit' && event.length > 0,
+  );
+  const first = commits.find((event) => event.firstIntent && !event.fullIntent);
+  const full = commits.at(-1);
+  const preview = events.find(
+    (event) =>
+      event.kind === 'live-preview' && event.active === 1 && event.length > 0,
+  );
+  const refinements = events.filter(
+    (event) => event.kind === 'draft-refined' && event.active === 1,
+  );
   if (
-    recognition.length !== 3 ||
-    recognition.some((event) => !event.ok) ||
-    recognition[0]?.recognized !== 'prompt' ||
-    recognition[1]?.recognized !== 'content' ||
-    !['end prompt', 'send prompt', 'send'].includes(
-      recognition[2]?.recognized,
-    ) ||
-    !recognition[1]?.intent
+    commits.length < 2 ||
+    commits.some((event) => !event.appendOnly || !event.noDuplicates) ||
+    recognition.length !== 1 ||
+    !recognition[0].ok ||
+    recognition[0].recognized !== 'prompt' ||
+    !finalized ||
+    !first ||
+    !full ||
+    !full.fullIntent ||
+    full.at <= first.at ||
+    full.length <= first.length ||
+    !preview ||
+    !end('content-1') ||
+    !end('content-2') ||
+    !events.some(
+      (event) =>
+        event.kind === 'fixture-started' &&
+        event.label === 'content-2' &&
+        event.collectInFlight === true,
+    )
   )
     failures.push('recognition-or-intent');
+  const cleanupInvokes = calls('invoke', 'cleanup_refine');
+  const cleanup = calls('result', 'cleanup_refine');
+  const firstRequest = cleanupInvokes.find(
+    (event) =>
+      event.active === 1 &&
+      event.cleanupStage === 'first' &&
+      Number.isSafeInteger(event.cleanupId),
+  );
+  const firstResult =
+    firstRequest &&
+    cleanup.find(
+      (event) =>
+        event.cleanupId === firstRequest.cleanupId &&
+        event.ok &&
+        event.cleaned &&
+        event.at >= firstRequest.at &&
+        finalized &&
+        event.at < finalized.at,
+    );
+  const acceptedFull = refinements.some((revision) => {
+    if (
+      !full ||
+      !finalized ||
+      revision.at < full.at ||
+      revision.at >= finalized.at ||
+      revision.rawLength !== full.length ||
+      !revision.fullIntent ||
+      !Number.isSafeInteger(revision.cleanupId)
+    )
+      return false;
+    const invocation = cleanupInvokes.find(
+      (event) =>
+        event.cleanupId === revision.cleanupId &&
+        event.active === 1 &&
+        event.cleanupStage === 'full',
+    );
+    const result = cleanup.find(
+      (event) =>
+        event.cleanupId === revision.cleanupId && event.ok && event.cleaned,
+    );
+    return (
+      !!invocation &&
+      !!result &&
+      result.at >= invocation.at &&
+      revision.at >= result.at
+    );
+  });
+  if (!firstResult || !acceptedFull) failures.push('cleanup-unconfirmed');
   const busy = events.filter(
     (event) =>
       event.kind === 'invoke' &&
-      [
-        'speech_transcribe',
-        'cleanup_refine',
-        'ivy_submit',
-        'speech_speak',
-      ].includes(event.command),
+      ['speech_transcribe', 'ivy_submit', 'speech_speak'].includes(
+        event.command,
+      ),
   );
   if (busy.some((event) => event.active !== 0))
     failures.push('capture-not-released');
-  const cleanup = calls('result', 'cleanup_refine');
-  if (
-    cleanup.length !== 1 ||
-    !cleanup[0].ok ||
-    !cleanup[0].cleaned ||
-    !recognition[2] ||
-    cleanup[0].at < recognition[2].at
-  )
-    failures.push('cleanup-unconfirmed');
   const submit = calls('invoke', 'ivy_submit');
   if (
     submit.length !== 1 ||
     !submit[0].dissolved ||
     !submit[0].opacityZero ||
-    !cleanup[0] ||
-    submit[0].at < cleanup[0].at
+    !finalized ||
+    submit[0].at < finalized.at ||
+    !acceptedFull
   )
     failures.push('presentation-or-submit');
   const complete = events.find(
@@ -94,10 +171,20 @@ export function assessVoiceQualification(trace) {
     failures.push('playback-unconfirmed');
   if (
     trace.active !== 1 ||
-    trace.acquisitions !== 4 ||
+    trace.acquisitions !== 3 ||
+    ['content-1', 'content-2', 'finalize'].some(
+      (label) =>
+        !events.some(
+          (event) =>
+            event.kind === 'fixture-armed' &&
+            event.label === label &&
+            event.acquisition === 2 &&
+            event.active === 1,
+        ),
+    ) ||
     events.filter(
       (event) => event.kind === 'track-stopped' && event.ended === true,
-    ).length !== 3 ||
+    ).length !== 2 ||
     events.filter(
       (event, index) => index > idle && event.kind === 'track-started',
     ).length !== 1
@@ -136,7 +223,8 @@ export function verifyOfflineFixture(receipt, workerHash, label, hash) {
     return false;
   const cases = {
     prompt: ['prompt', 'prompt'],
-    content: ['owned-content', null],
+    'content-1': ['content-1', null],
+    'content-2': ['content-2-variation', null],
     finalize: ['finalize', null],
   };
   if (!Object.hasOwn(cases, label)) return false;
@@ -149,9 +237,17 @@ export function verifyOfflineFixture(receipt, workerHash, label, hash) {
     (label === 'finalize'
       ? ['end prompt', 'send prompt', 'send'].includes(row.actual_voice_command)
       : row.actual_voice_command === expected) &&
-    (label !== 'content' ||
+    (label !== 'content-1' ||
       [
+        'stellar text pane',
         'native voice check',
+        'voice pipeline complete',
+      ].every((part) =>
+        String(row.synthetic_transcript).toLowerCase().includes(part),
+      )) &&
+    (label !== 'content-2' ||
+      [
+        'speak the words',
         'voice pipeline complete',
         'only workspace tools',
         'do not read or change any files or settings',
@@ -184,4 +280,25 @@ export function verifyOfflineControls(receipt, negativeHash) {
     typeof silence.synthetic_transcript === 'string' &&
     !silence.synthetic_transcript.trim()
   );
+}
+
+/** Preserve each sanitized observation even if a subsequent page read fails. */
+export async function waitForVoiceObservation(
+  page,
+  predicate,
+  timeoutMs = 120000,
+  observe = () => undefined,
+) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    const value = await page.evaluate(() =>
+      window.__stellarVoiceQualification.snapshot(),
+    );
+    if (value && typeof value === 'object') observe(value);
+    if (!value?.installed || value.overflow)
+      throw new Error('Qualification observer unavailable');
+    if (predicate(value)) return value;
+    await new Promise((done) => setTimeout(done, 150));
+  }
+  throw new Error('Qualification stage timed out');
 }

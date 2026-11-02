@@ -68,6 +68,7 @@ export class ActivityDetector {
     return {
       calibrating: this.calibrating,
       active: this.active,
+      starting: !this.active && this.candidateSince !== undefined,
       level: this.level,
       peakLevel: this.peakLevel,
       durationMs: this.durationMs,

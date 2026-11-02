@@ -11,6 +11,7 @@ import {
   speechSpeakCommand,
   speechStopCommand,
   speechTranscribeCommand,
+  speechCollectCommand,
   type SpeechCommands,
   type SpeechError,
   type SpeechSnapshot,
@@ -40,9 +41,20 @@ export class SpeechAdapter {
   constructor(private readonly transport: SpeechTransport) {}
 
   async transcribe(input: SpeechTranscribeRequest): Promise<SpeechTranscript> {
+    return this.transcribeWith(input, false);
+  }
+
+  async collect(input: SpeechTranscribeRequest): Promise<SpeechTranscript> {
+    return this.transcribeWith(input, true);
+  }
+
+  private async transcribeWith(
+    input: SpeechTranscribeRequest,
+    collecting: boolean,
+  ): Promise<SpeechTranscript> {
     const request = this.validate(() => decodeSpeechTranscribeRequest(input));
     const reply = await this.invoke(
-      speechTranscribeCommand,
+      collecting ? speechCollectCommand : speechTranscribeCommand,
       request,
       decodeSpeechTranscript,
     );

@@ -177,6 +177,7 @@ export class AudioActivityController {
     const activity = this.detector.push(frame);
     const changed =
       activity.active !== this.current.activity.active ||
+      activity.starting !== this.current.activity.starting ||
       activity.calibrating !== this.current.activity.calibrating;
     if (
       !changed &&

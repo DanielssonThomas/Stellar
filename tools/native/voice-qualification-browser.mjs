@@ -14,6 +14,8 @@ export function voiceQualificationPreflight() {
         .length === 0 &&
       composition?.status === 'idle' &&
       composition.raw === '' &&
+      (composition.draft === undefined || composition.draft === '') &&
+      (composition.preview === undefined || composition.preview === '') &&
       (composition.refined === null || composition.refined === '') &&
       composition.lastSubmittedRaw === ''
     );
@@ -52,16 +54,53 @@ export async function installVoiceQualification() {
     events.push({ at: performance.now(), kind, active, ...details });
   };
   const commands = new Map(
-    ['speech_transcribe', 'cleanup_refine', 'ivy_submit', 'speech_speak'].map(
-      (command) => [internals.convertFileSrc(command, 'ipc'), command],
-    ),
+    [
+      'speech_transcribe',
+      'speech_collect',
+      'cleanup_refine',
+      'ivy_submit',
+      'speech_speak',
+    ].map((command) => [internals.convertFileSrc(command, 'ipc'), command]),
   );
+  let collecting = 0;
+  let cleanupSerial = 0;
+  let lastSuccessfulCleanup;
   const observedFetch = async function (input, ...args) {
     const command = typeof input === 'string' ? commands.get(input) : undefined;
+    const cleanupId = command === 'cleanup_refine' ? ++cleanupSerial : null;
+    if (command === 'speech_collect') collecting++;
+    let cleanupRaw;
     if (command) {
       const group = document.querySelector('[aria-label="Spoken prompt"]');
+      let cleanupStage = null;
+      if (command === 'cleanup_refine') {
+        try {
+          const raw = JSON.parse(args[0]?.body ?? '{}')?.request?.raw;
+          if (typeof raw === 'string') {
+            cleanupRaw = raw;
+            const text = raw.toLocaleLowerCase('en-US');
+            const first = [
+              'stellar text pane',
+              'native voice check',
+              'voice pipeline complete',
+            ].every((part) => text.includes(part));
+            const full =
+              first &&
+              [
+                'speak the words',
+                'only workspace tools',
+                'do not read or change any files or settings',
+              ].every((part) => text.includes(part));
+            cleanupStage = full ? 'full' : first ? 'first' : null;
+          }
+        } catch {
+          /* A malformed request cannot establish the cleanup stage. */
+        }
+      }
       append('invoke', {
         command,
+        cleanupStage,
+        cleanupId,
         dissolved: !!group?.classList.contains('dissolved'),
         opacityZero: !!group && Number(getComputedStyle(group).opacity) === 0,
       });
@@ -72,6 +111,7 @@ export async function installVoiceQualification() {
         const info = {
           command,
           ok: response.headers.get('Tauri-Response') === 'ok',
+          cleanupId,
         };
         let result;
         try {
@@ -79,7 +119,10 @@ export async function installVoiceQualification() {
         } catch {
           info.ok = false;
         }
-        if (info.ok && command === 'speech_transcribe') {
+        if (
+          info.ok &&
+          ['speech_transcribe', 'speech_collect'].includes(command)
+        ) {
           const text = typeof result?.text === 'string' ? result.text : '';
           const normalized = text
             .toLocaleLowerCase('en-US')
@@ -108,6 +151,13 @@ export async function installVoiceQualification() {
         if (info.ok && command === 'cleanup_refine')
           info.cleaned =
             typeof result?.text === 'string' && !!result.text.trim();
+        if (
+          command === 'cleanup_refine' &&
+          info.ok &&
+          info.cleaned &&
+          typeof cleanupRaw === 'string'
+        )
+          lastSuccessfulCleanup = { id: cleanupId, raw: cleanupRaw };
         if (info.ok && command === 'ivy_submit')
           info.verifiedModel = ['sol', 'terra'].includes(result?.verified_model)
             ? result.verified_model
@@ -116,8 +166,10 @@ export async function installVoiceQualification() {
       }
       return response;
     } catch (error) {
-      if (command) append('result', { command, ok: false });
+      if (command) append('result', { command, ok: false, cleanupId });
       throw error;
+    } finally {
+      if (command === 'speech_collect') collecting--;
     }
   };
   const syntheticGetUserMedia = async (constraints) => {
@@ -197,6 +249,95 @@ export async function installVoiceQualification() {
       append('expected-pane-visible', { paneCount: panes.length });
     }
   }, 150);
+  let lastRaw = '';
+  let lastRevision = 0;
+  let previewSeen = false;
+  const compositionTimer = setInterval(() => {
+    try {
+      const root = document.querySelector('stellar-root');
+      const composition =
+        root && window.ng?.getComponent(root)?.voice?.composition();
+      if (!composition || typeof composition.raw !== 'string') return;
+      const raw = composition.raw.toLocaleLowerCase('en-US');
+      if (composition.raw !== lastRaw) {
+        const appendOnly =
+          !lastRaw || composition.raw.startsWith(lastRaw + '\n');
+        const count = (part) => raw.split(part).length - 1;
+        const noDuplicates =
+          count('stellar text pane') <= 1 &&
+          count('native voice check') <= 1 &&
+          count('speak the words') <= 1 &&
+          count('only workspace tools') <= 1 &&
+          count('do not read or change any files or settings') <= 1 &&
+          count('voice pipeline complete') <= 2;
+        lastRaw = composition.raw;
+        append('draft-commit', {
+          length: composition.raw.length,
+          appendOnly,
+          noDuplicates,
+          firstIntent: [
+            'stellar text pane',
+            'native voice check',
+            'voice pipeline complete',
+          ].every((part) => raw.includes(part)),
+          fullIntent:
+            count('voice pipeline complete') === 2 &&
+            [
+              'stellar text pane',
+              'native voice check',
+              'voice pipeline complete',
+              'speak the words',
+              'only workspace tools',
+              'do not read or change any files or settings',
+            ].every((part) => raw.includes(part)),
+        });
+      }
+      const revision = composition.refinementRevision ?? 0;
+      if (Number.isSafeInteger(revision) && revision > lastRevision) {
+        lastRevision = revision;
+        append('draft-refined', {
+          revision,
+          rawLength: composition.raw.length,
+          cleanupId:
+            lastSuccessfulCleanup?.raw === composition.raw
+              ? lastSuccessfulCleanup.id
+              : null,
+          fullIntent: [
+            'speak the words',
+            'only workspace tools',
+            'do not read or change any files or settings',
+          ].every((part) => raw.includes(part)),
+        });
+      }
+      if (
+        session?.armed &&
+        !session.started &&
+        session.context.currentTime >= session.startedAt
+      ) {
+        session.started = true;
+        append('fixture-started', {
+          label: session.label,
+          acquisition: acquisitions,
+          collectInFlight: collecting > 0,
+        });
+      }
+      if (
+        !previewSeen &&
+        session?.label === 'content-1' &&
+        session.armed &&
+        !session.stopped &&
+        session.context.currentTime >= session.startedAt &&
+        typeof composition.preview === 'string' &&
+        composition.preview.length > 0 &&
+        active === 1
+      ) {
+        previewSeen = true;
+        append('live-preview', { length: composition.preview.length });
+      }
+    } catch {
+      /* Missing development inspection cannot qualify the run. */
+    }
+  }, 50);
   const stopListeners = [];
   let playbackIdentity;
   try {
@@ -279,13 +420,14 @@ export async function installVoiceQualification() {
     }
     observer.disconnect();
     clearInterval(paneTimer);
+    clearInterval(compositionTimer);
     for (const stop of stopListeners) stop();
     throw error;
   }
   const arm = async (base64, label) => {
     if (
       disposed ||
-      !['prompt', 'content', 'finalize'].includes(label) ||
+      !['prompt', 'content-1', 'content-2', 'finalize'].includes(label) ||
       !session ||
       session.stopped ||
       session.armed ||
@@ -309,10 +451,19 @@ export async function installVoiceQualification() {
     )
       throw new Error('Synthetic fixture expired or invalid');
     current.armed = true;
+    current.started = false;
+    current.label = label;
+    current.startedAt = current.context.currentTime + 1.2;
     const source = current.context.createBufferSource();
     source.buffer = buffer;
     source.connect(current.destination);
-    source.start(current.context.currentTime + 1.2);
+    source.onended = () => {
+      if (current.armed && current.label === label) {
+        current.armed = false;
+        append('fixture-ended', { label, acquisition: acquisitions });
+      }
+    };
+    source.start(current.startedAt);
     append('fixture-armed', { label, acquisition: acquisitions });
   };
   const snapshot = () => ({
@@ -321,6 +472,17 @@ export async function installVoiceQualification() {
       window.fetch === observedFetch,
     acquisitions,
     active,
+    composing: (() => {
+      try {
+        return (
+          window.ng
+            ?.getComponent(document.querySelector('stellar-root'))
+            ?.voice?.composition()?.status === 'composing'
+        );
+      } catch {
+        return false;
+      }
+    })(),
     overflow,
     events: events.map((event) => ({ ...event })),
   });
@@ -329,6 +491,7 @@ export async function installVoiceQualification() {
     if (session && !session.stopped) session.track.stop();
     observer.disconnect();
     clearInterval(paneTimer);
+    clearInterval(compositionTimer);
     for (const stop of stopListeners) stop();
     if (window.fetch === observedFetch) window.fetch = nativeFetch;
     // Keep getUserMedia synthetic and fail closed until the isolated window closes.

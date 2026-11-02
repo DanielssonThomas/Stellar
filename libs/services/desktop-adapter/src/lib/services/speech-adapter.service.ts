@@ -56,19 +56,34 @@ export class SpeechAdapterService {
   }
 
   transcribe(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, false);
+  }
+
+  collect(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, true);
+  }
+
+  private transcribeWith(
+    pcm: Int16Array,
+    utteranceId: string,
+    collecting: boolean,
+  ): Promise<SpeechTranscript> {
     if (!pcm.length || pcm.length > 320000)
       return Promise.reject(new SpeechAdapterError('contract'));
     const generation = this.generation;
     return this.run(async () => {
       await this.prepare();
       this.assertCurrent(generation);
-      return this.adapter.transcribe({
+      const request = {
         version: 1,
         epoch: this.current().epoch,
         utterance_id: utteranceId,
         sample_rate_hz: 16000,
         pcm: Array.from(pcm),
-      });
+      };
+      return collecting
+        ? this.adapter.collect(request)
+        : this.adapter.transcribe(request);
     });
   }
 

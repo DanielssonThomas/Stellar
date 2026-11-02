@@ -82,6 +82,22 @@ export class VoiceCaptureGate {
           );
         }),
       ]);
+      const now = this.current();
+      if (
+        this.disposed ||
+        !this.paused ||
+        this.generation !== generation ||
+        this.pending !== pending ||
+        this.identity !== identity ||
+        !now.available ||
+        (identity
+          ? now.requestId !== identity.requestId ||
+            now.deviceId !== identity.deviceId ||
+            now.status !== 'turn-paused'
+          : now.requestId !== null ||
+            ['capturing', 'requesting'].includes(now.status))
+      )
+        throw new Error('Capture release no longer applies');
     } catch (error) {
       const now = this.current();
       if (
@@ -93,8 +109,7 @@ export class VoiceCaptureGate {
         identity &&
         now.available &&
         now.requestId === identity.requestId &&
-        now.deviceId === identity.deviceId &&
-        now.status === 'turn-paused'
+        now.deviceId === identity.deviceId
       ) {
         this.failedRequestId = identity.requestId;
         this.onFailure();
@@ -129,9 +144,10 @@ export class VoiceCaptureGate {
       this.failedRequestId = null;
     }
     this.identity = identity;
-    this.pending = Promise.all([this.pending, this.release()])
-      .then(() => undefined)
-      .catch(() => undefined);
+    this.pending = Promise.all([this.pending, this.release()]).then(
+      () => undefined,
+    );
+    void this.pending.catch(() => undefined);
   }
 
   dispose(): void {

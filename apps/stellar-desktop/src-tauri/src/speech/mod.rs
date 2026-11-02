@@ -34,6 +34,21 @@ pub async fn speech_transcribe(
 }
 
 #[tauri::command]
+pub async fn speech_collect(
+    host: tauri::State<'_, SpeechHost>,
+    request: Option<serde_json::Value>,
+) -> Result<SpeechTranscript, SpeechError> {
+    let request: SpeechTranscribeRequest = validation::decode(request)?;
+    validation::transcribe(&request)?;
+    let completion = host.collect(request)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        completion.recv().map_err(|_| SpeechError::Unavailable)?
+    })
+    .await
+    .map_err(|_| SpeechError::Unavailable)?
+}
+
+#[tauri::command]
 pub fn speech_speak(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,

@@ -11,6 +11,7 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
   let nativeCalls = 0;
   let sourceStarts = 0;
   let paneTick;
+  let currentSource;
   let headingText = 'wrong title';
   let paneVisible = false;
   const pane = {
@@ -55,7 +56,7 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
       return { duration: 1 };
     }
     createBufferSource() {
-      return {
+      currentSource = {
         connect() {
           return undefined;
         },
@@ -63,6 +64,7 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
           sourceStarts++;
         },
       };
+      return currentSource;
     }
   }
   const media = {
@@ -117,7 +119,7 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
     opacity: element === pane ? '1' : '0',
   });
   globalThis.setInterval = (fn) => {
-    paneTick = fn;
+    paneTick ??= fn;
     return 1;
   };
   globalThis.clearInterval = () => undefined;
@@ -160,6 +162,12 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
     await fixture.arm('AA==', 'prompt');
     await assert.rejects(fixture.arm('AA==', 'prompt'));
     assert.equal(sourceStarts, 1);
+    currentSource.onended();
+    await fixture.arm('AA==', 'content-1');
+    await assert.rejects(fixture.arm('AA==', 'content-2'));
+    currentSource.onended();
+    await fixture.arm('AA==', 'content-2');
+    assert.equal(sourceStarts, 3);
     const reply = await window.fetch('http://ipc.localhost/speech_transcribe', {
       body: 'never record',
     });
@@ -342,6 +350,8 @@ test('preflight rejects retained drafts and non-idle composition before capture 
     assert.equal(voiceQualificationPreflight(), true);
     for (const [key, value] of [
       ['raw', 'retained'],
+      ['draft', 'retained'],
+      ['preview', 'retained'],
       ['refined', 'retained'],
       ['lastSubmittedRaw', 'retained'],
       ['status', 'composing'],

@@ -25,6 +25,33 @@ fn invalid_pcm_and_identity_never_reserve_work() {
 }
 
 #[test]
+fn draft_collection_shares_the_worker_and_stop_fences_its_late_result() {
+    let host = SpeechHost::new(
+        std::env::temp_dir().join("stellar-speech-collection"),
+        Arc::new(|_| {}),
+    );
+    let first = host
+        .reserve(identity(), "0", SpeechState::Collecting)
+        .unwrap();
+    assert_eq!(host.snapshot().unwrap().state, SpeechState::Collecting);
+    assert!(matches!(
+        host.reserve(identity(), "0", SpeechState::Transcribing),
+        Err(SpeechError::Busy)
+    ));
+    let snapshot = host.stop_epoch("0").unwrap();
+    assert_eq!(snapshot.state, SpeechState::Idle);
+    let next = host
+        .reserve(identity(), &snapshot.epoch, SpeechState::Transcribing)
+        .unwrap();
+    assert!(matches!(
+        host.settle(&first, Ok("stale".into())),
+        Err(SpeechError::Cancelled)
+    ));
+    assert!(current(&host.inner.view.lock().unwrap(), &next));
+    host.stop_epoch(&snapshot.epoch).unwrap();
+}
+
+#[test]
 fn synchronous_stop_during_admission_prevents_process_launch() {
     let holder = Arc::new(Mutex::new(None::<SpeechHost>));
     let observed = holder.clone();

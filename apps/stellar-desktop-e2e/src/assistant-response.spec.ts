@@ -4,6 +4,7 @@ import { controlPane } from './stage-driver';
 
 type ResponseFixture = {
   complete(items: IvyPresentation[]): void;
+  snapshotRead: boolean;
 };
 
 test('waiting restores full presence, long content scrolls intact and Ivy closes minimized activity once', async ({
@@ -31,6 +32,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     });
     Object.assign(window, {
       __responseFixture: {
+        snapshotRead: false,
         complete: (items: IvyPresentation[]) =>
           notify({ payload: snapshot('completed', items) }),
       },
@@ -57,6 +59,12 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
                 capabilities: [],
                 build_revision: null,
               };
+            if (name === 'ivy_snapshot') {
+              (
+                window as unknown as { __responseFixture: ResponseFixture }
+              ).__responseFixture.snapshotRead = true;
+              return snapshot('idle');
+            }
             if (name === 'ivy_connect') return snapshot('idle');
             if (name === 'ivy_submit') {
               inputId = String(args.request['input_id']);
@@ -69,6 +77,20 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     });
   });
   await page.goto('/');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __responseFixture: ResponseFixture })
+            .__responseFixture.snapshotRead,
+      ),
+    )
+    .toBe(true);
+  await expect(
+    page.getByText(
+      'Conversation state unavailable. Refresh before voice resumes.',
+    ),
+  ).toHaveCount(0);
   const menu = page.getByRole('button', {
     name: 'Experience menu',
     exact: true,

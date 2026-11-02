@@ -5,6 +5,7 @@ import {
   parseLoopbackEndpoint,
   verifyOfflineFixture,
   verifyOfflineControls,
+  waitForVoiceObservation,
 } from './voice-qualification-core.mjs';
 
 function success() {
@@ -15,21 +16,91 @@ function success() {
     kind,
     ...fields,
   });
-  const events = [];
-  for (const recognized of ['prompt', 'content', 'end prompt']) {
-    events.push(event('invoke', { command: 'speech_transcribe' }));
-    events.push(
-      event('result', {
-        command: 'speech_transcribe',
-        ok: true,
-        recognized,
-        intent: recognized === 'content',
-      }),
-    );
-  }
+  const events = [
+    event('invoke', { command: 'speech_transcribe' }),
+    event('result', {
+      command: 'speech_transcribe',
+      ok: true,
+      recognized: 'prompt',
+    }),
+    event('fixture-armed', { active: 1, acquisition: 2, label: 'content-1' }),
+    event('live-preview', { active: 1, length: 4 }),
+    event('fixture-ended', { active: 1, label: 'content-1' }),
+    event('draft-commit', {
+      active: 1,
+      length: 90,
+      appendOnly: true,
+      noDuplicates: true,
+      firstIntent: true,
+      fullIntent: false,
+    }),
+    event('invoke', {
+      active: 1,
+      command: 'cleanup_refine',
+      cleanupStage: 'first',
+      cleanupId: 1,
+    }),
+    event('result', {
+      active: 1,
+      command: 'cleanup_refine',
+      cleanupId: 1,
+      ok: true,
+      cleaned: true,
+    }),
+    event('draft-refined', {
+      active: 1,
+      revision: 1,
+      rawLength: 90,
+      cleanupId: 1,
+      fullIntent: false,
+    }),
+    event('fixture-armed', { active: 1, acquisition: 2, label: 'content-2' }),
+    event('fixture-started', {
+      active: 1,
+      acquisition: 2,
+      label: 'content-2',
+      collectInFlight: true,
+    }),
+    event('fixture-ended', { active: 1, label: 'content-2' }),
+    event('draft-commit', {
+      active: 1,
+      length: 180,
+      appendOnly: true,
+      noDuplicates: true,
+      firstIntent: true,
+      fullIntent: true,
+    }),
+    event('invoke', {
+      active: 1,
+      command: 'cleanup_refine',
+      cleanupStage: 'full',
+      cleanupId: 2,
+    }),
+    event('result', {
+      active: 1,
+      command: 'cleanup_refine',
+      cleanupId: 2,
+      ok: true,
+      cleaned: true,
+    }),
+    event('draft-refined', {
+      active: 1,
+      revision: 2,
+      rawLength: 180,
+      cleanupId: 2,
+      fullIntent: true,
+    }),
+    event('fixture-armed', { active: 1, acquisition: 2, label: 'finalize' }),
+    event('fixture-started', { active: 1, acquisition: 2, label: 'finalize' }),
+    event('fixture-ended', { active: 1, label: 'finalize' }),
+    event('result', {
+      active: 1,
+      command: 'speech_collect',
+      ok: true,
+      recognized: 'send prompt',
+    }),
+  ];
   events.push(
-    event('invoke', { command: 'cleanup_refine' }),
-    event('result', { command: 'cleanup_refine', ok: true, cleaned: true }),
     event('invoke', {
       command: 'ivy_submit',
       dissolved: true,
@@ -53,12 +124,11 @@ function success() {
     event('track-started', { active: 1 }),
     event('track-stopped', { ended: true }),
     event('track-stopped', { ended: true }),
-    event('track-stopped', { ended: true }),
   );
   return {
     installed: true,
     active: 1,
-    acquisitions: 4,
+    acquisitions: 3,
     overflow: false,
     events,
   };
@@ -71,7 +141,7 @@ test('requires real ordered recognition, cleanup, dissolved handoff, verified So
   });
   for (const mutate of [
     (t) => {
-      t.events.find((e) => e.recognized === 'end prompt').recognized =
+      t.events.find((e) => e.recognized === 'send prompt').recognized =
         'content';
     },
     (t) => {
@@ -127,17 +197,102 @@ test('requires real ordered recognition, cleanup, dissolved handoff, verified So
   }
 });
 
-test('accepts only supported actual finalization commands', () => {
-  for (const command of ['end prompt', 'send prompt', 'send']) {
+test('requires the verified send prompt fixture and live checks', () => {
+  for (const mutate of [
+    (t) => {
+      t.events.find((e) => e.recognized === 'send prompt').recognized =
+        'and prompt';
+    },
+    (t) => {
+      t.events = t.events.filter((e) => e.kind !== 'live-preview');
+    },
+    (t) => {
+      t.events.find((e) => e.fullIntent).fullIntent = false;
+    },
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'invoke' && e.command === 'cleanup_refine',
+      ).active = 0;
+    },
+  ]) {
     const trace = success();
-    trace.events.find((event) => event.recognized === 'end prompt').recognized =
-      command;
-    assert.equal(assessVoiceQualification(trace).passed, true);
+    mutate(trace);
+    assert.equal(assessVoiceQualification(trace).passed, false);
   }
-  const trace = success();
-  trace.events.find((event) => event.recognized === 'end prompt').recognized =
-    'and prompt';
-  assert.equal(assessVoiceQualification(trace).passed, false);
+});
+
+test('accepts multiple append-only segments and rejects loss, duplicates or missing overlap', () => {
+  const multiple = success();
+  const full = multiple.events.find(
+    (event) => event.kind === 'draft-commit' && event.fullIntent,
+  );
+  const index = multiple.events.indexOf(full);
+  multiple.events.splice(index, 0, {
+    kind: 'draft-commit',
+    at: full.at - 0.5,
+    active: 1,
+    length: 130,
+    appendOnly: true,
+    noDuplicates: true,
+    firstIntent: true,
+    fullIntent: false,
+  });
+  assert.equal(assessVoiceQualification(multiple).passed, true);
+  for (const mutate of [
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'draft-commit' && e.fullIntent,
+      ).appendOnly = false;
+    },
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'draft-commit' && e.fullIntent,
+      ).noDuplicates = false;
+    },
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'draft-commit' && e.fullIntent,
+      ).fullIntent = false;
+    },
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'fixture-started' && e.label === 'content-2',
+      ).collectInFlight = false;
+    },
+  ]) {
+    const trace = success();
+    mutate(trace);
+    assert.equal(assessVoiceQualification(trace).passed, false);
+  }
+});
+
+test('requires a successful current full-draft refinement before Send', () => {
+  assert.equal(assessVoiceQualification(success()).passed, true);
+  for (const mutate of [
+    (t) => {
+      t.events.find(
+        (e) => e.kind === 'draft-refined' && e.fullIntent,
+      ).cleanupId = null;
+    },
+    (t) => {
+      t.events.find((e) => e.kind === 'draft-refined' && e.fullIntent)
+        .rawLength--;
+    },
+    (t) => {
+      t.events.find((e) => e.kind === 'result' && e.cleanupId === 2).ok = false;
+    },
+    (t) => {
+      t.events.find((e) => e.kind === 'draft-refined' && e.fullIntent).at = 1;
+    },
+    (t) => {
+      t.events.find((e) => e.kind === 'draft-refined' && e.fullIntent).at =
+        t.events.find((e) => e.recognized === 'send prompt').at + 1;
+    },
+  ]) {
+    const trace = success();
+    mutate(trace);
+    assert.equal(assessVoiceQualification(trace).passed, false);
+  }
 });
 
 test('rejects cancelled, failed or epoch-changed playback even after speaking', () => {
@@ -189,18 +344,18 @@ test('requires a matching worker, source fixture and independent recognized comm
         actual_voice_command: 'end prompt',
       },
       {
-        fixture: 'owned-content',
+        fixture: 'content-1',
         exit: 0,
         sha256: 'c',
         actual_voice_command: null,
         synthetic_transcript:
-          'native voice check voice pipeline complete only workspace tools do not read or change any files or settings',
+          'stellar text pane native voice check voice pipeline complete',
       },
     ],
   };
   assert.equal(verifyOfflineFixture(receipt, 'worker', 'prompt', 'p'), true);
   assert.equal(verifyOfflineFixture(receipt, 'worker', 'finalize', 'e'), true);
-  assert.equal(verifyOfflineFixture(receipt, 'worker', 'content', 'c'), true);
+  assert.equal(verifyOfflineFixture(receipt, 'worker', 'content-1', 'c'), true);
   assert.equal(verifyOfflineFixture(receipt, 'other', 'prompt', 'p'), false);
   assert.equal(
     verifyOfflineFixture(receipt, 'worker', 'prompt', 'other'),
@@ -219,7 +374,10 @@ test('requires a matching worker, source fixture and independent recognized comm
   receipt.records[1].actual_voice_command = null;
   assert.equal(verifyOfflineFixture(receipt, 'worker', 'finalize', 'e'), false);
   receipt.records[2].synthetic_transcript = 'only workspace tools';
-  assert.equal(verifyOfflineFixture(receipt, 'worker', 'content', 'c'), false);
+  assert.equal(
+    verifyOfflineFixture(receipt, 'worker', 'content-1', 'c'),
+    false,
+  );
 });
 
 test('requires near-command negative, ordinary and silence controls', () => {
@@ -247,4 +405,47 @@ test('requires near-command negative, ordinary and silence controls', () => {
   receipt.records[0].actual_voice_command = null;
   receipt.records[2].synthetic_transcript = 'invented';
   assert.equal(verifyOfflineControls(receipt, 'negative'), false);
+});
+
+test('accepts stale first refinement and cleanup invocation before polled raw commit', () => {
+  const trace = success();
+  trace.events = trace.events.filter(
+    (event) => !(event.kind === 'draft-refined' && event.revision === 1),
+  );
+  const first = trace.events.find(
+    (event) => event.kind === 'draft-commit' && event.firstIntent,
+  );
+  const invoke = trace.events.find(
+    (event) => event.kind === 'invoke' && event.cleanupStage === 'first',
+  );
+  invoke.at = first.at - 0.5;
+  const full = trace.events.find(
+    (event) => event.kind === 'draft-commit' && event.fullIntent,
+  );
+  trace.events.find(
+    (event) => event.kind === 'invoke' && event.cleanupStage === 'full',
+  ).at = full.at - 0.5;
+  assert.equal(assessVoiceQualification(trace).passed, true);
+});
+
+test('preserves last polled trace when the target closes', async () => {
+  let reads = 0;
+  let retained;
+  const page = {
+    evaluate: async () => {
+      if (reads++) throw new Error('closed');
+      return { installed: true, events: [{ kind: 'safe' }] };
+    },
+  };
+  await assert.rejects(
+    waitForVoiceObservation(
+      page,
+      () => false,
+      1000,
+      (value) => {
+        retained = value;
+      },
+    ),
+  );
+  assert.deepEqual(retained.events, [{ kind: 'safe' }]);
 });

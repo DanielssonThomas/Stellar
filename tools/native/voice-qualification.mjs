@@ -13,6 +13,7 @@ import {
   parseLoopbackEndpoint,
   verifyOfflineFixture,
   verifyOfflineControls,
+  waitForVoiceObservation,
 } from './voice-qualification-core.mjs';
 
 function options(argv) {
@@ -42,20 +43,6 @@ function options(argv) {
   return result;
 }
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-async function waitFor(page, predicate, timeoutMs = 120000) {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    const value = await page.evaluate(() =>
-      window.__stellarVoiceQualification.snapshot(),
-    );
-    if (!value.installed || value.overflow)
-      throw new Error('Qualification observer unavailable');
-    if (predicate(value)) return value;
-    await sleep(150);
-  }
-  throw new Error('Qualification stage timed out');
-}
 async function main() {
   const args = options(process.argv.slice(2));
   const directory = resolve(args['--fixtures']);
@@ -91,7 +78,8 @@ async function main() {
   const clips = [];
   for (const [label, fixture] of [
     ['prompt', 'prompt'],
-    ['content', 'owned-content'],
+    ['content-1', 'content-1'],
+    ['content-2', 'content-2-variation'],
     ['finalize', 'finalize'],
   ]) {
     const row = receipt.records.find((record) => record.fixture === fixture);
@@ -149,61 +137,132 @@ async function main() {
         instruction: 'Enable microphone in the owned native window.',
       }),
     );
-    let acquisition = 0;
-    for (let index = 0; index < clips.length; index++) {
-      snapshot = await waitFor(
-        page,
-        (state) => state.active === 1 && state.acquisitions > acquisition,
-      );
-      acquisition = snapshot.acquisitions;
-      await page.evaluate(
+    const waitFor = (predicate, timeoutMs) =>
+      waitForVoiceObservation(page, predicate, timeoutMs, (value) => {
+        snapshot = value;
+      });
+    const has = (state, predicate) => state.events.some(predicate);
+    const arm = async (index) =>
+      page.evaluate(
         ({ base64, label }) =>
           window.__stellarVoiceQualification.arm(base64, label),
         clips[index],
       );
-      snapshot = await waitFor(
-        page,
-        (state) =>
-          state.events.filter(
-            (event) =>
-              event.kind === 'result' && event.command === 'speech_transcribe',
-          ).length > index,
-      );
-      const result = snapshot.events.filter(
-        (event) =>
-          event.kind === 'result' && event.command === 'speech_transcribe',
-      )[index];
-      const expected = [
-        'prompt',
-        'content',
-        receipt.records.find((row) => row.fixture === 'finalize')
-          .actual_voice_command,
-      ][index];
-      if (
-        !result.ok ||
-        result.recognized !== expected ||
-        (index === 1 && !result.intent)
-      )
-        throw new Error('Recognized fixture did not meet its gate');
-      if (
-        index < 2 &&
-        snapshot.events.some(
-          (event) => event.kind === 'invoke' && event.command === 'ivy_submit',
-        )
-      )
-        throw new Error('Premature submission');
-    }
     snapshot = await waitFor(
-      page,
+      (state) => state.active === 1 && state.acquisitions === 1,
+    );
+    await arm(0);
+    snapshot = await waitFor(
+      (state) =>
+        state.active === 1 &&
+        state.acquisitions === 2 &&
+        has(
+          state,
+          (event) =>
+            event.kind === 'result' &&
+            event.command === 'speech_transcribe' &&
+            event.ok &&
+            event.recognized === 'prompt',
+        ),
+    );
+    await arm(1);
+    snapshot = await waitFor(
+      (state) =>
+        has(
+          state,
+          (event) =>
+            event.kind === 'fixture-ended' && event.label === 'content-1',
+        ) &&
+        state.active === 1 &&
+        state.acquisitions === 2 &&
+        state.composing,
+    );
+    if (
+      has(
+        snapshot,
+        (event) => event.kind === 'invoke' && event.command === 'ivy_submit',
+      )
+    )
+      throw new Error('Premature submission');
+    await arm(2);
+    snapshot = await waitFor((state) => {
+      const commits = state.events.filter(
+        (event) => event.kind === 'draft-commit' && event.length > 0,
+      );
+      const latest = commits.at(-1);
+      const first = state.events.find(
+        (event) =>
+          event.kind === 'invoke' &&
+          event.cleanupStage === 'first' &&
+          Number.isSafeInteger(event.cleanupId),
+      );
+      const firstOk =
+        first &&
+        has(
+          state,
+          (event) =>
+            event.kind === 'result' &&
+            event.command === 'cleanup_refine' &&
+            event.cleanupId === first.cleanupId &&
+            event.ok &&
+            event.cleaned,
+        );
+      const latestRefined =
+        latest?.fullIntent &&
+        has(
+          state,
+          (event) =>
+            event.kind === 'draft-refined' &&
+            event.active === 1 &&
+            event.fullIntent &&
+            event.rawLength === latest.length &&
+            event.at >= latest.at &&
+            Number.isSafeInteger(event.cleanupId) &&
+            has(
+              state,
+              (result) =>
+                result.kind === 'result' &&
+                result.command === 'cleanup_refine' &&
+                result.cleanupId === event.cleanupId &&
+                result.ok &&
+                result.cleaned &&
+                result.at <= event.at,
+            ),
+        );
+      return (
+        state.active === 1 &&
+        state.acquisitions === 2 &&
+        has(
+          state,
+          (event) =>
+            event.kind === 'fixture-ended' && event.label === 'content-2',
+        ) &&
+        commits.length >= 2 &&
+        commits.every((event) => event.appendOnly && event.noDuplicates) &&
+        !!firstOk &&
+        !!latestRefined
+      );
+    });
+    if (
+      has(
+        snapshot,
+        (event) => event.kind === 'invoke' && event.command === 'ivy_submit',
+      )
+    )
+      throw new Error('Premature submission');
+    await arm(3);
+    snapshot = await waitFor(
       (state) => assessVoiceQualification(state).passed,
       180000,
     );
   } catch {
     errorCode = 'qualification_failed';
-    if (page && installed)
-      snapshot = await page
+    if (page && installed) {
+      const latest = await page
         .evaluate(() => window.__stellarVoiceQualification.snapshot())
         .catch(() => undefined);
+      if (latest) snapshot = latest;
+    }
   } finally {
     if (page && installed)
       teardownActive = await page

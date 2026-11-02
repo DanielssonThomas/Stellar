@@ -32,5 +32,6 @@
     "Synthetic observations do not verify a physical microphone, Windows microphone indicator, or performance budget; physical qualification remains issue 184.",
     "The first native end-prompt misrecognition is not claimed fixed.",
     "Fixture audio, detailed receipts and app recordings are private and not included in the repository."
-  ]
+  ],
+  "scope": "Historical pre-continuous-dictation runs; updated implementation and strengthened observer await fresh native qualification."
 }

@@ -3,13 +3,22 @@ import type { PcmChunk } from './pcm-model';
 export function createUtteranceAssembler(): {
   push(
     chunk: PcmChunk,
-    gate: { active: boolean; calibrating: boolean },
+    gate: {
+      active: boolean;
+      calibrating: boolean;
+      starting?: boolean;
+      draft?: boolean;
+    },
   ): Int16Array | null;
+  snapshot(): Int16Array | null;
+  lastResultCapped(): boolean;
+  hasCappedContinuation(): boolean;
   reset(): void;
 } {
   const MAX_SAMPLES = 320000;
   const PREROLL_SAMPLES = 3840;
   const SILENT_TAIL_SAMPLES = 22400;
+  const DRAFT_SILENT_TAIL_SAMPLES = 8640;
   const MIN_VOICE_SAMPLES = 3200;
   const MAX_CHUNK_SAMPLES = 640;
 
@@ -22,6 +31,8 @@ export function createUtteranceAssembler(): {
   let silentSamples = 0;
   let lastSequence: number | null = null;
   let waitingForSilence = false;
+  let resultCapped = false;
+  let cappedContinuation = false;
 
   function erase(array: Int16Array, length: number): void {
     array.fill(0, 0, length);
@@ -45,6 +56,8 @@ export function createUtteranceAssembler(): {
     clearRing();
     lastSequence = null;
     waitingForSilence = false;
+    resultCapped = false;
+    cappedContinuation = false;
   }
 
   function appendRing(samples: Int16Array): void {
@@ -60,7 +73,7 @@ export function createUtteranceAssembler(): {
   }
 
   function finish(capped: boolean): Int16Array | null {
-    if (voiceSamples < MIN_VOICE_SAMPLES) {
+    if (voiceSamples < MIN_VOICE_SAMPLES && !cappedContinuation) {
       clearUtterance();
       return null;
     }
@@ -73,8 +86,14 @@ export function createUtteranceAssembler(): {
 
   function push(
     chunk: PcmChunk,
-    gate: { active: boolean; calibrating: boolean },
+    gate: {
+      active: boolean;
+      calibrating: boolean;
+      starting?: boolean;
+      draft?: boolean;
+    },
   ): Int16Array | null {
+    resultCapped = false;
     if (
       chunk.sampleRate !== 16000 ||
       !Number.isSafeInteger(chunk.sequence) ||
@@ -83,7 +102,9 @@ export function createUtteranceAssembler(): {
       chunk.samples.length === 0 ||
       chunk.samples.length > MAX_CHUNK_SAMPLES ||
       typeof gate.active !== 'boolean' ||
-      typeof gate.calibrating !== 'boolean'
+      typeof gate.calibrating !== 'boolean' ||
+      (gate.starting !== undefined && typeof gate.starting !== 'boolean') ||
+      (gate.draft !== undefined && typeof gate.draft !== 'boolean')
     ) {
       reset();
       return null;
@@ -93,6 +114,7 @@ export function createUtteranceAssembler(): {
       clearUtterance();
       clearRing();
       waitingForSilence = false;
+      cappedContinuation = false;
     }
     lastSequence = chunk.sequence;
 
@@ -100,6 +122,7 @@ export function createUtteranceAssembler(): {
       clearUtterance();
       clearRing();
       waitingForSilence = false;
+      cappedContinuation = false;
       return null;
     }
 
@@ -123,6 +146,15 @@ export function createUtteranceAssembler(): {
     }
 
     if (utteranceLength === 0 && !gate.active) {
+      if (cappedContinuation) {
+        silentSamples = gate.starting
+          ? 0
+          : silentSamples + chunk.samples.length;
+        if (silentSamples >= DRAFT_SILENT_TAIL_SAMPLES) {
+          cappedContinuation = false;
+          silentSamples = 0;
+        }
+      }
       appendRing(chunk.samples);
       return null;
     }
@@ -133,14 +165,47 @@ export function createUtteranceAssembler(): {
     if (gate.active) {
       voiceSamples += count;
       silentSamples = 0;
+    } else if (gate.draft && gate.starting) {
+      silentSamples = 0;
     } else {
       silentSamples += count;
     }
 
-    if (utteranceLength === MAX_SAMPLES) return finish(true);
-    if (silentSamples >= SILENT_TAIL_SAMPLES) return finish(false);
+    if (utteranceLength === MAX_SAMPLES) {
+      resultCapped = true;
+      const output = finish(!gate.draft);
+      cappedContinuation = Boolean(gate.draft && output);
+      if (cappedContinuation && count < chunk.samples.length) {
+        const remainder = chunk.samples.subarray(count);
+        utterance.set(remainder);
+        utteranceLength = remainder.length;
+        if (gate.active) voiceSamples = remainder.length;
+        else silentSamples = remainder.length;
+      }
+      return output;
+    }
+    if (
+      silentSamples >=
+      (gate.draft ? DRAFT_SILENT_TAIL_SAMPLES : SILENT_TAIL_SAMPLES)
+    ) {
+      const output = finish(false);
+      cappedContinuation = false;
+      return output;
+    }
     return null;
   }
 
-  return { push, reset };
+  function snapshot(): Int16Array | null {
+    return !waitingForSilence && voiceSamples >= MIN_VOICE_SAMPLES
+      ? utterance.slice(0, utteranceLength)
+      : null;
+  }
+
+  return {
+    push,
+    snapshot,
+    lastResultCapped: () => resultCapped,
+    hasCappedContinuation: () => cappedContinuation,
+    reset,
+  };
 }

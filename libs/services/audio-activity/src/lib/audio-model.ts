@@ -33,6 +33,7 @@ export interface AudioSource {
 export interface ActivitySnapshot {
   readonly calibrating: boolean;
   readonly active: boolean;
+  readonly starting?: boolean;
   readonly level: number;
   readonly peakLevel: number;
   readonly durationMs: number;

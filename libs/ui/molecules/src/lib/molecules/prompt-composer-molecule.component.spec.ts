@@ -9,6 +9,7 @@ describe('PromptComposerMolecule', () => {
     finish: () => void;
     cancel: ReturnType<typeof vi.fn>;
     frames: Keyframe[];
+    duration: number;
   }[] = [];
   const frames = new Map<number, FrameRequestCallback>();
   let nextFrame = 0;
@@ -34,18 +35,25 @@ describe('PromptComposerMolecule', () => {
     });
     Object.defineProperty(Element.prototype, 'animate', {
       configurable: true,
-      value: vi.fn((keyframes: Keyframe[]) => {
-        let finish!: () => void, fail!: (error: Error) => void;
-        const finished = new Promise<void>((resolve, reject) => {
-          finish = resolve;
-          fail = reject;
-        });
-        const cancel = vi.fn(() =>
-          fail(new DOMException('Cancelled', 'AbortError')),
-        );
-        animations.push({ finish, cancel, frames: keyframes });
-        return { finished, cancel } as unknown as Animation;
-      }),
+      value: vi.fn(
+        (keyframes: Keyframe[], options: KeyframeAnimationOptions) => {
+          let finish!: () => void, fail!: (error: Error) => void;
+          const finished = new Promise<void>((resolve, reject) => {
+            finish = resolve;
+            fail = reject;
+          });
+          const cancel = vi.fn(() =>
+            fail(new DOMException('Cancelled', 'AbortError')),
+          );
+          animations.push({
+            finish,
+            cancel,
+            frames: keyframes,
+            duration: Number(options.duration),
+          });
+          return { finished, cancel } as unknown as Animation;
+        },
+      ),
     });
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       frames.set(++nextFrame, callback);
@@ -100,6 +108,9 @@ describe('PromptComposerMolecule', () => {
     return { controller, completion };
   }
   it('opens braces from the shared center with a tone between them and plain literal text', async () => {
+    expect(animations.every((animation) => animation.duration === 1000)).toBe(
+      true,
+    );
     expect(animations[0].frames[0]).toEqual({
       left: 'calc(50% - 0.75rem)',
       opacity: 0,
@@ -124,7 +135,7 @@ describe('PromptComposerMolecule', () => {
     const complete = vi.fn();
     void completion.then(complete);
     await tick(0);
-    await tick(150);
+    await tick(500);
     expect(fixture.componentInstance.displayText()).not.toBe(
       'Keep <script> words',
     );
@@ -133,13 +144,21 @@ describe('PromptComposerMolecule', () => {
     );
     expect(animations).toHaveLength(0);
     expect(complete).not.toHaveBeenCalled();
-    await tick(2400);
+    await tick(1000);
+    expect(animations).toHaveLength(0);
+    await tick(1001);
+    await tick(2000);
+    expect(animations).toHaveLength(0);
+    await tick(2001);
     await vi.waitFor(async () => {
       await fixture.whenStable();
       expect(animations).toHaveLength(4);
     });
     expect(fixture.componentInstance.displayText()).toBe(
       'Keep corrected words',
+    );
+    expect(animations.every((animation) => animation.duration === 1000)).toBe(
+      true,
     );
     expect(animations[0].frames.at(-1)).toEqual({
       left: 'calc(50% - 0.75rem)',
@@ -177,7 +196,9 @@ describe('PromptComposerMolecule', () => {
     const { controller, completion } = await begin();
     const result = completion.catch((error) => error.name);
     await tick(0);
-    await tick(2400);
+    await tick(1000);
+    await tick(1001);
+    await tick(2001);
     await vi.waitFor(async () => {
       await fixture.whenStable();
       expect(animations).toHaveLength(4);
@@ -230,6 +251,81 @@ describe('PromptComposerMolecule', () => {
     expect(
       fixture.nativeElement.querySelector('stellar-skeleton-atom'),
     ).not.toBeNull();
+  });
+
+  it('shows actual preview, refines for one second without closing, and commits new words once', async () => {
+    await open();
+    fixture.componentRef.setInput('raw', 'Um, first sentence.');
+    fixture.componentRef.setInput('draft', 'Um, first sentence.');
+    fixture.componentRef.setInput('preview', 'More words');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.displayText()).toBe(
+      'Um, first sentence. More words',
+    );
+    fixture.componentRef.setInput('draft', 'first sentence.');
+    fixture.componentRef.setInput('refined', 'first sentence.');
+    fixture.componentRef.setInput('refinementRevision', 1);
+    await fixture.whenStable();
+    await tick(0);
+    await tick(500);
+    expect(fixture.componentInstance.displayText()).toContain('More words');
+    expect(fixture.componentInstance.displayText()).not.toBe(
+      'first sentence. More words',
+    );
+    expect(animations).toHaveLength(0);
+    await tick(999);
+    expect(fixture.componentInstance.draftEditing()).toBe(true);
+    await tick(1000);
+    expect(fixture.componentInstance.displayText()).toBe(
+      'first sentence. More words',
+    );
+    expect(fixture.componentInstance.raw()).toBe('Um, first sentence.');
+    fixture.componentRef.setInput('raw', 'Um, first sentence.\nMore words.');
+    fixture.componentRef.setInput('draft', 'first sentence.\nMore words.');
+    fixture.componentRef.setInput('preview', '');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.displayText()).toBe(
+      'first sentence.\nMore words.',
+    );
+    expect(fixture.nativeElement.querySelector('.opened')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.dissolved')).toBeNull();
+  });
+
+  it('preserves new dictation when it interrupts an older correction', async () => {
+    await open();
+    fixture.componentRef.setInput('draft', 'Um, first sentence.');
+    await fixture.whenStable();
+    fixture.componentRef.setInput('draft', 'first sentence.');
+    fixture.componentRef.setInput('refinementRevision', 1);
+    await fixture.whenStable();
+    await tick(0);
+    await tick(250);
+    fixture.componentRef.setInput('draft', 'first sentence.\nNew words.');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.displayText()).toBe(
+      'first sentence.\nNew words.',
+    );
+    await tick(3000);
+    expect(fixture.componentInstance.displayText()).toBe(
+      'first sentence.\nNew words.',
+    );
+    expect(frames.size).toBe(0);
+    expect(animations).toHaveLength(0);
+  });
+
+  it('cancels the corrected-text hold without closing or completing submission', async () => {
+    const { controller, completion } = await begin();
+    const result = completion.catch((error) => error.name);
+    await tick(0);
+    await tick(1000);
+    await tick(1001);
+    await tick(1500);
+    expect(animations).toHaveLength(0);
+    controller.abort();
+    expect(await result).toBe('AbortError');
+    await tick(3000);
+    expect(animations).toHaveLength(0);
+    expect(frames.size).toBe(0);
   });
 });
 

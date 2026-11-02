@@ -170,6 +170,11 @@ describe('desktop voice cleanup integration', () => {
         utterance_id,
         text: transcript,
       })),
+      collect: vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+        version: 1,
+        utterance_id,
+        text: transcript,
+      })),
       stop: vi.fn(async () => undefined),
     };
     const snapshot = vi.fn(async () => initialIvySnapshot());

@@ -15,6 +15,21 @@ const audio = {
 };
 
 describe('speech adapter boundary', () => {
+  it('uses the bounded collection command and binds its reply to the requested utterance', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ version: 1, utterance_id: id, text: 'partial' });
+    const adapter = new SpeechAdapter({
+      invoke,
+      listen: async () => () => undefined,
+    });
+    expect((await adapter.collect(audio)).text).toBe('partial');
+    expect(invoke).toHaveBeenCalledWith('speech_collect', { request: audio });
+    await expect(
+      adapter.collect({ ...audio, sample_rate_hz: 48000 }),
+    ).rejects.toMatchObject({ kind: 'contract' });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
   it('rejects input before transport and sanitizes private transport failures', async () => {
     const invoke = vi
       .fn()

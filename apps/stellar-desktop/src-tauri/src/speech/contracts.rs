@@ -7,6 +7,7 @@ pub const SPEECH_EVENT: &str = "speech-state";
 #[serde(rename_all = "snake_case")]
 pub enum SpeechState {
     Idle,
+    Collecting,
     Transcribing,
     Synthesizing,
     Speaking,

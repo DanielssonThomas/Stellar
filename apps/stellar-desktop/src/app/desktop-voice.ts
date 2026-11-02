@@ -73,6 +73,7 @@ export class DesktopVoice {
   );
   private readonly conversation = new VoiceConversation({
     transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
+    collect: (pcm, id) => this.speech.collect(pcm, id),
     refinePrompt: async (raw, signal) =>
       (await this.cleanup.refine(raw, signal)).text,
     submit: (text, id) => this.assistant.submit(text, id),
@@ -114,19 +115,9 @@ export class DesktopVoice {
         if (request === this.sessionRequest) this.sessionError.set(true);
       });
     const unsubscribe = this.audio.subscribePcm((event) =>
-      this.conversation.accept(event),
+      this.conversation.accept(event, this.audio.state()),
     );
-    effect(() =>
-      this.conversation.update({
-        audio: this.audio.state(),
-        speech: this.speech.state(),
-        assistant: this.assistant.state(),
-        available:
-          this.sessionKnown() &&
-          !this.sessionError() &&
-          !['suspended', 'shutdown'].includes(this.experience.state().phase),
-      }),
-    );
+    effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
       unsubscribe();
       this.sessionRequest++;
@@ -137,6 +128,28 @@ export class DesktopVoice {
 
   setMuted(muted: boolean) {
     this.conversation.setMuted(muted);
+  }
+
+  submitText(text: string): Promise<boolean> {
+    return this.conversation.withCaptureReleased(async () => {
+      try {
+        return await this.assistant.submit(text);
+      } finally {
+        this.updateContext();
+      }
+    });
+  }
+
+  private updateContext() {
+    this.conversation.update({
+      audio: this.audio.state(),
+      speech: this.speech.state(),
+      assistant: this.assistant.state(),
+      available:
+        this.sessionKnown() &&
+        !this.sessionError() &&
+        !['suspended', 'shutdown'].includes(this.experience.state().phase),
+    });
   }
   stop() {
     this.conversation.stopVoice();

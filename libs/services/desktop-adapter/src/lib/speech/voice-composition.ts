@@ -8,6 +8,9 @@ export type VoiceCommand =
   | 'done';
 export interface VoiceComposition {
   readonly raw: string;
+  readonly preview?: string;
+  readonly draft?: string;
+  readonly refinementRevision?: number;
   readonly refined: string | null;
   readonly lastSubmittedRaw: string;
   readonly model: VoiceModel;

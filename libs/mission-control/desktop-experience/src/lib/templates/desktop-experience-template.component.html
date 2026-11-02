@@ -35,6 +35,9 @@
     <stellar-prompt-composer-molecule
       stage-composer
       [raw]="promptRaw()"
+      [draft]="promptDraft()"
+      [preview]="promptPreview()"
+      [refinementRevision]="promptRefinementRevision()"
       [refined]="promptRefined()"
       [status]="promptStatus()"
       [visible]="composing() && (emblem()?.assembled() ?? false)"

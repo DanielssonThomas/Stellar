@@ -51,6 +51,127 @@ async function flush() {
 }
 
 describe('voice capture release gate', () => {
+  it('does not send through a lease after microphone identity changes', async () => {
+    const f = fixture();
+    const send = vi.fn(async () => true);
+    const voice = new VoiceConversation({
+      transcribe: async (_pcm, utterance_id) => ({
+        version: 1,
+        utterance_id,
+        text: '',
+      }),
+      submit: async () => true,
+      speak: async () => initialSpeechSnapshot(),
+      stop: async () => undefined,
+      id: () => 'unused',
+      onChange: () => undefined,
+      onCapturePauseChange: (paused) => f.gate.setPaused(paused),
+      waitForCapturePause: () => f.gate.waitForRelease(),
+    });
+    voice.update({
+      available: true,
+      audio: {
+        status: 'capturing',
+        activity: {
+          calibrating: false,
+          active: false,
+          level: 0,
+          peakLevel: 0,
+          durationMs: 0,
+          noiseFloor: 0,
+          clipped: false,
+        },
+      },
+      assistant: { ...initialIvySnapshot(), connection: 'ready' },
+      speech: initialSpeechSnapshot(),
+    });
+    const pending = voice.withCaptureReleased(send);
+    f.update({ requestId: 8, deviceId: 'device-2', status: 'requesting' });
+    f.gate.refresh();
+    f.update({ requestId: 9, status: 'idle' });
+    f.releaseDone.resolve();
+    expect(await pending).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    await flush();
+    expect(f.acquire).not.toHaveBeenCalled();
+    voice.dispose();
+  });
+  it('rejects a typed release lease if the requested input changes before release', async () => {
+    const f = fixture();
+    f.gate.setPaused(true);
+    const pending = f.gate.waitForRelease();
+    f.update({ requestId: 8, deviceId: 'device-2', status: 'requesting' });
+    f.gate.refresh();
+    f.releaseDone.resolve();
+    await expect(pending).rejects.toThrow('Capture release no longer applies');
+    f.gate.setPaused(false);
+    f.update({ requestId: 9, deviceId: 'device-3', status: 'idle' });
+    await flush();
+    expect(f.acquire).not.toHaveBeenCalled();
+  });
+
+  it('propagates an actual source release failure', async () => {
+    const f = fixture();
+    f.release.mockImplementationOnce(() =>
+      Promise.reject(new Error('release failed')),
+    );
+    f.gate.setPaused(true);
+    await expect(f.gate.waitForRelease()).rejects.toThrow('release failed');
+  });
+  it('releases for an external Ivy turn and reacquires the same device after completion', async () => {
+    const f = fixture();
+    let draft = '';
+    const transcribe = vi.fn();
+    const voice = new VoiceConversation({
+      transcribe,
+      submit: async () => true,
+      speak: async () => initialSpeechSnapshot(),
+      stop: async () => undefined,
+      id: () => 'unused',
+      onChange: () => undefined,
+      onCapturePauseChange: (paused) => f.gate.setPaused(paused),
+      onComposition: (state) => {
+        draft = state.raw;
+      },
+    });
+    const context: VoiceContext = {
+      available: true,
+      audio: {
+        status: 'capturing',
+        activity: {
+          calibrating: false,
+          active: false,
+          level: 0,
+          peakLevel: 0,
+          durationMs: 0,
+          noiseFloor: 0,
+          clipped: false,
+        },
+      },
+      assistant: { ...initialIvySnapshot(), connection: 'ready' },
+      speech: initialSpeechSnapshot(),
+    };
+    voice.update(context);
+    voice.setDraft('keep this');
+    voice.update({
+      ...context,
+      assistant: { ...context.assistant, turn: 'admitted' },
+    });
+    expect(f.release).toHaveBeenCalledOnce();
+    voice.accept({ type: 'turn-pause' });
+    voice.update({
+      ...context,
+      audio: { ...context.audio, status: 'turn-paused' },
+      assistant: { ...context.assistant, turn: 'completed' },
+    });
+    expect(f.acquire).not.toHaveBeenCalled();
+    f.releaseDone.resolve();
+    await flush();
+    expect(f.acquire).toHaveBeenCalledExactlyOnceWith('device-1');
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(draft).toBe('keep this');
+    voice.dispose();
+  });
   it('releases once and reacquires the original device once only after release settles', async () => {
     const f = fixture();
     f.gate.setPaused(true);
