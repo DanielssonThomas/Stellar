@@ -6,6 +6,7 @@ fn open(payload: &str) -> WorkspaceToolRequest {
         request_id: "1234567890abcdef1234567890abcdef".into(),
         epoch: "2".into(),
         turn_id: "00000000-0000-4000-8000-000000000001".into(),
+        expires_at_ms: "1700000015000".into(),
         operation: WorkspaceToolOperation::Open {
             instance_id: "pane_1".into(),
             surface: WorkspaceSurface::RichText,

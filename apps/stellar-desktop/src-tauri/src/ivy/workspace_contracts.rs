@@ -11,6 +11,7 @@ pub enum WorkspaceSurface {
     Workflow,
     Session,
     AssistantMessage,
+    ActivitySummary,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -55,6 +56,7 @@ pub struct WorkspaceToolRequest {
     pub request_id: String,
     pub epoch: String,
     pub turn_id: String,
+    pub expires_at_ms: String,
     pub operation: WorkspaceToolOperation,
 }
 

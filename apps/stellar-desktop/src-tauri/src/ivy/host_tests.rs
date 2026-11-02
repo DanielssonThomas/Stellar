@@ -98,6 +98,7 @@ if ($reply.control -eq 'workspace_reply' -and $reply.reply.outcome.kind -eq 'app
     host.set_workspace_publisher(Arc::new(move |request| {
         let host = weak.upgrade().unwrap();
         assert_eq!(host.snapshot().unwrap().turn, IvyTurnState::Submitting);
+        assert!(request.expires_at_ms.parse::<u64>().unwrap() > 0);
         host.workspace_reply(WorkspaceToolReply {
             version: 1,
             request_id: request.request_id,

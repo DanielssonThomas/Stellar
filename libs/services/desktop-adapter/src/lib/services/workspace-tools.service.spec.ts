@@ -15,6 +15,7 @@ const request = {
   request_id: '1234567890abcdef1234567890abcdef',
   epoch: '2',
   turn_id: turn,
+  expires_at_ms: String(Date.now() + 15000),
   operation: { kind: 'clear' as const },
 };
 
@@ -97,4 +98,51 @@ describe('workspace tool adapter', () => {
     expect(f.reply.mock.calls[0][0].outcome).toEqual({ kind: 'rejected' });
     TestBed.resetTestingModule();
   });
+  it('never invokes the handler when the native deadline passes during snapshot', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    let now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    let resolve!: (value: ReturnType<typeof f.state>) => void;
+    f.ivy.snapshot.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const handler = vi.fn(() => ({ kind: 'applied' as const }));
+    f.service.bind(handler);
+    const deadline = now + 100;
+    f.deliver({ ...request, expires_at_ms: String(deadline) });
+    now = deadline;
+    resolve(f.state());
+    await vi.waitFor(() => expect(f.reply).toHaveBeenCalledOnce());
+    expect(handler).not.toHaveBeenCalled();
+    expect(f.reply.mock.calls[0][0].outcome).toEqual({ kind: 'rejected' });
+    clock.mockRestore();
+    TestBed.resetTestingModule();
+  });
+
+  it('ignores an initially expired request before fetching a snapshot', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    const handler = vi.fn(() => ({ kind: 'applied' as const }));
+    f.service.bind(handler);
+    f.deliver({ ...request, expires_at_ms: String(Date.now() - 1) });
+    await Promise.resolve();
+    expect(f.ivy.snapshot).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+  });
+
+  it('fails closed when the system clock rolls back before delivery', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    const handler = vi.fn(() => ({ kind: 'applied' as const }));
+    f.service.bind(handler);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now - 2000);
+    f.deliver({ ...request, expires_at_ms: String(now + 1000) });
+    await Promise.resolve();
+    expect(f.ivy.snapshot).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+    clock.mockRestore();
+    TestBed.resetTestingModule();
+  });
+
 });

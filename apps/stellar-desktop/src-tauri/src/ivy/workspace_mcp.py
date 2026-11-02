@@ -57,13 +57,27 @@ def make_server(gate, bearer, port):
     @server.tool()
     async def open_pane(turn_token: str, instance_id: str, surface: str,
                         payload_json: str, prominence: str):
-        """Open a registered workspace pane."""
+        """Open a pane for the current request. Supply the current turn_token; never echo or store it.
+
+        instance_id must match [A-Za-z0-9_-]{1,64}; prominence is primary or secondary.
+        payload_json is a JSON object encoded as a string, without duplicate or extra keys.
+        At most four panes exist. Surface payload examples and limits:
+        rich-text: {"title":"Plan","blocks":[{"kind":"heading","text":"Steps"},{"kind":"paragraph","text":"Summary"},{"kind":"code","text":"print(1)","language":"python"},{"kind":"list","items":["One"]},{"kind":"checklist","items":[{"text":"Done","checked":true}]},{"kind":"table","columns":["Name","Status"],"rows":[["A","Ready"]]}]}. One to 32 blocks; headings and title up to 240 characters; paragraph/code up to 32768; language up to 32; lists up to 64, checklists up to 48 items; tables up to 8 columns and 24 matching-width rows, cells up to 4096.
+        image: {"title":"Image","src":"/emblem/layers/gold-body.png","alt":"Description","caption":"Optional"}. Source is a bundled /emblem/layers/[a-z0-9-]+.png or .webp, or padded PNG/JPEG/WebP data URI; never remote, file, or SVG.
+        browser: {"title":"Reference","url":"https://example.com/"}. HTTP(S) only, no userinfo, max 2048 characters; address fallback only, no automation.
+        diagram: {"title":"Flow","nodes":[{"id":"start","label":"Start"},{"id":"end","label":"End"}],"edges":[{"from":"start","to":"end","label":"Next"}]}. One to 12 unique IDs matching [a-z][a-z0-9_-]{0,31}; labels max 60. Up to 24 unique directed non-self edges reference existing nodes; optional edge label max 40.
+        workflow: {"title":"Workflow","project":"stellar"}; optional project stellar or stellar-design.
+        session: {"title":"Session"}; assistant-message: {"title":"Answer","body":"Complete plain text"}.
+        image, browser, workflow and session optionally accept kind equal to the surface. Workflow/session are source-backed; do not invent metrics.
+        UTF-8 payload_json limits: 65536 bytes rich-text/image/assistant-message, 16384 diagram, 4096 browser, 2048 workflow/session. Stage also limits depth to 8 and total nodes to 256. Text must be nonblank and exclude control characters except tab, CR and LF, DEL, and unpaired surrogates.
+        activity-summary may appear in inspection but cannot be opened or updated through tools.
+        """
         return await gate.call({'kind': 'open', 'instance_id': instance_id, 'surface': surface,
                                 'payload_json': payload_json, 'prominence': prominence}, turn_token)
 
     @server.tool()
     async def update_pane(turn_token: str, instance_id: str, surface: str, payload_json: str):
-        """Update a registered pane with its validated payload."""
+        """Update a pane using the same surface payload schemas and limits as open_pane."""
         return await gate.call({'kind': 'update', 'instance_id': instance_id, 'surface': surface,
                                 'payload_json': payload_json}, turn_token)
 
@@ -79,7 +93,7 @@ def make_server(gate, bearer, port):
 
     @server.tool()
     async def arrange_panes(turn_token: str, instance_ids: list[str]):
-        """Arrange all visible workspace panes in the requested order."""
+        """Arrange every existing pane ID exactly once, including minimized panes."""
         return await gate.call({'kind': 'arrange', 'instance_ids': instance_ids}, turn_token)
 
     @server.tool()

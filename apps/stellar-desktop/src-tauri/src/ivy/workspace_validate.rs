@@ -36,6 +36,7 @@ fn correlation(request_id: &str, epoch: &str, turn_id: &str) -> bool {
 
 fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
     let limit = match surface {
+        WorkspaceSurface::ActivitySummary => return false,
         WorkspaceSurface::Diagram => 16384,
         WorkspaceSurface::Browser => 4096,
         WorkspaceSurface::Workflow | WorkspaceSurface::Session => 2048,
@@ -52,7 +53,13 @@ fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
 }
 
 pub fn request(value: &WorkspaceToolRequest) -> bool {
-    if value.version != 1 || !correlation(&value.request_id, &value.epoch, &value.turn_id) {
+    if value.version != 1
+        || !correlation(&value.request_id, &value.epoch, &value.turn_id)
+        || !value
+            .expires_at_ms
+            .parse::<u64>()
+            .is_ok_and(|n| n > 0 && n.to_string() == value.expires_at_ms)
+    {
         return false;
     }
     match &value.operation {

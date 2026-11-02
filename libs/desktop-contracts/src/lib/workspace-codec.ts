@@ -22,6 +22,7 @@ const surfaces: Record<WorkspaceSurface, true> = {
   workflow: true,
   session: true,
   'assistant-message': true,
+  'activity-summary': true,
 };
 const prominence: Record<WorkspaceProminence, true> = {
   primary: true,
@@ -30,6 +31,7 @@ const prominence: Record<WorkspaceProminence, true> = {
 const payloadLimits: Record<WorkspaceSurface, number> = {
   'rich-text': 65536, image: 65536, 'assistant-message': 65536,
   diagram: 16384, browser: 4096, workflow: 2048, session: 2048,
+  'activity-summary': 0,
 };
 
 function choice<T extends string>(value: unknown, choices: Record<T, true>): T {
@@ -74,6 +76,7 @@ function operation(value: unknown): WorkspaceToolOperation {
     ...(kind === 'open' ? ['prominence'] : []),
   ]);
   const surface = choice(data['surface'], surfaces);
+  if (surface === 'activity-summary') throw new DesktopContractError('unknown-variant');
   const payload = boundedString(data['payload_json'], payloadLimits[surface]);
   try {
     const parsed: unknown = JSON.parse(payload);
@@ -107,6 +110,7 @@ export function decodeWorkspaceToolRequest(
     'request_id',
     'epoch',
     'turn_id',
+    'expires_at_ms',
     'operation',
   ]);
   const request = boundedString(data['request_id'], 32);
@@ -116,11 +120,15 @@ export function decodeWorkspaceToolRequest(
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(turn)
   )
     throw new DesktopContractError('malformed');
+  const expiresAt = sequence(data['expires_at_ms']);
+  if (!Number.isSafeInteger(Number(expiresAt)) || Number(expiresAt) <= 0)
+    throw new DesktopContractError('malformed');
   return {
     version: version(data['version']),
     request_id: request,
     epoch: sequence(data['epoch']),
     turn_id: turn,
+    expires_at_ms: expiresAt,
     operation: operation(data['operation']),
   };
 }

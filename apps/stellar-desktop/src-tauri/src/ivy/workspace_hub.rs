@@ -11,7 +11,7 @@ use super::{
 use serde_json::{Value, json};
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 pub type Publisher = Arc<dyn Fn(WorkspaceToolRequest) -> bool + Send + Sync>;
@@ -81,9 +81,23 @@ impl WorkspaceHub {
     }
 
     pub fn handle(self: &Arc<Self>, frame: Value) -> Result<(), IvyErrorCode> {
+        let started = Instant::now();
+        let deadline = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| IvyErrorCode::Unavailable)?
+            .as_millis()
+            .checked_add(15_000)
+            .ok_or(IvyErrorCode::Unavailable)?;
+        let mut data = frame.get("data").cloned().ok_or(IvyErrorCode::Protocol)?;
+        let object = data.as_object_mut().ok_or(IvyErrorCode::Protocol)?;
+        if object
+            .insert("expires_at_ms".into(), deadline.to_string().into())
+            .is_some()
+        {
+            return Err(IvyErrorCode::Protocol);
+        }
         let request: WorkspaceToolRequest =
-            serde_json::from_value(frame.get("data").cloned().ok_or(IvyErrorCode::Protocol)?)
-                .map_err(|_| IvyErrorCode::Protocol)?;
+            serde_json::from_value(data).map_err(|_| IvyErrorCode::Protocol)?;
         if !workspace_validate::request(&request) {
             return Err(IvyErrorCode::Protocol);
         }
@@ -121,7 +135,7 @@ impl WorkspaceHub {
         }
         *pending = Some(Pending {
             request: request.clone(),
-            started: Instant::now(),
+            started,
         });
         drop(pending);
         self.shared.update(connection_epoch, |view| {
