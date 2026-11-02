@@ -1,0 +1,43 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="text" />
+} @else if (payload(); as content) {
+  <article class="presentation">
+    <h2>{{ content.title }}</h2>
+    @if (image(); as image) {
+      <figure class="media-frame m-0">
+        @if (pending()) {
+          <div class="image-status" role="status" aria-label="Loading image">
+            <stellar-skeleton-atom shape="text" />
+          </div>
+        }
+        <img
+          class="media-image"
+          [src]="image.src"
+          [alt]="image.alt"
+          (load)="settle($event, false)"
+          (error)="settle($event, true)"
+          [hidden]="currentResult()?.failed"
+        />
+        @if (currentResult()?.failed) {
+          <p role="status" class="image-status muted">
+            Image unavailable. {{ image.alt }}
+          </p>
+        }
+        @if (image.caption) {
+          <figcaption class="mt-4 text-sm text-stellar-muted">
+            {{ image.caption }}
+          </figcaption>
+        }
+      </figure>
+    } @else if (content.kind === 'browser') {
+      <p class="text-stellar-primary">{{ content.url }}</p>
+      <p>
+        Embedded browsing is unavailable in this desktop build. Open this
+        address in your browser.
+      </p>
+      <p class="muted">
+        This pane presents a web address. It does not automate the browser.
+      </p>
+    }
+  </article>
+}

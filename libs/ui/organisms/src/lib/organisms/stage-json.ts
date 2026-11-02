@@ -21,6 +21,7 @@ export function boundedJson(value: unknown, maximumBytes: number): boolean {
     if (typeof entry === 'string') return entry.length <= maximumBytes;
     if (Array.isArray(entry)) {
       if (
+        Object.getPrototypeOf(entry) !== Array.prototype ||
         entry.length > 128 ||
         Reflect.ownKeys(entry).length !== entry.length + 1
       )

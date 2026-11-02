@@ -1,0 +1,49 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="text" />
+} @else if (payload(); as diagram) {
+  <article class="presentation">
+    <h2>{{ diagram.title }}</h2>
+    <svg
+      class="w-full"
+      [attr.viewBox]="'0 0 840 ' + height()"
+      role="img"
+      [attr.aria-label]="diagram.title"
+    >
+      <defs>
+        <marker
+          [attr.id]="markerId"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="5"
+          markerHeight="5"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0 L10 5 L0 10z" fill="currentColor" />
+        </marker>
+      </defs>
+      @for (edge of edges(); track $index) {
+        <path
+          [attr.d]="edge.path"
+          class="edge"
+          [attr.marker-end]="'url(#' + markerId + ')'"
+        />
+        @if (edge.label) {
+          <text [attr.x]="edge.x" [attr.y]="edge.y" class="edge-label">
+            {{ edge.label }}
+          </text>
+        }
+      }
+      @for (node of nodes(); track node.id) {
+        <g [attr.transform]="'translate(' + node.x + ' ' + node.y + ')'">
+          <rect width="230" height="90" />
+          <text x="115" [attr.y]="52 - (node.lines.length - 1) * 10">
+            @for (line of node.lines; track $index) {
+              <tspan x="115" [attr.dy]="$first ? 0 : 20">{{ line }}</tspan>
+            }
+          </text>
+        </g>
+      }
+    </svg>
+  </article>
+}

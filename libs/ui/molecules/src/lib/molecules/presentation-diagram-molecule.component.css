@@ -1,0 +1,24 @@
+@import './presentation-content.css';
+svg {
+  color: var(--stellar-color-primary);
+  min-height: 9rem;
+}
+rect {
+  fill: var(--stellar-color-canvas);
+  stroke: var(--stellar-color-divider, var(--stellar-color-line));
+  stroke-width: 1;
+}
+text {
+  fill: var(--stellar-color-foreground);
+  text-anchor: middle;
+  font: 16px var(--stellar-font-family);
+}
+.edge {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.edge-label {
+  fill: var(--stellar-color-muted);
+  font-size: 13px;
+}
