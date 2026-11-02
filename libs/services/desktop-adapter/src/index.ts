@@ -39,3 +39,8 @@ export type {
   VoiceView,
   VoicePorts,
 } from './lib/speech/voice-conversation';
+export type {
+  VoiceComposition,
+  VoiceModel,
+  VoiceCommand,
+} from './lib/speech/voice-composition';

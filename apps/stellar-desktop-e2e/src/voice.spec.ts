@@ -19,6 +19,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
     >();
     const emit = (event: string, payload: unknown) =>
       callbacks.get(event)?.forEach((callback) => callback({ payload }));
+    let initialSnapshot = true;
     let ivyRevision = 0,
       speechRevision = 0;
     let currentSpeech: SpeechSnapshot = {
@@ -84,6 +85,15 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
                 build_revision: null,
               };
             if (command === 'ivy_connect') return ivy();
+            if (command === 'ivy_snapshot') {
+              if (initialSnapshot) {
+                initialSnapshot = false;
+                throw new Error('Temporary snapshot failure');
+              }
+              return ivy();
+            }
+            if (command === 'ivy_select_session')
+              return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
             if (command === 'speech_transcribe') {
               results.speechId = String(request['utterance_id']);
@@ -194,6 +204,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
+  await page.getByRole('button', { name: 'Retry voice', exact: true }).click();
   await expect(page.getByText('Ivy connected', { exact: true })).toBeVisible();
   expect(
     (await fixture()).calls.filter(
