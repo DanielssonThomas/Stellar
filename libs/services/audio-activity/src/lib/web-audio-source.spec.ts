@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WebAudioSource } from './web-audio-source';
+import { AudioActivityController } from './audio-activity-controller';
 import type { AudioSink } from './audio-model';
 
 function fixture() {
@@ -139,6 +140,33 @@ describe('opt-in Web Audio source', () => {
     expect(f.removeContext.mock.calls).toEqual(f.addContext.mock.calls);
     f.sample();
     expect(f.sink.frame).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases actual source tracks for a voice pause and fences a late grant', async () => {
+    const owner = new AudioActivityController(() => undefined);
+    const active = fixture();
+    await owner.start(active.capture, 'device-1');
+    expect(active.acquire).toHaveBeenCalledExactlyOnceWith('device-1');
+    await owner.pauseForTurn();
+    expect(active.track.stop).toHaveBeenCalledOnce();
+    expect(active.context.close).toHaveBeenCalledOnce();
+    expect(owner.snapshot().status).toBe('turn-paused');
+
+    const pending = fixture();
+    let grant!: (stream: MediaStream) => void;
+    pending.acquire.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const starting = owner.start(pending.capture, 'device-1');
+    await owner.pauseForTurn();
+    grant(pending.stream);
+    await starting;
+    expect(pending.track.stop).toHaveBeenCalledOnce();
+    expect(owner.snapshot().status).toBe('turn-paused');
+    await owner.dispose();
   });
 
   it('stops late permission tracks after cancellation or source replacement', async () => {

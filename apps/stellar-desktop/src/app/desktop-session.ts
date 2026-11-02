@@ -69,6 +69,10 @@ export class DesktopSession {
     const requestId = this.captureId;
     if (requestId === null) return;
     if (audio.status === 'requesting') return;
+    if (audio.status === 'turn-paused') {
+      this.dispatch({ type: 'audio-activity', requestId, active: false });
+      return;
+    }
     if (audio.status === 'capturing') {
       this.dispatch({ type: 'capture-result', requestId, result: 'started' });
       this.dispatch({

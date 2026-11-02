@@ -12,6 +12,11 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       speechId: '',
       sampleCount: 0,
       stopped: false,
+      acquisitions: 0,
+      activeTracks: 0,
+      transcribeActive: -1,
+      speakActive: -1,
+      submitActive: -1,
     };
     const callbacks = new Map<
       string,
@@ -98,6 +103,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
               return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
             if (command === 'speech_transcribe') {
+              results.transcribeActive = results.activeTracks;
               results.speechId = String(request['utterance_id']);
               results.sampleCount = (request['pcm'] as number[]).length;
               emit('speech-state', speech('transcribing', results.speechId));
@@ -110,6 +116,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
               };
             }
             if (command === 'ivy_submit') {
+              results.submitActive = results.activeTracks;
               results.inputId = String(request['input_id']);
               const completed: IvySnapshot = {
                 ...ivy(results.inputId),
@@ -128,6 +135,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
               return completed;
             }
             if (command === 'speech_speak') {
+              results.speakActive = results.activeTracks;
               const accepted = speech(
                 'synthesizing',
                 String(request['utterance_id']),
@@ -165,6 +173,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
     });
     Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
       value: async () => {
+        results.acquisitions++;
         const context = new AudioContext();
         const oscillator = context.createOscillator();
         const gain = context.createGain();
@@ -176,8 +185,12 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
         oscillator.start();
         await context.resume();
         for (const track of destination.stream.getTracks()) {
+          results.activeTracks++;
+          let stopped = false;
           const stop = track.stop.bind(track);
           track.stop = () => {
+            if (!stopped) results.activeTracks--;
+            stopped = true;
             results.stopped = true;
             stop();
             void context.close();
@@ -198,6 +211,11 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
               speechId: string;
               sampleCount: number;
               stopped: boolean;
+              acquisitions: number;
+              activeTracks: number;
+              transcribeActive: number;
+              speakActive: number;
+              submitActive: number;
             };
           }
         ).__voiceFixture,
@@ -233,6 +251,11 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);
+  expect(result.transcribeActive).toBe(0);
+  expect(result.speakActive).toBe(0);
+  expect(result.submitActive).toBe(0);
+  await expect.poll(async () => (await fixture()).acquisitions).toBe(2);
+  await expect.poll(async () => (await fixture()).activeTracks).toBe(1);
   expect(result.sampleCount).toBeGreaterThan(24000);
   expect(result.sampleCount).toBeLessThanOrEqual(320000);
   expect(
@@ -249,7 +272,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Stop microphone', exact: true })
     .click();
-  await expect.poll(async () => (await fixture()).stopped).toBe(true);
+  await expect.poll(async () => (await fixture()).activeTracks).toBe(0);
   await expect(panel).toBeVisible();
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })

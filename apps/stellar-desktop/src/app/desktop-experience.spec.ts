@@ -63,6 +63,60 @@ describe('desktop experience status', () => {
     expect(audio.startMicrophone).toHaveBeenCalledTimes(2);
     TestBed.resetTestingModule();
   });
+  it('does not reacquire a turn-paused microphone after focus loss', async () => {
+    let release!: () => void;
+    const stopped = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const current = signal<AudioActivityState>({
+      status: 'idle',
+      activity: {
+        active: false,
+        calibrating: false,
+        level: 0,
+        peakLevel: 0,
+        durationMs: 0,
+        noiseFloor: 0,
+        clipped: false,
+      },
+    });
+    const audio = {
+      state: current,
+      startMicrophone: vi.fn(async () => {
+        current.update((state) => ({ ...state, status: 'capturing' }));
+      }),
+      pauseForTurn: vi.fn(() => {
+        current.update((state) => ({ ...state, status: 'turn-paused' }));
+        return stopped;
+      }),
+      stop: vi.fn(async () => {
+        current.update((state) => ({ ...state, status: 'idle' }));
+      }),
+      reportUnavailable: vi.fn(async () => undefined),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        DesktopExperience,
+        { provide: AudioActivityService, useValue: audio },
+      ],
+    });
+    const experience = TestBed.inject(DesktopExperience);
+    experience.dispatch({ type: 'capture-request' });
+    TestBed.tick();
+    experience.setVoiceCapturePaused(true);
+    TestBed.tick();
+    expect(audio.pauseForTurn).toHaveBeenCalledOnce();
+    expect(experience.statusText()).toContain('paused during voice turn');
+    experience.setVoiceCapturePaused(false);
+    window.dispatchEvent(new Event('blur'));
+    TestBed.tick();
+    release();
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    expect(audio.startMicrophone).toHaveBeenCalledOnce();
+    expect(experience.state().phase).toBe('suspended');
+    TestBed.resetTestingModule();
+  });
+
   it('releases a late microphone grant after suspension and resumes only manual activity', async () => {
     let grant: (stream: MediaStream) => void = () => undefined;
     const acquire = vi.fn(

@@ -6,7 +6,7 @@ export interface PcmChunk {
 
 export type PcmEvent =
   | { readonly type: 'chunk'; readonly chunk: PcmChunk }
-  | { readonly type: 'reset' | 'unavailable' };
+  | { readonly type: 'reset' | 'unavailable' | 'turn-pause' };
 
 export function validPcmChunk(value: unknown): value is PcmChunk {
   if (!value || typeof value !== 'object') return false;
