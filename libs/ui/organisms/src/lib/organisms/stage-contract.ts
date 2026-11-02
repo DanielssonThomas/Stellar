@@ -57,28 +57,32 @@ export type ProductionPayloadMap = {
   };
 };
 
+function readableText(value: string): boolean {
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (
+      (code < 32 && ![9, 10, 13].includes(code)) ||
+      code === 127 ||
+      (code >= 0xd800 && code <= 0xdfff)
+    )
+      return false;
+  }
+  return true;
+}
+
 export function decodeAssistantMessage(
   value: unknown,
 ): ProductionPayloadMap['assistant-message'] | null {
   if (!plainRecord(value) || !exactKeys(value, ['title', 'body'])) return null;
   const title = value['title'],
     body = value['body'];
-  const encoder = new TextEncoder();
   if (
     typeof title !== 'string' ||
     !title.trim() ||
-    encoder.encode(title).length > 160 ||
     typeof body !== 'string' ||
     !body.trim() ||
-    encoder.encode(body).length > 8192 ||
-    [...(title + body)].some((character) => {
-      const code = character.codePointAt(0) ?? 0;
-      return (
-        (code < 32 && ![9, 10, 13].includes(code)) ||
-        code === 127 ||
-        (code >= 0xd800 && code <= 0xdfff)
-      );
-    })
+    !readableText(title) ||
+    !readableText(body)
   )
     return null;
   return Object.freeze({ title, body });
@@ -148,7 +152,7 @@ export function decodeStageCommand<P extends object>(
       !plainRecord(input) ||
       !boundedJson(
         input,
-        input['surface'] === 'assistant-message' ? 24576 : 4096,
+        input['surface'] === 'assistant-message' ? Infinity : 4096,
       )
     )
       return null;
@@ -183,7 +187,7 @@ export function decodeStageCommand<P extends object>(
       !Object.hasOwn(decoders, input['surface']) ||
       !boundedJson(
         input['payload'],
-        input['surface'] === 'assistant-message' ? 20480 : 2048,
+        input['surface'] === 'assistant-message' ? Infinity : 2048,
       )
     )
       return null;
@@ -199,7 +203,7 @@ export function decodeStageCommand<P extends object>(
       payload === null ||
       !boundedJson(
         payload,
-        input['surface'] === 'assistant-message' ? 20480 : 2048,
+        input['surface'] === 'assistant-message' ? Infinity : 2048,
       )
     )
       return null;

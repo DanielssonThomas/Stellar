@@ -69,6 +69,33 @@ describe('EmblemMotionMolecule', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows a separate star ring only while waiting and suppresses it on suspension', async () => {
+    fixture.componentRef.setInput('phase', 'listening');
+    fixture.componentRef.setInput('waiting', true);
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelectorAll('.waiting-ring path'),
+    ).toHaveLength(4);
+    expect(
+      fixture.nativeElement.querySelector('.waiting-response'),
+    ).not.toBeNull();
+    fixture.componentRef.setInput('reducedMotion', true);
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector(
+        '.waiting-response.motion-paused.motion-reduced',
+      ),
+    ).not.toBeNull();
+    fixture.componentRef.setInput('waiting', false);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.waiting-response')).toBeNull();
+    fixture.componentRef.setInput('waiting', true);
+    fixture.componentRef.setInput('phase', 'suspended');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
+  });
+
   it('keeps body fragments during motion and consolidates only after real settlement', async () => {
     fixture.componentRef.setInput('manifest', {
       ...manifest,

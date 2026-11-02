@@ -61,7 +61,7 @@ impl Session {
             bounded_id(created.get("session_id"))?
         };
         let text = format!(
-            "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"plain text\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
+            "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
             request.text
         );
         let params = json!({"session_id":sid,"input_id":request.input_id,"text":text});
@@ -258,7 +258,6 @@ impl Session {
             vec![]
         } else {
             super::presentation_decode::parse_presentation(text)
-                .map_err(|_| IvyErrorCode::Protocol)?
         };
         self.record.unsettled = false;
         self.journal.save(&self.record)?;

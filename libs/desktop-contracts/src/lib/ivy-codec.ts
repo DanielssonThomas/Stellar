@@ -47,6 +47,7 @@ const components: Record<IvyComponent, true> = { assistant_message: true };
 const kinds: Record<IvyPresentation['kind'], true> = {
   text: true,
   component: true,
+  close_activity: true,
 };
 
 function variant<T extends string>(value: unknown, values: Record<T, true>): T {
@@ -66,8 +67,8 @@ function identifier(value: unknown): string {
   return result;
 }
 
-function text(value: unknown, bytes: number): string {
-  const result = boundedString(value, bytes);
+function text(value: unknown, bytes?: number): string {
+  const result = boundedString(value, bytes ?? Infinity);
   if (!result.trim()) throw new DesktopContractError('malformed');
   return result;
 }
@@ -96,14 +97,18 @@ function presentation(value: unknown): IvyPresentation {
   const kind = variant((value as Record<string, unknown>)['kind'], kinds);
   if (kind === 'text') {
     const data = record(value, ['kind', 'text']);
-    return { kind: 'text', text: text(data['text'], 16384) };
+    return { kind: 'text', text: text(data['text']) };
+  }
+  if (kind === 'close_activity') {
+    record(value, ['kind']);
+    return { kind };
   }
   const data = record(value, ['kind', 'component', 'title', 'body']);
   return {
     kind: 'component',
     component: variant(data['component'], components),
-    title: text(data['title'], 160),
-    body: text(data['body'], 8192),
+    title: text(data['title']),
+    body: text(data['body']),
   };
 }
 
@@ -123,6 +128,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   const decoded = items.map(presentation);
   if (new Set(decoded.map((item) => item.kind)).size !== decoded.length)
     throw new DesktopContractError('malformed');
+  if (decoded.filter((item) => item.kind !== 'text').length > 1)
+    throw new DesktopContractError('malformed');
   const snapshot: IvySnapshot = {
     version: version(data['version']),
     revision: sequence(data['revision']),
@@ -132,7 +139,5 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     items: decoded,
     error: data['error'] === null ? null : decodeIvyError(data['error']),
   };
-  if (new TextEncoder().encode(JSON.stringify(snapshot)).length > 65536)
-    throw new DesktopContractError('malformed');
   return snapshot;
 }

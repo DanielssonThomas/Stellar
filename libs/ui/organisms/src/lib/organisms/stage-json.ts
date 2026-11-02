@@ -51,7 +51,9 @@ export function boundedJson(value: unknown, maximumBytes: number): boolean {
   try {
     return (
       visit(value, 0) &&
-      new TextEncoder().encode(JSON.stringify(value)).byteLength <= maximumBytes
+      (!Number.isFinite(maximumBytes) ||
+        new TextEncoder().encode(JSON.stringify(value)).byteLength <=
+          maximumBytes)
     );
   } catch {
     return false;

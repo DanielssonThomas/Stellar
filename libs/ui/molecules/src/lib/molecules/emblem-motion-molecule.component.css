@@ -12,6 +12,7 @@
 }
 
 .camera,
+.emblem-presence,
 .plane,
 .artwork,
 img {
@@ -19,6 +20,56 @@ img {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.emblem-presence {
+  transform-style: preserve-3d;
+  transform: scale(1);
+  opacity: 1;
+  transition:
+    transform 450ms ease,
+    opacity 450ms ease;
+}
+
+.waiting-response .emblem-presence {
+  transform: scale(0.86);
+  opacity: 0.68;
+}
+
+.waiting-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--stellar-color-accent);
+  animation: waiting-orbit 16s linear infinite;
+}
+.waiting-ring circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  opacity: 0.7;
+}
+.waiting-ring .ring-accent {
+  stroke: var(--stellar-color-primary);
+  stroke-dasharray: 2 16;
+  opacity: 0.5;
+}
+.waiting-ring path {
+  fill: currentColor;
+}
+.motion-paused .waiting-ring {
+  animation-play-state: paused;
+}
+.motion-reduced .emblem-presence {
+  transition: none;
+}
+@keyframes waiting-orbit {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .camera,

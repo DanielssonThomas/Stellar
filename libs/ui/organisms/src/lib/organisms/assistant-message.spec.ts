@@ -3,7 +3,7 @@ import { decodeAssistantMessage } from './stage-contract';
 import { createStageRegistry } from './stage-registry';
 
 describe('trusted assistant message', () => {
-  it('accepts bounded plain text, rejects malformed data and fences stale commands', () => {
+  it('preserves complete plain text, rejects malformed data and fences stale commands', () => {
     const registry = createStageRegistry({
       'assistant-message': decodeAssistantMessage,
     });
@@ -22,7 +22,7 @@ describe('trusted assistant message', () => {
     );
     for (const payload of [
       { title: '', body: 'Hello' },
-      { title: 'Hello', body: 'x'.repeat(8193) },
+      { title: 'Hello', body: '\ud800' },
       { title: 'Hello', body: 'World', html: true },
     ])
       expect(
@@ -34,8 +34,12 @@ describe('trusted assistant message', () => {
         ...command,
         commandId: 4,
         instanceId: 'large-panel',
-        payload: { title: 'é'.repeat(80), body: '"'.repeat(8192) },
+        payload: { title: 'é'.repeat(1000), body: '🪐"\\\n'.repeat(100_000) },
       }).status,
     ).toBe('applied');
+    expect(registry.snapshot()[1].payload).toEqual({
+      title: 'é'.repeat(1000),
+      body: '🪐"\\\n'.repeat(100_000),
+    });
   });
 });

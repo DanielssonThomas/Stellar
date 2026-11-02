@@ -18,6 +18,8 @@
     [assistantReply]="assistant.reply()"
     [assistantBusy]="assistant.busy() || assistant.uncertain()"
     [assistantUncertain]="assistant.uncertain()"
+    [assistantWaiting]="assistant.waiting() || voice.waiting()"
+    [assistantNarrating]="voice.narrating()"
     [voiceStatus]="voice.state().status"
     [voiceMuted]="voice.state().muted"
     [voiceBusy]="voice.state().busy"

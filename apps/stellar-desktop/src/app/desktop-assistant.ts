@@ -36,11 +36,21 @@ export class DesktopAssistant {
   private available: () => boolean = () => true;
   private readonly presentedTurns = new Set<string>();
   private readonly submittedTurns = new Set<string>();
+  private activityIds: () => readonly string[] = () => [];
+  private readonly closeTargets = new Map<string, readonly string[]>();
+  private readonly cancelRequested = signal(false);
   private commandId = 0;
   readonly busy = computed(() =>
     ['submitting', 'admitted'].includes(this.state().turn),
   );
   readonly uncertain = computed(() => this.state().turn === 'uncertain');
+  readonly waiting = computed(
+    () =>
+      this.busy() &&
+      this.state().connection === 'ready' &&
+      !this.state().error &&
+      !this.cancelRequested(),
+  );
   readonly reply = computed(() =>
     this.state()
       .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
@@ -77,9 +87,11 @@ export class DesktopAssistant {
   bind(
     present: (command: StageCommand<ProductionPayloadMap>) => StageResult,
     available: () => boolean = () => true,
+    activityIds: () => readonly string[] = () => [],
   ) {
     this.present = present;
     this.available = available;
+    this.activityIds = activityIds;
     this.ready.set(true);
   }
 
@@ -104,11 +116,14 @@ export class DesktopAssistant {
     if (this.submittedTurns.has(inputId)) return false;
     this.inputError.set(false);
     this.presentationError.set(false);
+    this.cancelRequested.set(false);
     this.submittedTurns.add(inputId);
-    if (this.submittedTurns.size > 64)
-      this.submittedTurns.delete(
-        this.submittedTurns.values().next().value as string,
-      );
+    this.closeTargets.set(inputId, [...this.activityIds()]);
+    if (this.submittedTurns.size > 64) {
+      const expired = this.submittedTurns.values().next().value as string;
+      this.submittedTurns.delete(expired);
+      this.closeTargets.delete(expired);
+    }
     try {
       await this.adapter.submit(value, inputId);
       return true;
@@ -124,6 +139,7 @@ export class DesktopAssistant {
     }
   }
   async cancel() {
+    this.cancelRequested.set(true);
     try {
       await this.adapter.cancel();
     } catch {
@@ -158,12 +174,26 @@ export class DesktopAssistant {
         this.presentedTurns.values().next().value as string,
       );
     for (const item of snapshot.items) {
+      if (item.kind === 'close_activity') {
+        for (const instanceId of this.closeTargets.get(snapshot.turn_id) ??
+          []) {
+          const result = this.present?.({
+            contractVersion: 1,
+            commandId: ++this.commandId,
+            instanceId,
+            action: 'close',
+          });
+          if (result?.status === 'rejected') this.presentationError.set(true);
+        }
+        continue;
+      }
       if (item.kind !== 'component') continue;
       const commandId = ++this.commandId;
+      const instanceId = 'ivy-content-' + commandId;
       const result = this.present?.({
         contractVersion: 1,
         commandId,
-        instanceId: 'ivy-content-' + commandId,
+        instanceId,
         action: 'open',
         surface: surface(item.component),
         prominence: 'primary',
@@ -171,5 +201,6 @@ export class DesktopAssistant {
       });
       if (result?.status === 'rejected') this.presentationError.set(true);
     }
+    this.closeTargets.delete(snapshot.turn_id);
   }
 }

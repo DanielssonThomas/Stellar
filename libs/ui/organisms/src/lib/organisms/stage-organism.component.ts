@@ -154,6 +154,10 @@ export class StageOrganism {
       this.control('close', instance.instanceId);
   }
 
+  presentationIds(): readonly string[] {
+    return this.registry.snapshot().map((instance) => instance.instanceId);
+  }
+
   restorePresentation() {
     const instances = this.registry.snapshot();
     const instance = instances.find((entry) => entry.minimized) ?? instances[0];

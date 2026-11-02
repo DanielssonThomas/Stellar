@@ -82,8 +82,20 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
                 bridge.validate(request)
         with self.assertRaises(ValueError):
             json.loads('{"id":1,"id":2}', object_pairs_hook=bridge.pairs)
-        with patch.object(sys, 'stdout', Pipe()), self.assertRaises(bridge.Closed):
-            bridge.emit({'text': 'a' * bridge.OUTPUT_LIMIT})
+
+    async def test_long_unicode_event_and_receipt_preserve_complete_text(self):
+        text = '\U0001fa90"\\\n' * 100000
+        conn = Connection()
+        async def receipt(method, params):
+            return {'status': 'terminal', 'result': {'final_response': text, 'secret': 'excluded'}}
+        conn.call = receipt
+        stdin = Pipe(b'{"id":1,"method":"prompt.receipt","params":{"session_id":"s","admission_id":"a","include_result":true}}\n')
+        stdout = Pipe()
+        with patch.object(sys, 'stdin', stdin), patch.object(sys, 'stdout', stdout):
+            await bridge.requests(conn)
+        frame = json.loads(stdout.buffer.getvalue())
+        self.assertEqual(frame['result']['result'], {'final_response': text})
+        self.assertEqual(bridge.text_fields({'text': text, 'reasoning': 'excluded'}), {'text': text})
 
     async def test_timeout_is_uncertain_and_does_not_retry(self):
         conn = Connection()

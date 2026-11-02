@@ -1,7 +1,7 @@
 use super::contracts::IvyErrorCode;
 use serde_json::{Value, json};
 use std::{
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Write},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
@@ -65,10 +65,10 @@ impl Broker {
             let mut reader = BufReader::new(output);
             loop {
                 let mut line = vec![];
-                let count = reader.by_ref().take(65_537).read_until(b'\n', &mut line);
+                let count = reader.read_until(b'\n', &mut line);
                 let frame = match count {
                     Ok(0) => break,
-                    Ok(n) if n <= 65_536 && line.last() == Some(&b'\n') => {
+                    Ok(_) if line.last() == Some(&b'\n') => {
                         serde_json::from_slice(&line).map_err(|_| IvyErrorCode::Protocol)
                     }
                     _ => Err(IvyErrorCode::Protocol),
