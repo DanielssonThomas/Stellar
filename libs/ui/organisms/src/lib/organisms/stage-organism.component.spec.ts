@@ -174,6 +174,10 @@ describe('StageOrganism', () => {
     await fixture.whenStable();
     fixture.componentInstance.dispatch(open(2, 'second'));
     await fixture.whenStable();
+    const focusedControl: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[data-instance-id="second"] button',
+    );
+    focusedControl.focus();
     expect(
       fixture.componentInstance.dispatch({
         contractVersion: 1,
@@ -186,6 +190,7 @@ describe('StageOrganism', () => {
     expect(
       fixture.componentInstance.surfaces().map((surface) => surface.instanceId),
     ).toEqual(['second', 'first']);
+    expect(document.activeElement).toBe(focusedControl);
     retained.mockClear();
     visible.mockClear();
     expect(

@@ -63,7 +63,10 @@ export class StageOrganism {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly panels = viewChildren<ElementRef<HTMLElement>>('panel');
   private readonly origins = new Map<string, HTMLElement>();
-  private readonly focusRequest = signal<string | null>(null);
+  private readonly focusRequest = signal<{
+    instanceId: string;
+    descendant?: HTMLElement;
+  } | null>(null);
   private readonly viewport = signal({ width: 0, height: 0 });
   private readonly instances = signal(this.registry.snapshot());
   readonly layout = computed(() =>
@@ -108,10 +111,14 @@ export class StageOrganism {
       const requested = this.focusRequest();
       if (!requested || this.loading()) return;
       const panel = this.panels().find(
-        (entry) => entry.nativeElement.dataset['instanceId'] === requested,
+        (entry) => entry.nativeElement.dataset['instanceId'] === requested.instanceId,
       );
       if (panel) {
-        panel.nativeElement.focus();
+        const target = requested.descendant;
+        (target?.isConnected && panel.nativeElement.contains(target)
+          ? target
+          : panel.nativeElement
+        ).focus({ preventScroll: true });
         this.focusRequest.set(null);
       }
     });
@@ -183,8 +190,10 @@ export class StageOrganism {
       const activePanel = this.panels().find((entry) =>
         entry.nativeElement.contains(this.document.activeElement),
       );
-      if (activePanel?.nativeElement.dataset['instanceId'])
-        this.focusRequest.set(activePanel.nativeElement.dataset['instanceId']);
+      const instanceId = activePanel?.nativeElement.dataset['instanceId'];
+      const active = this.document.activeElement;
+      if (instanceId && active instanceof HTMLElement)
+        this.focusRequest.set({ instanceId, descendant: active });
     }
     if (action === 'clear') {
       const focusedPanel = this.panels().find((entry) =>
@@ -246,6 +255,6 @@ export class StageOrganism {
       this.registry.snapshot().some((instance) => !instance.minimized),
     );
     if (instanceId && (action === 'open' || action === 'focus'))
-      this.focusRequest.set(instanceId);
+      this.focusRequest.set({ instanceId });
   }
 }
