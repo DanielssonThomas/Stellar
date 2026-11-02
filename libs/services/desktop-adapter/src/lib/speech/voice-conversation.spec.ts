@@ -641,6 +641,150 @@ describe('spoken prompt composition', () => {
     expect(state).toMatchObject({ raw: 'original', status: 'error' });
   });
 
+  it('aborts pending refinement on mute and never presents or submits its late result', async () => {
+    let signal!: AbortSignal;
+    let state!: VoiceComposition;
+    const pending = deferred<string>();
+    const present = vi.fn(async () => undefined);
+    const f = fixture({
+      refinePrompt: (_raw, next) => {
+        signal = next;
+        return pending.promise;
+      },
+      presentFinalized: present,
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    expect(state.status).toBe('refining');
+    f.controller.setMuted(true);
+    expect(signal.aborted).toBe(true);
+    pending.resolve('late refinement');
+    await flush();
+    expect(present).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(state).toMatchObject({ raw: 'original', status: 'error' });
+  });
+
+  it.each(['unbind', 'replace'] as const)(
+    'fences an existing presentation binding on %s during refinement',
+    async (operation) => {
+      let signal!: AbortSignal;
+      const pending = deferred<string>();
+      const present = vi.fn(async () => undefined);
+      const replacement = vi.fn(async () => undefined);
+      const f = fixture({
+        refinePrompt: (_raw, next) => {
+          signal = next;
+          return pending.promise;
+        },
+      });
+      const unbind = f.controller.bindPromptPresentation(present);
+      f.controller.setDraft('original');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'end prompt',
+      });
+      f.utterance();
+      await flush();
+      if (operation === 'unbind') unbind();
+      else f.controller.bindPromptPresentation(replacement);
+      expect(signal.aborted).toBe(true);
+      pending.resolve('late refinement');
+      await flush();
+      expect(present).not.toHaveBeenCalled();
+      expect(replacement).not.toHaveBeenCalled();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps the immediate path when no consumer was bound at finalization start', async () => {
+    const pending = deferred<string>();
+    const present = vi.fn(async () => undefined);
+    const f = fixture({ refinePrompt: () => pending.promise });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    f.controller.bindPromptPresentation(present);
+    pending.resolve('cleaned');
+    await flush();
+    expect(present).not.toHaveBeenCalled();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+  });
+
+  it('fences removal of a binding while session selection is still pending', async () => {
+    const selected = deferred<boolean>();
+    const present = vi.fn(async () => undefined);
+    const f = fixture({ selectSession: () => selected.promise });
+    const unbind = f.controller.bindPromptPresentation(present);
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    unbind();
+    selected.resolve(true);
+    await flush();
+    expect(present).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+
+  it('clears a failed presentation’s refined text when speech appends to the draft', async () => {
+    let state!: VoiceComposition;
+    const f = fixture({
+      refinePrompt: async () => 'cleaned',
+      presentFinalized: async () => {
+        throw new Error('failed');
+      },
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    expect(state).toMatchObject({
+      raw: 'original',
+      refined: 'cleaned',
+      status: 'error',
+    });
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'more words',
+    });
+    f.utterance();
+    await flush();
+    expect(state).toMatchObject({
+      raw: 'original\nmore words',
+      refined: null,
+      status: 'composing',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+
   it('keeps physical capture paused after uncertain dispatch until the draft is edited', async () => {
     const pause = vi.fn();
     const f = fixture({
@@ -772,6 +916,199 @@ describe('spoken prompt composition', () => {
     expect(state.lastSubmittedRaw).toBe(
       ' First clause \nend prompt is a phrase',
     );
+  });
+
+  it('waits for the bound presentation before submitting the refined prompt once', async () => {
+    let state!: VoiceComposition;
+    const done = deferred<void>();
+    const present = vi.fn((prompt: unknown, signal: AbortSignal) => {
+      void prompt;
+      void signal;
+      return done.promise;
+    });
+    const f = fixture({
+      refinePrompt: async () => 'cleaned',
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    const unbind = f.controller.bindPromptPresentation(present);
+    f.controller.setDraft('raw input');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    expect(state).toMatchObject({
+      raw: 'raw input',
+      refined: 'cleaned',
+      status: 'finalizing',
+    });
+    expect(present).toHaveBeenCalledOnce();
+    expect(present.mock.calls[0][0]).toEqual({
+      raw: 'raw input',
+      refined: 'cleaned',
+      model: 'terra',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    done.resolve();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    expect(state).toMatchObject({
+      raw: '',
+      refined: null,
+      lastSubmittedRaw: 'raw input',
+    });
+    unbind();
+  });
+
+  it('keeps physical capture paused throughout presentation and the admitted turn', async () => {
+    const pause = vi.fn();
+    const done = deferred<void>();
+    const f = fixture({
+      onCapturePauseChange: pause,
+      refinePrompt: async () => 'cleaned',
+      presentFinalized: () => done.promise,
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    await flush();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    done.resolve();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    expect(pause).toHaveBeenLastCalledWith(true);
+  });
+
+  it('releases the capture pause after presentation fails while retaining the draft', async () => {
+    const pause = vi.fn();
+    let state!: VoiceComposition;
+    const f = fixture({
+      onCapturePauseChange: pause,
+      refinePrompt: async () => 'cleaned',
+      presentFinalized: async () => {
+        throw new Error('failed');
+      },
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    await flush();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(state).toMatchObject({
+      raw: 'original',
+      refined: 'cleaned',
+      status: 'error',
+    });
+    expect(pause).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each(['reset', 'mute', 'unavailable', 'dispose', 'unbind'] as const)(
+    'fences a pending presentation on %s and ignores late completion',
+    async (operation) => {
+      let state!: VoiceComposition;
+      let signal!: AbortSignal;
+      const done = deferred<void>();
+      const f = fixture({
+        refinePrompt: async () => 'cleaned',
+        onComposition: (next) => {
+          state = next;
+        },
+      });
+      const unbind = f.controller.bindPromptPresentation((_prompt, next) => {
+        signal = next;
+        return done.promise;
+      });
+      f.controller.setDraft('raw input');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'end prompt',
+      });
+      f.utterance();
+      await flush();
+      expect(state.status).toBe('finalizing');
+      if (operation === 'reset') f.controller.accept({ type: 'reset' });
+      if (operation === 'mute') f.controller.setMuted(true);
+      if (operation === 'unavailable') f.update({ available: false });
+      if (operation === 'dispose') f.controller.dispose();
+      if (operation === 'unbind') unbind();
+      expect(signal.aborted).toBe(true);
+      done.resolve();
+      await flush();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      if (operation !== 'dispose')
+        expect(state).toMatchObject({
+          raw: 'raw input',
+          refined: 'cleaned',
+          status: 'error',
+        });
+    },
+  );
+
+  it('retains both versions on presentation failure and on timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const fail of ['reject', 'timeout'] as const) {
+        let state!: VoiceComposition;
+        let signal!: AbortSignal;
+        const done = deferred<void>();
+        const f = fixture({
+          refinePrompt: async () => 'cleaned',
+          onComposition: (next) => {
+            state = next;
+          },
+          presentFinalized: (_prompt, next) => {
+            signal = next;
+            return fail === 'reject'
+              ? Promise.reject(new Error('UI failed'))
+              : done.promise;
+          },
+        });
+        f.controller.setDraft('raw input');
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: 'end prompt',
+        });
+        f.utterance();
+        await flush();
+        if (fail === 'timeout') await vi.advanceTimersByTimeAsync(10_000);
+        await flush();
+        expect(state).toMatchObject({
+          raw: 'raw input',
+          refined: 'cleaned',
+          status: 'error',
+        });
+        expect(state.error).toContain('presentation');
+        if (fail === 'timeout') expect(signal.aborted).toBe(true);
+        done.resolve();
+        await flush();
+        expect(f.ports.submit).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('retains an over-limit draft without selecting a model or dispatching, and permits editing', async () => {

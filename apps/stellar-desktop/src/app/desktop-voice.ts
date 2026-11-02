@@ -14,6 +14,7 @@ import {
   IvyAdapterService,
   VoiceConversation,
   type VoiceComposition,
+  type PromptPresentation,
   type VoiceModel,
   type VoiceView,
 } from '@stellar/service-desktop-adapter';
@@ -48,6 +49,7 @@ export class DesktopVoice {
   );
   private readonly compositionState = signal<VoiceComposition>({
     raw: '',
+    refined: null,
     lastSubmittedRaw: '',
     model: 'terra',
     status: 'idle',
@@ -142,6 +144,10 @@ export class DesktopVoice {
   retry() {
     this.conversation.retry();
     if (!this.sessionKnown() || this.sessionError()) void this.refreshSession();
+  }
+
+  bindPromptPresentation(callback: PromptPresentation): () => void {
+    return this.conversation.bindPromptPresentation(callback);
   }
 
   bindForegroundClear(callback: () => void) {
