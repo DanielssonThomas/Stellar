@@ -8,6 +8,12 @@ import type {
   SpeechSnapshot,
   SpeechTranscript,
 } from '@stellar/desktop-contracts';
+import {
+  fitsVoicePrompt,
+  voiceCommand,
+  type VoiceComposition,
+  type VoiceModel,
+} from './voice-composition';
 
 export interface VoiceContext {
   readonly audio: AudioActivityState;
@@ -33,6 +39,11 @@ export interface VoicePorts {
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
   readonly onChange: (view: VoiceView) => void;
+  readonly selectSession?: (model: VoiceModel) => Promise<boolean>;
+  readonly clearConversation?: () => Promise<boolean>;
+  readonly readSession?: () => Promise<VoiceModel>;
+  readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
+  readonly onComposition?: (state: VoiceComposition) => void;
 }
 
 export class VoiceConversation {
@@ -41,6 +52,7 @@ export class VoiceConversation {
   private generation = 0;
   private phase: 'transcribing' | 'waiting' | 'speaking' | null = null;
   private voiceTurn: string | null = null;
+  private settledTurn: string | null = null;
   private playbackAcknowledged = false;
   private playbackRevision = 0n;
   private awaitingQuiet = false;
@@ -50,6 +62,17 @@ export class VoiceConversation {
   private disposed = false;
   private stopping = false;
   private unconfirmedStop = false;
+  private composition: VoiceComposition = {
+    raw: '',
+    lastSubmittedRaw: '',
+    model: 'terra',
+    status: 'idle',
+    error: '',
+  };
+  private refinement?: AbortController;
+  private dispatchUncertain = false;
+  private routeUncertain = false;
+  private sessionPending = false;
 
   constructor(private readonly ports: VoicePorts) {}
 
@@ -150,6 +173,327 @@ export class VoiceConversation {
     if (this.disposed) return;
     this.invalidate();
     this.disposed = true;
+    this.composition = {
+      raw: '',
+      lastSubmittedRaw: '',
+      model: 'terra',
+      status: 'idle',
+      error: '',
+    };
+  }
+
+  setModel(model: VoiceModel) {
+    if (
+      !this.disposed &&
+      !this.sessionPending &&
+      this.composition.status !== 'finalizing'
+    )
+      this.setComposition({ ...this.composition, model });
+  }
+
+  setDraft(raw: string) {
+    if (
+      this.disposed ||
+      this.sessionPending ||
+      this.composition.status === 'finalizing'
+    )
+      return;
+    if (raw !== this.composition.raw) this.dispatchUncertain = false;
+    this.setComposition({
+      ...this.composition,
+      raw,
+      status: fitsVoicePrompt(raw) ? 'composing' : 'error',
+      error: fitsVoicePrompt(raw)
+        ? ''
+        : 'Prompt exceeds the 8 KiB limit. Edit it before sending.',
+    });
+  }
+
+  initializeSession(model: VoiceModel) {
+    if (
+      !this.disposed &&
+      !this.sessionPending &&
+      this.composition.status !== 'finalizing'
+    )
+      this.setComposition({ ...this.composition, model });
+  }
+
+  async resetConversation(): Promise<boolean> {
+    if (this.disposed || this.sessionPending || this.phase !== null)
+      return false;
+    return this.clearConversation(this.generation);
+  }
+
+  private setComposition(state: VoiceComposition) {
+    this.composition = Object.freeze(state);
+    this.ports.onComposition?.(this.composition);
+  }
+
+  private compositionError(error: string) {
+    this.phase = null;
+    this.voiceTurn = null;
+    this.setComposition({ ...this.composition, status: 'error', error });
+    this.publish();
+  }
+
+  reconcileSession(model: VoiceModel): boolean {
+    if (
+      this.disposed ||
+      this.sessionPending ||
+      this.composition.status === 'finalizing'
+    )
+      return false;
+    this.routeUncertain = false;
+    this.setComposition({
+      ...this.composition,
+      model,
+    });
+    this.publish();
+    return true;
+  }
+
+  private async mutateSession(
+    operation: () => Promise<boolean>,
+    generation: number,
+  ): Promise<boolean> {
+    this.sessionPending = true;
+    let accepted = false;
+    try {
+      accepted = await operation();
+    } catch {
+      /* A lost response may follow a mutation. */
+    }
+    if (!this.current(generation) || !accepted) {
+      this.routeUncertain = true;
+      let model: VoiceModel | undefined;
+      try {
+        model = await this.ports.readSession?.();
+      } catch {
+        /* Require explicit reconciliation. */
+      }
+      if (!this.disposed) {
+        if (model === 'terra' || model === 'sol') this.routeUncertain = false;
+        this.setComposition({
+          ...this.composition,
+          ...(model ? { model } : {}),
+          status: 'error',
+          error: this.routeUncertain
+            ? 'Conversation state is uncertain. Refresh it before sending.'
+            : 'Conversation state refreshed after interruption. Your text is retained.',
+        });
+      }
+    }
+    this.sessionPending = false;
+    if (!this.disposed) this.publish();
+    return accepted;
+  }
+
+  private async recognize(text: string, id: string, generation: number) {
+    const command = voiceCommand(text);
+    if (command === 'prompt') {
+      this.phase = null;
+      this.setComposition({
+        ...this.composition,
+        model: 'sol',
+        status: 'composing',
+        error: '',
+      });
+      this.publish();
+      return;
+    }
+    if (command === 'clear' || command === 'done') {
+      await this.clearConversation(generation);
+      return;
+    }
+    if (command === 'end prompt') {
+      if (this.composition.status === 'idle' || !this.composition.raw.trim()) {
+        this.phase = null;
+        this.publish();
+        return;
+      }
+      await this.finalize(id, generation);
+      return;
+    }
+    if (this.composition.status !== 'idle') {
+      const raw = this.composition.raw
+        ? `${this.composition.raw}\n${text}`
+        : text;
+      this.phase = null;
+      this.setComposition({
+        ...this.composition,
+        raw,
+        status: fitsVoicePrompt(raw) ? 'composing' : 'error',
+        error: fitsVoicePrompt(raw)
+          ? ''
+          : 'Prompt exceeds the 8 KiB limit. Clear it before sending.',
+      });
+      this.publish();
+      return;
+    }
+    const model = this.composition.model;
+    this.setComposition({
+      ...this.composition,
+      raw: text,
+      status: 'finalizing',
+      error: '',
+    });
+    try {
+      if (!this.current(generation)) return;
+      if (this.routeUncertain) throw new Error();
+      const selectSession = this.ports.selectSession;
+      if (model === 'sol' && !selectSession) throw new Error();
+      if (
+        selectSession &&
+        !(await this.mutateSession(() => selectSession(model), generation))
+      )
+        throw new Error();
+      if (!this.current(generation)) return;
+      await this.dispatchDraft(text, text.trim(), model, id, generation);
+    } catch {
+      if (this.current(generation))
+        this.compositionError(
+          'Could not select the conversation. Your text is retained.',
+        );
+    }
+  }
+
+  private async clearConversation(generation: number): Promise<boolean> {
+    if (!this.ports.clearConversation) {
+      this.compositionError('Conversation could not be cleared.');
+      return false;
+    }
+    const cleared = await this.mutateSession(
+      this.ports.clearConversation,
+      generation,
+    );
+    if (!this.current(generation)) return false;
+    if (!cleared) {
+      this.compositionError('Conversation could not be cleared.');
+      return false;
+    }
+    this.dispatchUncertain = false;
+    this.routeUncertain = false;
+    this.phase = null;
+    this.setComposition({
+      raw: '',
+      lastSubmittedRaw: '',
+      model: 'terra',
+      status: 'idle',
+      error: '',
+    });
+    this.publish();
+    return true;
+  }
+
+  private async finalize(id: string, generation: number) {
+    const { raw, model } = this.composition;
+    if (this.routeUncertain) {
+      this.compositionError(
+        'Conversation state is uncertain. Refresh it before sending.',
+      );
+      return;
+    }
+    if (this.dispatchUncertain) {
+      this.compositionError(
+        'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
+      );
+      return;
+    }
+    if (!fitsVoicePrompt(raw)) {
+      this.compositionError(
+        'Prompt exceeds the 8 KiB limit. Clear it before sending.',
+      );
+      return;
+    }
+    this.setComposition({
+      ...this.composition,
+      status: 'finalizing',
+      error: '',
+    });
+    try {
+      if (!this.current(generation)) return;
+      const selectSession = this.ports.selectSession;
+      if (model === 'sol' && !selectSession) throw new Error();
+      if (
+        selectSession &&
+        !(await this.mutateSession(() => selectSession(model), generation))
+      )
+        throw new Error();
+      if (!this.current(generation)) return;
+      const controller = new AbortController();
+      this.refinement = controller;
+      const text = this.ports.refinePrompt
+        ? await this.ports.refinePrompt(raw, controller.signal)
+        : raw;
+      if (!this.current(generation)) return;
+      this.refinement = undefined;
+      if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
+      await this.dispatchDraft(raw, text, model, id, generation);
+    } catch {
+      if (this.current(generation))
+        this.compositionError(
+          this.dispatchUncertain
+            ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
+            : 'Prompt could not be prepared. Your text is retained.',
+        );
+    }
+  }
+
+  private async dispatchDraft(
+    raw: string,
+    text: string,
+    model: VoiceModel,
+    id: string,
+    generation: number,
+  ) {
+    this.dispatchUncertain = true;
+    let accepted = false;
+    try {
+      accepted = await this.submit(text, id, generation);
+    } catch {
+      // A failed transport may still have delivered the turn.
+    }
+    if (!this.current(generation)) return;
+    if (!accepted && this.settledTurn !== id) {
+      this.compositionError(
+        'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
+      );
+      return;
+    }
+    this.dispatchUncertain = false;
+    this.setComposition({
+      raw: '',
+      lastSubmittedRaw: raw,
+      model,
+      status: 'idle',
+      error: '',
+    });
+  }
+
+  private async submit(
+    text: string,
+    id: string,
+    generation: number,
+  ): Promise<boolean> {
+    this.settledTurn = null;
+    this.voiceTurn = id;
+    this.phase = 'waiting';
+    this.publish();
+    if (!this.current(generation)) return false;
+    const accepted = await this.ports.submit(text, id);
+    if (
+      this.current(generation) &&
+      !accepted &&
+      this.phase === 'waiting' &&
+      this.voiceTurn === id
+    ) {
+      this.voiceTurn = null;
+      this.phase = null;
+      this.failure =
+        'Message was not sent. Check Ivy in the menu; it will not be resent.';
+      this.publish();
+    }
+    return accepted;
   }
 
   private canCollect(context: VoiceContext): boolean {
@@ -158,6 +502,8 @@ export class VoiceConversation {
       context.audio.status === 'capturing' &&
       !this.phase &&
       !this.stopping &&
+      !this.sessionPending &&
+      !this.routeUncertain &&
       !this.unconfirmedStop &&
       !this.blocked &&
       context.assistant.connection === 'ready' &&
@@ -180,29 +526,14 @@ export class VoiceConversation {
     try {
       const transcript = await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
-      const text = transcript.text.trim();
+      const text = transcript.text;
       if (transcript.utterance_id !== id) throw new Error();
-      if (!text) {
+      if (!text.trim()) {
         this.phase = null;
         this.publish();
         return;
       }
-      this.voiceTurn = id;
-      this.phase = 'waiting';
-      this.publish();
-      const accepted = await this.ports.submit(text, id);
-      if (
-        this.current(generation) &&
-        !accepted &&
-        this.phase === 'waiting' &&
-        this.voiceTurn === id
-      ) {
-        this.voiceTurn = null;
-        this.phase = null;
-        this.failure =
-          'Message was not sent. Check Ivy in the menu; it will not be resent.';
-        this.publish();
-      }
+      await this.recognize(text, id, generation);
     } catch {
       if (this.current(generation))
         this.fail('Local recognition unavailable. Retry voice or use text.');
@@ -216,6 +547,10 @@ export class VoiceConversation {
     if (!context || this.phase !== 'waiting' || !this.voiceTurn) return;
     const snapshot = context.assistant;
     if (snapshot.turn_id !== this.voiceTurn) return;
+    if (
+      ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
+    )
+      this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
       this.voiceTurn = null;
       this.phase = null;
@@ -291,6 +626,16 @@ export class VoiceConversation {
           this.context.speech.state,
         ));
     ++this.generation;
+    this.refinement?.abort();
+    this.refinement = undefined;
+    if (this.composition.status === 'finalizing')
+      this.setComposition({
+        ...this.composition,
+        status: 'error',
+        error: this.dispatchUncertain
+          ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
+          : 'Prompt preparation interrupted. Your text is retained.',
+      });
     this.phase = null;
     this.voiceTurn = null;
     this.playbackAcknowledged = false;
@@ -331,7 +676,7 @@ export class VoiceConversation {
     const context = this.context;
     this.ports.onChange({
       muted: this.muted,
-      error: !!this.failure,
+      error: !!this.failure || this.routeUncertain,
       busy:
         this.stopping ||
         this.unconfirmedStop ||
@@ -339,6 +684,9 @@ export class VoiceConversation {
         this.phase === 'speaking',
       status:
         this.failure ||
+        (this.routeUncertain
+          ? 'Conversation state is uncertain. Refresh it in the menu before voice resumes.'
+          : '') ||
         (this.phase === 'transcribing'
           ? 'Recognizing locally'
           : this.phase === 'waiting'
