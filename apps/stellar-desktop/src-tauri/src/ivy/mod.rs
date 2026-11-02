@@ -4,6 +4,7 @@ mod journal;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+mod rotation;
 pub(crate) mod runtime;
 mod session;
 #[cfg(test)]
@@ -83,7 +84,7 @@ pub fn ivy_disconnect(
 }
 
 #[tauri::command]
-pub fn ivy_select_session(
+pub async fn ivy_select_session(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
@@ -93,13 +94,19 @@ pub fn ivy_select_session(
     if request.version != 1 {
         return Err(IvyErrorCode::MalformedRequest);
     }
-    host.rotate(request.model, false)
+    let pending = host.rotate(request.model, false)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
 }
 #[tauri::command]
-pub fn ivy_clear_conversation(
+pub async fn ivy_clear_conversation(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
     validate(request)?;
-    host.rotate(IvyModel::Terra, true)
+    let pending = host.rotate(IvyModel::Terra, true)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
 }

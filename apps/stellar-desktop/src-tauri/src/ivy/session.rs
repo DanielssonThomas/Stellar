@@ -143,7 +143,7 @@ impl Session {
         self.record = next;
         self.buffered.clear();
         self.replay = None;
-        self.shared.update(self.epoch, |view| {
+        self.shared.update_current(|view| {
             view.model = model;
             view.verified_model = None;
             view.turn = IvyTurnState::Idle;

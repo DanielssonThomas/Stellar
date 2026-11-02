@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 import {
   ivyConnectCommand,
+  ivySnapshotCommand,
   ivySubmitCommand,
   ivyCancelCommand,
   ivyReconcileCommand,
@@ -83,6 +84,9 @@ export class IvyAdapterService {
   }
   disconnect() {
     return this.invoke(ivyDisconnectCommand, { version: 1 });
+  }
+  snapshot() {
+    return this.invoke(ivySnapshotCommand, { version: 1 });
   }
 
   async selectSession(model: IvyModel): Promise<boolean> {

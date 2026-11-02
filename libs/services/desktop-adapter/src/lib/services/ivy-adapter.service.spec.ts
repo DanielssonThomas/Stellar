@@ -93,4 +93,26 @@ describe('Ivy service startup and revision ownership', () => {
     expect(await service.clearConversation()).toBe(false);
     expect(service.state().model).toBe('sol');
   });
+
+  it('exposes busy reconciliation and then an authoritative settled snapshot', async () => {
+    const invoke = vi
+      .fn()
+      .mockRejectedValueOnce('busy')
+      .mockResolvedValueOnce({
+        ...initialIvySnapshot(),
+        revision: '2',
+        model: 'sol',
+      });
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: IVY_TRANSPORT,
+          useValue: { invoke, listen: async () => vi.fn() },
+        },
+      ],
+    });
+    const service = TestBed.inject(IvyAdapterService);
+    await expect(service.snapshot()).rejects.toMatchObject({ code: 'busy' });
+    expect((await service.snapshot()).model).toBe('sol');
+  });
 });

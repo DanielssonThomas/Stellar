@@ -11,6 +11,7 @@ fn main() {
         "shell_status",
         command_name::APP_INFO_COMMAND,
         "smoke_result",
+        "smoke_hold_ivy",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],
         ivy_names::IVY_COMMANDS[2],
