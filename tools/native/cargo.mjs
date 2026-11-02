@@ -187,7 +187,11 @@ if (action === 'smoke') {
       ? ''
       : cargo(args[action], action.startsWith('contract-'));
   if (action === 'test') {
-    for (const script of ['ivy_bridge_test.py', 'speech_worker_test.py', 'cleanup_worker_test.py']) {
+    for (const script of [
+      'ivy_bridge_test.py',
+      'speech_worker_test.py',
+      'cleanup_worker_test.py',
+    ]) {
       const bridge = spawnSync('python', ['-I', `tools/native/${script}`], {
         cwd: root,
         env,
