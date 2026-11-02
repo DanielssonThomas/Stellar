@@ -130,4 +130,19 @@ describe('workspace tool adapter', () => {
     TestBed.resetTestingModule();
   });
 
+  it('fails closed when the system clock rolls back before delivery', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    const handler = vi.fn(() => ({ kind: 'applied' as const }));
+    f.service.bind(handler);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now - 2000);
+    f.deliver({ ...request, expires_at_ms: String(now + 1000) });
+    await Promise.resolve();
+    expect(f.ivy.snapshot).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+    clock.mockRestore();
+    TestBed.resetTestingModule();
+  });
+
 });

@@ -65,6 +65,7 @@ export class WorkspaceToolsService {
   private readonly transport = inject(WORKSPACE_TOOL_TRANSPORT);
   private readonly listening = signal(false);
   private handler?: WorkspaceToolHandler;
+  private readonly clockOffset = Date.now() - performance.now();
   private pending = false;
   private deadline?: { id: string; monotonic: number };
   private disposed = false;
@@ -106,6 +107,7 @@ export class WorkspaceToolsService {
     const state = this.ivy.state();
     return (
       !this.disposed &&
+      this.clockIsStable() &&
       Date.now() < Number(request.expires_at_ms) &&
       this.deadline?.id === request.request_id &&
       performance.now() < this.deadline.monotonic &&
@@ -114,6 +116,10 @@ export class WorkspaceToolsService {
       state.turn_id === request.turn_id &&
       ['submitting', 'admitted'].includes(state.turn)
     );
+  }
+
+  private clockIsStable(): boolean {
+    return Math.abs(Date.now() - performance.now() - this.clockOffset) < 500;
   }
 
   private async accept(value: unknown) {
@@ -125,7 +131,7 @@ export class WorkspaceToolsService {
     }
     if (!this.transport || this.disposed || this.pending) return;
     const remaining = Number(request.expires_at_ms) - Date.now();
-    if (remaining <= 0 || remaining > 15000) return;
+    if (!this.clockIsStable() || remaining <= 0 || remaining > 15000) return;
     this.deadline = { id: request.request_id, monotonic: performance.now() + remaining };
     this.pending = true;
     let outcome: WorkspaceToolOutcome = { kind: 'rejected' };
