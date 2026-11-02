@@ -22,6 +22,20 @@ describe('prompt cleanup', () => {
     ['Update src/app/main.ts', 'Update lib/app/main.ts'],
     ['Read ./config.json', 'Read ../config.json'],
     ['Read ../config.json', 'Read ./config.json'],
+    ['Read "src/app(main).ts"', 'Read "src/app(other).ts"'],
+    ['Read "/tmp/input[old].txt"', 'Read "/tmp/input[new].txt"'],
+    [
+      'Read https://en.wikipedia.org/wiki/Function_(mathematics)',
+      'Read https://en.wikipedia.org/wiki/Function_(programming)',
+    ],
+    [
+      'Read "C:\\Program Files\\old\\file.txt"',
+      'Read "C:\\Program Files\\new\\file.txt"',
+    ],
+    [
+      "Read 'src/a directory/old file.txt'",
+      "Read 'src/a directory/new file.txt'",
+    ],
     ['Update src\\app\\main.ts', 'Update lib\\app\\main.ts'],
   ])(
     'rejects a protected token extended in the rewrite',
@@ -34,6 +48,18 @@ describe('prompt cleanup', () => {
       ).toEqual({ raw, text: raw, status: 'fallback' });
     },
   );
+
+  it.each([
+    ['Read "src/a directory/file.txt', 'Read "src/a extra directory/file.txt'],
+    ["Read 'src/a directory/file.txt'", "Read 'src/a directory/file.txt'"],
+  ])('falls back for ambiguous path quotes', async (raw, output) => {
+    expect(
+      await createPromptCleanup(vi.fn().mockResolvedValue(output))(
+        raw,
+        new AbortController().signal,
+      ),
+    ).toEqual({ raw, text: raw, status: 'fallback' });
+  });
 
   it('accepts an unchanged complete relative path', async () => {
     const raw = 'Um, update src/app/main.ts.';

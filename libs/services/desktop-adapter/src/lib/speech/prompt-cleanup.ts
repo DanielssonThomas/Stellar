@@ -65,14 +65,28 @@ export function createPromptCleanup(
         })
       )
         return fallback;
-      const tokens = (text: string) =>
-        (
-          text.match(
-            /[^\s,;()[\]{}"'<>]*[\\/][^\s,;()[\]{}"'<>]*|\b[\w.-]*\d[\w.-]*\b/g,
-          ) ?? []
-        ).map((token) => token.replace(/[.,;:!?]+$/, ''));
-      const outputTokens = new Set(tokens(output));
-      if (tokens(raw).some((token) => !outputTokens.has(token)))
+      const ambiguousQuotes = (text: string) =>
+        /[\\/]/.test(text) &&
+        (text.includes("'") ||
+          text.includes('\\"') ||
+          (text.match(/"/g)?.length ?? 0) % 2 !== 0);
+      if (ambiguousQuotes(raw) || ambiguousQuotes(output)) return fallback;
+      const quotedPaths = (text: string) =>
+        (text.match(/"[^"\r\n]*"|'[^'\r\n]*'/g) ?? []).filter(
+          (token) => /[\\/]/.test(token) && /\s/.test(token),
+        );
+      const quotedOutput = new Set(quotedPaths(output));
+      if (quotedPaths(raw).some((token) => !quotedOutput.has(token)))
+        return fallback;
+      const paths = (text: string) => text.match(/\S*[\\/]\S*/g) ?? [];
+      const outputPaths = new Set(paths(output));
+      if (paths(raw).some((token) => !outputPaths.has(token))) return fallback;
+      const identifiers = (text: string) =>
+        (text.match(/\b[\w.-]*\d[\w.-]*\b/g) ?? []).map((token) =>
+          token.replace(/[.,;:!?]+$/, ''),
+        );
+      const outputIds = new Set(identifiers(output));
+      if (identifiers(raw).some((token) => !outputIds.has(token)))
         return fallback;
       return { raw, text: output, status: 'refined' };
     } catch {
