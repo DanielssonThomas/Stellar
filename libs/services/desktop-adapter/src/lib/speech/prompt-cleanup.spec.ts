@@ -2,6 +2,52 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPromptCleanup } from './prompt-cleanup';
 
 describe('prompt cleanup', () => {
+  it.each([
+    [
+      'Um, synthetic local UI qualification only. Reply exactly "Composer ready." Do not use tools, inspect files, change files or change settings.',
+      'Composer ready.',
+    ],
+    [
+      'Do not delete files or change settings.',
+      'Delete files or change settings.',
+    ],
+    ['Keep the original; do not deploy.', 'Keep the original.'],
+    [
+      'Read the report, then write the summary.',
+      'Write the summary, then read the report.',
+    ],
+    ['Reply exactly "Composer ready."', 'Reply exactly "Composer done."'],
+    ['Keep the setting unchanged.', 'Keep the setting unchanged and restart.'],
+    ['Use red, no, use blue.', 'Use blue.'],
+    ['Keep this: do not change it.', 'Keep this; do not change it.'],
+    ['Run `rm -rf test` only in the example.', 'Run `rm -rf test`.'],
+    ['Um, keep CaseSensitive identifier.', 'Keep CaseSensitive identifier.'],
+  ])('falls back when unverified content changes', async (raw, output) => {
+    expect(
+      await createPromptCleanup(vi.fn().mockResolvedValue(output))(
+        raw,
+        new AbortController().signal,
+      ),
+    ).toEqual({ raw, text: raw, status: 'fallback' });
+  });
+
+  it.each([
+    ['  keep the constraints.  ', 'keep the constraints.'],
+    ['Um, keep this exact text.', 'keep this exact text.'],
+    ['uh,  do not change settings.', 'do not change settings.'],
+    ['Um, Reply exactly "Composer ready."', 'Reply exactly "Composer ready."'],
+  ])(
+    'accepts only a bounded filler or outer whitespace edit',
+    async (raw, output) => {
+      expect(
+        await createPromptCleanup(vi.fn().mockResolvedValue(output))(
+          raw,
+          new AbortController().signal,
+        ),
+      ).toEqual({ raw, text: output, status: 'refined' });
+    },
+  );
+
   it('falls back when a rewrite removes a protected path, including a retracted path', async () => {
     const raw =
       'Um, open C:\\Work\\app.ts, no, use C:\\Work\\main.ts and keep ID ABC-42.';
@@ -63,7 +109,7 @@ describe('prompt cleanup', () => {
 
   it('accepts an unchanged complete relative path', async () => {
     const raw = 'Um, update src/app/main.ts.';
-    const text = 'Update src/app/main.ts.';
+    const text = 'update src/app/main.ts.';
     expect(
       await createPromptCleanup(vi.fn().mockResolvedValue(text))(
         raw,
