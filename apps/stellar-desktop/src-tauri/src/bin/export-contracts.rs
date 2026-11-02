@@ -151,6 +151,7 @@ fn main() {
         "speechSpeakCommand",
         "speechStopCommand",
         "speechSnapshotCommand",
+        "speechCollectCommand",
     ]
     .iter()
     .zip(speech_names::SPEECH_COMMANDS)
@@ -165,6 +166,6 @@ fn main() {
         serde_json::to_string(SPEECH_EVENT).unwrap()
     );
     println!(
-        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest }};"
+        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest; [speechCollectCommand]: SpeechTranscribeRequest }};"
     );
 }

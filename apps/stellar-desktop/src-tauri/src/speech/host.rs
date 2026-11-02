@@ -91,14 +91,25 @@ impl SpeechHost {
         &self,
         request: SpeechTranscribeRequest,
     ) -> Result<std::sync::mpsc::Receiver<Result<SpeechTranscript, SpeechError>>, SpeechError> {
+        self.transcribe_as(request, SpeechState::Transcribing)
+    }
+
+    pub fn collect(
+        &self,
+        request: SpeechTranscribeRequest,
+    ) -> Result<std::sync::mpsc::Receiver<Result<SpeechTranscript, SpeechError>>, SpeechError> {
+        self.transcribe_as(request, SpeechState::Collecting)
+    }
+
+    fn transcribe_as(
+        &self,
+        request: SpeechTranscribeRequest,
+        state: SpeechState,
+    ) -> Result<std::sync::mpsc::Receiver<Result<SpeechTranscript, SpeechError>>, SpeechError> {
         validation::transcribe(&request)?;
         let payload =
             process::payload(json!({"pcm":request.pcm,"sample_rate_hz":request.sample_rate_hz}))?;
-        let operation = self.reserve(
-            request.utterance_id.clone(),
-            &request.epoch,
-            SpeechState::Transcribing,
-        )?;
+        let operation = self.reserve(request.utterance_id.clone(), &request.epoch, state)?;
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         let host = self.clone();
         std::thread::spawn(move || {

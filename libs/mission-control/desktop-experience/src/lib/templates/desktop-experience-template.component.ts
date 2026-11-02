@@ -59,6 +59,9 @@ export class DesktopExperienceTemplate {
   readonly conversationActive = input(false);
   readonly solActive = input(false);
   readonly promptRaw = input('');
+  readonly promptDraft = input<string | null>(null);
+  readonly promptPreview = input('');
+  readonly promptRefinementRevision = input(0);
   readonly promptRefined = input<string | null>(null);
   readonly promptStatus = input<PromptComposerStatus>('idle');
   readonly composing = computed(

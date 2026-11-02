@@ -36,6 +36,9 @@ export interface ComposerFinalizedText {
 })
 export class PromptComposerMolecule {
   readonly raw = input('');
+  readonly draft = input<string | null>(null);
+  readonly preview = input('');
+  readonly refinementRevision = input(0);
   readonly refined = input<string | null>(null);
   readonly status = input<PromptComposerStatus>('idle');
   readonly visible = input(false);
@@ -47,6 +50,10 @@ export class PromptComposerMolecule {
   private readonly opened = signal(false);
   private readonly dissolved = signal(false);
   private readonly edited = signal<string | null>(null);
+  readonly draftEditing = signal(false);
+  private draftTarget?: string;
+  private draftRevision = 0;
+  private draftEdit?: AbortController;
   private entrance?: {
     group: HTMLElement;
     controller: AbortController;
@@ -54,11 +61,16 @@ export class PromptComposerMolecule {
   };
   private pending?: AbortController;
   private destroyed = false;
-  readonly displayText = computed(() =>
-    this.status() === 'error'
-      ? (this.refined() ?? this.raw())
-      : (this.edited() ?? this.raw()),
-  );
+  readonly displayText = computed(() => {
+    const base =
+      this.status() === 'error'
+        ? (this.refined() ?? this.draft() ?? this.raw())
+        : (this.edited() ?? this.draft() ?? this.raw());
+    const preview = this.status() === 'composing' ? this.preview() : '';
+    return preview
+      ? `${base}${base && !/\s$/.test(base) ? ' ' : ''}${preview}`
+      : base;
+  });
   readonly classes = computed(() =>
     clsx('composer text-stellar-foreground', {
       opened: this.opened(),
@@ -74,12 +86,21 @@ export class PromptComposerMolecule {
       const raw = this.raw(),
         refined = this.refined(),
         status = this.status();
+      const draft = this.draft() ?? raw;
+      const revision = this.refinementRevision();
       const displayed = this.displayText();
-      if (status === 'composing' || status === 'idle') {
+      if (status === 'composing') {
+        this.syncDraft(draft, revision);
+        this.dissolved.set(false);
+      } else if (status === 'idle') {
         this.edited.set(null);
         this.dissolved.set(false);
       } else if (status === 'error') this.dissolved.set(false);
+      if (status !== 'composing') this.cancelDraftEdit();
       if (!visible || !group) {
+        this.cancelDraftEdit();
+        this.draftTarget = undefined;
+        this.draftRevision = 0;
         this.entrance?.controller.abort();
         this.pending?.abort();
         this.entrance = undefined;
@@ -91,6 +112,7 @@ export class PromptComposerMolecule {
       fitPromptText(group, this.host.nativeElement, [
         raw,
         refined ?? raw,
+        draft,
         displayed,
       ]);
       if (this.reduced(group)) {
@@ -111,6 +133,7 @@ export class PromptComposerMolecule {
           fitPromptText(group, this.host.nativeElement, [
             this.raw(),
             this.refined() ?? this.raw(),
+            this.draft() ?? this.raw(),
             this.displayText(),
           ]),
         );
@@ -124,12 +147,14 @@ export class PromptComposerMolecule {
         fitPromptText(group, this.host.nativeElement, [
           this.raw(),
           this.refined() ?? this.raw(),
+          this.draft() ?? this.raw(),
           this.displayText(),
         ]);
     };
     fonts?.addEventListener('loadingdone', refit);
     inject(DestroyRef).onDestroy(() => {
       this.destroyed = true;
+      this.cancelDraftEdit();
       this.pending?.abort();
       this.entrance?.controller.abort();
       observer?.disconnect();
@@ -142,6 +167,7 @@ export class PromptComposerMolecule {
     signal: AbortSignal,
   ): Promise<void> {
     if (this.destroyed || signal.aborted) throw this.cancelled();
+    this.cancelDraftEdit();
     this.pending?.abort();
     const controller = new AbortController();
     this.pending = controller;
@@ -160,12 +186,21 @@ export class PromptComposerMolecule {
           this.opened(),
       );
       const group = this.requireCurrent(controller, text);
-      await this.editText(text, controller.signal, this.reduced(group));
+      await this.editText(
+        {
+          raw: this.edited() ?? this.draft() ?? text.raw,
+          refined: text.refined,
+        },
+        controller.signal,
+        this.reduced(group),
+      );
       this.requireCurrent(controller, text);
       await this.rendered(
         controller.signal,
         () => this.displayText() === text.refined,
       );
+      this.requireCurrent(controller, text);
+      await this.holdCorrected(group, controller.signal);
       this.requireCurrent(controller, text);
       if (!this.reduced(group)) {
         animations.push(...this.brackets(group, false));
@@ -180,6 +215,85 @@ export class PromptComposerMolecule {
       signal.removeEventListener('abort', abort);
       if (this.pending === controller) this.pending = undefined;
     }
+  }
+
+  private syncDraft(target: string, revision: number) {
+    const previous = this.edited() ?? this.draftTarget ?? target;
+    const changed = target !== this.draftTarget;
+    const refined =
+      this.draftTarget !== undefined && revision > this.draftRevision;
+    this.draftTarget = target;
+    this.draftRevision = revision;
+    if (!changed) return;
+    this.cancelDraftEdit();
+    if (!refined) {
+      this.edited.set(target);
+      return;
+    }
+    const controller = new AbortController();
+    this.draftEdit = controller;
+    this.draftEditing.set(true);
+    void (async () => {
+      await this.entrance?.completion;
+      if (
+        controller.signal.aborted ||
+        this.status() !== 'composing' ||
+        this.draftTarget !== target
+      )
+        throw this.cancelled();
+      const group = this.group()?.nativeElement;
+      if (!group || !this.visible()) throw this.cancelled();
+      await this.editText(
+        { raw: previous, refined: target },
+        controller.signal,
+        this.reduced(group),
+      );
+    })()
+      .catch(() => {
+        if (!controller.signal.aborted && this.draftTarget === target)
+          this.edited.set(target);
+      })
+      .finally(() => {
+        if (this.draftEdit === controller) {
+          this.draftEdit = undefined;
+          this.draftEditing.set(false);
+        }
+      });
+  }
+
+  private cancelDraftEdit() {
+    this.draftEdit?.abort();
+    this.draftEdit = undefined;
+    this.draftEditing.set(false);
+  }
+
+  private holdCorrected(
+    group: HTMLElement,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const view = group.ownerDocument.defaultView;
+    if (this.reduced(group) || !view?.requestAnimationFrame)
+      return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      let frame = 0;
+      let started: number | undefined;
+      const abort = () => {
+        view.cancelAnimationFrame(frame);
+        signal.removeEventListener('abort', abort);
+        reject(this.cancelled());
+      };
+      const tick = (now: number) => {
+        if (signal.aborted) return abort();
+        started ??= now;
+        if (this.reduced(group) || now - started >= 1000) {
+          signal.removeEventListener('abort', abort);
+          resolve();
+        } else frame = view.requestAnimationFrame(tick);
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+      else frame = view.requestAnimationFrame(tick);
+    });
   }
 
   private async enter(group: HTMLElement, signal: AbortSignal) {
@@ -227,11 +341,9 @@ export class PromptComposerMolecule {
             element.animate(
               opening ? frames[index] : [...frames[index]].reverse(),
               {
-                duration: 340,
+                duration: 1000,
                 fill: 'forwards',
-                easing: opening
-                  ? 'cubic-bezier(0.22, 0.7, 0.25, 1)'
-                  : 'cubic-bezier(0.75, 0, 0.78, 0.3)',
+                easing: 'cubic-bezier(0.4, 0, 0.6, 1)',
               },
             ),
           ]
@@ -258,7 +370,7 @@ export class PromptComposerMolecule {
         signal.removeEventListener('abort', abort);
         reject(this.cancelled());
       };
-      const duration = Math.min(2400, Math.max(320, edit.steps * 22));
+      const duration = 1000;
       const tick = (now: number) => {
         if (signal.aborted) {
           abort();

@@ -1,0 +1,72 @@
+{
+  "issue": 225,
+  "method": "Opt-in synthetic audio into the native application; real Web Audio, local speech worker, cleanup, Ivy, workspace and playback boundaries",
+  "physicalMicrophone": false,
+  "models": {
+    "recognition": "Whisper base CPU int8",
+    "cleanup": "Qwen3.5-9B-Q5_K_S",
+    "requestedIvy": "gpt-6.1-sol",
+    "verifiedIvy": "sol",
+    "synthesis": "Kokoro af_heart with Windows winsound"
+  },
+  "privateReceiptSha256": {
+    "firstNativeEndPromptFailure": "8327f6719de1242e2af8dd112ab1bbce3c509d5ff10cc59406171f49c8404c23",
+    "offlineSendAndNegativeControls": "b19fd4f47516b4d18c1880a4d741faadf2d2440a381bc82e664ac06a575f81b9",
+    "alternateViewportNativePass": "64d3639daf205188b6697f61e898b4fec80210adb3774c7dcdb7e1b1a7c48dea",
+    "primaryViewportNativePass": "65b0ad731ca7e86a67c1ae83d4376b34d5205aad61f9619402cb35f36c242f0c",
+    "settledForegroundClear": "6f84e8ffa9f15c651c4e61685cadbfd9b0c7fade3dddd181a56905ee19aec4c4"
+  },
+  "observations": {
+    "alternateViewport": [1100, 760],
+    "primaryViewport": [2560, 1370],
+    "finalizationRecognizedInBoth": "send prompt",
+    "captureTracksEndedBeforeBusy": true,
+    "singleSubmitAfterDissolvedPresentation": true,
+    "expectedPaneAndVerifiedSolCompletion": true,
+    "synthesisSpeakingIdleAndCaptureReacquisition": true,
+    "settledPublicClearReturnedTrue": true,
+    "firstEndPromptSyntheticRecognizedAsAndPrompt": true
+  },
+  "limitations": [
+    "Plain send is covered by automated command and coordinator tests, not a native speech fixture.",
+    "Synthetic observations do not verify a physical microphone, Windows microphone indicator, or performance budget; physical qualification remains issue 184.",
+    "The first native end-prompt misrecognition is not claimed fixed.",
+    "Fixture audio, detailed receipts and app recordings are private and not included in the repository."
+  ],
+  "scope": "The original top-level observations describe historical pre-continuous runs; current continuous runs are indexed separately.",
+  "continuous": {
+    "sourceCommit": "63b4bd4ff3d32712d4309d4c80cd932c26c9072d",
+    "build": "Angular development-mode native diagnostic executable",
+    "executableSha256": "841a35b37ab80d377969e51a59a9ad6e1150e118d353a9d3f914d4ab485bd467",
+    "workerSha256": "6747187794662cf682ab0699a290d76822a1cae5abb03d84e4210a00d2a43aed",
+    "receiptSha256": {
+      "alternate": "3b1ff8b2b4287e564171f7e9ca61a94fe29ea6ec0a06ff96aa5badc94f8f5cf7",
+      "primary": "9418765a6a6f389a2dde78e612ee17cbdb131eb2cfc0b5888c32ff72148e74e0",
+      "alternateClear": "1aae1103c95b94a83a478e41128254f9e5aef7a758349a336d75ff7d6269bbb7",
+      "primaryClear": "4781ed00d205b4309195077663b156a5479e5bf3b93278cfcd49d6e148229c6e",
+      "earlierFailedDiagnostic": "90d402b88a827f745ebcfb0e2c475c71b4623f53df3ec1e02d5e42b8ffb80234"
+    },
+    "fixtureSha256": {
+      "prompt": "ff28c7767c3e9c555044336d3931d64a17ce2820ef5a2fa0a0705666be10ed8b",
+      "first": "7e303cb3ab967c0b1b68fce0c1064e3abeb144bc2fa8d11c7a1535c18fca808d",
+      "second": "d77e4178174d02c67cda6f3eba73d60cdcb549d43e54debf6fa33479430c4619",
+      "finalize": "1abf7b18e6c03a3872d9d1e8edb6e7586567d9136df18d7bb23cded36d7517c8"
+    },
+    "alternateViewport": [1100, 760],
+    "primaryViewport": [2560, 1370],
+    "synthetic": true,
+    "passed": true,
+    "observed": "One synthetic draft capture remained active for local recognition and cleanup; final Send released it before one Ivy submission and playback, then capture reacquired.",
+    "foregroundClear": "Public API reset accepted after capture settled; pane retired and Terra returned idle.",
+    "visualReview": {
+      "sol": "Actual native application and original intermediate frames inspected at both viewport sizes.",
+      "user": "Pending review of the revised continuous composer; earlier artwork and pane-motion approvals remain separate.",
+      "alternateSamples": 878,
+      "primarySamples": 933,
+      "hostDisplacements": 0,
+      "scrollDisplacements": 0
+    },
+    "earlierFailure": "A diagnostic run lost a critical negation at an audio boundary and did not pass; the onset boundary was corrected before the indexed passes.",
+    "limits": "These runs use an Angular development-mode diagnostic build; production build and IPC smoke are separate checks. They do not establish physical microphone, Windows indicator, performance-budget or visual approval."
+  }
+}

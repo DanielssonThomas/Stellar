@@ -76,6 +76,7 @@ export type {
 } from './generated';
 export {
   speechTranscribeCommand,
+  speechCollectCommand,
   speechSpeakCommand,
   speechStopCommand,
   speechSnapshotCommand,

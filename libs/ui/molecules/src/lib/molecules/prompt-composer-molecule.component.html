@@ -18,7 +18,9 @@
       <div
         class="text-stack"
         aria-label="Prompt text"
-        [attr.aria-live]="status() === 'finalizing' ? 'off' : 'polite'"
+        [attr.aria-live]="
+          status() === 'finalizing' || draftEditing() ? 'off' : 'polite'
+        "
         aria-atomic="true"
       >
         <span class="prompt-text">{{ displayText() }}</span>

@@ -3,7 +3,16 @@ import type { IvySnapshot } from '@stellar/desktop-contracts';
 import { openPane } from './stage-driver';
 
 type ComposerApp = {
+  experience: {
+    waitForVoiceCaptureRelease(): Promise<void>;
+    state(): { microphone: { requestId: number | null } };
+  };
   voice: {
+    audio: {
+      start(source: unknown): Promise<void>;
+      startMicrophone(): Promise<void>;
+      state(): { status: string };
+    };
     setModel(model: 'terra' | 'sol'): void;
     setDraft(text: string): void;
     setMuted(muted: boolean): void;
@@ -11,6 +20,8 @@ type ComposerApp = {
     conversation: {
       generation: number;
       recognize(text: string, id: string, generation: number): Promise<void>;
+      update(context: unknown): void;
+      accept(event: unknown): void;
     };
   };
 };
@@ -19,6 +30,7 @@ type ComposerFixture = {
   edits: string[];
   submissions: { text: string; dissolved: boolean }[];
   hold: boolean;
+  cleanupText?: string;
   panel?: Element;
 };
 const raw = 'Um, Set up the next Stellar sprint.';
@@ -99,8 +111,26 @@ async function install(page: Page, hold = true) {
                 model = 'terra';
                 return snapshot();
               }
-              if (command === 'cleanup_refine')
-                return { version: 1, text: refined };
+              if (command === 'cleanup_refine') {
+                return { version: 1, text: fixture.cleanupText ?? refined };
+              }
+              if (command === 'speech_collect') {
+                const pcm = request['pcm'] as number[];
+                const marker = pcm.some((sample) => sample === 4000);
+                const words = pcm.filter((sample) => sample === 2000).length;
+                const text = marker
+                  ? 'send prompt'
+                  : words < 22000
+                    ? 'the'
+                    : words < 30000
+                      ? 'the next'
+                      : 'the next Stellar sprint.';
+                return {
+                  version: 1,
+                  utterance_id: request['utterance_id'],
+                  text,
+                };
+              }
               if (command === 'speech_snapshot' || command === 'speech_stop')
                 return {
                   version: 1,
@@ -200,6 +230,228 @@ const state = (page: Page) =>
       submissions: fixture.submissions,
     };
   });
+
+test('typed submit waits for capture release and keeps the message in the form', async ({
+  page,
+}) => {
+  await install(page, false);
+  await page.evaluate(() => {
+    const debug = window as unknown as {
+      ng: { getComponent(element: Element): ComposerApp };
+      __finishCaptureRelease?: () => void;
+    };
+    const root = document.querySelector('stellar-root');
+    if (!root) throw Error('Root missing');
+    debug.ng.getComponent(root).experience.waitForVoiceCaptureRelease = () =>
+      new Promise<void>((resolve) => {
+        debug.__finishCaptureRelease = resolve;
+      });
+  });
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  const input = page.getByLabel('Message Ivy');
+  await input.fill('A typed message');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof (window as unknown as { __finishCaptureRelease?: () => void })
+            .__finishCaptureRelease,
+      ),
+    )
+    .toBe('function');
+  expect((await state(page)).submissions).toEqual([]);
+  await expect(input).toHaveValue('A typed message');
+  await page.evaluate(() =>
+    (
+      window as unknown as { __finishCaptureRelease: () => void }
+    ).__finishCaptureRelease(),
+  );
+  await expect
+    .poll(async () => (await state(page)).submissions)
+    .toEqual([{ text: 'A typed message', dissolved: false }]);
+  await expect(input).toHaveValue('A typed message');
+});
+
+test('typed release failure preserves the message and does not submit', async ({
+  page,
+}) => {
+  await install(page, false);
+  await page.evaluate(() => {
+    const debug = window as unknown as {
+      ng: { getComponent(element: Element): ComposerApp };
+      __releaseRejected?: boolean;
+    };
+    const root = document.querySelector('stellar-root');
+    if (!root) throw Error('Root missing');
+    debug.ng.getComponent(root).experience.waitForVoiceCaptureRelease =
+      async () => {
+        debug.__releaseRejected = true;
+        throw Error('Synthetic release failure');
+      };
+  });
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  const input = page.getByLabel('Message Ivy');
+  await input.fill('Keep this message');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __releaseRejected?: boolean })
+            .__releaseRejected,
+      ),
+    )
+    .toBe(true);
+  expect((await state(page)).submissions).toEqual([]);
+  await expect(input).toHaveValue('Keep this message');
+});
+
+test('synthetic voice preview, stable sentence and cleanup reach one finalized submission', async ({
+  page,
+}) => {
+  await install(page, false);
+  await page.evaluate(() => {
+    const fixture = (
+      window as unknown as { __composerFixture: ComposerFixture }
+    ).__composerFixture;
+    fixture.cleanupText = 'Set up\nthe next Stellar sprint.';
+  });
+  await page.evaluate(() => {
+    type Sink = {
+      status(value: string): void;
+      frame(value: unknown): void;
+      pcm?(value: unknown): void;
+    };
+    const debug = window as unknown as {
+      ng: { getComponent(element: Element): ComposerApp };
+      __syntheticFeed?: (
+        active: boolean,
+        count: number,
+        marker: number,
+      ) => Promise<void>;
+    };
+    const root = document.querySelector('stellar-root');
+    if (!root) throw Error('Root missing');
+    const audio = debug.ng.getComponent(root).voice.audio;
+    let sink: Sink | undefined;
+    let sequence = 0;
+    let timestampMs = 0;
+    const source = {
+      async start(next: Sink) {
+        sink = next;
+        next.status('capturing');
+      },
+      async stop() {
+        sink = undefined;
+      },
+    };
+    audio.startMicrophone = () => audio.start(source);
+    debug.__syntheticFeed = async (active, count, marker) => {
+      for (let i = 0; i < count; i++) {
+        if (!sink) return;
+        timestampMs += 40;
+        sink.frame({
+          timestampMs,
+          rms: active ? 0.1 : 0.001,
+          peak: active ? 0.1 : 0.001,
+          clipped: false,
+        });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+        sink?.pcm?.({
+          type: 'chunk',
+          chunk: {
+            sampleRate: 16000,
+            sequence: sequence++,
+            samples: new Int16Array(640).fill(active ? marker : 0),
+          },
+        });
+      }
+    };
+  });
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Enable microphone', exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const root = document.querySelector('stellar-root');
+        if (!root) return null;
+        const app = (
+          window as unknown as {
+            ng: { getComponent(element: Element): ComposerApp };
+          }
+        ).ng.getComponent(root);
+        return {
+          requestId: app.experience.state().microphone.requestId,
+          status: app.voice.audio.state().status,
+        };
+      }),
+    )
+    .toMatchObject({ requestId: expect.any(Number), status: 'capturing' });
+  const feed = (active: boolean, count: number, marker = 2000) =>
+    page.evaluate(
+      ({ active, count, marker }) =>
+        (
+          window as unknown as {
+            __syntheticFeed: (
+              active: boolean,
+              count: number,
+              marker: number,
+            ) => Promise<void>;
+          }
+        ).__syntheticFeed(active, count, marker),
+      { active, count, marker },
+    );
+  await feed(false, 18);
+  await draft(page, 'Um, Set up', false);
+  await expect(page.locator('.composer')).toHaveClass(/opened/);
+  await feed(true, 30);
+  await expect(page.locator('.prompt-text')).toContainText('the');
+  await feed(true, 25);
+  await expect(page.locator('.prompt-text')).toContainText('the next');
+  await feed(false, 36);
+  await expect(page.locator('.text-stack')).toHaveAttribute('aria-live', 'off');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const root = document.querySelector('stellar-root');
+        if (!root) return null;
+        return (
+          window as unknown as {
+            ng: { getComponent(element: Element): ComposerApp };
+          }
+        ).ng
+          .getComponent(root)
+          .voice.composition();
+      }),
+    )
+    .toMatchObject({
+      raw: 'Um, Set up\nthe next Stellar sprint.',
+      refined: 'Set up\nthe next Stellar sprint.',
+    });
+  await expect(page.locator('.prompt-text')).toHaveText(
+    'Set up\nthe next Stellar sprint.',
+  );
+  const sendStarted = await page.evaluate(() => performance.now());
+  await feed(true, 12, 4000);
+  await feed(false, 36);
+  await expect
+    .poll(async () => (await state(page)).submissions, { timeout: 12000 })
+    .toEqual([{ text: 'Set up\nthe next Stellar sprint.', dissolved: true }]);
+  expect(
+    (await page.evaluate(() => performance.now())) - sendStarted,
+  ).toBeGreaterThanOrEqual(1800);
+});
 
 test('braces open from center, text edits by character and dispatch waits for reverse closure exactly once', async ({
   page,

@@ -12,6 +12,7 @@ import {
   type VoicePorts,
 } from './voice-conversation';
 import { voiceCommand, type VoiceComposition } from './voice-composition';
+import { createNativePromptCleanup } from './native-prompt-cleanup';
 
 const id = '11111111-2222-4333-8444-555555555555';
 function deferred<T>() {
@@ -74,11 +75,11 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     context = { ...context, ...change };
     controller.update(context);
   };
-  const feed = (active: boolean, count: number) => {
+  const feed = (active: boolean, count: number, starting = false) => {
     update({
       audio: {
         ...context.audio,
-        activity: { ...context.audio.activity, active },
+        activity: { ...context.audio.activity, active, starting },
       },
     });
     for (let i = 0; i < count; i++) {
@@ -93,6 +94,20 @@ function fixture(extra: Partial<VoicePorts> = {}) {
   const utterance = () => {
     feed(true, 5);
     feed(false, 35);
+  };
+  const freshStartingChunk = () => {
+    const samples = new Int16Array(640).fill(2000);
+    controller.accept(
+      {
+        type: 'chunk',
+        chunk: { sampleRate: 16000, sequence: sequence++, samples },
+      },
+      {
+        ...context.audio,
+        activity: { ...context.audio.activity, starting: true },
+      },
+    );
+    expect(samples.every((sample) => sample === 0)).toBe(true);
   };
   const completed = () =>
     update({
@@ -110,6 +125,7 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     update,
     feed,
     utterance,
+    freshStartingChunk,
     completed,
     context: () => context,
     view: () => view,
@@ -117,6 +133,375 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('voice conversation ownership', () => {
+  it('uses the current PCM-time onset snapshot even when the effect context is stale', async () => {
+    let composition!: VoiceComposition;
+    const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: pcm.length < 20000 ? 'send' : 'send and continue',
+    }));
+    const f = fixture({
+      collect,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('seed');
+    f.feed(true, 5);
+    f.feed(false, 13);
+    f.freshStartingChunk();
+    f.freshStartingChunk();
+    f.freshStartingChunk();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.feed(true, 8);
+    f.feed(false, 35);
+    for (let i = 0; i < 6; i++) await flush();
+    expect(composition.raw).toBe('seed\nsend and continue');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+  it('does not classify a preview as send while the next onset is pending', async () => {
+    let composition!: VoiceComposition;
+    const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: pcm.length < 20000 ? 'send' : 'send and continue',
+    }));
+    const f = fixture({
+      collect,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('seed');
+    f.feed(true, 5);
+    f.feed(false, 12);
+    f.feed(false, 3, true);
+    await flush();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(composition.raw).toBe('seed');
+    f.feed(true, 8);
+    f.feed(false, 35);
+    for (let i = 0; i < 6; i++) await flush();
+    expect(composition.raw).toBe('seed\nsend and continue');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+  it('cancels a pending typed lease on an explicit conversation reset', async () => {
+    const released = deferred<void>();
+    const action = vi.fn(async () => true);
+    const f = fixture({
+      waitForCapturePause: () => released.promise,
+      clearConversation: async () => true,
+    });
+    const pending = f.controller.withCaptureReleased(action);
+    expect(await f.controller.resetConversation()).toBe(true);
+    expect(await pending).toBe(false);
+    released.resolve();
+    await flush();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('never sends after disposal interrupts a pending typed lease', async () => {
+    const released = deferred<void>();
+    const action = vi.fn(async () => true);
+    const f = fixture({ waitForCapturePause: () => released.promise });
+    const pending = f.controller.withCaptureReleased(action);
+    f.controller.dispose();
+    expect(await pending).toBe(false);
+    released.resolve();
+    await flush();
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('holds typed submission until physical capture release and transfers pause to the Ivy turn', async () => {
+    const released = deferred<void>();
+    const pause = vi.fn();
+    const action = vi.fn(async () => true);
+    const f = fixture({
+      waitForCapturePause: () => released.promise,
+      onCapturePauseChange: pause,
+    });
+    const pending = f.controller.withCaptureReleased(async () => {
+      f.update({ assistant: { ...f.context().assistant, turn: 'admitted' } });
+      return action();
+    });
+    expect(pause).toHaveBeenLastCalledWith(true);
+    await flush();
+    expect(action).not.toHaveBeenCalled();
+    released.resolve();
+    expect(await pending).toBe(true);
+    expect(action).toHaveBeenCalledOnce();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.update({ assistant: { ...f.context().assistant, turn: 'completed' } });
+    expect(pause).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each(['reset', 'unavailable'] as const)(
+    'never submits a typed message after %s interrupts release',
+    async (event) => {
+      const released = deferred<void>();
+      const action = vi.fn(async () => true);
+      const f = fixture({ waitForCapturePause: () => released.promise });
+      const pending = f.controller.withCaptureReleased(action);
+      f.controller.accept({ type: event });
+      expect(await pending).toBe(false);
+      released.resolve();
+      await flush();
+      expect(action).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses typed submission when capture release fails or another lease is pending', async () => {
+    const released = deferred<void>();
+    const action = vi.fn(async () => true);
+    const f = fixture({ waitForCapturePause: () => released.promise });
+    const pending = f.controller.withCaptureReleased(action);
+    expect(await f.controller.withCaptureReleased(action)).toBe(false);
+    f.controller.stopVoice();
+    expect(await pending).toBe(false);
+    released.resolve();
+    await flush();
+    expect(action).not.toHaveBeenCalled();
+    const failed = fixture({
+      waitForCapturePause: async () => {
+        throw new Error('release failed');
+      },
+    });
+    expect(await failed.controller.withCaptureReleased(action)).toBe(false);
+    expect(action).not.toHaveBeenCalled();
+  });
+  it('retains native cleanup serialization across reset and refines the new draft', async () => {
+    const old = deferred<unknown>();
+    const invoke = vi
+      .fn()
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ version: 1, text: 'new draft\nwords' });
+    const cleanup = createNativePromptCleanup(invoke);
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'words',
+    }));
+    let composition!: VoiceComposition;
+    const f = fixture({
+      collect,
+      refinePrompt: async (raw, signal) => (await cleanup(raw, signal)).text,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('old draft');
+    f.utterance();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    f.controller.accept({ type: 'reset' });
+    f.controller.setDraft('new draft');
+    f.utterance();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(composition.raw).toBe('new draft\nwords');
+    expect(invoke).toHaveBeenCalledTimes(1);
+    old.resolve({ version: 1, text: 'old draft\nwords' });
+    for (let i = 0; i < 8; i++) await flush();
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(composition.draft).toBe('new draft\nwords');
+    expect(composition.refinementRevision).toBe(1);
+  });
+  it('pauses capture for an external Ivy admission and resumes with the draft intact', () => {
+    const pause = vi.fn();
+    let composition!: VoiceComposition;
+    const f = fixture({
+      onCapturePauseChange: pause,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('retained draft');
+    f.update({ assistant: { ...f.context().assistant, turn: 'submitting' } });
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.update({ assistant: { ...f.context().assistant, turn: 'admitted' } });
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.update({ assistant: { ...f.context().assistant, turn: 'completed' } });
+    expect(pause).toHaveBeenLastCalledWith(false);
+    expect(composition.raw).toBe('retained draft');
+  });
+
+  it('aborts active and queued draft cleanups on reset and fences their late results', async () => {
+    let composition!: VoiceComposition;
+    const first = deferred<string>();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'words',
+    }));
+    const refinePrompt = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValue('new cleaned');
+    const f = fixture({
+      collect,
+      refinePrompt,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('seed');
+    f.utterance();
+    for (let i = 0; i < 4; i++) await flush();
+    f.utterance();
+    for (let i = 0; i < 4; i++) await flush();
+    const controllers = [
+      ...(f.controller as unknown as { draftCleanups: Set<AbortController> })
+        .draftCleanups,
+    ];
+    expect(controllers).toHaveLength(2);
+    f.controller.accept({ type: 'reset' });
+    expect(controllers.every((controller) => controller.signal.aborted)).toBe(
+      true,
+    );
+    first.resolve('stale');
+    for (let i = 0; i < 4; i++) await flush();
+    expect(composition.draft).not.toBe('stale');
+    expect(refinePrompt).toHaveBeenCalledTimes(1);
+  });
+  it('submits a previously cleaned full draft once after a standalone send', async () => {
+    const collect = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'sentence' })
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'send prompt',
+      });
+    const refinePrompt = vi.fn(async () => 'clean draft');
+    const f = fixture({ collect, refinePrompt });
+    f.controller.setDraft('seed');
+    f.utterance();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(refinePrompt).toHaveBeenCalledTimes(1);
+    f.utterance();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(refinePrompt).toHaveBeenCalledTimes(1);
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('clean draft', id);
+  });
+  it('treats capped continuous speech as content until a real quiet boundary', async () => {
+    let composition!: VoiceComposition;
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'send',
+    }));
+    const f = fixture({
+      collect,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('seed');
+    f.feed(true, 505);
+    f.feed(false, 14);
+    for (let i = 0; i < 6; i++) await flush();
+    expect(composition.raw).toBe('seed\nsend\nsend');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.utterance();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+  });
+  it('shows a local partial without interpreting it as a send command', async () => {
+    let composition!: VoiceComposition;
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'send prompt',
+    }));
+    const f = fixture({
+      collect,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('existing words');
+    f.feed(true, 25);
+    await flush();
+    expect(composition.preview).toBe('send prompt');
+    expect(composition.raw).toBe('existing words');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.context().audio.status).toBe('capturing');
+  });
+
+  it('commits a complete utterance and refines the full draft while capture continues', async () => {
+    let composition!: VoiceComposition;
+    const collect = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'new' })
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'new words',
+      });
+    const refinePrompt = vi.fn(async (raw: string) =>
+      raw.replace('old', 'Old'),
+    );
+    const f = fixture({
+      collect,
+      refinePrompt,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('old');
+    f.feed(true, 25);
+    await flush();
+    expect(composition.preview).toBe('new');
+    f.feed(false, 35);
+    await flush();
+    await flush();
+    expect(composition.raw).toBe('old\nnew words');
+    expect(composition.draft).toBe('Old\nnew words');
+    expect(composition.preview).toBe('');
+    expect(composition.refinementRevision).toBe(1);
+    expect(refinePrompt).toHaveBeenCalledExactlyOnceWith(
+      'old\nnew words',
+      expect.any(AbortSignal),
+    );
+    expect(f.context().audio.status).toBe('capturing');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+
+  it('keeps cleanup single-flight, ignores stale results, and refines the newest full draft', async () => {
+    let composition!: VoiceComposition;
+    const first = deferred<string>();
+    const collect = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'first' })
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'second' });
+    const refinePrompt = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce('clean latest');
+    const f = fixture({
+      collect,
+      refinePrompt,
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.controller.setDraft('seed');
+    f.utterance();
+    await flush();
+    await flush();
+    expect(refinePrompt).toHaveBeenCalledTimes(1);
+    f.utterance();
+    await flush();
+    await flush();
+    expect(composition.raw).toBe('seed\nfirst\nsecond');
+    expect(refinePrompt).toHaveBeenCalledTimes(1);
+    first.resolve('stale rewrite');
+    await flush();
+    await flush();
+    expect(refinePrompt).toHaveBeenCalledTimes(2);
+    expect(refinePrompt.mock.calls[1][0]).toBe('seed\nfirst\nsecond');
+    expect(composition.draft).toBe('clean latest');
+    expect(composition.refinementRevision).toBe(1);
+  });
+
   it('dispatches ordinary speech after an idle session refresh', async () => {
     let composition!: VoiceComposition;
     const f = fixture({
@@ -401,6 +786,36 @@ describe('spoken prompt composition', () => {
       expect(f.ports.submit).not.toHaveBeenCalled();
     },
   );
+
+  it('reconciles an overlapping capture reset and accepts a settled public clear', async () => {
+    const pending = deferred<boolean>();
+    let state!: VoiceComposition;
+    let actual: 'sol' | 'terra' = 'sol';
+    const clearConversation = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        const accepted = await pending.promise;
+        actual = 'terra';
+        return accepted;
+      })
+      .mockResolvedValueOnce(true);
+    const f = fixture({
+      clearConversation,
+      readSession: async () => actual,
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setModel('sol');
+    const overlapping = f.controller.resetConversation();
+    f.controller.accept({ type: 'reset' });
+    pending.resolve(true);
+    expect(await overlapping).toBe(false);
+    expect(state).toMatchObject({ model: 'terra', status: 'error' });
+    expect(await f.controller.resetConversation()).toBe(true);
+    expect(state).toMatchObject({ model: 'terra', status: 'idle' });
+    expect(clearConversation).toHaveBeenCalledTimes(2);
+  });
 
   it('keeps interrupted route unknown without a snapshot until explicit reconciliation', async () => {
     let state!: VoiceComposition;
@@ -868,9 +1283,15 @@ describe('spoken prompt composition', () => {
       expect(voiceCommand(text)).toBe(text === 'clear' ? 'clear' : 'done');
     expect(voiceCommand('Prompt!')).toBe('prompt');
     expect(voiceCommand('end prompt.')).toBe('end prompt');
+    expect(voiceCommand('Send!')).toBe('send');
+    expect(voiceCommand('SEND, PROMPT.')).toBe('send prompt');
     for (const text of [
       'the prompt is clear',
       'say end prompt now',
+      'and prompt',
+      'dont send',
+      'send me the draft',
+      'send prompt now',
       'I am done with this part',
     ])
       expect(voiceCommand(text)).toBeNull();
@@ -917,6 +1338,43 @@ describe('spoken prompt composition', () => {
       ' First clause \nend prompt is a phrase',
     );
   });
+
+  it.each(['send', 'send prompt'])(
+    'treats %s as one finalization only after a nonempty draft and presentation',
+    async (command) => {
+      const empty = fixture();
+      empty.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: command,
+      });
+      empty.utterance();
+      await flush();
+      expect(empty.ports.submit).not.toHaveBeenCalled();
+
+      const done = deferred<void>();
+      const refinePrompt = vi.fn(async () => 'cleaned');
+      const present = vi.fn(() => done.promise);
+      const f = fixture({ refinePrompt, presentFinalized: present });
+      f.controller.setDraft('raw text');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: command,
+      });
+      f.utterance();
+      await flush();
+      expect(refinePrompt).toHaveBeenCalledOnce();
+      expect(present).toHaveBeenCalledOnce();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      f.utterance();
+      await flush();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      done.resolve();
+      await flush();
+      expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    },
+  );
 
   it('waits for the bound presentation before submitting the refined prompt once', async () => {
     let state!: VoiceComposition;

@@ -18,6 +18,7 @@ import {
 
 const states: Record<SpeechState, true> = {
   idle: true,
+  collecting: true,
   transcribing: true,
   synthesizing: true,
   speaking: true,

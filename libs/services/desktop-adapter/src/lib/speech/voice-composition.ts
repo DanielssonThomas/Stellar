@@ -1,7 +1,16 @@
 export type VoiceModel = 'terra' | 'sol';
-export type VoiceCommand = 'prompt' | 'end prompt' | 'clear' | 'done';
+export type VoiceCommand =
+  | 'prompt'
+  | 'end prompt'
+  | 'send prompt'
+  | 'send'
+  | 'clear'
+  | 'done';
 export interface VoiceComposition {
   readonly raw: string;
+  readonly preview?: string;
+  readonly draft?: string;
+  readonly refinementRevision?: number;
   readonly refined: string | null;
   readonly lastSubmittedRaw: string;
   readonly model: VoiceModel;
@@ -25,6 +34,8 @@ export function voiceCommand(text: string): VoiceCommand | null {
   if (
     normalized === 'prompt' ||
     normalized === 'end prompt' ||
+    normalized === 'send prompt' ||
+    normalized === 'send' ||
     normalized === 'clear'
   )
     return normalized;

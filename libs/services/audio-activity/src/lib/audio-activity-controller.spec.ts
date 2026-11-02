@@ -24,6 +24,23 @@ function fixtureSource() {
 }
 
 describe('audio lifecycle owner', () => {
+  it('publishes a pending onset immediately, before activity confirmation', async () => {
+    const source = new SyntheticAudioSource();
+    const published: boolean[] = [];
+    const owner = new AudioActivityController(
+      (state) => published.push(Boolean(state.activity.starting)),
+      { calibrationMs: 0, minActiveMs: 120 },
+    );
+    await owner.start(source);
+    source.push({ timestampMs: 0, rms: 0.001, peak: 0.001, clipped: false });
+    source.push({ timestampMs: 20, rms: 0.1, peak: 0.1, clipped: false });
+    expect(owner.snapshot().activity).toMatchObject({
+      active: false,
+      starting: true,
+    });
+    expect(published.at(-1)).toBe(true);
+    await owner.dispose();
+  });
   it.each(['start', 'stop'] as const)(
     'preserves a replacement started synchronously by cleanup during %s',
     async (action) => {
