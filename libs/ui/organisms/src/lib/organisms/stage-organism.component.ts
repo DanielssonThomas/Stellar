@@ -141,7 +141,7 @@ export class StageOrganism {
         (entry) => entry.nativeElement.dataset['instanceId'] === requested,
       );
       if (panel) {
-        panel.nativeElement.focus();
+        panel.nativeElement.focus({ preventScroll: true });
         this.focusRequest.set(null);
       }
     });

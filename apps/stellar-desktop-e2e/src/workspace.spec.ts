@@ -1,6 +1,89 @@
 import { expect, test } from '@playwright/test';
 import { controlPane, openPane } from './stage-driver';
 
+test('focus during repeated and interrupted pane changes never scrolls the workspace', async ({
+  page,
+}) => {
+  const advanceFrames = (count: number) =>
+    page.evaluate(async (count) => {
+      for (let frame = 0; frame < count; frame++)
+        await new Promise(requestAnimationFrame);
+    }, count);
+  await page.goto('/');
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.evaluate(() => {
+    const state = window as unknown as {
+      workspaceFrames: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        scroll: number[];
+      }[];
+      recordWorkspace: boolean;
+    };
+    state.workspaceFrames = [];
+    state.recordWorkspace = true;
+    const sample = () => {
+      const host = document.querySelector('stellar-stage-organism');
+      const experience = document.querySelector('.experience');
+      if (host && experience) {
+        const { x, y, width, height } = host.getBoundingClientRect();
+        state.workspaceFrames.push({
+          x,
+          y,
+          width,
+          height,
+          scroll: [experience.scrollLeft, experience.scrollTop],
+        });
+      }
+      if (state.recordWorkspace) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await openPane(page, 1, 'plan', 'Plan', 'Stable primary content', 'primary');
+  const plan = page.locator('[data-instance-id="plan"]');
+  await plan.evaluate((element) => {
+    (element as HTMLElement).dataset['preserved'] = 'yes';
+  });
+  let commandId = 2;
+  for (let round = 0; round < 3; round++) {
+    for (const id of ['second', 'third', 'fourth']) {
+      await openPane(page, commandId++, id, id, 'Long content\n'.repeat(40));
+      await advanceFrames(round === 0 ? 32 : 5);
+    }
+    for (const id of ['fourth', 'third', 'second']) {
+      await controlPane(page, 'close', id);
+      await advanceFrames(round === 0 ? 32 : 5);
+    }
+  }
+  await expect(plan).toHaveCSS('width', '1100px');
+  const frames = await page.evaluate(() => {
+    const state = window as unknown as {
+      recordWorkspace: boolean;
+      workspaceFrames: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        scroll: number[];
+      }[];
+    };
+    state.recordWorkspace = false;
+    return state.workspaceFrames;
+  });
+  expect(frames.length).toBeGreaterThan(30);
+  for (const frame of frames) {
+    expect(frame.x).toBe(0);
+    expect(frame.y).toBe(0);
+    expect(frame.width).toBe(1100);
+    expect(frame.height).toBe(760);
+    expect(frame.scroll).toEqual([0, 0]);
+  }
+  await expect(plan).toHaveAttribute('data-preserved', 'yes');
+  await expect(plan).toHaveCSS('width', '1100px');
+});
+
 test('workspace tiles fill the viewport and stable content survives pane insertion and retirement', async ({
   page,
 }) => {
