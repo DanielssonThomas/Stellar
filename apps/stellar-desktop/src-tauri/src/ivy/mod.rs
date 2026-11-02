@@ -14,6 +14,7 @@ mod state;
 mod workspace_capture;
 pub mod workspace_contracts;
 mod workspace_data;
+mod workspace_deadline;
 mod workspace_hub;
 mod workspace_validate;
 #[cfg(test)]

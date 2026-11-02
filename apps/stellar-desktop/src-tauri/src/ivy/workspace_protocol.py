@@ -7,6 +7,7 @@ import json
 import math
 import re
 import secrets
+import time
 
 MAX_PAYLOAD = 65536
 MAX_FRAME = 400000
@@ -165,7 +166,8 @@ class WorkspaceGate:
         request_id = secrets.token_hex(16)
         frame = {'event': 'workspace_tool', 'data': {
             'version': 1, 'request_id': request_id, 'epoch': epoch,
-            'turn_id': turn_id, 'operation': operation,
+            'turn_id': turn_id, 'issued_at_ms': str(time.time_ns() // 1_000_000),
+            'operation': operation,
         }}
         if len(json.dumps(frame, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) + 1 > MAX_FRAME:
             raise WorkspaceRefused()
