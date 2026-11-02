@@ -1,0 +1,70 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.presentation {
+  color: var(--stellar-color-foreground);
+  overflow-wrap: anywhere;
+}
+.presentation h2 {
+  margin: 0 0 1.25rem;
+  font-size: var(--stellar-presentation-title, 1.7rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+}
+.presentation h3 {
+  margin: 1.6rem 0 0.65rem;
+  font-size: 1.2em;
+  font-weight: 500;
+}
+.presentation p,
+.presentation li,
+.presentation td,
+.presentation th,
+.presentation dd {
+  font-size: var(--stellar-presentation-body, 1rem);
+  line-height: 1.65;
+}
+.presentation p {
+  white-space: pre-wrap;
+  margin: 0 0 1rem;
+}
+.presentation ul {
+  padding-left: 1.25rem;
+  margin: 0 0 1.5rem;
+  list-style: disc;
+}
+.presentation li {
+  margin-bottom: 0.4rem;
+}
+.presentation pre {
+  padding: 1rem 0;
+  overflow: auto;
+  white-space: pre;
+  border-block: 1px solid
+    var(--stellar-color-divider, var(--stellar-color-line));
+}
+.presentation code {
+  font-family: monospace;
+  font-size: 0.9em;
+}
+.presentation table {
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 100%;
+}
+.presentation th,
+.presentation td {
+  border-bottom: 1px solid
+    var(--stellar-color-divider, var(--stellar-color-line));
+  padding: 0.65rem 1rem 0.65rem 0;
+  vertical-align: top;
+}
+.presentation th {
+  color: var(--stellar-color-primary);
+  font-weight: 500;
+}
+.muted {
+  color: var(--stellar-color-muted);
+}

@@ -218,6 +218,23 @@ export class StageOrganism {
     return this.registry.snapshot().map((instance) => instance.instanceId);
   }
 
+  nextCommandId(): number | null {
+    return this.registry.nextCommandId();
+  }
+
+  inspectPresentations() {
+    return Object.freeze(
+      this.instances().map((instance) =>
+        Object.freeze({
+          instanceId: instance.instanceId,
+          surface: instance.surface,
+          prominence: instance.prominence,
+          minimized: instance.minimized,
+        }),
+      ),
+    );
+  }
+
   restorePresentation() {
     const instances = this.registry.snapshot();
     const instance = instances.find((entry) => entry.minimized) ?? instances[0];

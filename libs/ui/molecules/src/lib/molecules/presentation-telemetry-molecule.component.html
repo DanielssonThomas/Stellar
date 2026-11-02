@@ -1,0 +1,29 @@
+@if (loading() || view().state === 'loading') {
+  <stellar-skeleton-atom shape="text" />
+} @else if (payload(); as content) {
+  <article class="presentation">
+    <h2>{{ content.title }}</h2>
+    <p class="muted">
+      Source: {{ view().source }} ·
+      {{ live() ? 'Connected' : 'Unavailable or stale' }}
+      @if (age() !== null) {
+        · Observed {{ age() }}s ago
+      }
+    </p>
+    @if (rows().length) {
+      <dl class="m-0">
+        @for (row of rows(); track row.id) {
+          <div class="source-row py-4">
+            <dt class="text-sm text-stellar-muted">{{ row.label }}</dt>
+            <dd class="m-0">{{ live() ? row.value : 'Unavailable' }}</dd>
+            @if (live() && row.detail) {
+              <p class="muted mb-0">{{ row.detail }}</p>
+            }
+          </div>
+        }
+      </dl>
+    } @else {
+      <p class="muted">No source-backed information is available.</p>
+    }
+  </article>
+}

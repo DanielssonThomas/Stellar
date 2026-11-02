@@ -1,0 +1,5 @@
+@import './presentation-content.css';
+.source-row {
+  border-bottom: 1px solid
+    var(--stellar-color-divider, var(--stellar-color-line));
+}
