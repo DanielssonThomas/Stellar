@@ -355,7 +355,11 @@ export class VoiceConversation {
       await this.clearConversation(generation);
       return;
     }
-    if (command === 'end prompt') {
+    if (
+      command === 'end prompt' ||
+      command === 'send prompt' ||
+      command === 'send'
+    ) {
       if (this.composition.status === 'idle' || !this.composition.raw.trim()) {
         this.phase = null;
         this.publish();

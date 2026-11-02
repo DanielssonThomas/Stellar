@@ -441,3 +441,46 @@ fn verified_sol_mismatch_revokes_public_verification_after_reconnect() {
         std::fs::remove_dir_all(directory).unwrap();
     }
 }
+#[cfg(windows)]
+#[test]
+fn clearing_settled_foreground_keeps_unrelated_broker_work_running() {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let script = r#"
+$background = 'running'
+$methods = @()
+while ($line = [Console]::ReadLine()) {
+  $request = $line | ConvertFrom-Json
+  if ($request.method -ne 'test.background') { $methods += $request.method }
+  if ($request.method -ne 'workspace.stop' -and $request.method -ne 'test.background') { $background = 'stopped' }
+  $result = @{background=$background;methods=$methods}
+  [Console]::WriteLine((@{id=$request.id;result=$result}|ConvertTo-Json -Compress -Depth 6))
+}
+"#;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(0x08000000);
+    let (mut session, directory) = fixture();
+    session.record.unsettled = false;
+    session.record.workspace = Some(super::journal::WorkspaceDescriptor {
+        port: 12345,
+        credential_ref: "0123456789abcdef0123456789abcdef".into(),
+    });
+    session.broker =
+        Some(super::process::Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap());
+    session.rotate(IvyModel::Sol, true).unwrap();
+    assert!(session.record.session_id.is_none());
+    assert!(session.record.workspace.is_none());
+    let state = session.call("test.background", json!({})).unwrap();
+    assert_eq!(state["background"], "running");
+    assert_eq!(state["methods"], json!(["workspace.stop"]));
+    drop(session);
+    let (_, record) = Journal::open(&directory).unwrap();
+    assert!(record.session_id.is_none());
+    assert!(record.workspace.is_none());
+    std::fs::remove_dir_all(directory).unwrap();
+}

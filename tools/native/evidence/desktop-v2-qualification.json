@@ -1,0 +1,36 @@
+{
+  "issue": 225,
+  "method": "Opt-in synthetic audio into the native application; real Web Audio, local speech worker, cleanup, Ivy, workspace and playback boundaries",
+  "physicalMicrophone": false,
+  "models": {
+    "recognition": "Whisper base CPU int8",
+    "cleanup": "Qwen3.5-9B-Q5_K_S",
+    "requestedIvy": "gpt-6.1-sol",
+    "verifiedIvy": "sol",
+    "synthesis": "Kokoro af_heart with Windows winsound"
+  },
+  "privateReceiptSha256": {
+    "firstNativeEndPromptFailure": "8327f6719de1242e2af8dd112ab1bbce3c509d5ff10cc59406171f49c8404c23",
+    "offlineSendAndNegativeControls": "b19fd4f47516b4d18c1880a4d741faadf2d2440a381bc82e664ac06a575f81b9",
+    "alternateViewportNativePass": "64d3639daf205188b6697f61e898b4fec80210adb3774c7dcdb7e1b1a7c48dea",
+    "primaryViewportNativePass": "65b0ad731ca7e86a67c1ae83d4376b34d5205aad61f9619402cb35f36c242f0c",
+    "settledForegroundClear": "6f84e8ffa9f15c651c4e61685cadbfd9b0c7fade3dddd181a56905ee19aec4c4"
+  },
+  "observations": {
+    "alternateViewport": [1100, 760],
+    "primaryViewport": [2560, 1370],
+    "finalizationRecognizedInBoth": "send prompt",
+    "captureTracksEndedBeforeBusy": true,
+    "singleSubmitAfterDissolvedPresentation": true,
+    "expectedPaneAndVerifiedSolCompletion": true,
+    "synthesisSpeakingIdleAndCaptureReacquisition": true,
+    "settledPublicClearReturnedTrue": true,
+    "firstEndPromptSyntheticRecognizedAsAndPrompt": true
+  },
+  "limitations": [
+    "Plain send is covered by automated command and coordinator tests, not a native speech fixture.",
+    "Synthetic observations do not verify a physical microphone, Windows microphone indicator, or performance budget; physical qualification remains issue 184.",
+    "The first native end-prompt misrecognition is not claimed fixed.",
+    "Fixture audio, detailed receipts and app recordings are private and not included in the repository."
+  ]
+}

@@ -402,6 +402,36 @@ describe('spoken prompt composition', () => {
     },
   );
 
+  it('reconciles an overlapping capture reset and accepts a settled public clear', async () => {
+    const pending = deferred<boolean>();
+    let state!: VoiceComposition;
+    let actual: 'sol' | 'terra' = 'sol';
+    const clearConversation = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        const accepted = await pending.promise;
+        actual = 'terra';
+        return accepted;
+      })
+      .mockResolvedValueOnce(true);
+    const f = fixture({
+      clearConversation,
+      readSession: async () => actual,
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setModel('sol');
+    const overlapping = f.controller.resetConversation();
+    f.controller.accept({ type: 'reset' });
+    pending.resolve(true);
+    expect(await overlapping).toBe(false);
+    expect(state).toMatchObject({ model: 'terra', status: 'error' });
+    expect(await f.controller.resetConversation()).toBe(true);
+    expect(state).toMatchObject({ model: 'terra', status: 'idle' });
+    expect(clearConversation).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps interrupted route unknown without a snapshot until explicit reconciliation', async () => {
     let state!: VoiceComposition;
     const pending = deferred<boolean>();
@@ -868,9 +898,15 @@ describe('spoken prompt composition', () => {
       expect(voiceCommand(text)).toBe(text === 'clear' ? 'clear' : 'done');
     expect(voiceCommand('Prompt!')).toBe('prompt');
     expect(voiceCommand('end prompt.')).toBe('end prompt');
+    expect(voiceCommand('Send!')).toBe('send');
+    expect(voiceCommand('SEND, PROMPT.')).toBe('send prompt');
     for (const text of [
       'the prompt is clear',
       'say end prompt now',
+      'and prompt',
+      'dont send',
+      'send me the draft',
+      'send prompt now',
       'I am done with this part',
     ])
       expect(voiceCommand(text)).toBeNull();
@@ -917,6 +953,43 @@ describe('spoken prompt composition', () => {
       ' First clause \nend prompt is a phrase',
     );
   });
+
+  it.each(['send', 'send prompt'])(
+    'treats %s as one finalization only after a nonempty draft and presentation',
+    async (command) => {
+      const empty = fixture();
+      empty.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: command,
+      });
+      empty.utterance();
+      await flush();
+      expect(empty.ports.submit).not.toHaveBeenCalled();
+
+      const done = deferred<void>();
+      const refinePrompt = vi.fn(async () => 'cleaned');
+      const present = vi.fn(() => done.promise);
+      const f = fixture({ refinePrompt, presentFinalized: present });
+      f.controller.setDraft('raw text');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: command,
+      });
+      f.utterance();
+      await flush();
+      expect(refinePrompt).toHaveBeenCalledOnce();
+      expect(present).toHaveBeenCalledOnce();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      f.utterance();
+      await flush();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      done.resolve();
+      await flush();
+      expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    },
+  );
 
   it('waits for the bound presentation before submitting the refined prompt once', async () => {
     let state!: VoiceComposition;
