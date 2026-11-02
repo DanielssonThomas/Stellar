@@ -29,8 +29,13 @@ const prominence: Record<WorkspaceProminence, true> = {
   secondary: true,
 };
 const payloadLimits: Record<WorkspaceSurface, number> = {
-  'rich-text': 65536, image: 65536, 'assistant-message': 65536,
-  diagram: 16384, browser: 4096, workflow: 2048, session: 2048,
+  'rich-text': 65536,
+  image: 65536,
+  'assistant-message': 65536,
+  diagram: 16384,
+  browser: 4096,
+  workflow: 2048,
+  session: 2048,
   'activity-summary': 0,
 };
 
@@ -76,7 +81,8 @@ function operation(value: unknown): WorkspaceToolOperation {
     ...(kind === 'open' ? ['prominence'] : []),
   ]);
   const surface = choice(data['surface'], surfaces);
-  if (surface === 'activity-summary') throw new DesktopContractError('unknown-variant');
+  if (surface === 'activity-summary')
+    throw new DesktopContractError('unknown-variant');
   const payload = boundedString(data['payload_json'], payloadLimits[surface]);
   try {
     const parsed: unknown = JSON.parse(payload);

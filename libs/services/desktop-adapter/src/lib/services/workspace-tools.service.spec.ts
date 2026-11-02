@@ -29,7 +29,9 @@ function fixture() {
     turn_id: turn,
   });
   const ivy = { state, snapshot: vi.fn(async () => state()) };
-  const reply = vi.fn<(reply: WorkspaceToolReply) => Promise<void>>(async () => undefined);
+  const reply = vi.fn<(reply: WorkspaceToolReply) => Promise<void>>(
+    async () => undefined,
+  );
   const unlisten = vi.fn();
   const transport = {
     listen: vi.fn(async (callback: (value: unknown) => void) => {
@@ -104,7 +106,12 @@ describe('workspace tool adapter', () => {
     let now = Date.now();
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
     let resolve!: (value: ReturnType<typeof f.state>) => void;
-    f.ivy.snapshot.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    f.ivy.snapshot.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
     const handler = vi.fn(() => ({ kind: 'applied' as const }));
     f.service.bind(handler);
     const deadline = now + 100;
@@ -144,5 +151,4 @@ describe('workspace tool adapter', () => {
     clock.mockRestore();
     TestBed.resetTestingModule();
   });
-
 });
