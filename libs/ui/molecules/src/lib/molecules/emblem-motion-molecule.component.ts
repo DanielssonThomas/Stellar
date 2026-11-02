@@ -28,6 +28,8 @@ import {
   consolidatedClipFiles,
 } from './emblem-motion-model';
 
+let nextEmblemIdentity = 0;
+
 @Component({
   selector: 'stellar-emblem-motion-molecule',
   standalone: true,
@@ -37,6 +39,13 @@ import {
   host: { '[attr.aria-busy]': 'loading()' },
 })
 export class EmblemMotionMolecule {
+  readonly solMaskId = `sol-stars-${++nextEmblemIdentity}`;
+  readonly solStars = [
+    'translate(640 130)',
+    'translate(1150 640)',
+    'translate(640 1150)',
+    'translate(130 640)',
+  ];
   readonly manifest = input<EmblemManifest | null>(null);
   readonly assetBasePath = input('');
   readonly phase = input<Phase>('idle');

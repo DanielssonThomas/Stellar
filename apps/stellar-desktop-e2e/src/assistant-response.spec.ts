@@ -102,10 +102,11 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
   await expect(page.locator('.sol-ring')).toHaveCount(1);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   await expect(page.locator('.camera')).toHaveCSS('opacity', '0.68');
-  await expect(page.locator('.sol-ring')).toHaveCSS(
-    'vector-effect',
-    'non-scaling-stroke',
-  );
+  const redStroke = await page
+    .locator('.sol-ring')
+    .evaluate((element) => parseFloat(getComputedStyle(element).strokeWidth));
+  expect(redStroke).toBeGreaterThanOrEqual(15);
+  expect(redStroke).toBeLessThanOrEqual(19);
   await selectAppearance('terra');
   await expect(page.locator('.sol-ring')).toHaveCount(0);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');

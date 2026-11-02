@@ -80,14 +80,40 @@
           animate.enter="sol-enter"
           animate.leave="sol-leave"
         >
-          <circle class="sol-ring" cx="640" cy="640" r="510" />
+          <defs>
+            <mask
+              [id]="solMaskId"
+              maskUnits="userSpaceOnUse"
+              x="0"
+              y="0"
+              width="1280"
+              height="1280"
+            >
+              <rect width="1280" height="1280" fill="white" />
+              <g fill="black" stroke="black" stroke-width="4">
+                @for (star of solStars; track star) {
+                  <path
+                    [attr.transform]="star"
+                    d="M0 -58 Q10 -10 44 0 Q10 10 0 58 Q-10 10 -44 0 Q-10 -10 0 -58Z"
+                  />
+                }
+              </g>
+            </mask>
+          </defs>
+          <circle
+            class="sol-ring"
+            cx="640"
+            cy="640"
+            r="510"
+            [attr.mask]="'url(#' + solMaskId + ')'"
+          />
           <path
             class="sol-eye"
-            d="M344 508 Q363 493 390 498 Q369 514 344 508Z M916 537 Q940 535 966 553 Q942 553 916 537Z"
+            d="M344 523 Q363 508 390 513 Q369 529 344 523Z M914 510 Q936 504 956 523 Q935 527 914 510Z"
           />
           <path
             class="sol-eye-core"
-            d="M351 506 Q367 498 383 499 Q367 508 351 506Z M924 540 Q941 540 959 550 Q941 548 924 540Z"
+            d="M351 521 Q367 513 383 514 Q367 523 351 521Z M921 512 Q936 509 949 520 Q936 520 921 512Z"
           />
         </svg>
       }

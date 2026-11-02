@@ -112,6 +112,10 @@ describe('EmblemMotionMolecule', () => {
       ring.getAttribute('cy'),
       ring.getAttribute('r'),
     ]).toEqual(['640', '640', '510']);
+    expect(fixture.nativeElement.querySelectorAll('mask path')).toHaveLength(4);
+    expect(ring.getAttribute('mask')).toBe(
+      `url(#${fixture.componentInstance.solMaskId})`,
+    );
     expect(
       fixture.nativeElement
         .querySelector('.sol-eye')
