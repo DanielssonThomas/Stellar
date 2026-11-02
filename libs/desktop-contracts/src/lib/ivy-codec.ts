@@ -4,6 +4,8 @@ import type {
   IvyTurnState,
   IvyErrorCode,
   IvyPresentation,
+  IvyModel,
+  IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
   IvySnapshot,
@@ -43,6 +45,8 @@ const errors: Record<IvyErrorCode, true> = {
   turn_failed: true,
 };
 
+const models: Record<IvyModel, true> = { terra: true, sol: true };
+
 const components: Record<IvyComponent, true> = { assistant_message: true };
 const kinds: Record<IvyPresentation['kind'], true> = {
   text: true,
@@ -76,6 +80,14 @@ function text(value: unknown, bytes?: number): string {
 export function decodeIvyRequest(value: unknown): IvyRequest {
   const data = record(value, ['version']);
   return { version: version(data['version']) };
+}
+
+export function decodeIvySelectRequest(value: unknown): IvySelectRequest {
+  const data = record(value, ['version', 'model']);
+  return {
+    version: version(data['version']),
+    model: variant(data['model'], models),
+  };
 }
 
 export function decodeIvySubmitRequest(value: unknown): IvySubmitRequest {
@@ -117,6 +129,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     'version',
     'revision',
     'turn_id',
+    'model',
+    'verified_model',
     'connection',
     'turn',
     'items',
@@ -134,10 +148,20 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     version: version(data['version']),
     revision: sequence(data['revision']),
     turn_id: data['turn_id'] === null ? null : identifier(data['turn_id']),
+    model: variant(data['model'], models),
+    verified_model:
+      data['verified_model'] === null
+        ? null
+        : variant(data['verified_model'], models),
     connection: variant(data['connection'], connections),
     turn: variant(data['turn'], turns),
     items: decoded,
     error: data['error'] === null ? null : decodeIvyError(data['error']),
   };
+  if (
+    snapshot.verified_model !== null &&
+    snapshot.verified_model !== snapshot.model
+  )
+    throw new DesktopContractError('malformed');
   return snapshot;
 }

@@ -19,6 +19,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
     >();
     const emit = (event: string, payload: unknown) =>
       callbacks.get(event)?.forEach((callback) => callback({ payload }));
+    let initialSnapshot = true;
     let ivyRevision = 0,
       speechRevision = 0;
     let currentSpeech: SpeechSnapshot = {
@@ -33,6 +34,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       version: 1,
       revision: String(++ivyRevision),
       turn_id,
+      model: 'terra',
+      verified_model: null,
       connection: 'ready',
       turn: 'idle',
       items: [],
@@ -82,6 +85,15 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
                 build_revision: null,
               };
             if (command === 'ivy_connect') return ivy();
+            if (command === 'ivy_snapshot') {
+              if (initialSnapshot) {
+                initialSnapshot = false;
+                throw new Error('Temporary snapshot failure');
+              }
+              return ivy();
+            }
+            if (command === 'ivy_select_session')
+              return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
             if (command === 'speech_transcribe') {
               results.speechId = String(request['utterance_id']);
@@ -192,6 +204,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
+  await page.getByRole('button', { name: 'Retry voice', exact: true }).click();
   await expect(page.getByText('Ivy connected', { exact: true })).toBeVisible();
   expect(
     (await fixture()).calls.filter(
@@ -239,9 +252,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: 'Close Assistant message', exact: true })
-    .click();
+  await panel.focus();
+  await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
   expect(
     (await fixture()).calls.filter((command) => command === 'ivy_submit'),

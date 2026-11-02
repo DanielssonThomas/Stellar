@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { controlPane } from './stage-driver';
 
 test('menu keyboard and explicit trusted presentation retain activity and return ambient on close', async ({
   page,
@@ -68,14 +69,13 @@ test('menu keyboard and explicit trusted presentation retain activity and return
     .click();
   await page.getByRole('button', { name: 'End activity', exact: true }).click();
   await expect(panel).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Minimize Assistant message' })
-    .click();
+  await controlPane(page, 'minimize');
   await expect(panel).toHaveCount(0);
-  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('button', { name: 'Show content', exact: true }).click();
   await expect(panel).toBeVisible();
-  await page.getByRole('button', { name: 'Close Assistant message' }).click();
+  await panel.focus();
+  await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await expect(

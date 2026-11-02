@@ -39,3 +39,21 @@ export type {
   VoiceView,
   VoicePorts,
 } from './lib/speech/voice-conversation';
+export { createPromptCleanup } from './lib/speech/prompt-cleanup';
+export type {
+  PromptCleanupProvider,
+  PromptCleanupResult,
+} from './lib/speech/prompt-cleanup';
+
+export { createNativePromptCleanup } from './lib/speech/native-prompt-cleanup';
+export type { CleanupInvoke } from './lib/speech/native-prompt-cleanup';
+export { PromptCleanupService } from './lib/services/prompt-cleanup.service';
+export {
+  DesktopTelemetryService,
+  DESKTOP_TELEMETRY_TRANSPORT,
+} from './lib/services/desktop-telemetry.service';
+export type {
+  VoiceComposition,
+  VoiceModel,
+  VoiceCommand,
+} from './lib/speech/voice-composition';

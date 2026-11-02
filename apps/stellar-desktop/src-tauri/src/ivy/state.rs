@@ -29,6 +29,18 @@ impl Shared {
         (self.publish)(updated);
     }
 
+    pub fn update_current(&self, change: impl FnOnce(&mut IvySnapshot)) {
+        let updated = {
+            let Ok(mut view) = self.view.lock() else {
+                return;
+            };
+            change(&mut view.snapshot);
+            let revision = view.snapshot.revision.parse::<u64>().unwrap_or(0);
+            view.snapshot.revision = revision.saturating_add(1).to_string();
+            view.snapshot.clone()
+        };
+        (self.publish)(updated);
+    }
     pub fn current(&self, epoch: u64) -> bool {
         self.view.lock().is_ok_and(|view| view.epoch == epoch)
     }

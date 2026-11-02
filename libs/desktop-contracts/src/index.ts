@@ -22,6 +22,8 @@ export type {
   IvyConnectionState,
   IvyTurnState,
   IvyErrorCode,
+  IvyModel,
+  IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
   IvyComponent,
@@ -36,10 +38,13 @@ export {
   ivyCancelCommand,
   ivyReconcileCommand,
   ivyDisconnectCommand,
+  ivySelectSessionCommand,
+  ivyClearConversationCommand,
   ivyEvent,
 } from './generated';
 export {
   decodeIvyRequest,
+  decodeIvySelectRequest,
   decodeIvySubmitRequest,
   decodeIvyError,
   decodeIvySnapshot,
@@ -71,3 +76,23 @@ export {
   decodeSpeechSnapshot,
   decodeSpeechError,
 } from './lib/speech-codec';
+
+export type { CleanupRequest, CleanupReply } from './generated';
+export { cleanupRefineCommand } from './generated';
+export { decodeCleanupReply } from './lib/cleanup-codec';
+export type {
+  TelemetrySnapshot,
+  TelemetryAgent,
+  TelemetrySource,
+  TelemetryUsage,
+  TelemetryEvent,
+  TelemetryProject,
+  TelemetryState,
+  TelemetryHealth,
+  TelemetrySourceKind,
+  TelemetryEventKind,
+  TelemetryError,
+} from './generated';
+export { decodeTelemetrySnapshot } from './lib/telemetry-codec';
+
+export { telemetrySnapshotCommand } from './generated';

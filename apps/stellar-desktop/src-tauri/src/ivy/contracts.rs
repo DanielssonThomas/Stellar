@@ -40,6 +40,19 @@ pub enum IvyErrorCode {
     TurnFailed,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyModel {
+    #[default]
+    Terra,
+    Sol,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvySelectRequest {
+    pub version: u16,
+    pub model: IvyModel,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvyRequest {
@@ -60,6 +73,8 @@ pub struct IvySnapshot {
     pub version: u16,
     pub revision: String,
     pub turn_id: Option<String>,
+    pub model: IvyModel,
+    pub verified_model: Option<IvyModel>,
     pub connection: IvyConnectionState,
     pub turn: IvyTurnState,
     pub items: Vec<super::presentation::IvyPresentation>,
@@ -72,6 +87,8 @@ impl Default for IvySnapshot {
             version: 1,
             revision: "0".into(),
             turn_id: None,
+            model: IvyModel::Terra,
+            verified_model: None,
             connection: IvyConnectionState::Disconnected,
             turn: IvyTurnState::Idle,
             items: vec![],

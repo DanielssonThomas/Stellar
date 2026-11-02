@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+mod cleanup;
 mod commands;
 mod contracts;
 mod ivy;
@@ -9,10 +10,11 @@ mod shell;
 #[cfg(feature = "native-smoke")]
 mod smoke;
 mod speech;
+mod telemetry;
 
 fn main() {
     use tauri::{Emitter, Manager};
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 6);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 8);
     let navigation = tauri::plugin::Builder::<tauri::Wry>::new("local-navigation")
         .on_navigation(|_, url| {
             (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
@@ -22,8 +24,13 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
+            app.manage(cleanup::CleanupHost::default());
             let handle = app.handle().clone();
+            #[cfg(not(feature = "native-smoke"))]
             let directory = app.path().app_local_data_dir()?.join("ivy");
+            #[cfg(feature = "native-smoke")]
+            let directory =
+                std::env::temp_dir().join(format!("stellar-ivy-smoke-{}", std::process::id()));
             app.manage(ivy::IvyHost::new(
                 &directory,
                 std::sync::Arc::new(move |snapshot| {
@@ -46,6 +53,11 @@ fn main() {
                 host.shutdown();
             }
             if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<cleanup::CleanupHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<speech::SpeechHost>()
             {
                 let _ = host.shutdown();
@@ -63,10 +75,14 @@ fn main() {
         ivy::ivy_cancel,
         ivy::ivy_reconcile,
         ivy::ivy_disconnect,
+        ivy::ivy_select_session,
+        ivy::ivy_clear_conversation,
         speech::speech_transcribe,
         speech::speech_speak,
         speech::speech_stop,
-        speech::speech_snapshot
+        speech::speech_snapshot,
+        cleanup::cleanup_refine,
+        telemetry::telemetry_snapshot
     ]);
     builder
         .build(tauri::generate_context!())
@@ -74,6 +90,11 @@ fn main() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<ivy::IvyHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<cleanup::CleanupHost>()
             {
                 host.shutdown();
             }

@@ -1,22 +1,31 @@
 #![forbid(unsafe_code)]
+#[path = "src/cleanup/command_name.rs"]
+mod cleanup_name;
 #[path = "src/app_info/command_name.rs"]
 mod command_name;
 #[path = "src/ivy/command_names.rs"]
 mod ivy_names;
 #[path = "src/speech/command_names.rs"]
 mod speech_names;
+#[path = "src/telemetry/command_name.rs"]
+mod telemetry_name;
 
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        cleanup_name::CLEANUP_COMMAND,
         command_name::APP_INFO_COMMAND,
         "smoke_result",
+        telemetry_name::TELEMETRY_COMMAND,
+        "smoke_hold_ivy",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],
         ivy_names::IVY_COMMANDS[2],
         ivy_names::IVY_COMMANDS[3],
         ivy_names::IVY_COMMANDS[4],
         ivy_names::IVY_COMMANDS[5],
+        ivy_names::IVY_COMMANDS[6],
+        ivy_names::IVY_COMMANDS[7],
         speech_names::SPEECH_COMMANDS[0],
         speech_names::SPEECH_COMMANDS[1],
         speech_names::SPEECH_COMMANDS[2],

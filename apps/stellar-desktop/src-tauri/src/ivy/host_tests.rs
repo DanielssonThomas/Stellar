@@ -14,6 +14,8 @@ fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
             shared,
             child: Arc::new(Mutex::new(None)),
             sender,
+            gate: Mutex::new(()),
+            pending_rotation: Arc::new(Mutex::new(None)),
         },
         receiver,
     )
@@ -33,6 +35,121 @@ fn repeated_connect_enqueues_one_silent_operation() {
         host.snapshot().unwrap().connection,
         IvyConnectionState::Connecting
     );
+}
+
+#[test]
+fn failed_route_validation_revokes_verification_through_reconnect() {
+    let (host, _receiver) = fixture();
+    let directory =
+        std::env::temp_dir().join(format!("stellar-ivy-verification-{}", std::process::id()));
+    let (journal, record) = Journal::open(&directory).unwrap();
+    let mut session = Session {
+        journal,
+        record,
+        broker: None,
+        shared: host.shared.clone(),
+        epoch: 0,
+        buffered: vec![],
+        replay: None,
+    };
+    host.shared.update(0, |view| {
+        view.model = IvyModel::Sol;
+        view.verified_model = Some(IvyModel::Sol);
+        view.turn = IvyTurnState::Submitting;
+    });
+    fail(&mut session, IvyErrorCode::Unavailable);
+    let failed = host.snapshot().unwrap();
+    assert_eq!(failed.model, IvyModel::Sol);
+    assert_eq!(failed.verified_model, None);
+    publish_ready(&session);
+    let reconnected = host.snapshot().unwrap();
+    assert_eq!(reconnected.connection, IvyConnectionState::Ready);
+    assert_eq!(reconnected.verified_model, None);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn disconnect_cancels_rotation_queued_behind_slow_connect_without_waiting() {
+    let (host, receiver) = fixture();
+    host.request(Action::Connect).unwrap();
+    let slow_connect = receiver.try_recv().unwrap();
+    let rotation = host.rotate(IvyModel::Sol, false).unwrap();
+    let queued = receiver.try_recv().unwrap();
+    let started = Instant::now();
+    host.request(Action::Cancel).unwrap();
+    host.request(Action::Disconnect).unwrap();
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(!host.shared.current(slow_connect.epoch));
+    if let Action::Rotate(_, _, ticket, reply) = queued.action {
+        assert!(!rotation::start(&ticket));
+        drop(reply);
+    } else {
+        panic!("expected rotation");
+    }
+    assert!(matches!(rotation.wait(), Err(IvyErrorCode::Unavailable)));
+    assert_eq!(host.snapshot().unwrap().model, IvyModel::Terra);
+}
+
+#[test]
+fn timed_out_queued_rotation_cannot_start_later() {
+    let (host, receiver) = fixture();
+    let rotation = host.rotate(IvyModel::Sol, false).unwrap();
+    let queued = receiver.try_recv().unwrap();
+    assert!(matches!(rotation.wait(), Err(IvyErrorCode::Timeout)));
+    if let Action::Rotate(_, _, ticket, _) = queued.action {
+        assert!(!rotation::start(&ticket));
+    } else {
+        panic!("expected rotation");
+    }
+    assert_eq!(host.snapshot().unwrap().model, IvyModel::Terra);
+}
+
+#[test]
+fn started_rotation_remains_busy_until_settled_after_disconnect() {
+    let (host, receiver) = fixture();
+    let rotation = host.rotate(IvyModel::Sol, false).unwrap();
+    let queued = receiver.try_recv().unwrap();
+    let Action::Rotate(model, force, ticket, reply) = queued.action else {
+        panic!("expected rotation")
+    };
+    assert!(rotation::start(&ticket));
+    host.request(Action::Disconnect).unwrap();
+    assert!(matches!(host.snapshot(), Err(IvyErrorCode::Busy)));
+    let directory =
+        std::env::temp_dir().join(format!("stellar-ivy-rotation-{}", std::process::id()));
+    let (journal, record) = Journal::open(&directory).unwrap();
+    let mut session = Session {
+        journal,
+        record,
+        broker: None,
+        shared: host.shared.clone(),
+        epoch: queued.epoch,
+        buffered: vec![],
+        replay: None,
+    };
+    session.rotate(model, force).unwrap();
+    rotation::finish(&host.pending_rotation, &ticket);
+    reply.send(Ok(host.snapshot().unwrap())).unwrap();
+    assert_eq!(rotation.wait().unwrap().model, IvyModel::Sol);
+    assert_eq!(host.snapshot().unwrap().model, IvyModel::Sol);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn timed_out_started_rotation_stays_busy_until_its_result_is_known() {
+    let (host, receiver) = fixture();
+    let rotation = host.rotate(IvyModel::Sol, false).unwrap();
+    let queued = receiver.try_recv().unwrap();
+    let Action::Rotate(_, _, ticket, _reply) = queued.action else {
+        panic!("expected rotation")
+    };
+    assert!(rotation::start(&ticket));
+    assert!(matches!(rotation.wait(), Err(IvyErrorCode::Uncertain)));
+    assert!(matches!(host.snapshot(), Err(IvyErrorCode::Busy)));
+    rotation::finish(&host.pending_rotation, &ticket);
+    assert_eq!(host.snapshot().unwrap().model, IvyModel::Terra);
 }
 
 #[test]
