@@ -65,6 +65,12 @@ export function createPromptCleanup(
         })
       )
         return fallback;
+      // Only remove an initial, comma-delimited spoken interjection. All
+      // remaining characters must match, including quoted text and punctuation.
+      const source = raw.trim();
+      const withoutFiller = source.replace(/^(?:um|uh),[ \t]+/i, '');
+      if (output.trim() !== source && output.trim() !== withoutFiller)
+        return fallback;
       const ambiguousQuotes = (text: string) =>
         /[\\/]/.test(text) &&
         (text.includes("'") ||

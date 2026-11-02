@@ -4,10 +4,10 @@ import { createNativePromptCleanup } from './native-prompt-cleanup';
 describe('native prompt cleanup', () => {
   const raw =
     'Um, save C:\\demo\\report.txt for ID ALPHA-42. Actually JSON, not CSV.';
-  it('decodes a native reply and keeps protected identifiers', async () => {
+  it('decodes a native reply with a permitted filler removal', async () => {
     const invoke = vi.fn().mockResolvedValue({
       version: 1,
-      text: 'Save C:\\demo\\report.txt for ID ALPHA-42 as JSON.',
+      text: 'save C:\\demo\\report.txt for ID ALPHA-42. Actually JSON, not CSV.',
     });
     const result = await createNativePromptCleanup(invoke)(
       raw,
@@ -15,8 +15,24 @@ describe('native prompt cleanup', () => {
     );
     expect(result).toEqual({
       raw,
-      text: 'Save C:\\demo\\report.txt for ID ALPHA-42 as JSON.',
+      text: 'save C:\\demo\\report.txt for ID ALPHA-42. Actually JSON, not CSV.',
       status: 'refined',
+    });
+  });
+  it('keeps the raw transcript when a native reply applies an ambiguous revision', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      version: 1,
+      text: 'Save C:\\demo\\report.txt for ID ALPHA-42 as JSON.',
+    });
+    expect(
+      await createNativePromptCleanup(invoke)(
+        raw,
+        new AbortController().signal,
+      ),
+    ).toEqual({
+      raw,
+      text: raw,
+      status: 'fallback',
     });
   });
   it.each([
