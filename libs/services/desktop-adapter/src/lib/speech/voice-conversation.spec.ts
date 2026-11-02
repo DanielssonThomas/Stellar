@@ -673,6 +673,140 @@ describe('spoken prompt composition', () => {
     );
   });
 
+  it('waits for the bound presentation before submitting the refined prompt once', async () => {
+    let state!: VoiceComposition;
+    const done = deferred<void>();
+    const present = vi.fn((prompt: unknown, signal: AbortSignal) => {
+      void prompt;
+      void signal;
+      return done.promise;
+    });
+    const f = fixture({
+      refinePrompt: async () => 'cleaned',
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    const unbind = f.controller.bindPromptPresentation(present);
+    f.controller.setDraft('raw input');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    expect(state).toMatchObject({
+      raw: 'raw input',
+      refined: 'cleaned',
+      status: 'finalizing',
+    });
+    expect(present).toHaveBeenCalledOnce();
+    expect(present.mock.calls[0][0]).toEqual({
+      raw: 'raw input',
+      refined: 'cleaned',
+      model: 'terra',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    done.resolve();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    expect(state).toMatchObject({
+      raw: '',
+      refined: null,
+      lastSubmittedRaw: 'raw input',
+    });
+    unbind();
+  });
+
+  it.each(['reset', 'mute', 'unavailable', 'dispose', 'unbind'] as const)(
+    'fences a pending presentation on %s and ignores late completion',
+    async (operation) => {
+      let state!: VoiceComposition;
+      let signal!: AbortSignal;
+      const done = deferred<void>();
+      const f = fixture({
+        refinePrompt: async () => 'cleaned',
+        onComposition: (next) => {
+          state = next;
+        },
+      });
+      const unbind = f.controller.bindPromptPresentation((_prompt, next) => {
+        signal = next;
+        return done.promise;
+      });
+      f.controller.setDraft('raw input');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'end prompt',
+      });
+      f.utterance();
+      await flush();
+      expect(state.status).toBe('finalizing');
+      if (operation === 'reset') f.controller.accept({ type: 'reset' });
+      if (operation === 'mute') f.controller.setMuted(true);
+      if (operation === 'unavailable') f.update({ available: false });
+      if (operation === 'dispose') f.controller.dispose();
+      if (operation === 'unbind') unbind();
+      expect(signal.aborted).toBe(true);
+      done.resolve();
+      await flush();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      if (operation !== 'dispose')
+        expect(state).toMatchObject({
+          raw: 'raw input',
+          refined: 'cleaned',
+          status: 'error',
+        });
+    },
+  );
+
+  it('retains both versions on presentation failure and on timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const fail of ['reject', 'timeout'] as const) {
+        let state!: VoiceComposition;
+        let signal!: AbortSignal;
+        const done = deferred<void>();
+        const f = fixture({
+          refinePrompt: async () => 'cleaned',
+          onComposition: (next) => {
+            state = next;
+          },
+          presentFinalized: (_prompt, next) => {
+            signal = next;
+            return fail === 'reject'
+              ? Promise.reject(new Error('UI failed'))
+              : done.promise;
+          },
+        });
+        f.controller.setDraft('raw input');
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: 'end prompt',
+        });
+        f.utterance();
+        await flush();
+        if (fail === 'timeout') await vi.advanceTimersByTimeAsync(10_000);
+        await flush();
+        expect(state).toMatchObject({
+          raw: 'raw input',
+          refined: 'cleaned',
+          status: 'error',
+        });
+        expect(state.error).toContain('presentation');
+        if (fail === 'timeout') expect(signal.aborted).toBe(true);
+        done.resolve();
+        await flush();
+        expect(f.ports.submit).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('retains an over-limit draft without selecting a model or dispatching, and permits editing', async () => {
     let state!: VoiceComposition;
     const selectSession = vi.fn(async () => true);

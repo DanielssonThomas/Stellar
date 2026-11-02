@@ -14,6 +14,13 @@ import {
   type VoiceComposition,
   type VoiceModel,
 } from './voice-composition';
+import {
+  awaitPromptPresentation,
+  type PromptPresentation,
+} from './prompt-presentation';
+
+const preparing = (status: VoiceComposition['status']) =>
+  ['refining', 'finalizing', 'submitting'].includes(status);
 
 export interface VoiceContext {
   readonly audio: AudioActivityState;
@@ -43,6 +50,7 @@ export interface VoicePorts {
   readonly clearConversation?: () => Promise<boolean>;
   readonly readSession?: () => Promise<VoiceModel>;
   readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
+  readonly presentFinalized?: PromptPresentation;
   readonly onComposition?: (state: VoiceComposition) => void;
 }
 
@@ -64,17 +72,41 @@ export class VoiceConversation {
   private unconfirmedStop = false;
   private composition: VoiceComposition = {
     raw: '',
+    refined: null,
     lastSubmittedRaw: '',
     model: 'terra',
     status: 'idle',
     error: '',
   };
   private refinement?: AbortController;
+  private presentation?: { handler: PromptPresentation };
+  private activePresentation?: { handler: PromptPresentation };
   private dispatchUncertain = false;
   private routeUncertain = false;
   private sessionPending = false;
 
-  constructor(private readonly ports: VoicePorts) {}
+  constructor(private readonly ports: VoicePorts) {
+    if (ports.presentFinalized)
+      this.presentation = { handler: ports.presentFinalized };
+  }
+
+  bindPromptPresentation(handler: PromptPresentation): () => void {
+    if (this.disposed) return () => undefined;
+    if (this.activePresentation) {
+      this.invalidate();
+      this.publish();
+    }
+    const binding = { handler };
+    this.presentation = binding;
+    return () => {
+      if (this.presentation !== binding) return;
+      this.presentation = undefined;
+      if (this.activePresentation === binding) {
+        this.invalidate();
+        this.publish();
+      }
+    };
+  }
 
   update(context: VoiceContext) {
     if (this.disposed) return;
@@ -151,7 +183,11 @@ export class VoiceConversation {
   setMuted(muted: boolean) {
     if (this.disposed) return;
     this.muted = muted;
-    if (muted && this.phase === 'speaking') this.invalidate();
+    if (
+      muted &&
+      (this.phase === 'speaking' || this.composition.status === 'finalizing')
+    )
+      this.invalidate();
     this.publish();
   }
 
@@ -175,6 +211,7 @@ export class VoiceConversation {
     this.disposed = true;
     this.composition = {
       raw: '',
+      refined: null,
       lastSubmittedRaw: '',
       model: 'terra',
       status: 'idle',
@@ -186,7 +223,7 @@ export class VoiceConversation {
     if (
       !this.disposed &&
       !this.sessionPending &&
-      this.composition.status !== 'finalizing'
+      !preparing(this.composition.status)
     )
       this.setComposition({ ...this.composition, model });
   }
@@ -195,13 +232,14 @@ export class VoiceConversation {
     if (
       this.disposed ||
       this.sessionPending ||
-      this.composition.status === 'finalizing'
+      preparing(this.composition.status)
     )
       return;
     if (raw !== this.composition.raw) this.dispatchUncertain = false;
     this.setComposition({
       ...this.composition,
       raw,
+      refined: raw === this.composition.raw ? this.composition.refined : null,
       status: fitsVoicePrompt(raw) ? 'composing' : 'error',
       error: fitsVoicePrompt(raw)
         ? ''
@@ -213,7 +251,7 @@ export class VoiceConversation {
     if (
       !this.disposed &&
       !this.sessionPending &&
-      this.composition.status !== 'finalizing'
+      !preparing(this.composition.status)
     )
       this.setComposition({ ...this.composition, model });
   }
@@ -240,7 +278,7 @@ export class VoiceConversation {
     if (
       this.disposed ||
       this.sessionPending ||
-      this.composition.status === 'finalizing'
+      preparing(this.composition.status)
     )
       return false;
     this.routeUncertain = false;
@@ -334,7 +372,8 @@ export class VoiceConversation {
     this.setComposition({
       ...this.composition,
       raw: text,
-      status: 'finalizing',
+      refined: null,
+      status: 'submitting',
       error: '',
     });
     try {
@@ -376,6 +415,7 @@ export class VoiceConversation {
     this.phase = null;
     this.setComposition({
       raw: '',
+      refined: null,
       lastSubmittedRaw: '',
       model: 'terra',
       status: 'idle',
@@ -407,9 +447,13 @@ export class VoiceConversation {
     }
     this.setComposition({
       ...this.composition,
-      status: 'finalizing',
+      refined: null,
+      status: 'refining',
       error: '',
     });
+    let controller: AbortController | undefined;
+    let activeBinding: { handler: PromptPresentation } | undefined;
+    let presenting = false;
     try {
       if (!this.current(generation)) return;
       const selectSession = this.ports.selectSession;
@@ -420,22 +464,60 @@ export class VoiceConversation {
       )
         throw new Error();
       if (!this.current(generation)) return;
-      const controller = new AbortController();
+      controller = new AbortController();
       this.refinement = controller;
       const text = this.ports.refinePrompt
         ? await this.ports.refinePrompt(raw, controller.signal)
         : raw;
       if (!this.current(generation)) return;
-      this.refinement = undefined;
       if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
+      const binding = this.presentation;
+      if (binding) {
+        this.activePresentation = binding;
+        activeBinding = binding;
+        this.setComposition({
+          ...this.composition,
+          refined: text,
+          status: 'finalizing',
+        });
+        if (
+          !this.current(generation) ||
+          controller.signal.aborted ||
+          this.presentation !== binding
+        )
+          return;
+        presenting = true;
+        await awaitPromptPresentation(
+          binding.handler,
+          Object.freeze({ raw, refined: text, model }),
+          controller,
+        );
+        presenting = false;
+        if (!this.current(generation) || controller.signal.aborted) return;
+        if (this.activePresentation === binding)
+          this.activePresentation = undefined;
+        activeBinding = undefined;
+      }
+      this.setComposition({
+        ...this.composition,
+        refined: text,
+        status: 'submitting',
+      });
+      if (!this.current(generation) || controller.signal.aborted) return;
       await this.dispatchDraft(raw, text, model, id, generation);
     } catch {
       if (this.current(generation))
         this.compositionError(
           this.dispatchUncertain
             ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
-            : 'Prompt could not be prepared. Your text is retained.',
+            : presenting
+              ? 'Prompt presentation did not complete or timed out. Your text is retained.'
+              : 'Prompt could not be prepared. Your text is retained.',
         );
+    } finally {
+      if (this.refinement === controller) this.refinement = undefined;
+      if (this.activePresentation === activeBinding)
+        this.activePresentation = undefined;
     }
   }
 
@@ -463,6 +545,7 @@ export class VoiceConversation {
     this.dispatchUncertain = false;
     this.setComposition({
       raw: '',
+      refined: null,
       lastSubmittedRaw: raw,
       model,
       status: 'idle',
@@ -628,7 +711,7 @@ export class VoiceConversation {
     ++this.generation;
     this.refinement?.abort();
     this.refinement = undefined;
-    if (this.composition.status === 'finalizing')
+    if (preparing(this.composition.status))
       this.setComposition({
         ...this.composition,
         status: 'error',

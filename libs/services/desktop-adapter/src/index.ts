@@ -65,3 +65,8 @@ export type {
   VoiceModel,
   VoiceCommand,
 } from './lib/speech/voice-composition';
+
+export type {
+  FinalizedPrompt,
+  PromptPresentation,
+} from './lib/speech/prompt-presentation';

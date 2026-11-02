@@ -241,6 +241,37 @@ describe('desktop voice cleanup integration', () => {
     TestBed.resetTestingModule();
   });
 
+  it('exposes the presentation handoff and submits only after its completion', async () => {
+    const refine = vi.fn(async (raw: string) => ({
+      raw,
+      text: 'Refined prompt',
+      status: 'refined',
+    }));
+    let complete!: () => void;
+    const present = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const f = await setup('end prompt', refine);
+    const unbind = f.voice.bindPromptPresentation(present);
+    f.voice.setDraft('raw prompt');
+    f.utterance();
+    await vi.waitFor(() => expect(present).toHaveBeenCalledOnce());
+    expect(f.voice.composition()).toMatchObject({
+      raw: 'raw prompt',
+      refined: 'Refined prompt',
+      status: 'finalizing',
+    });
+    expect(f.assistant.submit).not.toHaveBeenCalled();
+    complete();
+    await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
+    expect(f.assistant.submit.mock.calls[0][0]).toBe('Refined prompt');
+    unbind();
+    TestBed.resetTestingModule();
+  });
+
   it('submits the raw fallback once when cleanup is unavailable', async () => {
     const refine = vi.fn(async (raw: string) => ({
       raw,
