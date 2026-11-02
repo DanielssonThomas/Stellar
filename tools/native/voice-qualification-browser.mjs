@@ -1,3 +1,27 @@
+export function voiceQualificationPreflight() {
+  try {
+    const root = document.querySelector('stellar-root');
+    const composition =
+      root && window.ng?.getComponent(root)?.voice?.composition();
+    const buttons = [...document.querySelectorAll('button')].map((button) =>
+      button.textContent?.trim(),
+    );
+    return (
+      !!root &&
+      buttons.includes('Enable microphone') &&
+      !buttons.includes('Stop microphone') &&
+      document.querySelectorAll('section[role="region"][data-instance-id]')
+        .length === 0 &&
+      composition?.status === 'idle' &&
+      composition.raw === '' &&
+      (composition.refined === null || composition.refined === '') &&
+      composition.lastSubmittedRaw === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Install only in an isolated, explicitly opted-in native qualification WebView. */
 export async function installVoiceQualification() {
   if (window.__stellarVoiceQualification) throw new Error('Already installed');
@@ -174,6 +198,7 @@ export async function installVoiceQualification() {
     }
   }, 150);
   const stopListeners = [];
+  let playbackIdentity;
   try {
     Object.defineProperty(media, 'getUserMedia', {
       configurable: true,
@@ -196,8 +221,28 @@ export async function installVoiceQualification() {
               'speaking',
               'unavailable',
             ].includes(payload?.state)
-          )
-            append('speech-state', { state: payload.state });
+          ) {
+            if (payload.state === 'synthesizing') {
+              playbackIdentity =
+                typeof payload.epoch === 'string' &&
+                typeof payload.operation_id === 'string'
+                  ? { epoch: payload.epoch, operation: payload.operation_id }
+                  : undefined;
+            }
+            append('speech-state', {
+              state: payload.state,
+              samePlayback:
+                !!playbackIdentity &&
+                payload.epoch === playbackIdentity.epoch &&
+                payload.operation_id === playbackIdentity.operation,
+              error:
+                payload.error === null
+                  ? null
+                  : payload.error === 'cancelled'
+                    ? 'cancelled'
+                    : 'error',
+            });
+          }
           if (
             event === 'ivy-state' &&
             [

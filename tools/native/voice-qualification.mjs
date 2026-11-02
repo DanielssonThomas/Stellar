@@ -4,7 +4,10 @@ import { readFile, open } from 'node:fs/promises';
 import { resolve, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { chromium } from '@playwright/test';
-import { installVoiceQualification } from './voice-qualification-browser.mjs';
+import {
+  installVoiceQualification,
+  voiceQualificationPreflight,
+} from './voice-qualification-browser.mjs';
 import {
   assessVoiceQualification,
   parseLoopbackEndpoint,
@@ -132,18 +135,7 @@ async function main() {
     if (matches.length !== 1)
       throw new Error('Owned native target not found uniquely');
     page = matches[0];
-    const safe = await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll('button')].map((button) =>
-        button.textContent?.trim(),
-      );
-      return (
-        !!document.querySelector('stellar-root') &&
-        buttons.includes('Enable microphone') &&
-        !buttons.includes('Stop microphone') &&
-        document.querySelectorAll('section[role="region"][data-instance-id]')
-          .length === 0
-      );
-    });
+    const safe = await page.evaluate(voiceQualificationPreflight);
     if (!safe)
       throw new Error(
         'Open the native controls with microphone disabled first',

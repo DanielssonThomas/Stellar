@@ -38,9 +38,17 @@ function success() {
     event('ivy-state', { turn: 'completed', verifiedModel: 'sol' }),
     event('expected-pane-visible', { paneCount: 1 }),
     event('invoke', { command: 'speech_speak' }),
-    event('speech-state', { state: 'synthesizing' }),
-    event('speech-state', { state: 'speaking' }),
-    event('speech-state', { state: 'idle' }),
+    event('speech-state', {
+      state: 'synthesizing',
+      samePlayback: true,
+      error: null,
+    }),
+    event('speech-state', {
+      state: 'speaking',
+      samePlayback: true,
+      error: null,
+    }),
+    event('speech-state', { state: 'idle', samePlayback: true, error: null }),
     event('result', { command: 'speech_speak', ok: true }),
     event('track-started', { active: 1 }),
     event('track-stopped', { ended: true }),
@@ -130,6 +138,21 @@ test('accepts only supported actual finalization commands', () => {
   trace.events.find((event) => event.recognized === 'end prompt').recognized =
     'and prompt';
   assert.equal(assessVoiceQualification(trace).passed, false);
+});
+
+test('rejects cancelled, failed or epoch-changed playback even after speaking', () => {
+  for (const failure of [
+    { samePlayback: false, error: null },
+    { samePlayback: true, error: 'cancelled' },
+    { samePlayback: true, error: 'error' },
+  ]) {
+    const trace = success();
+    const idle = trace.events.find(
+      (event) => event.kind === 'speech-state' && event.state === 'idle',
+    );
+    Object.assign(idle, failure);
+    assert.equal(assessVoiceQualification(trace).passed, false);
+  }
 });
 
 test('refuses remote endpoints, credentials and URL paths', () => {

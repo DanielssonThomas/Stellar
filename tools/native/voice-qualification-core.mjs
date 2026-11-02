@@ -82,7 +82,14 @@ export function assessVoiceQualification(trace) {
     !speak[0].ok ||
     synth < 0 ||
     playing < 0 ||
-    idle < 0
+    idle < 0 ||
+    events
+      .slice(synth, idle + 1)
+      .some(
+        (event) =>
+          event.kind === 'speech-state' &&
+          (!event.samePlayback || event.error !== null),
+      )
   )
     failures.push('playback-unconfirmed');
   if (

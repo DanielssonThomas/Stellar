@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installVoiceQualification } from './voice-qualification-browser.mjs';
+import {
+  installVoiceQualification,
+  voiceQualificationPreflight,
+} from './voice-qualification-browser.mjs';
 
 test('synthetic media, delegated IPC, bounded safe observation and teardown', async () => {
   const listeners = new Map();
@@ -170,6 +173,47 @@ test('synthetic media, delegated IPC, bounded safe observation and teardown', as
     listeners.get('speech-state')({
       payload: { state: 'speaking', secret: 'never record' },
     });
+    for (const payload of [
+      {
+        state: 'synthesizing',
+        epoch: '4',
+        operation_id: 'private-operation',
+        error: null,
+      },
+      {
+        state: 'speaking',
+        epoch: '4',
+        operation_id: 'private-operation',
+        error: null,
+      },
+      {
+        state: 'idle',
+        epoch: '5',
+        operation_id: 'private-operation',
+        error: 'cancelled',
+      },
+    ])
+      listeners.get('speech-state')({ payload });
+    const projected = fixture
+      .snapshot()
+      .events.filter((event) => event.kind === 'speech-state')
+      .slice(-3);
+    assert.deepEqual(
+      projected.map(({ state, samePlayback, error }) => ({
+        state,
+        samePlayback,
+        error,
+      })),
+      [
+        { state: 'synthesizing', samePlayback: true, error: null },
+        { state: 'speaking', samePlayback: true, error: null },
+        { state: 'idle', samePlayback: false, error: 'cancelled' },
+      ],
+    );
+    assert.equal(
+      JSON.stringify(projected).includes('private-operation'),
+      false,
+    );
     const trace = fixture.snapshot();
     assert.equal(
       trace.events.find(
@@ -274,5 +318,43 @@ test('installation failure after replacing capture leaves no physical fallback',
     });
     globalThis.document = originalDocument;
     globalThis.MutationObserver = originalObserver;
+  }
+});
+
+test('preflight rejects retained drafts and non-idle composition before capture hook', () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const composition = {
+    status: 'idle',
+    raw: '',
+    refined: null,
+    lastSubmittedRaw: '',
+  };
+  globalThis.document = {
+    querySelector: () => ({}),
+    querySelectorAll: (selector) =>
+      selector === 'button' ? [{ textContent: 'Enable microphone' }] : [],
+  };
+  globalThis.window = {
+    ng: { getComponent: () => ({ voice: { composition: () => composition } }) },
+  };
+  try {
+    assert.equal(voiceQualificationPreflight(), true);
+    for (const [key, value] of [
+      ['raw', 'retained'],
+      ['refined', 'retained'],
+      ['lastSubmittedRaw', 'retained'],
+      ['status', 'composing'],
+    ]) {
+      const previous = composition[key];
+      composition[key] = value;
+      assert.equal(voiceQualificationPreflight(), false);
+      composition[key] = previous;
+    }
+    delete window.ng;
+    assert.equal(voiceQualificationPreflight(), false);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
   }
 });
