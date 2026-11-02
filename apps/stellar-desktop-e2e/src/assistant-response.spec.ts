@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { IvyPresentation, IvySnapshot } from '@stellar/desktop-contracts';
+import { controlPane } from './stage-driver';
 
 type ResponseFixture = {
   complete(items: IvyPresentation[]): void;
@@ -96,6 +97,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     ]);
   }, body);
   const panel = page.getByRole('region', { name: 'Assistant message' });
+  const content = panel.locator('.surface-content');
   await expect(panel).toBeVisible();
   await expect(page.locator('.waiting-ring')).toHaveCount(0);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
@@ -105,21 +107,23 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
   );
   await expect(panel.locator('script')).toHaveCount(0);
   expect(
-    await panel.evaluate(
+    await content.evaluate(
       (element) => element.scrollHeight > element.clientHeight,
     ),
   ).toBe(true);
-  await panel.evaluate((element) => {
+  await content.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
   expect(
-    await panel.evaluate(
+    await content.evaluate(
       (element) => element.scrollWidth <= element.clientWidth,
     ),
   ).toBe(true);
-  await page
-    .getByRole('button', { name: 'Minimize Assistant message', exact: true })
-    .click();
+  await controlPane(
+    page,
+    'minimize',
+    (await panel.getAttribute('data-instance-id')) ?? '',
+  );
   await menu.click();
   await page
     .getByLabel('Message Ivy', { exact: true })

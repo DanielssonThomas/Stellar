@@ -18,6 +18,51 @@ export interface StageLayout {
   readonly surfaces: readonly (StageRect & { readonly instanceId: string })[];
 }
 
+function tile(
+  bounds: StageRect,
+  items: readonly StageLayoutItem[],
+): StageLayout['surfaces'] {
+  if (!items.length) return [];
+  if (items.length === 1)
+    return [{ ...bounds, instanceId: items[0].instanceId }];
+  const primary = items.findIndex((item) => item.prominence === 'primary');
+  if (primary >= 0 && bounds.width >= 760) {
+    const split = bounds.width * 0.54;
+    const rest = items.filter((_, index) => index !== primary);
+    return [
+      { ...bounds, width: split, instanceId: items[primary].instanceId },
+      ...rest.map((item, index) => ({
+        instanceId: item.instanceId,
+        x: bounds.x + split,
+        y: bounds.y + (bounds.height * index) / rest.length,
+        width: bounds.width - split,
+        height: bounds.height / rest.length,
+      })),
+    ];
+  }
+  const count = Math.ceil(items.length / 2);
+  const ratio = count / items.length;
+  const horizontal = bounds.width >= bounds.height;
+  const first = horizontal
+    ? { ...bounds, width: bounds.width * ratio }
+    : { ...bounds, height: bounds.height * ratio };
+  const second = horizontal
+    ? {
+        ...bounds,
+        x: bounds.x + first.width,
+        width: bounds.width - first.width,
+      }
+    : {
+        ...bounds,
+        y: bounds.y + first.height,
+        height: bounds.height - first.height,
+      };
+  return [
+    ...tile(first, items.slice(0, count)),
+    ...tile(second, items.slice(count)),
+  ];
+}
+
 export function directStage(
   viewport: Readonly<{ width: number; height: number }>,
   instances: readonly StageLayoutItem[],
@@ -31,9 +76,14 @@ export function directStage(
   const visible = instances
     .filter((instance) => !instance.minimized)
     .slice(0, 4);
-  const docked = target ? target === 'docked' : visible.length > 0;
+  const docked = visible.length > 0 || target === 'docked';
   const size = docked
-    ? Math.min(96, width - padding * 2, height * 0.2)
+    ? Math.min(
+        144,
+        Math.max(64, width * 0.09),
+        width - padding * 2,
+        height * 0.18,
+      )
     : Math.min(
         target === 'focused' ? 320 : target === 'center' ? 480 : 280,
         width - padding * 2,
@@ -46,39 +96,5 @@ export function directStage(
     height: size,
   };
   if (!visible.length) return { emblem, surfaces: [] };
-  const columns = width >= 760 && visible.length > 1 ? 2 : 1;
-  const rows = Math.ceil(visible.length / columns);
-  const availableWidth = width - padding * 2;
-  const availableHeight = Math.max(0, emblem.y - padding * 2);
-  const gap = Math.min(
-    16,
-    availableWidth / (columns * 2),
-    availableHeight / (rows * 2),
-  );
-  const cellWidth = Math.max(
-    0,
-    (availableWidth - gap * (columns - 1)) / columns,
-  );
-  const cellHeight = Math.max(0, (availableHeight - gap * (rows - 1)) / rows);
-  const surfaces = visible.map((instance, index) => {
-    const itemWidth = Math.min(
-      instance.prominence === 'primary' ? 440 : 340,
-      cellWidth,
-    );
-    const itemHeight = Math.min(240, cellHeight);
-    return {
-      instanceId: instance.instanceId,
-      x:
-        padding +
-        (index % columns) * (cellWidth + gap) +
-        (cellWidth - itemWidth) / 2,
-      y:
-        padding +
-        Math.floor(index / columns) * (cellHeight + gap) +
-        (cellHeight - itemHeight) / 2,
-      width: itemWidth,
-      height: itemHeight,
-    };
-  });
-  return { emblem, surfaces };
+  return { emblem, surfaces: tile({ x: 0, y: 0, width, height }, visible) };
 }
