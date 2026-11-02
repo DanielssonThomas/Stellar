@@ -27,14 +27,12 @@ describe('Stage structural motion', () => {
     } as unknown as Animation;
     const animate = vi.fn().mockReturnValue(animation);
     Object.assign(element, { animate });
-    const getComputedStyle = vi
-      .fn()
-      .mockReturnValue({
-        left: '0px',
-        top: '0px',
-        width: '760px',
-        height: '800px',
-      });
+    const getComputedStyle = vi.fn().mockReturnValue({
+      left: '0px',
+      top: '0px',
+      width: '760px',
+      height: '800px',
+    });
     const motion = createStageMotion({ getComputedStyle });
     motion.capture([element]);
     motion.update(
