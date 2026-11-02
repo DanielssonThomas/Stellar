@@ -5,6 +5,7 @@
   "permissions": [
     "allow-shell-status",
     "allow-app-info",
+    "allow-telemetry-snapshot",
     "allow-ivy-connect",
     "allow-ivy-snapshot",
     "allow-ivy-submit",

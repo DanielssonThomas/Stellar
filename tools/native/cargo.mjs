@@ -75,6 +75,7 @@ if (action === 'smoke') {
             permissions: [
               'allow-shell-status',
               'allow-app-info',
+              'allow-telemetry-snapshot',
               'core:event:allow-listen',
               'core:event:allow-unlisten',
               'allow-smoke-result',

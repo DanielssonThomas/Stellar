@@ -76,3 +76,20 @@ export {
   decodeSpeechSnapshot,
   decodeSpeechError,
 } from './lib/speech-codec';
+
+export type {
+  TelemetrySnapshot,
+  TelemetryAgent,
+  TelemetrySource,
+  TelemetryUsage,
+  TelemetryEvent,
+  TelemetryProject,
+  TelemetryState,
+  TelemetryHealth,
+  TelemetrySourceKind,
+  TelemetryEventKind,
+  TelemetryError,
+} from './generated';
+export { decodeTelemetrySnapshot } from './lib/telemetry-codec';
+
+export { telemetrySnapshotCommand } from './generated';
