@@ -14,6 +14,32 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
+  it('retains assembled presence between foreground turns until clear, while suspension still wins', async () => {
+    expect(fixture.componentInstance.emblemPhase()).toBe('idle');
+    fixture.componentRef.setInput('conversationActive', true);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'suspended',
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('suspended');
+    fixture.componentRef.setInput('state', initialState);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('conversationActive', false);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('idle');
+    fixture.componentRef.setInput('conversationActive', true);
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'shutdown',
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('shutdown');
+  });
+
   it('assembles while waiting, restores presence for narration and removes waiting on suspension', async () => {
     fixture.componentRef.setInput('assistantWaiting', true);
     await fixture.whenStable();

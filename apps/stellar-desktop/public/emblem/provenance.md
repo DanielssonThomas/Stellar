@@ -1,18 +1,18 @@
 # Embedded hybrid emblem
 
-Runtime files are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md). Issue #176 supplied the hybrid raster artwork and editable SVG geometry; #204 composes its four stars into the outer frame, adds three matching inner circles and assigns eleven uniformly spaced logical planes. #211 divides each existing body into three registered clips, yielding fifteen logical planes over the same eleven image files. The manifest retains production-candidate status. All files share a 1280 square origin and all assembled transforms remain zero. The six registered raster files are unchanged.
+Runtime files are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md). Issue #176 supplied the hybrid raster artwork and editable SVG geometry; #204 composes its four stars into the outer frame, adds three matching inner circles and assigns eleven uniformly spaced logical planes. #211 divides each existing body into three registered clips, yielding fifteen logical planes over the same eleven image files. The manifest retains production-candidate status. All files share a 1280 square origin and all assembled transforms remain zero. The #221 correction re-registers the two body exports inside their hair apertures; all six generated source cutouts remain unchanged, as do the other four exported raster images.
 
-The runtime payload is 2,744,096 bytes for the manifest and eleven unique registered image files on this checkout. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the raster artwork; this does not attribute it to the earlier Hermes SVG study. Native performance and physical microphones require separate verification.
+The exported runtime payload is 2,743,954 bytes for the manifest and eleven unique registered image files. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the original raster artwork; #221 only changes deterministic registration. Native performance and physical microphones require separate verification.
 
 Copy integrity was checked byte-for-byte against source files on this checkout. SHA-256 hashes below normalize JSON/SVG text to LF and preserve exact PNG bytes.
 
 | Runtime file               | SHA-256                                                          |
 | -------------------------- | ---------------------------------------------------------------- |
 | manifest.json              | 5d19f26cbeb4bd01eaa4cec1963eaaecb281087179b36b0c537128e3ef2dd992 |
-| layers/violet-body.png     | 0010606509668e59836ba19a07eb9cf8e99d46ae275fe2f2c2258e4f1f021127 |
+| layers/violet-body.png     | c77ca373d592c55ce75b96255d54fff58af82dbcb1c67d6fa786671016de3d04 |
 | layers/violet-hair.png     | 5ca76606302c0758dd55b520c5ce0cd751bda9e9b8c827ff2e78920c19938da3 |
 | layers/violet-ornament.png | 693fdcba33e399e0585d05c27ca3fac38b93bd66d4d61c0cd08ecdd0647d09ef |
-| layers/gold-body.png       | c722b70f806345416863141be4cb9201d38a94b5578e049859a461a180ee6dd7 |
+| layers/gold-body.png       | e4f0044e8b4a320b312c0071596cf0d91912136915cb322fec9dd96446aa3e9c |
 | layers/gold-hair.png       | 43b1bf105096cd2ac20f60050c8adb8e05d99dabeb65c2bb886330b661da3448 |
 | layers/gold-ornament.png   | f9c182b24634b242e03b4515b61ea68c8ffe325bd16f12f9c4c3130a634b8350 |
 | layers/outer-frame.svg     | 513a4316be96fe9cd4081aa7d02429728d6d3c206e3e504e2808194a8b169f4c |
