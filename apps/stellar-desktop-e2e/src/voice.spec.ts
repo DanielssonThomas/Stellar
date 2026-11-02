@@ -244,9 +244,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: 'Close Assistant message', exact: true })
-    .click();
+  await panel.focus();
+  await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
   expect(
     (await fixture()).calls.filter((command) => command === 'ivy_submit'),

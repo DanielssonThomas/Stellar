@@ -3,43 +3,84 @@
   position: relative;
   width: 100%;
   height: 100%;
+  isolation: isolate;
+  --pane-motion: 420ms;
+  --pane-easing: cubic-bezier(0.22, 0.7, 0.25, 1);
 }
-
 .surface,
 .emblem-slot {
   position: absolute;
   box-sizing: border-box;
 }
 .surface {
+  --stellar-presentation-title: clamp(1.5rem, 2.5vw, 2.7rem);
+  --stellar-presentation-body: clamp(1rem, 1.3vw, 1.3rem);
+  overflow: hidden;
+  overscroll-behavior: contain;
+  padding: clamp(1.5rem, 3.6vw, 3.75rem);
+  background: var(--stellar-color-canvas);
+}
+.surface-content {
+  height: 100%;
   overflow: auto;
-  padding: var(--stellar-space-3, 0.75rem);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--stellar-color-divider, var(--stellar-color-line))
+    transparent;
+}
+.surface-content:focus-visible {
+  outline: 1px solid var(--stellar-color-primary);
+  outline-offset: -2px;
+}
+.boundary-left {
+  border-left: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
+}
+.surface:not(.boundary-left):not(.boundary-top) {
+  padding-top: max(4.5rem, 3.6vw);
+}
+.boundary-top {
+  border-top: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
+}
+.emblem-reserve {
+  padding-bottom: var(--emblem-clearance);
 }
 .emblem-slot {
+  z-index: 2;
+  pointer-events: none;
   transition:
-    left var(--emblem-duration) ease,
-    top var(--emblem-duration) ease,
-    width var(--emblem-duration) ease,
-    height var(--emblem-duration) ease;
+    left var(--emblem-duration) var(--pane-easing),
+    top var(--emblem-duration) var(--pane-easing),
+    width var(--emblem-duration) var(--pane-easing),
+    height var(--emblem-duration) var(--pane-easing);
 }
-:host(.motion-reduced) .emblem-slot {
-  transition: none;
+.pane-enter {
+  animation: pane-reveal var(--pane-motion) ease both;
 }
-@media (prefers-reduced-motion: reduce) {
-  .emblem-slot {
-    transition: none;
+.pane-leave {
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes pane-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
-.surface:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--stellar-color-primary);
-  outline-offset: 2px;
+:host(.keyboard-focus) .surface:focus-visible {
+  outline: 1px solid var(--stellar-color-primary);
+  outline-offset: -4px;
 }
-header {
-  margin-bottom: var(--stellar-space-4, 1rem);
+:host(.motion-reduced) .surface,
+:host(.motion-reduced) .emblem-slot {
+  transition: none;
+  animation: none;
 }
-button {
-  color: inherit;
-  background: transparent;
-  border: 1px solid currentColor;
-  cursor: pointer;
+@media (prefers-reduced-motion: reduce) {
+  .surface,
+  .emblem-slot {
+    transition: none;
+    animation: none;
+  }
 }

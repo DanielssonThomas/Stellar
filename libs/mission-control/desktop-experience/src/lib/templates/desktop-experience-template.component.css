@@ -1,4 +1,7 @@
 :host {
+  --stellar-color-canvas: #030303;
+  --stellar-color-divider: rgb(203 166 74 / 25%);
+  --stellar-color-primary: #d5b76a;
   display: block;
   height: 100%;
   min-height: 0;
@@ -13,7 +16,10 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  background: var(--stellar-color-canvas);
+  background:
+    radial-gradient(ellipse at 0 0, rgb(102 59 25 / 5%), transparent 35%),
+    radial-gradient(ellipse at 100% 100%, rgb(102 59 25 / 4%), transparent 35%),
+    var(--stellar-color-canvas);
 }
 
 .stage {
