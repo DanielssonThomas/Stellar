@@ -13,6 +13,10 @@ mod speech;
 fn main() {
     use tauri::{Emitter, Manager};
     debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 8);
+    debug_assert_eq!(
+        ivy::contracts::WORKSPACE_REPLY_COMMAND,
+        "workspace_tool_reply"
+    );
     let navigation = tauri::plugin::Builder::<tauri::Wry>::new("local-navigation")
         .on_navigation(|_, url| {
             (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
@@ -28,12 +32,26 @@ fn main() {
             #[cfg(feature = "native-smoke")]
             let directory =
                 std::env::temp_dir().join(format!("stellar-ivy-smoke-{}", std::process::id()));
-            app.manage(ivy::IvyHost::new(
+            let ivy_host = ivy::IvyHost::new(
                 &directory,
                 std::sync::Arc::new(move |snapshot| {
                     let _ = handle.emit_to("main", ivy::contracts::IVY_EVENT, snapshot);
                 }),
-            ));
+            );
+            let handle = app.handle().clone();
+            ivy_host.set_workspace_publisher(std::sync::Arc::new(move |request| {
+                handle
+                    .emit_to("main", ivy::contracts::WORKSPACE_EVENT, request)
+                    .is_ok()
+            }));
+            #[cfg(windows)]
+            {
+                let handle = app.handle().clone();
+                ivy_host.set_workspace_capture(std::sync::Arc::new(move || {
+                    ivy::capture_workspace_window(&handle)
+                }));
+            }
+            app.manage(ivy_host);
             let handle = app.handle().clone();
             app.manage(speech::SpeechHost::new(
                 app.path().app_local_data_dir()?.join("speech"),
@@ -69,6 +87,7 @@ fn main() {
         ivy::ivy_disconnect,
         ivy::ivy_select_session,
         ivy::ivy_clear_conversation,
+        ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_speak,
         speech::speech_stop,

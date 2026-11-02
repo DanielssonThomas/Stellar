@@ -6,6 +6,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceDescriptor {
+    pub port: u16,
+    pub credential_ref: String,
+}
+
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
@@ -18,6 +25,8 @@ pub struct Record {
     pub model: IvyModel,
     #[serde(default)]
     pub route_verified: bool,
+    #[serde(default)]
+    pub workspace: Option<WorkspaceDescriptor>,
 }
 
 pub struct Journal {

@@ -15,6 +15,18 @@ fn smoke_hold_ivy(
     host.smoke_hold()
 }
 
+#[cfg(windows)]
+#[tauri::command]
+async fn smoke_capture_window(app: tauri::AppHandle) -> bool {
+    tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
+        .await
+        .is_ok_and(|result| {
+            result.is_ok_and(|image| {
+                image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
+            })
+        })
+}
+
 fn check_page(window: Webview) {
     let script = r#"
         (async () => {
@@ -44,6 +56,7 @@ fn check_page(window: Webview) {
                 await invoke('ivy_disconnect', { request: { version: 1 } });
                 const disconnectResponsive = performance.now() - beforeDisconnect < 750;
                 const cancelledRotation = await pending;
+                const capturedWindow = await invoke('smoke_capture_window');
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
                 const root = document.querySelector('stellar-root');
                 const adapterReady = root?.getAttribute('data-desktop-ready') === 'true' &&
@@ -70,7 +83,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { success: sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -90,6 +103,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
             smoke_hold_ivy,
+            smoke_capture_window,
             smoke_result
         ])
         .on_page_load(|window, payload| {

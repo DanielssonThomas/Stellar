@@ -24,6 +24,8 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
       turn_id: inputId,
       model: 'terra',
       verified_model: null,
+      workspace_tools: 'unavailable',
+      workspace_epoch: '0',
       items,
       error: null,
     });

@@ -83,6 +83,7 @@ if (action === 'smoke') {
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
               'allow-smoke-hold-ivy',
+              'allow-smoke-capture-window',
             ],
           },
         ],
@@ -186,7 +187,7 @@ if (action === 'smoke') {
       ? ''
       : cargo(args[action], action.startsWith('contract-'));
   if (action === 'test') {
-    for (const script of ['ivy_bridge_test.py', 'speech_worker_test.py']) {
+    for (const script of ['ivy_bridge_test.py', 'ivy_workspace_bridge_test.py', 'workspace_protocol_test.py', 'workspace_credentials_test.py', 'speech_worker_test.py']) {
       const bridge = spawnSync('python', ['-I', `tools/native/${script}`], {
         cwd: root,
         env,
