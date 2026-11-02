@@ -363,8 +363,14 @@ describe('spoken prompt composition', () => {
     pending.resolve(true);
     await flush();
     expect(state.error).toContain('uncertain');
+    expect(f.view().status).toContain('Refresh it in the menu');
+    f.feed(false, 1);
+    f.utterance();
+    expect(f.ports.transcribe).toHaveBeenCalledTimes(1);
     f.controller.reconcileSession('sol');
     expect(state).toMatchObject({ model: 'sol', raw: 'keep', status: 'error' });
+    f.utterance();
+    expect(f.ports.transcribe).toHaveBeenCalledTimes(2);
   });
   it.each(['false', 'throw'])(
     'retains ordinary speech after %s submission and fences replay',
@@ -682,6 +688,7 @@ describe('spoken prompt composition', () => {
       .mockResolvedValueOnce(true);
     const f = fixture({
       clearConversation,
+      readSession: async () => 'terra',
       onComposition: (next) => {
         state = next;
       },

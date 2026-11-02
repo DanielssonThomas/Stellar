@@ -481,6 +481,7 @@ export class VoiceConversation {
       !this.phase &&
       !this.stopping &&
       !this.sessionPending &&
+      !this.routeUncertain &&
       !this.unconfirmedStop &&
       !this.blocked &&
       context.assistant.connection === 'ready' &&
@@ -653,7 +654,7 @@ export class VoiceConversation {
     const context = this.context;
     this.ports.onChange({
       muted: this.muted,
-      error: !!this.failure,
+      error: !!this.failure || this.routeUncertain,
       busy:
         this.stopping ||
         this.unconfirmedStop ||
@@ -661,6 +662,9 @@ export class VoiceConversation {
         this.phase === 'speaking',
       status:
         this.failure ||
+        (this.routeUncertain
+          ? 'Conversation state is uncertain. Refresh it in the menu before voice resumes.'
+          : '') ||
         (this.phase === 'transcribing'
           ? 'Recognizing locally'
           : this.phase === 'waiting'
