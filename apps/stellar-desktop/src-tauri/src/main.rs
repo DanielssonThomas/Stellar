@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+mod cleanup;
 mod commands;
 mod contracts;
 mod ivy;
@@ -27,6 +28,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
+            app.manage(cleanup::CleanupHost::default());
             let handle = app.handle().clone();
             #[cfg(not(feature = "native-smoke"))]
             let directory = app.path().app_local_data_dir()?.join("ivy");
@@ -69,6 +71,11 @@ fn main() {
                 host.shutdown();
             }
             if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<cleanup::CleanupHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<speech::SpeechHost>()
             {
                 let _ = host.shutdown();
@@ -93,6 +100,7 @@ fn main() {
         speech::speech_speak,
         speech::speech_stop,
         speech::speech_snapshot,
+        cleanup::cleanup_refine,
         telemetry::telemetry_snapshot
     ]);
     builder
@@ -101,6 +109,11 @@ fn main() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<ivy::IvyHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<cleanup::CleanupHost>()
             {
                 host.shutdown();
             }

@@ -10,6 +10,7 @@ import {
 import { AudioActivityService } from '@stellar/service-audio-activity';
 import {
   SpeechAdapterService,
+  PromptCleanupService,
   IvyAdapterService,
   VoiceConversation,
   type VoiceComposition,
@@ -23,6 +24,7 @@ import { DesktopExperience } from './desktop-experience';
 export class DesktopVoice {
   private readonly audio = inject(AudioActivityService);
   private readonly speech = inject(SpeechAdapterService);
+  private readonly cleanup = inject(PromptCleanupService);
   private readonly ivy = inject(IvyAdapterService);
   private readonly assistant = inject(DesktopAssistant);
   private readonly experience = inject(DesktopExperience);
@@ -69,6 +71,8 @@ export class DesktopVoice {
   );
   private readonly conversation = new VoiceConversation({
     transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
+    refinePrompt: async (raw, signal) =>
+      (await this.cleanup.refine(raw, signal)).text,
     submit: (text, id) => this.assistant.submit(text, id),
     speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
