@@ -264,6 +264,39 @@ describe('Stage command boundary and registry', () => {
     expect(registry.inspect()).toEqual(before);
   });
 
+  it('rejects custom array prototypes and own iterators without invoking them', () => {
+    const registry = createStageRegistry(catalogue);
+    registry.dispatch(open(1, 'one'));
+    const iterator = vi.fn(function* () {
+      yield 'other';
+    });
+    const toJSON = vi.fn(() => ['other']);
+    const inherited = ['one'];
+    Object.setPrototypeOf(
+      inherited,
+      Object.assign(Object.create(Array.prototype), {
+        [Symbol.iterator]: iterator,
+        toJSON,
+      }),
+    );
+    const own = ['one'];
+    Object.defineProperty(own, Symbol.iterator, { value: iterator });
+    for (const instanceIds of [inherited, own])
+      expect(
+        registry.dispatch({
+          contractVersion: 1,
+          commandId: 2,
+          action: 'arrange',
+          instanceIds,
+        }).reason,
+      ).toBe('invalid-command');
+    expect(iterator).not.toHaveBeenCalled();
+    expect(toJSON).not.toHaveBeenCalled();
+    expect(registry.inspect().map((entry) => entry.instanceId)).toEqual([
+      'one',
+    ]);
+  });
+
   it('clears atomically, fences replays, and keeps disposal terminal', () => {
     const registry = createStageRegistry(catalogue);
     const clear = { contractVersion: 1, commandId: 1, action: 'clear' };

@@ -163,6 +163,52 @@ describe('StageOrganism', () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
+  it('synchronizes arrange and clear, restores nested focus and emits visibility once', async () => {
+    const retained = vi.fn();
+    const visible = vi.fn();
+    const dismiss = vi.fn();
+    fixture.componentInstance.retainedPresentations.subscribe(retained);
+    fixture.componentInstance.presentationChange.subscribe(visible);
+    fixture.componentInstance.interaction.subscribe(dismiss);
+    fixture.componentInstance.dispatch(open(1, 'first'));
+    await fixture.whenStable();
+    fixture.componentInstance.dispatch(open(2, 'second'));
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.dispatch({
+        contractVersion: 1,
+        commandId: 3,
+        action: 'arrange',
+        instanceIds: ['second', 'first'],
+      }).status,
+    ).toBe('applied');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.surfaces().map((surface) => surface.instanceId),
+    ).toEqual(['second', 'first']);
+    retained.mockClear();
+    visible.mockClear();
+    expect(
+      fixture.componentInstance.dispatch({
+        contractVersion: 1,
+        commandId: 4,
+        action: 'clear',
+      }).status,
+    ).toBe('applied');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(0);
+    expect(document.activeElement).toBe(opener);
+    expect(retained).toHaveBeenCalledExactlyOnceWith(false);
+    expect(visible).toHaveBeenCalledExactlyOnceWith(false);
+    expect(dismiss).toHaveBeenCalledExactlyOnceWith({ type: 'dismiss' });
+    fixture.componentInstance.dispatch({
+      contractVersion: 1,
+      commandId: 4,
+      action: 'clear',
+    });
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
   it('supports a second test-only trusted kind and disposes it on minimize/close', async () => {
     fixture.componentInstance.dispatch(open());
     fixture.componentInstance.dispatch(open(2, 'fixture', 'fixture'));

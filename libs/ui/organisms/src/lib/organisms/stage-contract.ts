@@ -163,6 +163,13 @@ export function decodeStageCommand<P extends object>(
 ): StageCommand<P> | null {
   try {
     if (
+      plainRecord(input) &&
+      input['action'] === 'arrange' &&
+      Array.isArray(input['instanceIds']) &&
+      Object.getPrototypeOf(input['instanceIds']) !== Array.prototype
+    )
+      return null;
+    if (
       !plainRecord(input) ||
       !boundedJson(
         input,
