@@ -372,7 +372,7 @@ fn connect(session: &mut Session, child: OwnedChild) -> Result<(), IvyErrorCode>
     Ok(())
 }
 
-fn publish_ready(session: &Session) {
+pub(super) fn publish_ready(session: &Session) {
     session.restore_admission_state();
     session.shared.update(session.epoch, |view| {
         view.connection = IvyConnectionState::Ready;
@@ -380,10 +380,11 @@ fn publish_ready(session: &Session) {
     });
 }
 
-fn fail(session: &mut Session, error: IvyErrorCode) {
+pub(super) fn fail(session: &mut Session, error: IvyErrorCode) {
     session.broker = None;
     session.shared.update(session.epoch, |view| {
         view.connection = IvyConnectionState::Unavailable;
+        view.verified_model = None;
         view.error = Some(error);
         if session.record.unsettled {
             view.turn = IvyTurnState::Uncertain;

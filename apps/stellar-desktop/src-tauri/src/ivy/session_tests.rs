@@ -377,3 +377,38 @@ fn legacy_mismatched_or_missing_route_refuses_without_changing_journal() {
         std::fs::remove_dir_all(directory).unwrap();
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn verified_sol_mismatch_revokes_public_verification_after_reconnect() {
+    for model in ["gpt-6.1-terra", ""] {
+        let (mut session, directory) = fixture();
+        session.record.unsettled = false;
+        session.record.model = IvyModel::Sol;
+        session.record.route_verified = true;
+        session.journal.save(&session.record).unwrap();
+        session.shared.update(session.epoch, |view| {
+            view.model = IvyModel::Sol;
+            view.verified_model = Some(IvyModel::Sol);
+            view.turn = IvyTurnState::Submitting;
+        });
+        session.broker = Some(inert_route(false, "completed", "answer", model));
+        let error = session
+            .submit(IvySubmitRequest {
+                version: 1,
+                input_id: "00000000-0000-0000-0000-000000000002".into(),
+                text: "follow up".into(),
+            })
+            .unwrap_err();
+        assert_eq!(error, IvyErrorCode::Unavailable);
+        super::host::fail(&mut session, error);
+        super::host::publish_ready(&session);
+        let snapshot = session.shared.view.lock().unwrap().snapshot.clone();
+        assert_eq!(snapshot.model, IvyModel::Sol);
+        assert_eq!(snapshot.verified_model, None);
+        assert_eq!(snapshot.connection, IvyConnectionState::Ready);
+        assert_eq!(session.record.session_id.as_deref(), Some("session"));
+        drop(session);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}

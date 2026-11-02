@@ -38,6 +38,38 @@ fn repeated_connect_enqueues_one_silent_operation() {
 }
 
 #[test]
+fn failed_route_validation_revokes_verification_through_reconnect() {
+    let (host, _receiver) = fixture();
+    let directory =
+        std::env::temp_dir().join(format!("stellar-ivy-verification-{}", std::process::id()));
+    let (journal, record) = Journal::open(&directory).unwrap();
+    let mut session = Session {
+        journal,
+        record,
+        broker: None,
+        shared: host.shared.clone(),
+        epoch: 0,
+        buffered: vec![],
+        replay: None,
+    };
+    host.shared.update(0, |view| {
+        view.model = IvyModel::Sol;
+        view.verified_model = Some(IvyModel::Sol);
+        view.turn = IvyTurnState::Submitting;
+    });
+    fail(&mut session, IvyErrorCode::Unavailable);
+    let failed = host.snapshot().unwrap();
+    assert_eq!(failed.model, IvyModel::Sol);
+    assert_eq!(failed.verified_model, None);
+    publish_ready(&session);
+    let reconnected = host.snapshot().unwrap();
+    assert_eq!(reconnected.connection, IvyConnectionState::Ready);
+    assert_eq!(reconnected.verified_model, None);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn disconnect_cancels_rotation_queued_behind_slow_connect_without_waiting() {
     let (host, receiver) = fixture();
     host.request(Action::Connect).unwrap();
