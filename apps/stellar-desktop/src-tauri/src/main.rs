@@ -9,6 +9,7 @@ mod shell;
 #[cfg(feature = "native-smoke")]
 mod smoke;
 mod speech;
+mod telemetry;
 
 fn main() {
     use tauri::{Emitter, Manager};
@@ -72,7 +73,8 @@ fn main() {
         speech::speech_transcribe,
         speech::speech_speak,
         speech::speech_stop,
-        speech::speech_snapshot
+        speech::speech_snapshot,
+        telemetry::telemetry_snapshot
     ]);
     builder
         .build(tauri::generate_context!())

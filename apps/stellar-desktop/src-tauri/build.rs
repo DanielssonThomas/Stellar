@@ -5,12 +5,15 @@ mod command_name;
 mod ivy_names;
 #[path = "src/speech/command_names.rs"]
 mod speech_names;
+#[path = "src/telemetry/command_name.rs"]
+mod telemetry_name;
 
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
         command_name::APP_INFO_COMMAND,
         "smoke_result",
+        telemetry_name::TELEMETRY_COMMAND,
         "smoke_hold_ivy",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],

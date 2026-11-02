@@ -23,6 +23,9 @@ fn check_page(window: Webview) {
                 for (let n = 0; n < 100 && !(document.querySelector('stellar-root')?.getAttribute('data-desktop-ready') === 'true' &&
                     document.querySelector('stellar-root')?.getAttribute('data-desktop-event') === 'true'); n++)
                     await new Promise(resolve => setTimeout(resolve, 100));
+                let telemetryOk = false;
+                try { const snapshot = await invoke('telemetry_snapshot'); telemetryOk = snapshot.schemaVersion === 1; }
+                catch (error) { telemetryOk = ['unavailable', 'timeout', 'invalid'].includes(error); }
                 const reply = await invoke('shell_status', { request: { version: 1 } });
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
@@ -70,7 +73,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { success: telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -85,6 +88,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
             crate::app_info::app_info,
+            crate::telemetry::telemetry_snapshot,
             crate::ivy::ivy_select_session,
             crate::ivy::ivy_clear_conversation,
             crate::ivy::ivy_disconnect,
