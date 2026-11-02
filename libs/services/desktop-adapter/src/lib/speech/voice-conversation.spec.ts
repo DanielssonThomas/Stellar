@@ -532,6 +532,84 @@ describe('spoken prompt composition', () => {
     );
     expect(state.lastSubmittedRaw).toBe(' ordinary request ');
   });
+  it('waits for physical release before transcription and fences cancellation while waiting', async () => {
+    const released = deferred<void>();
+    const pause = vi.fn();
+    const f = fixture({
+      onCapturePauseChange: pause,
+      waitForCapturePause: () => released.promise,
+    });
+    f.utterance();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    f.controller.accept({ type: 'reset' });
+    released.resolve();
+    await flush();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+
+  it('begins transcription only after physical release completes', async () => {
+    const released = deferred<void>();
+    const f = fixture({ waitForCapturePause: () => released.promise });
+    f.utterance();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    released.resolve();
+    await flush();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+  });
+
+  it('keeps listening available when only voice output is muted', () => {
+    const pause = vi.fn();
+    const f = fixture({ onCapturePauseChange: pause });
+    f.controller.setMuted(true);
+    expect(pause).not.toHaveBeenCalled();
+    f.utterance();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an admitted turn through a physical capture pause and an early reply', async () => {
+    const transcription = deferred<SpeechTranscript>();
+    const admission = deferred<boolean>();
+    const pause = vi.fn();
+    let composition!: VoiceComposition;
+    const f = fixture({
+      onCapturePauseChange: pause,
+      onComposition: (next) => {
+        composition = next;
+      },
+    });
+    f.ports.transcribe.mockReturnValueOnce(transcription.promise);
+    f.ports.submit.mockReturnValueOnce(admission.promise);
+    f.utterance();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    transcription.resolve({
+      version: 1,
+      utterance_id: id,
+      text: 'ordinary request',
+    });
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'ordinary request',
+      id,
+    );
+    f.completed();
+    await flush();
+    expect(f.ports.speak).toHaveBeenCalledOnce();
+    f.update({
+      speech: { ...initialSpeechSnapshot(), revision: '2', state: 'idle' },
+    });
+    await flush();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    admission.resolve(true);
+    await flush();
+    expect(pause).toHaveBeenLastCalledWith(false);
+    expect(composition.lastSubmittedRaw).toBe('ordinary request');
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+  });
+
   it('aborts refinement on capture loss and fences its late result', async () => {
     let state!: VoiceComposition;
     let signal!: AbortSignal;
@@ -707,6 +785,29 @@ describe('spoken prompt composition', () => {
     expect(f.ports.submit).not.toHaveBeenCalled();
   });
 
+  it('keeps physical capture paused after uncertain dispatch until the draft is edited', async () => {
+    const pause = vi.fn();
+    const f = fixture({
+      selectSession: async () => true,
+      onCapturePauseChange: pause,
+    });
+    f.controller.setDraft('original');
+    f.ports.submit.mockResolvedValueOnce(false);
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.controller.setDraft('edited');
+    expect(pause).toHaveBeenLastCalledWith(false);
+  });
+
   it('keeps an uncertain draft and does not replay without an edit', async () => {
     let state!: VoiceComposition;
     const pending = deferred<boolean>();
@@ -861,6 +962,65 @@ describe('spoken prompt composition', () => {
       lastSubmittedRaw: 'raw input',
     });
     unbind();
+  });
+
+  it('keeps physical capture paused throughout presentation and the admitted turn', async () => {
+    const pause = vi.fn();
+    const done = deferred<void>();
+    const f = fixture({
+      onCapturePauseChange: pause,
+      refinePrompt: async () => 'cleaned',
+      presentFinalized: () => done.promise,
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    await flush();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    done.resolve();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('cleaned', id);
+    expect(pause).toHaveBeenLastCalledWith(true);
+  });
+
+  it('releases the capture pause after presentation fails while retaining the draft', async () => {
+    const pause = vi.fn();
+    let state!: VoiceComposition;
+    const f = fixture({
+      onCapturePauseChange: pause,
+      refinePrompt: async () => 'cleaned',
+      presentFinalized: async () => {
+        throw new Error('failed');
+      },
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setDraft('original');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    f.controller.accept({ type: 'turn-pause' });
+    f.update({ audio: { ...f.context().audio, status: 'turn-paused' } });
+    await flush();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(state).toMatchObject({
+      raw: 'original',
+      refined: 'cleaned',
+      status: 'error',
+    });
+    expect(pause).toHaveBeenLastCalledWith(false);
   });
 
   it.each(['reset', 'mute', 'unavailable', 'dispose', 'unbind'] as const)(

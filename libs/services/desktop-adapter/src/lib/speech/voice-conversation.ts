@@ -46,6 +46,8 @@ export interface VoicePorts {
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
   readonly onChange: (view: VoiceView) => void;
+  readonly onCapturePauseChange?: (paused: boolean) => void;
+  readonly waitForCapturePause?: () => Promise<void>;
   readonly selectSession?: (model: VoiceModel) => Promise<boolean>;
   readonly clearConversation?: () => Promise<boolean>;
   readonly readSession?: () => Promise<VoiceModel>;
@@ -81,7 +83,9 @@ export class VoiceConversation {
   private refinement?: AbortController;
   private presentation?: { handler: PromptPresentation };
   private activePresentation?: { binding: { handler: PromptPresentation } };
+  private capturePaused = false;
   private dispatchUncertain = false;
+  private dispatchPending = false;
   private routeUncertain = false;
   private sessionPending = false;
 
@@ -114,7 +118,8 @@ export class VoiceConversation {
     this.context = context;
     if (
       !context.available ||
-      (hadCapture && context.audio.status !== 'capturing')
+      (hadCapture &&
+        !['capturing', 'turn-paused'].includes(context.audio.status))
     ) {
       this.invalidate();
     } else if (
@@ -138,6 +143,10 @@ export class VoiceConversation {
 
   accept(event: PcmEvent) {
     if (this.disposed) return;
+    if (event.type === 'turn-pause') {
+      this.assembler.reset();
+      return;
+    }
     if (event.type === 'reset') {
       this.invalidate();
       this.blocked = false;
@@ -247,6 +256,7 @@ export class VoiceConversation {
         ? ''
         : 'Prompt exceeds the 8 KiB limit. Edit it before sending.',
     });
+    this.publish();
   }
 
   initializeSession(model: VoiceModel) {
@@ -530,11 +540,15 @@ export class VoiceConversation {
     generation: number,
   ) {
     this.dispatchUncertain = true;
+    this.dispatchPending = true;
     let accepted = false;
     try {
       accepted = await this.submit(text, id, generation);
     } catch {
       // A failed transport may still have delivered the turn.
+    } finally {
+      this.dispatchPending = false;
+      this.publish();
     }
     if (!this.current(generation)) return;
     if (!accepted && this.settledTurn !== id) {
@@ -552,6 +566,7 @@ export class VoiceConversation {
       status: 'idle',
       error: '',
     });
+    this.publish();
   }
 
   private async submit(
@@ -587,6 +602,7 @@ export class VoiceConversation {
       !this.phase &&
       !this.stopping &&
       !this.sessionPending &&
+      !this.dispatchPending &&
       !this.routeUncertain &&
       !this.unconfirmedStop &&
       !this.blocked &&
@@ -608,6 +624,10 @@ export class VoiceConversation {
     this.assembler.reset();
     this.publish();
     try {
+      if (this.ports.waitForCapturePause) {
+        await this.ports.waitForCapturePause();
+        if (!this.current(generation)) return;
+      }
       const transcript = await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
       const text = transcript.text;
@@ -656,7 +676,7 @@ export class VoiceConversation {
       !text ||
       this.muted ||
       !context.available ||
-      context.audio.status !== 'capturing'
+      !['capturing', 'turn-paused'].includes(context.audio.status)
     )
       return;
     if (new TextEncoder().encode(text).length > 4000) {
@@ -757,6 +777,19 @@ export class VoiceConversation {
   }
 
   private publish() {
+    const paused =
+      this.phase !== null ||
+      this.stopping ||
+      this.unconfirmedStop ||
+      this.dispatchPending ||
+      this.dispatchUncertain ||
+      this.blocked ||
+      this.routeUncertain ||
+      this.context?.assistant.turn === 'uncertain';
+    if (paused !== this.capturePaused) {
+      this.capturePaused = paused;
+      this.ports.onCapturePauseChange?.(paused);
+    }
     const context = this.context;
     this.ports.onChange({
       muted: this.muted,
