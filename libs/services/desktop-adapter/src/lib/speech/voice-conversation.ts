@@ -80,7 +80,7 @@ export class VoiceConversation {
   };
   private refinement?: AbortController;
   private presentation?: { handler: PromptPresentation };
-  private activePresentation?: { handler: PromptPresentation };
+  private activePresentation?: { binding: { handler: PromptPresentation } };
   private dispatchUncertain = false;
   private routeUncertain = false;
   private sessionPending = false;
@@ -101,7 +101,7 @@ export class VoiceConversation {
     return () => {
       if (this.presentation !== binding) return;
       this.presentation = undefined;
-      if (this.activePresentation === binding) {
+      if (this.activePresentation?.binding === binding) {
         this.invalidate();
         this.publish();
       }
@@ -185,7 +185,9 @@ export class VoiceConversation {
     this.muted = muted;
     if (
       muted &&
-      (this.phase === 'speaking' || this.composition.status === 'finalizing')
+      (this.phase === 'speaking' ||
+        this.composition.status === 'refining' ||
+        this.composition.status === 'finalizing')
     )
       this.invalidate();
     this.publish();
@@ -360,6 +362,7 @@ export class VoiceConversation {
       this.setComposition({
         ...this.composition,
         raw,
+        refined: null,
         status: fitsVoicePrompt(raw) ? 'composing' : 'error',
         error: fitsVoicePrompt(raw)
           ? ''
@@ -445,6 +448,9 @@ export class VoiceConversation {
       );
       return;
     }
+    const binding = this.presentation;
+    const activePresentation = binding ? { binding } : undefined;
+    this.activePresentation = activePresentation;
     this.setComposition({
       ...this.composition,
       refined: null,
@@ -452,7 +458,6 @@ export class VoiceConversation {
       error: '',
     });
     let controller: AbortController | undefined;
-    let activeBinding: { handler: PromptPresentation } | undefined;
     let presenting = false;
     try {
       if (!this.current(generation)) return;
@@ -471,10 +476,7 @@ export class VoiceConversation {
         : raw;
       if (!this.current(generation)) return;
       if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
-      const binding = this.presentation;
       if (binding) {
-        this.activePresentation = binding;
-        activeBinding = binding;
         this.setComposition({
           ...this.composition,
           refined: text,
@@ -494,9 +496,8 @@ export class VoiceConversation {
         );
         presenting = false;
         if (!this.current(generation) || controller.signal.aborted) return;
-        if (this.activePresentation === binding)
+        if (this.activePresentation === activePresentation)
           this.activePresentation = undefined;
-        activeBinding = undefined;
       }
       this.setComposition({
         ...this.composition,
@@ -516,7 +517,7 @@ export class VoiceConversation {
         );
     } finally {
       if (this.refinement === controller) this.refinement = undefined;
-      if (this.activePresentation === activeBinding)
+      if (this.activePresentation === activePresentation)
         this.activePresentation = undefined;
     }
   }
