@@ -53,13 +53,19 @@ export class DesktopExperienceTemplate {
   readonly assistantUncertain = input(false);
   readonly assistantWaiting = input(false);
   readonly assistantNarrating = input(false);
+  readonly conversationActive = input(false);
+  readonly solActive = input(false);
   readonly assistantActive = computed(
     () =>
       !['suspended', 'shutdown'].includes(this.state().phase) &&
       (this.assistantWaiting() || this.assistantNarrating()),
   );
   readonly emblemPhase = computed(() =>
-    this.assistantActive() ? ('listening' as const) : this.state().phase,
+    this.assistantActive() ||
+    (this.conversationActive() &&
+      !['suspended', 'shutdown'].includes(this.state().phase))
+      ? ('listening' as const)
+      : this.state().phase,
   );
   readonly retryIvy = output<void>();
   readonly cancelIvy = output<void>();

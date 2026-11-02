@@ -14,9 +14,10 @@
         "partial": 204378
       },
       "exportAlpha": {
-        "transparent": 1501745,
-        "visible": 136655
-      }
+        "transparent": 1527626,
+        "visible": 110774
+      },
+      "visibleRadius": 492.12854011934724
     },
     {
       "id": "violet-hair",
@@ -32,7 +33,8 @@
       "exportAlpha": {
         "transparent": 1229025,
         "visible": 409375
-      }
+      },
+      "visibleRadius": 490.85894104111014
     },
     {
       "id": "violet-ornament",
@@ -48,7 +50,8 @@
       "exportAlpha": {
         "transparent": 1622094,
         "visible": 16306
-      }
+      },
+      "visibleRadius": 397.7065501094997
     },
     {
       "id": "gold-body",
@@ -64,7 +67,8 @@
       "exportAlpha": {
         "transparent": 1532418,
         "visible": 105982
-      }
+      },
+      "visibleRadius": 489.87396338241945
     },
     {
       "id": "gold-hair",
@@ -80,7 +84,8 @@
       "exportAlpha": {
         "transparent": 1275705,
         "visible": 362695
-      }
+      },
+      "visibleRadius": 478.3539484523986
     },
     {
       "id": "gold-ornament",
@@ -96,12 +101,13 @@
       "exportAlpha": {
         "transparent": 1615864,
         "visible": 22536
-      }
+      },
+      "visibleRadius": 353.7237622778543
     }
   ],
   "svgLayers": 5,
   "zeroPose": "All manifest poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 2744096,
+  "runtimeBytes": 2708109,
   "budgetBytes": 4194304,
   "activeSvgContent": false,
   "fragmentAssemblyPixelIdentical": true

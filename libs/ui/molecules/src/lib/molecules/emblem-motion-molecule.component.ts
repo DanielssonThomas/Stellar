@@ -28,6 +28,8 @@ import {
   consolidatedClipFiles,
 } from './emblem-motion-model';
 
+let nextEmblemIdentity = 0;
+
 @Component({
   selector: 'stellar-emblem-motion-molecule',
   standalone: true,
@@ -37,11 +39,19 @@ import {
   host: { '[attr.aria-busy]': 'loading()' },
 })
 export class EmblemMotionMolecule {
+  readonly solMaskId = `sol-stars-${++nextEmblemIdentity}`;
+  readonly solStars = [
+    'translate(640 130)',
+    'translate(1150 640)',
+    'translate(640 1150)',
+    'translate(130 640)',
+  ];
   readonly manifest = input<EmblemManifest | null>(null);
   readonly assetBasePath = input('');
   readonly phase = input<Phase>('idle');
   readonly audioLevel = input(0);
   readonly waiting = input(false);
+  readonly solActive = input(false);
   readonly reducedMotion = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
@@ -103,11 +113,20 @@ export class EmblemMotionMolecule {
       this.visible() &&
       !['suspended', 'shutdown'].includes(this.phase()),
   );
+  readonly showSol = computed(
+    () =>
+      this.solActive() &&
+      this.active() &&
+      this.visible() &&
+      !isExplodedPhase(this.phase()) &&
+      this.settledPhase() === this.phase(),
+  );
   readonly classes = computed(() =>
     clsx('emblem relative block h-full w-full', {
       'motion-paused': this.paused(),
       'motion-reduced': this.motionReduced(),
       'waiting-response': this.showWaiting(),
+      'sol-identity': this.solActive(),
       'with-environment': this.environment(),
       'idle-motion': idleMotionEnabled(this.phase(), this.paused()),
     }),
