@@ -53,7 +53,7 @@ img {
   fill: currentColor;
 }
 .sol-eye-core {
-  fill: #fff0db;
+  fill: var(--stellar-color-foreground);
 }
 .sol-enter {
   animation: sol-arrive 360ms ease both;
