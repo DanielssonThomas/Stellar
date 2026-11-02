@@ -21,6 +21,7 @@ const surfaces: readonly string[] = [
   'workflow',
   'session',
   'assistant-message',
+  'activity-summary',
 ];
 const supported = (surface: string): surface is WorkspaceSurface =>
   surfaces.includes(surface);

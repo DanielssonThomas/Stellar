@@ -33,6 +33,7 @@ function setup() {
       epoch: '2',
       request_id: 'request',
       turn_id: 'turn',
+      expires_at_ms: String(Date.now() + 15000),
       operation,
     } as WorkspaceToolRequest);
   const open = {
