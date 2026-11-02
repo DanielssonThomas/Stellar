@@ -4,7 +4,7 @@
   } @else {
     <div #group [class]="classes()" role="region" aria-label="Spoken prompt">
       <svg
-        class="brace"
+        class="brace left-brace"
         viewBox="-8 -3 48 118"
         preserveAspectRatio="none"
         aria-hidden="true"
@@ -14,25 +14,14 @@
         />
         <path class="star" d="M10 46 12 54 20 56 12 58 10 66 8 58 0 56 8 54Z" />
       </svg>
+      <div class="background-tone" aria-hidden="true"></div>
       <div
         class="text-stack"
-        tabindex="0"
         aria-label="Prompt text"
-        aria-live="polite"
+        [attr.aria-live]="status() === 'finalizing' ? 'off' : 'polite'"
         aria-atomic="true"
       >
-        <span
-          #rawText
-          class="raw-text"
-          [attr.aria-hidden]="showRefined() ? 'true' : null"
-          >{{ raw() }}</span
-        >
-        <span
-          #refinedText
-          class="refined-text"
-          [attr.aria-hidden]="showRefined() ? null : 'true'"
-          >{{ refined() ?? raw() }}</span
-        >
+        <span class="prompt-text">{{ displayText() }}</span>
       </div>
       <svg
         class="brace right-brace"

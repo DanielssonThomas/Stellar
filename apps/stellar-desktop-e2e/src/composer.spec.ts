@@ -16,11 +16,12 @@ type ComposerApp = {
 };
 type ComposerFixture = {
   animations: Animation[];
+  edits: string[];
   submissions: { text: string; dissolved: boolean }[];
   hold: boolean;
   panel?: Element;
 };
-const raw = 'Um, set up the next Stellar sprint.';
+const raw = 'Um, Set up the next Stellar sprint.';
 const refined = 'Set up the next Stellar sprint.';
 
 async function install(page: Page, hold = true) {
@@ -30,6 +31,7 @@ async function install(page: Page, hold = true) {
       let model: 'terra' | 'sol' = 'terra';
       const fixture: ComposerFixture = {
         animations: [],
+        edits: [],
         submissions: [],
         hold,
       };
@@ -54,12 +56,21 @@ async function install(page: Page, hold = true) {
         ...args: Parameters<Element['animate']>
       ) {
         const animation = animate.apply(this, args);
-        if (this.matches('.composer, .raw-text, .refined-text')) {
+        if (this.matches('.brace, .background-tone, .text-stack')) {
           fixture.animations.push(animation);
           if (fixture.hold) animation.pause();
         }
         return animation;
       };
+      new MutationObserver(() => {
+        const text = document.querySelector('.prompt-text')?.textContent;
+        if (text !== undefined && fixture.edits.at(-1) !== text)
+          fixture.edits.push(text ?? '');
+      }).observe(document, {
+        subtree: true,
+        characterData: true,
+        childList: true,
+      });
       Object.assign(window, {
         __composerFixture: fixture,
         __TAURI__: {
@@ -125,7 +136,7 @@ async function install(page: Page, hold = true) {
   );
 }
 
-async function draft(page: Page, text = raw) {
+async function draft(page: Page, text = raw, finishOpening = true) {
   await page.evaluate((text) => {
     const debug = window as unknown as {
       ng: { getComponent(element: Element): ComposerApp };
@@ -139,6 +150,27 @@ async function draft(page: Page, text = raw) {
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
+  if (finishOpening) {
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const fixture = (
+            window as unknown as { __composerFixture: ComposerFixture }
+          ).__composerFixture;
+          return (
+            fixture.animations.length >= 4 ||
+            !!document.querySelector('.composer.opened')
+          );
+        }),
+      )
+      .toBe(true);
+    await page.evaluate(() =>
+      (
+        window as unknown as { __composerFixture: ComposerFixture }
+      ).__composerFixture.animations.forEach((animation) => animation.finish()),
+    );
+    await expect(page.locator('.composer')).toHaveClass(/opened/);
+  }
 }
 
 async function finalize(page: Page) {
@@ -169,36 +201,54 @@ const state = (page: Page) =>
     };
   });
 
-test('cleaned prompt dispatch waits for real text and brace animation completion exactly once', async ({
+test('braces open from center, text edits by character and dispatch waits for reverse closure exactly once', async ({
   page,
 }) => {
   await install(page);
-  await draft(page);
+  await draft(page, raw, false);
   const prompt = page.getByRole('region', { name: 'Spoken prompt' });
   await expect(prompt.locator('.brace')).toHaveCount(2);
   await expect(prompt.locator('textarea, input, button')).toHaveCount(0);
+  await expect.poll(async () => (await state(page)).animations).toBe(4);
+  const centers = await prompt.locator('.brace').evaluateAll((elements) =>
+    elements.map((e) => {
+      const r = e.getBoundingClientRect();
+      return r.x + r.width / 2;
+    }),
+  );
+  expect(Math.abs(centers[0] - centers[1])).toBeLessThan(1);
+  await page.evaluate(() =>
+    (
+      window as unknown as { __composerFixture: ComposerFixture }
+    ).__composerFixture.animations.forEach((animation) => animation.finish()),
+  );
+  await expect(prompt).toHaveClass(/opened/);
   await finalize(page);
-  await expect.poll(async () => (await state(page)).animations).toBe(2);
+  await expect.poll(async () => (await state(page)).animations).toBe(8);
   expect((await state(page)).submissions).toEqual([]);
+  const edits = await page.evaluate(
+    () =>
+      (window as unknown as { __composerFixture: ComposerFixture })
+        .__composerFixture.edits,
+  );
+  expect(
+    edits.some(
+      (text) => text !== raw && text !== refined && text.endsWith(refined),
+    ),
+  ).toBe(true);
+  await expect(prompt.locator('.prompt-text')).toHaveText(refined);
   await page.evaluate(() =>
     (
       window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.animations[0].finish(),
+    ).__composerFixture.animations
+      .slice(4, 7)
+      .forEach((animation) => animation.finish()),
   );
   expect((await state(page)).submissions).toEqual([]);
   await page.evaluate(() =>
     (
       window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.animations[1].finish(),
-  );
-  await expect.poll(async () => (await state(page)).animations).toBe(3);
-  expect((await state(page)).submissions).toEqual([]);
-  await expect(prompt.locator('.refined-text')).toHaveCSS('opacity', '1');
-  await expect(prompt.locator('.refined-text')).toHaveText(refined);
-  await page.evaluate(() =>
-    (
-      window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.animations[2].finish(),
+    ).__composerFixture.animations[7].finish(),
   );
   await expect.poll(async () => (await state(page)).submissions.length).toBe(1);
   expect((await state(page)).submissions).toEqual([
@@ -207,7 +257,7 @@ test('cleaned prompt dispatch waits for real text and brace animation completion
   await expect(prompt).toHaveCount(0);
 });
 
-test('long dictation remains bounded and composition preserves the same tiled pane component', async ({
+test('extended dictation scales to fit without scrolling and preserves the same tiled pane component', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -253,6 +303,18 @@ test('long dictation remains bounded and composition preserves the same tiled pa
         );
       })
       .toBe(true);
+    const fit = await page.locator('.text-stack').evaluate((element) => ({
+      overflow: getComputedStyle(element).overflow,
+      height: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+    }));
+    expect(fit.overflow).toBe('hidden');
+    expect(fit.scrollHeight).toBeLessThanOrEqual(fit.height + 1);
+    expect(fit.scrollWidth).toBeLessThanOrEqual(fit.width + 1);
+    expect(fit.fontSize).toBeLessThan(16);
     await expect
       .poll(async () =>
         page
@@ -282,7 +344,7 @@ test('muting during finalization retains raw and cleaned text and blocks late su
   await install(page);
   await draft(page);
   await finalize(page);
-  await expect.poll(async () => (await state(page)).animations).toBe(2);
+  await expect.poll(async () => (await state(page)).animations).toBe(8);
   await page.evaluate(() => {
     const debug = window as unknown as {
       ng: { getComponent(element: Element): ComposerApp };
@@ -291,11 +353,9 @@ test('muting during finalization retains raw and cleaned text and blocks late su
     if (!root) throw Error('Root missing');
     debug.ng.getComponent(root).voice.setMuted(true);
   });
-  await expect(page.locator('.refined-ready .refined-text')).toHaveText(
-    refined,
-  );
+  await expect(page.locator('.prompt-text')).toHaveText(refined);
   expect((await state(page)).submissions).toEqual([]);
-  expect((await state(page)).animations).toBe(2);
+  expect((await state(page)).animations).toBe(8);
   const composition = await page.evaluate(() => {
     const debug = window as unknown as {
       ng: { getComponent(element: Element): ComposerApp };
@@ -305,6 +365,40 @@ test('muting during finalization retains raw and cleaned text and blocks late su
     return debug.ng.getComponent(root).voice.composition();
   });
   expect(composition).toMatchObject({ raw, refined, status: 'error' });
+});
+
+test('an impossible text fit retains the draft and refuses submission instead of accepting clipped text', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 100, height: 80 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await install(page);
+  const text = 'Keep every requirement intact. '.repeat(260);
+  await draft(page, text);
+  await expect(page.locator('.composer')).toHaveAttribute(
+    'data-text-fits',
+    'false',
+  );
+  await finalize(page);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const app = (
+          window as unknown as {
+            ng: { getComponent(element: Element): ComposerApp };
+          }
+        ).ng.getComponent(document.querySelector('stellar-root') as Element);
+        return app.voice.composition().status;
+      }),
+    )
+    .toBe('error');
+  expect((await state(page)).submissions).toEqual([]);
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await expect(page.locator('.composer')).toHaveAttribute(
+    'data-text-fits',
+    'true',
+  );
+  await expect(page.locator('.prompt-text')).toHaveText(text);
 });
 
 test('finalized Terra drafts preserve immediate dispatch without a hidden Sol presentation', async ({
