@@ -298,6 +298,150 @@ describe('voice conversation ownership', () => {
 });
 
 describe('spoken prompt composition', () => {
+  it.each(['select', 'clear'])(
+    'reconciles native state after interrupted %s mutation without dispatch',
+    async (operation) => {
+      let state!: VoiceComposition;
+      let actual: 'terra' | 'sol' = operation === 'clear' ? 'sol' : 'terra';
+      const pending = deferred<void>();
+      const f = fixture({
+        selectSession: async () => {
+          await pending.promise;
+          actual = 'sol';
+          return true;
+        },
+        clearConversation: async () => {
+          await pending.promise;
+          actual = 'terra';
+          return true;
+        },
+        readSession: async () => actual,
+        onComposition: (next) => {
+          state = next;
+        },
+      });
+      f.controller.setDraft('keep raw');
+      f.controller.setModel('sol');
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: operation === 'clear' ? 'clear' : 'end prompt',
+      });
+      f.utterance();
+      await flush();
+      f.controller.accept({ type: 'reset' });
+      pending.resolve();
+      await flush();
+      expect(state).toMatchObject({
+        raw: 'keep raw',
+        model: actual,
+        status: 'error',
+      });
+      expect(f.ports.submit).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps interrupted route unknown without a snapshot until explicit reconciliation', async () => {
+    let state!: VoiceComposition;
+    const pending = deferred<boolean>();
+    const f = fixture({
+      selectSession: () => pending.promise,
+      onComposition: (next) => {
+        state = next;
+      },
+    });
+    f.controller.setDraft('keep');
+    f.controller.setModel('sol');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    f.controller.accept({ type: 'reset' });
+    pending.resolve(true);
+    await flush();
+    expect(state.error).toContain('uncertain');
+    f.controller.reconcileSession('sol');
+    expect(state).toMatchObject({ model: 'sol', raw: 'keep', status: 'error' });
+  });
+  it.each(['false', 'throw'])(
+    'retains ordinary speech after %s submission and fences replay',
+    async (failure) => {
+      let state!: VoiceComposition;
+      const f = fixture({
+        onComposition: (next) => {
+          state = next;
+        },
+      });
+      if (failure === 'false') f.ports.submit.mockResolvedValueOnce(false);
+      else f.ports.submit.mockRejectedValueOnce(new Error('transport'));
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: '  retained raw  ',
+      });
+      f.utterance();
+      await flush();
+      expect(state).toMatchObject({ raw: '  retained raw  ', status: 'error' });
+      f.ports.transcribe.mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'end prompt',
+      });
+      f.utterance();
+      await flush();
+      expect(f.ports.submit).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps Sol selected for an ordinary follow-up after a composed turn', async () => {
+    const selectSession = vi.fn(async () => true);
+    const f = fixture({ selectSession });
+    f.controller.setDraft('first');
+    f.controller.setModel('sol');
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    f.completed();
+    await flush();
+    f.update({ speech: { ...initialSpeechSnapshot(), revision: '2' } });
+    f.feed(false, 1);
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'follow up',
+    });
+    f.utterance();
+    await flush();
+    expect(selectSession.mock.calls).toEqual([['sol'], ['sol']]);
+  });
+
+  it('keeps playback gated when a composed turn completes before a late refusal', async () => {
+    const pending = deferred<boolean>();
+    const f = fixture({ selectSession: async () => true });
+    f.controller.setDraft('first');
+    f.ports.submit.mockReturnValueOnce(pending.promise);
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'end prompt',
+    });
+    f.utterance();
+    await flush();
+    f.completed();
+    await flush();
+    pending.resolve(false);
+    await flush();
+    expect(f.view().status).toBe('Speaking locally');
+    f.utterance();
+    expect(f.ports.transcribe).toHaveBeenCalledTimes(1);
+  });
   it('selects Terra for ordinary speech and retains its original transcript', async () => {
     let state!: VoiceComposition;
     const selectSession = vi.fn(async () => true);

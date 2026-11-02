@@ -41,6 +41,7 @@ export interface VoicePorts {
   readonly onChange: (view: VoiceView) => void;
   readonly selectSession?: (model: VoiceModel) => Promise<boolean>;
   readonly clearConversation?: () => Promise<boolean>;
+  readonly readSession?: () => Promise<VoiceModel>;
   readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
   readonly onComposition?: (state: VoiceComposition) => void;
 }
@@ -51,6 +52,7 @@ export class VoiceConversation {
   private generation = 0;
   private phase: 'transcribing' | 'waiting' | 'speaking' | null = null;
   private voiceTurn: string | null = null;
+  private settledTurn: string | null = null;
   private playbackAcknowledged = false;
   private playbackRevision = 0n;
   private awaitingQuiet = false;
@@ -69,6 +71,8 @@ export class VoiceConversation {
   };
   private refinement?: AbortController;
   private dispatchUncertain = false;
+  private routeUncertain = false;
+  private sessionPending = false;
 
   constructor(private readonly ports: VoicePorts) {}
 
@@ -179,12 +183,21 @@ export class VoiceConversation {
   }
 
   setModel(model: VoiceModel) {
-    if (!this.disposed && this.composition.status !== 'finalizing')
+    if (
+      !this.disposed &&
+      !this.sessionPending &&
+      this.composition.status !== 'finalizing'
+    )
       this.setComposition({ ...this.composition, model });
   }
 
   setDraft(raw: string) {
-    if (this.disposed || this.composition.status === 'finalizing') return;
+    if (
+      this.disposed ||
+      this.sessionPending ||
+      this.composition.status === 'finalizing'
+    )
+      return;
     if (raw !== this.composition.raw) this.dispatchUncertain = false;
     this.setComposition({
       ...this.composition,
@@ -208,6 +221,54 @@ export class VoiceConversation {
     this.publish();
   }
 
+  reconcileSession(model: VoiceModel) {
+    if (this.disposed || this.sessionPending) return;
+    this.routeUncertain = false;
+    this.setComposition({
+      ...this.composition,
+      model,
+      status: 'error',
+      error: 'Conversation state refreshed. Your text is retained.',
+    });
+    this.publish();
+  }
+
+  private async mutateSession(
+    operation: () => Promise<boolean>,
+    generation: number,
+  ): Promise<boolean> {
+    this.sessionPending = true;
+    let accepted = false;
+    try {
+      accepted = await operation();
+    } catch {
+      /* A lost response may follow a mutation. */
+    }
+    if (!this.current(generation) || !accepted) {
+      this.routeUncertain = true;
+      let model: VoiceModel | undefined;
+      try {
+        model = await this.ports.readSession?.();
+      } catch {
+        /* Require explicit reconciliation. */
+      }
+      if (!this.disposed) {
+        if (model === 'terra' || model === 'sol') this.routeUncertain = false;
+        this.setComposition({
+          ...this.composition,
+          ...(model ? { model } : {}),
+          status: 'error',
+          error: this.routeUncertain
+            ? 'Conversation state is uncertain. Refresh it before sending.'
+            : 'Conversation state refreshed after interruption. Your text is retained.',
+        });
+      }
+    }
+    this.sessionPending = false;
+    if (!this.disposed) this.publish();
+    return accepted;
+  }
+
   private async recognize(text: string, id: string, generation: number) {
     const command = voiceCommand(text);
     if (command === 'prompt') {
@@ -227,10 +288,14 @@ export class VoiceConversation {
         return;
       }
       try {
-        const cleared = await this.ports.clearConversation();
+        const cleared = await this.mutateSession(
+          this.ports.clearConversation,
+          generation,
+        );
         if (!this.current(generation)) return;
         if (!cleared) throw new Error();
         this.dispatchUncertain = false;
+        this.routeUncertain = false;
         this.phase = null;
         this.setComposition({
           raw: '',
@@ -271,33 +336,41 @@ export class VoiceConversation {
       this.publish();
       return;
     }
-    if (this.ports.selectSession) {
-      try {
-        const selected = await this.ports.selectSession('terra');
-        if (!this.current(generation)) return;
-        if (!selected) throw new Error();
-      } catch {
-        if (this.current(generation)) {
-          this.setComposition({
-            raw: text,
-            lastSubmittedRaw: this.composition.lastSubmittedRaw,
-            model: 'terra',
-            status: 'error',
-            error: 'Could not select the conversation. Your text is retained.',
-          });
-          this.phase = null;
-          this.publish();
-        }
-        return;
-      }
+    const model = this.composition.model;
+    this.setComposition({
+      ...this.composition,
+      raw: text,
+      status: 'finalizing',
+      error: '',
+    });
+    try {
+      if (!this.current(generation)) return;
+      if (this.routeUncertain) throw new Error();
+      const selectSession = this.ports.selectSession;
+      if (model === 'sol' && !selectSession) throw new Error();
+      if (
+        selectSession &&
+        !(await this.mutateSession(() => selectSession(model), generation))
+      )
+        throw new Error();
+      if (!this.current(generation)) return;
+      await this.dispatchDraft(text, text.trim(), model, id, generation);
+    } catch {
+      if (this.current(generation))
+        this.compositionError(
+          'Could not select the conversation. Your text is retained.',
+        );
     }
-    const accepted = await this.submit(text.trim(), id, generation);
-    if (this.current(generation) && accepted)
-      this.setComposition({ ...this.composition, lastSubmittedRaw: text });
   }
 
   private async finalize(id: string, generation: number) {
     const { raw, model } = this.composition;
+    if (this.routeUncertain) {
+      this.compositionError(
+        'Conversation state is uncertain. Refresh it before sending.',
+      );
+      return;
+    }
     if (this.dispatchUncertain) {
       this.compositionError(
         'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
@@ -317,8 +390,12 @@ export class VoiceConversation {
     });
     try {
       if (!this.current(generation)) return;
-      if (model === 'sol' && !this.ports.selectSession) throw new Error();
-      if (this.ports.selectSession && !(await this.ports.selectSession(model)))
+      const selectSession = this.ports.selectSession;
+      if (model === 'sol' && !selectSession) throw new Error();
+      if (
+        selectSession &&
+        !(await this.mutateSession(() => selectSession(model), generation))
+      )
         throw new Error();
       if (!this.current(generation)) return;
       const controller = new AbortController();
@@ -329,23 +406,7 @@ export class VoiceConversation {
       if (!this.current(generation)) return;
       this.refinement = undefined;
       if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
-      this.dispatchUncertain = true;
-      const accepted = await this.submit(text, id, generation);
-      if (!this.current(generation)) return;
-      if (!accepted) {
-        this.compositionError(
-          'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
-        );
-        return;
-      }
-      this.dispatchUncertain = false;
-      this.setComposition({
-        raw: '',
-        lastSubmittedRaw: raw,
-        model,
-        status: 'idle',
-        error: '',
-      });
+      await this.dispatchDraft(raw, text, model, id, generation);
     } catch {
       if (this.current(generation))
         this.compositionError(
@@ -356,11 +417,43 @@ export class VoiceConversation {
     }
   }
 
+  private async dispatchDraft(
+    raw: string,
+    text: string,
+    model: VoiceModel,
+    id: string,
+    generation: number,
+  ) {
+    this.dispatchUncertain = true;
+    let accepted = false;
+    try {
+      accepted = await this.submit(text, id, generation);
+    } catch {
+      // A failed transport may still have delivered the turn.
+    }
+    if (!this.current(generation)) return;
+    if (!accepted && this.settledTurn !== id) {
+      this.compositionError(
+        'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
+      );
+      return;
+    }
+    this.dispatchUncertain = false;
+    this.setComposition({
+      raw: '',
+      lastSubmittedRaw: raw,
+      model,
+      status: 'idle',
+      error: '',
+    });
+  }
+
   private async submit(
     text: string,
     id: string,
     generation: number,
   ): Promise<boolean> {
+    this.settledTurn = null;
     this.voiceTurn = id;
     this.phase = 'waiting';
     this.publish();
@@ -387,6 +480,7 @@ export class VoiceConversation {
       context.audio.status === 'capturing' &&
       !this.phase &&
       !this.stopping &&
+      !this.sessionPending &&
       !this.unconfirmedStop &&
       !this.blocked &&
       context.assistant.connection === 'ready' &&
@@ -430,6 +524,10 @@ export class VoiceConversation {
     if (!context || this.phase !== 'waiting' || !this.voiceTurn) return;
     const snapshot = context.assistant;
     if (snapshot.turn_id !== this.voiceTurn) return;
+    if (
+      ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
+    )
+      this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
       this.voiceTurn = null;
       this.phase = null;
