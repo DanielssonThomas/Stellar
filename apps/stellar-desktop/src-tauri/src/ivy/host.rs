@@ -1,11 +1,16 @@
+#[cfg(test)]
+use super::process::Broker;
 use super::{
     contracts::*,
     journal::Journal,
-    process::{self, Broker, OwnedChild},
+    process::{self, OwnedChild},
     rotation::{self, Pending, Ticket},
     session::Session,
     state::{Publisher, Shared, View},
+    workspace_contracts::WorkspaceToolReply,
+    workspace_hub::{self, WorkspaceHub},
 };
+#[cfg(test)]
 use serde_json::json;
 use std::{
     path::Path,
@@ -33,6 +38,7 @@ pub enum Action {
 }
 struct Work {
     epoch: u64,
+    workspace_epoch: u64,
     action: Action,
 }
 pub struct IvyHost {
@@ -41,6 +47,7 @@ pub struct IvyHost {
     sender: SyncSender<Work>,
     gate: Mutex<()>,
     pending_rotation: Pending,
+    workspace: Arc<WorkspaceHub>,
 }
 
 pub struct RotationReply {
@@ -66,6 +73,8 @@ impl IvyHost {
         if let Ok(mut view) = self.shared.view.lock() {
             view.epoch = view.epoch.saturating_add(1);
         }
+        self.workspace.disarm();
+        self.workspace.set_input(None);
         process::stop(&self.child);
     }
     pub fn new(directory: &Path, publish: Publisher) -> Self {
@@ -89,6 +98,8 @@ impl IvyHost {
             view: Arc::new(Mutex::new(View { epoch: 0, snapshot })),
             publish,
         };
+        let workspace = Arc::new(WorkspaceHub::new(shared.clone()));
+        let tools = workspace.clone();
         let child = Arc::new(Mutex::new(None));
         let (sender, receiver) = mpsc::sync_channel::<Work>(4);
         let pending_rotation: Pending = Arc::new(Mutex::new(None));
@@ -105,6 +116,7 @@ impl IvyHost {
                 broker: None,
                 shared: state.clone(),
                 epoch: 0,
+                workspace_epoch: 0,
                 buffered: vec![],
                 replay: None,
             };
@@ -120,8 +132,9 @@ impl IvyHost {
                             continue;
                         }
                         session.epoch = work.epoch;
+                        session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
-                            Action::Connect => connect(&mut session, owned.clone()),
+                            Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => {
                                 deadline = Some(Instant::now() + Duration::from_secs(180));
                                 session.submit(request)
@@ -156,6 +169,8 @@ impl IvyHost {
                             }
                         };
                         if let Err(error) = result {
+                            tools.disarm();
+                            tools.set_input(None);
                             fail(&mut session, error);
                         }
                     }
@@ -170,14 +185,22 @@ impl IvyHost {
                     match broker.poll() {
                         Ok(Some(frame)) => {
                             if let Err(error) = session.event(frame) {
+                                tools.disarm();
+                                tools.set_input(None);
                                 fail(&mut session, error);
                             }
                         }
                         Ok(None) => {}
-                        Err(error) => fail(&mut session, error),
+                        Err(error) => {
+                            tools.disarm();
+                            tools.set_input(None);
+                            fail(&mut session, error);
+                        }
                     }
                 }
                 if deadline.is_some_and(|end| Instant::now() >= end) && session.record.unsettled {
+                    tools.disarm();
+                    tools.set_input(None);
                     fail(&mut session, IvyErrorCode::Timeout);
                     deadline = None;
                 }
@@ -189,7 +212,20 @@ impl IvyHost {
             sender,
             gate: Mutex::new(()),
             pending_rotation,
+            workspace,
         }
+    }
+
+    pub fn set_workspace_publisher(&self, publisher: workspace_hub::Publisher) {
+        self.workspace.set_publisher(publisher);
+    }
+
+    pub fn set_workspace_capture(&self, capture: workspace_hub::Capture) {
+        self.workspace.set_capture(capture);
+    }
+
+    pub fn workspace_reply(&self, reply: WorkspaceToolReply) -> Result<(), IvyErrorCode> {
+        self.workspace.reply(reply)
     }
 
     pub fn snapshot(&self) -> Result<IvySnapshot, IvyErrorCode> {
@@ -211,7 +247,7 @@ impl IvyHost {
 
     pub fn rotate(&self, model: IvyModel, force: bool) -> Result<RotationReply, IvyErrorCode> {
         let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
-        let view = self
+        let mut view = self
             .shared
             .view
             .lock()
@@ -229,6 +265,13 @@ impl IvyHost {
         if slot.is_some() {
             return Err(IvyErrorCode::Busy);
         }
+        let workspace_epoch = view
+            .snapshot
+            .workspace_epoch
+            .parse::<u64>()
+            .map_err(|_| IvyErrorCode::Protocol)?
+            .checked_add(1)
+            .ok_or(IvyErrorCode::Unavailable)?;
         let ticket = rotation::ticket();
         *slot = Some(ticket.clone());
         let (tx, rx) = mpsc::sync_channel(1);
@@ -236,6 +279,7 @@ impl IvyHost {
             .sender
             .try_send(Work {
                 epoch: view.epoch,
+                workspace_epoch,
                 action: Action::Rotate(model, force, ticket.clone(), tx),
             })
             .is_err()
@@ -243,6 +287,12 @@ impl IvyHost {
             *slot = None;
             return Err(IvyErrorCode::Busy);
         }
+        view.snapshot.workspace_epoch = workspace_epoch.to_string();
+        let epoch = view.epoch;
+        drop(slot);
+        drop(view);
+        self.workspace.disarm();
+        self.shared.update(epoch, |_| {});
         Ok(RotationReply {
             rx,
             pending: self.pending_rotation.clone(),
@@ -295,7 +345,23 @@ impl IvyHost {
         } else {
             view.epoch
         };
+        let previous_workspace_epoch = view
+            .snapshot
+            .workspace_epoch
+            .parse::<u64>()
+            .map_err(|_| IvyErrorCode::Protocol)?;
+        let workspace_epoch = if matches!(
+            action,
+            Action::Connect | Action::Disconnect | Action::Cancel | Action::Submit(_)
+        ) {
+            previous_workspace_epoch
+                .checked_add(1)
+                .ok_or(IvyErrorCode::Unavailable)?
+        } else {
+            previous_workspace_epoch
+        };
         let disconnect = matches!(action, Action::Disconnect);
+        let cancel = matches!(action, Action::Cancel);
         if disconnect {
             let ticket = self
                 .pending_rotation
@@ -313,9 +379,14 @@ impl IvyHost {
             _ => (None, None),
         };
         self.sender
-            .try_send(Work { epoch, action })
+            .try_send(Work {
+                epoch,
+                workspace_epoch,
+                action,
+            })
             .map_err(|_| IvyErrorCode::Busy)?;
         view.epoch = epoch;
+        view.snapshot.workspace_epoch = workspace_epoch.to_string();
         if let Some(connection) = connection {
             view.snapshot.connection = connection;
         }
@@ -326,6 +397,7 @@ impl IvyHost {
         }
         if disconnect {
             view.snapshot.verified_model = None;
+            view.snapshot.workspace_tools = WorkspaceToolsState::Unavailable;
         }
         if disconnect
             && matches!(
@@ -338,8 +410,12 @@ impl IvyHost {
         view.snapshot.error = None;
         let snapshot = view.snapshot.clone();
         drop(view);
+        if disconnect || cancel {
+            self.workspace.disarm();
+        }
         if disconnect {
             process::stop(&self.child);
+            self.workspace.set_input(None);
         }
         self.shared.update(epoch, |_| {});
         Ok(snapshot)
@@ -352,47 +428,10 @@ impl Drop for IvyHost {
     }
 }
 
-fn connect(session: &mut Session, child: OwnedChild) -> Result<(), IvyErrorCode> {
-    session.broker = None;
-    session.buffered.clear();
-    session.replay = None;
-    session.broker = Some(Broker::launch(child)?);
-    let ping = session.call("ping", json!({}))?;
-    let described = session.call("runtime.describe", json!({}))?;
-    if ping.get("pong").and_then(serde_json::Value::as_bool) != Some(true)
-        || described.get("profile").and_then(serde_json::Value::as_str) != Some("ivy")
-        || described
-            .get("protocol")
-            .and_then(serde_json::Value::as_u64)
-            != Some(1)
-    {
-        return Err(IvyErrorCode::Protocol);
-    }
-    publish_ready(session);
-    Ok(())
-}
-
-pub(super) fn publish_ready(session: &Session) {
-    session.restore_admission_state();
-    session.shared.update(session.epoch, |view| {
-        view.connection = IvyConnectionState::Ready;
-        view.error = None;
-    });
-}
-
-pub(super) fn fail(session: &mut Session, error: IvyErrorCode) {
-    session.broker = None;
-    session.shared.update(session.epoch, |view| {
-        view.connection = IvyConnectionState::Unavailable;
-        view.verified_model = None;
-        view.error = Some(error);
-        if session.record.unsettled {
-            view.turn = IvyTurnState::Uncertain;
-        } else if view.turn == IvyTurnState::Submitting {
-            view.turn = IvyTurnState::Idle;
-        }
-    });
-}
+use super::connection::connect;
+pub(super) use super::connection::fail;
+#[cfg(test)]
+pub(super) use super::connection::publish_ready;
 
 pub fn validate_submit(request: &IvySubmitRequest) -> Result<(), IvyErrorCode> {
     let valid_id = request.input_id.len() == 36

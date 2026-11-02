@@ -26,6 +26,7 @@ fn fixture() -> (Session, std::path::PathBuf) {
         unsettled: true,
         model: IvyModel::Terra,
         route_verified: true,
+        workspace: None,
     };
     journal.save(&record).unwrap();
     let shared = Shared {
@@ -45,6 +46,7 @@ fn fixture() -> (Session, std::path::PathBuf) {
             broker: None,
             shared,
             epoch: 1,
+            workspace_epoch: 1,
             buffered: vec![],
             replay: None,
         },
@@ -140,6 +142,8 @@ while ($line = [Console]::ReadLine()) {
   $request = $line | ConvertFrom-Json
   $receipt = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3;status='STATUS';outcome='OUTCOME';result=@{final_response='FINAL_TEXT'}}
   $result = switch ($request.method) {
+    'workspace.setup' { @{descriptor=@{port=12345;credential_ref='0123456789abcdef0123456789abcdef'};image_port=12346;image_secret=('a' * 64)} }
+    'workspace.stop' { @{} }
     'session.create' { @{session_id='session';model='gpt-6.1-terra'} }
     'prompt.submit' { $receipt }
     'session.resume' { @{session_id='session';model='MODEL';pending=@(@{ref=@{session_id='session'};admission_id='admission';execution_generation=3;input_id='00000000-0000-0000-0000-000000000001'})} }
@@ -165,7 +169,9 @@ while ($line = [Console]::ReadLine()) {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .creation_flags(0x08000000);
-    super::process::Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap()
+    let mut broker = super::process::Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap();
+    broker.set_workspace(Arc::new(|_| Ok(())), Arc::new(Mutex::new(None)));
+    broker
 }
 
 #[cfg(windows)]
@@ -286,6 +292,10 @@ fn rotation_persists_intent_and_fences_old_completions() {
         Err(IvyErrorCode::Uncertain)
     ));
     session.record.unsettled = false;
+    session.record.workspace = Some(super::journal::WorkspaceDescriptor {
+        port: 12345,
+        credential_ref: "0123456789abcdef0123456789abcdef".into(),
+    });
     session.rotate(IvyModel::Sol, false).unwrap();
     assert_eq!(session.record.model, IvyModel::Sol);
     assert!(session.record.session_id.is_none());
@@ -309,9 +319,28 @@ fn rotation_persists_intent_and_fences_old_completions() {
 }
 
 #[test]
+fn legacy_session_requires_explicit_clear_before_switching_foreground() {
+    let (mut session, directory) = fixture();
+    session.record.unsettled = false;
+    assert_eq!(
+        session.rotate(IvyModel::Sol, false),
+        Err(IvyErrorCode::Unavailable)
+    );
+    assert_eq!(session.record.session_id.as_deref(), Some("session"));
+    session.rotate(IvyModel::Terra, true).unwrap();
+    assert!(session.record.session_id.is_none());
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn failed_rotation_save_preserves_foreground() {
     let (mut session, directory) = fixture();
     session.record.unsettled = false;
+    session.record.workspace = Some(super::journal::WorkspaceDescriptor {
+        port: 12345,
+        credential_ref: "0123456789abcdef0123456789abcdef".into(),
+    });
     std::fs::create_dir(directory.join("ivy-session.pending")).unwrap();
     assert!(matches!(
         session.rotate(IvyModel::Sol, false),

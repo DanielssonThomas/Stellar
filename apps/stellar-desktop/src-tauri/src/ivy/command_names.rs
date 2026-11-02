@@ -1,4 +1,6 @@
 pub const IVY_EVENT: &str = "ivy-state";
+pub const WORKSPACE_EVENT: &str = "workspace-tool-request";
+pub const WORKSPACE_REPLY_COMMAND: &str = "workspace_tool_reply";
 pub const IVY_COMMANDS: [&str; 8] = [
     "ivy_connect",
     "ivy_snapshot",

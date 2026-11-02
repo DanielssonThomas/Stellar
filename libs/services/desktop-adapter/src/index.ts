@@ -16,6 +16,14 @@ export {
 } from './lib/ivy/ivy-transport';
 export type { IvyTransport, IvyNativeApi } from './lib/ivy/ivy-transport';
 export {
+  WorkspaceToolsService,
+  WORKSPACE_TOOL_TRANSPORT,
+} from './lib/services/workspace-tools.service';
+export type {
+  WorkspaceToolHandler,
+  WorkspaceToolTransport,
+} from './lib/services/workspace-tools.service';
+export {
   IvyAdapterService,
   IVY_TRANSPORT,
 } from './lib/services/ivy-adapter.service';

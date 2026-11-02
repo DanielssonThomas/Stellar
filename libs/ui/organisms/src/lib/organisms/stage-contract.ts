@@ -1,4 +1,10 @@
 import type { ActivitySummaryPayload } from '@stellar/ui-molecules';
+import type {
+  PresentationTextPayload,
+  PresentationMediaPayload,
+  PresentationDiagramPayload,
+  PresentationTelemetryPayload,
+} from '@stellar/ui-molecules';
 import {
   boundedJson,
   canonicalJson,
@@ -64,12 +70,35 @@ export type StageResult = {
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 export type ProductionPayloadMap = {
+  readonly 'rich-text': PresentationTextPayload;
+  readonly image: Extract<PresentationMediaPayload, { kind: 'image' }>;
+  readonly browser: Extract<PresentationMediaPayload, { kind: 'browser' }>;
+  readonly diagram: PresentationDiagramPayload;
+  readonly workflow: PresentationTelemetryPayload & { kind: 'workflow' };
+  readonly session: PresentationTelemetryPayload & { kind: 'session' };
   readonly 'activity-summary': ActivitySummaryPayload;
   readonly 'assistant-message': {
     readonly title: string;
     readonly body: string;
   };
 };
+
+function payloadLimit(surface: unknown): number {
+  switch (surface) {
+    case 'assistant-message':
+      return Infinity;
+    case 'rich-text':
+      return 65536;
+    case 'image':
+      return 512 * 1024 + 6144;
+    case 'diagram':
+      return 16384;
+    case 'browser':
+      return 4096;
+    default:
+      return 2048;
+  }
+}
 
 function readableText(value: string): boolean {
   for (const character of value) {
@@ -171,10 +200,7 @@ export function decodeStageCommand<P extends object>(
       return null;
     if (
       !plainRecord(input) ||
-      !boundedJson(
-        input,
-        input['surface'] === 'assistant-message' ? Infinity : 4096,
-      )
+      !boundedJson(input, payloadLimit(input['surface']) + 1024)
     )
       return null;
     const { contractVersion, commandId, instanceId, action } = input;
@@ -233,10 +259,7 @@ export function decodeStageCommand<P extends object>(
     if (
       typeof input['surface'] !== 'string' ||
       !Object.hasOwn(decoders, input['surface']) ||
-      !boundedJson(
-        input['payload'],
-        input['surface'] === 'assistant-message' ? Infinity : 2048,
-      )
+      !boundedJson(input['payload'], payloadLimit(input['surface']))
     )
       return null;
     if (
@@ -249,10 +272,7 @@ export function decodeStageCommand<P extends object>(
     const payload = decode(input['payload']);
     if (
       payload === null ||
-      !boundedJson(
-        payload,
-        input['surface'] === 'assistant-message' ? Infinity : 2048,
-      )
+      !boundedJson(payload, payloadLimit(input['surface']))
     )
       return null;
     const detached = freezeJson(JSON.parse(canonicalJson(payload)));

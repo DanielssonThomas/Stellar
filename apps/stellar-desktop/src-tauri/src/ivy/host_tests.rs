@@ -9,6 +9,7 @@ fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
         publish: Arc::new(|_| {}),
     };
     let (sender, receiver) = mpsc::sync_channel(4);
+    let workspace = Arc::new(WorkspaceHub::new(shared.clone()));
     (
         IvyHost {
             shared,
@@ -16,6 +17,7 @@ fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
             sender,
             gate: Mutex::new(()),
             pending_rotation: Arc::new(Mutex::new(None)),
+            workspace,
         },
         receiver,
     )
@@ -38,6 +40,161 @@ fn repeated_connect_enqueues_one_silent_operation() {
 }
 
 #[test]
+fn cancellation_revokes_workspace_generation_without_disconnect_or_turn_replay() {
+    let (host, _receiver) = fixture();
+    host.shared
+        .update(0, |view| view.connection = IvyConnectionState::Ready);
+    let turn = "00000000-0000-4000-8000-000000000001";
+    let before = host
+        .request(Action::Submit(IvySubmitRequest {
+            version: 1,
+            input_id: turn.into(),
+            text: "hello".into(),
+        }))
+        .unwrap();
+    let after = host.request(Action::Cancel).unwrap();
+    assert_eq!(after.connection, IvyConnectionState::Ready);
+    assert_eq!(after.turn_id.as_deref(), Some(turn));
+    assert_ne!(before.workspace_epoch, after.workspace_epoch);
+    let old = json!({"event":"workspace_tool","data":{"version":1,
+        "request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":before.workspace_epoch,
+        "turn_id":turn,"operation":{"kind":"clear"}}});
+    assert_eq!(host.workspace.handle(old), Ok(()));
+    assert_eq!(
+        host.snapshot().unwrap().workspace_tools,
+        WorkspaceToolsState::Unavailable
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn early_workspace_callback_can_read_snapshot_and_reply_during_admission() {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let (host, _receiver) = fixture();
+    let host = Arc::new(host);
+    let turn = "00000000-0000-4000-8000-000000000001";
+    host.shared.update(0, |view| {
+        view.connection = IvyConnectionState::Ready;
+        view.turn = IvyTurnState::Submitting;
+        view.turn_id = Some(turn.into());
+    });
+    let script = r#"
+$null=[Console]::ReadLine()
+[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"clear"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
+$reply=[Console]::ReadLine() | ConvertFrom-Json
+if ($reply.control -eq 'workspace_reply' -and $reply.reply.outcome.kind -eq 'applied') { [Console]::WriteLine('{"id":1,"result":{"admitted":true}}') }
+"#;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(0x08000000);
+    let mut broker = Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap();
+    host.workspace.set_input(Some(broker.input()));
+    let weak = Arc::downgrade(&host);
+    host.set_workspace_publisher(Arc::new(move |request| {
+        let host = weak.upgrade().unwrap();
+        assert_eq!(host.snapshot().unwrap().turn, IvyTurnState::Submitting);
+        assert!(request.expires_at_ms.parse::<u64>().unwrap() > 0);
+        host.workspace_reply(WorkspaceToolReply {
+            version: 1,
+            request_id: request.request_id,
+            epoch: request.epoch,
+            turn_id: request.turn_id,
+            outcome: super::super::workspace_contracts::WorkspaceToolOutcome::Applied,
+        })
+        .unwrap();
+        true
+    }));
+    let hub = host.workspace.clone();
+    broker.set_workspace(
+        Arc::new(move |frame| hub.handle(frame)),
+        host.workspace.image_endpoint(),
+    );
+    assert_eq!(
+        broker
+            .call("prompt.submit", json!({}), &mut vec![])
+            .unwrap(),
+        json!({"admitted":true})
+    );
+    assert_eq!(
+        host.snapshot().unwrap().workspace_tools,
+        WorkspaceToolsState::Available
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn early_window_capture_uses_private_binary_reply_during_admission() {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let (host, _receiver) = fixture();
+    let host = Arc::new(host);
+    host.shared.update(0, |view| {
+        view.connection = IvyConnectionState::Ready;
+        view.turn = IvyTurnState::Submitting;
+        view.turn_id = Some("00000000-0000-4000-8000-000000000001".into());
+    });
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    super::super::workspace_data::configure(
+        json!({
+            "descriptor":{"port":12345,"credential_ref":"0123456789abcdef0123456789abcdef"},
+            "image_port":listener.local_addr().unwrap().port(),"image_secret":"a".repeat(64)
+        }),
+        &host.workspace.image_endpoint(),
+    )
+    .unwrap();
+    let script = r#"
+$null=[Console]::ReadLine()
+[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"capture_window"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
+$reply=[Console]::ReadLine() | ConvertFrom-Json
+if ($reply.control -eq 'test_ack') { [Console]::WriteLine('{"id":1,"result":{"captured":true}}') }
+"#;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(0x08000000);
+    let mut broker = Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap();
+    host.workspace.set_input(Some(broker.input()));
+    host.set_workspace_capture(Arc::new(|| Ok(b"\x89PNG\r\n\x1a\nx".to_vec())));
+    let control = broker.input();
+    let image_receiver = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let header: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(header["secret"], "a".repeat(64));
+        assert_eq!(header["size"], 9);
+        let mut image = [0; 9];
+        reader.read_exact(&mut image).unwrap();
+        assert_eq!(&image, b"\x89PNG\r\n\x1a\nx");
+        reader.get_mut().write_all(&[1]).unwrap();
+        super::super::process::control(&control, &json!({"control":"test_ack"})).unwrap();
+    });
+    let hub = host.workspace.clone();
+    broker.set_workspace(
+        Arc::new(move |frame| hub.handle(frame)),
+        host.workspace.image_endpoint(),
+    );
+    assert_eq!(
+        broker
+            .call("prompt.submit", json!({}), &mut vec![])
+            .unwrap(),
+        json!({"captured":true})
+    );
+    image_receiver.join().unwrap();
+}
+
+#[test]
 fn failed_route_validation_revokes_verification_through_reconnect() {
     let (host, _receiver) = fixture();
     let directory =
@@ -49,6 +206,7 @@ fn failed_route_validation_revokes_verification_through_reconnect() {
         broker: None,
         shared: host.shared.clone(),
         epoch: 0,
+        workspace_epoch: 0,
         buffered: vec![],
         replay: None,
     };
@@ -125,6 +283,7 @@ fn started_rotation_remains_busy_until_settled_after_disconnect() {
         broker: None,
         shared: host.shared.clone(),
         epoch: queued.epoch,
+        workspace_epoch: queued.workspace_epoch,
         buffered: vec![],
         replay: None,
     };
@@ -252,6 +411,7 @@ fn disconnected_queued_submit_restores_the_unadmitted_journal_state() {
         broker: None,
         shared: host.shared.clone(),
         epoch: disconnected.epoch,
+        workspace_epoch: disconnected.workspace_epoch,
         buffered: vec![],
         replay: None,
     };
@@ -307,6 +467,7 @@ fn ready_subscriber_submission_keeps_its_busy_and_deduplication_state() {
         broker: None,
         shared: host.shared.clone(),
         epoch: 0,
+        workspace_epoch: 0,
         buffered: vec![],
         replay: None,
     };

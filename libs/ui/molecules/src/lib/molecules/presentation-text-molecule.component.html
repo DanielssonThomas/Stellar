@@ -1,0 +1,63 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="text" />
+} @else if (payload(); as content) {
+  <article class="presentation">
+    <h2>{{ content.title }}</h2>
+    @for (block of content.blocks; track $index) {
+      @switch (block.kind) {
+        @case ('heading') {
+          <h3>{{ block.text }}</h3>
+        }
+        @case ('paragraph') {
+          <p>{{ block.text }}</p>
+        }
+        @case ('code') {
+          <pre><code [attr.aria-label]="block.language || 'Code'">{{ block.text }}</code></pre>
+        }
+        @case ('list') {
+          <ul>
+            @for (item of block.items; track $index) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        }
+        @case ('checklist') {
+          <ul class="checklist">
+            @for (item of block.items; track $index) {
+              <li>
+                <span
+                  class="text-stellar-primary"
+                  [attr.aria-label]="item.checked ? 'Complete' : 'Incomplete'"
+                  >{{ item.checked ? '✓' : '○' }}</span
+                >
+                {{ item.text }}
+              </li>
+            }
+          </ul>
+        }
+        @case ('table') {
+          <div class="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  @for (column of block.columns; track $index) {
+                    <th scope="col">{{ column }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of block.rows; track $index) {
+                  <tr>
+                    @for (cell of row; track $index) {
+                      <td>{{ cell }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    }
+  </article>
+}
