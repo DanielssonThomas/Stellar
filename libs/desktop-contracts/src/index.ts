@@ -76,3 +76,7 @@ export {
   decodeSpeechSnapshot,
   decodeSpeechError,
 } from './lib/speech-codec';
+
+export type { CleanupRequest, CleanupReply } from './generated';
+export { cleanupRefineCommand } from './generated';
+export { decodeCleanupReply } from './lib/cleanup-codec';

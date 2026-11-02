@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPromptCleanup } from './prompt-cleanup';
 
 describe('prompt cleanup', () => {
-  it('returns exact raw diagnostics alongside a provider rewrite', async () => {
+  it('falls back when a rewrite removes a protected path, including a retracted path', async () => {
     const raw =
       'Um, open C:\\Work\\app.ts, no, use C:\\Work\\main.ts and keep ID ABC-42.';
     const refined = 'Open C:\\Work\\main.ts and keep ID ABC-42.';
@@ -11,7 +11,7 @@ describe('prompt cleanup', () => {
       raw,
       new AbortController().signal,
     );
-    expect(result).toEqual({ raw, text: refined, status: 'refined' });
+    expect(result).toEqual({ raw, text: raw, status: 'fallback' });
     expect(provider).toHaveBeenCalledOnce();
     expect(provider.mock.calls[0][0]).toBe(raw);
   });

@@ -44,3 +44,7 @@ export type {
   PromptCleanupProvider,
   PromptCleanupResult,
 } from './lib/speech/prompt-cleanup';
+
+export { createNativePromptCleanup } from './lib/speech/native-prompt-cleanup';
+export type { CleanupInvoke } from './lib/speech/native-prompt-cleanup';
+export { PromptCleanupService } from './lib/services/prompt-cleanup.service';

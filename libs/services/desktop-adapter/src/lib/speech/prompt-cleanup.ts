@@ -30,7 +30,7 @@ export function createPromptCleanup(
     };
     const cancelled = () => new DOMException('Cleanup cancelled', 'AbortError');
     if (signal.aborted) throw cancelled();
-    if (!provider || !raw.trim()) return fallback;
+    if (!provider || !raw.trim() || new TextEncoder().encode(raw).length > 8192) return fallback;
 
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -64,6 +64,8 @@ export function createPromptCleanup(
         })
       )
         return fallback;
+      const protectedTokens = raw.match(/(?:[A-Za-z]:\\|\/)[^\s,;]+|\b[\w.-]*\d[\w.-]*\b/g) ?? [];
+      if (protectedTokens.some((token) => !output.includes(token.replace(/[.,;:!?]+$/, '')))) return fallback;
       return { raw, text: output, status: 'refined' };
     } catch {
       if (signal.aborted) throw cancelled();

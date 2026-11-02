@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+#[path = "src/cleanup/command_name.rs"]
+mod cleanup_name;
 #[path = "src/app_info/command_name.rs"]
 mod command_name;
 #[path = "src/ivy/command_names.rs"]
@@ -9,6 +11,7 @@ mod speech_names;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        cleanup_name::CLEANUP_COMMAND,
         command_name::APP_INFO_COMMAND,
         "smoke_result",
         "smoke_hold_ivy",

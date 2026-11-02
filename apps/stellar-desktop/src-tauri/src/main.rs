@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+mod cleanup;
 mod commands;
 mod contracts;
 mod ivy;
@@ -22,6 +23,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
+            app.manage(cleanup::CleanupHost::default());
             let handle = app.handle().clone();
             #[cfg(not(feature = "native-smoke"))]
             let directory = app.path().app_local_data_dir()?.join("ivy");
@@ -72,7 +74,8 @@ fn main() {
         speech::speech_transcribe,
         speech::speech_speak,
         speech::speech_stop,
-        speech::speech_snapshot
+        speech::speech_snapshot,
+        cleanup::cleanup_refine
     ]);
     builder
         .build(tauri::generate_context!())
