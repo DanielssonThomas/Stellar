@@ -2,9 +2,16 @@ export type VoiceModel = 'terra' | 'sol';
 export type VoiceCommand = 'prompt' | 'end prompt' | 'clear' | 'done';
 export interface VoiceComposition {
   readonly raw: string;
+  readonly refined: string | null;
   readonly lastSubmittedRaw: string;
   readonly model: VoiceModel;
-  readonly status: 'idle' | 'composing' | 'finalizing' | 'error';
+  readonly status:
+    | 'idle'
+    | 'composing'
+    | 'refining'
+    | 'finalizing'
+    | 'submitting'
+    | 'error';
   readonly error: string;
 }
 
