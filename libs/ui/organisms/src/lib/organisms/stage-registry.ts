@@ -48,6 +48,11 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
   }
 
   return {
+    nextCommandId(): number | null {
+      return disposed || highWater === Number.MAX_SAFE_INTEGER
+        ? null
+        : highWater + 1;
+    },
     dispatch(input: unknown): StageResult {
       if (disposed) return { status: 'rejected', reason: 'disposed' };
       const command = decodeStageCommand(input, trusted);

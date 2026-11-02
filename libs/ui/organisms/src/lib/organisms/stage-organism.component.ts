@@ -142,6 +142,7 @@ export class StageOrganism {
       if (!requested || this.loading()) return;
       const panel = this.panels().find(
         (entry) =>
+          !entry.nativeElement.classList.contains('pane-leave') &&
           entry.nativeElement.dataset['instanceId'] === requested.instanceId,
       );
       if (panel) {
@@ -216,6 +217,23 @@ export class StageOrganism {
 
   presentationIds(): readonly string[] {
     return this.registry.snapshot().map((instance) => instance.instanceId);
+  }
+
+  nextCommandId(): number | null {
+    return this.registry.nextCommandId();
+  }
+
+  inspectPresentations() {
+    return Object.freeze(
+      this.instances().map((instance) =>
+        Object.freeze({
+          instanceId: instance.instanceId,
+          surface: instance.surface,
+          prominence: instance.prominence,
+          minimized: instance.minimized,
+        }),
+      ),
+    );
   }
 
   restorePresentation() {

@@ -2,6 +2,68 @@ import { describe, expect, it, vi } from 'vitest';
 import { createStageMotion, revealOrigin } from './stage-motion';
 
 describe('Stage structural motion', () => {
+  it.each(['before', 'after'])(
+    'retains the captured retiring rectangle when leave runs %s layout update',
+    (order) => {
+      const first = document.createElement('section'),
+        leaving = document.createElement('section');
+      first.dataset['instanceId'] = 'first';
+      leaving.dataset['instanceId'] = 'leaving';
+      const animations: Animation[] = [];
+      const makeAnimation = () => {
+        const animation = {
+          cancel: vi.fn(),
+          onfinish: null,
+          oncancel: null,
+          timeline: { currentTime: 77 },
+          startTime: 0,
+        } as unknown as Animation;
+        animations.push(animation);
+        return animation;
+      };
+      Object.assign(first, { animate: vi.fn(makeAnimation) });
+      const retire = vi.fn(makeAnimation);
+      Object.assign(leaving, { animate: retire });
+      const motion = createStageMotion({
+        getComputedStyle: (element) =>
+          ({
+            left: element === first ? '0px' : '540px',
+            top: '0px',
+            width: element === first ? '540px' : '460px',
+            height: '800px',
+            opacity: element === first ? '1' : '0.4',
+          }) as CSSStyleDeclaration,
+      });
+      const complete = vi.fn(),
+        full = { x: 0, y: 0, width: 1000, height: 800 };
+      motion.capture([first, leaving]);
+      if (order === 'before') motion.retire(leaving, [full], false, complete);
+      motion.update([{ ...full, instanceId: 'first', element: first }], false);
+      if (order === 'after') motion.retire(leaving, [full], false, complete);
+      expect(retire).toHaveBeenCalledOnce();
+      expect(retire).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            left: '540px',
+            top: '0px',
+            width: '460px',
+            height: '800px',
+            opacity: 0.4,
+          }),
+          expect.anything(),
+        ],
+        expect.anything(),
+      );
+      expect(animations.every((animation) => animation.startTime === 77)).toBe(
+        true,
+      );
+      expect(complete).not.toHaveBeenCalled();
+      const retiring = order === 'before' ? animations[0] : animations[1];
+      (retiring.onfinish as () => void)();
+      expect(complete).toHaveBeenCalledOnce();
+      motion.dispose();
+    },
+  );
   it('reveals supporting panes from the edge being reclaimed from existing content', () => {
     const full = { x: 0, y: 0, width: 1000, height: 800 };
     expect(
