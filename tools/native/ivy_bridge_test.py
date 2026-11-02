@@ -32,6 +32,7 @@ class Connection:
         self.calls = []
         self.client = self
         self.events = asyncio.Queue()
+        self.sessions = set()
         self.completed = set()
         self.active = None
         self.lease = Lease()
@@ -61,6 +62,42 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(frames[0]['result'], {'pong': True})
         self.assertEqual(set(frames[1]['result']), {'profile', 'protocol', 'capabilities'})
         self.assertNotIn(b'excluded', stdout.buffer.getvalue())
+
+    async def test_fixed_model_creation_checks_capability_and_projects_route(self):
+        conn = Connection()
+        async def call(method, params):
+            return {'session_create': {'parameters': ['model', 'provider']}}
+        async def rpc(method, **params):
+            self.assertEqual(params['provider'], 'openai-codex')
+            self.assertEqual(params['model'], 'gpt-6.1-sol')
+            return {'session_id': 'sid', 'info': {'model': params['model'], 'launch_request': {'model': params['model'], 'provider': params['provider']}, 'secret': 'hidden'}}
+        conn.call, conn.rpc = call, rpc
+        stdout = Pipe()
+        request = b'{"id":1,"method":"session.create","params":{"request_id":"abc","model":"gpt-6.1-sol"}}\n'
+        with patch.object(sys, 'stdin', Pipe(request)), patch.object(sys, 'stdout', stdout):
+            await bridge.requests(conn)
+        self.assertEqual(json.loads(stdout.buffer.getvalue()), {'id': 1, 'result': {'session_id': 'sid', 'model': 'gpt-6.1-sol'}})
+        self.assertEqual(conn.sessions, {'sid'})
+
+    async def test_mismatched_gateway_model_never_becomes_verified(self):
+        conn = Connection()
+        async def call(method, params):
+            return {'session_create': {'parameters': ['model', 'provider']}}
+        async def rpc(method, **params):
+            return {'session_id': 'sid', 'info': {'model': 'gpt-6.1-terra', 'launch_request': {'model': params['model'], 'provider': params['provider']}}}
+        conn.call, conn.rpc = call, rpc
+        request = b'{"id":1,"method":"session.create","params":{"request_id":"abc","model":"gpt-6.1-sol"}}\n'
+        with patch.object(sys, 'stdin', Pipe(request)), patch.object(sys, 'stdout', Pipe()):
+            with self.assertRaises(bridge.Closed):
+                await bridge.requests(conn)
+
+    async def test_missing_model_capability_fails_closed(self):
+        conn = Connection()
+        request = b'{"id":1,"method":"session.create","params":{"request_id":"abc","model":"gpt-6.1-sol"}}\n'
+        with patch.object(sys, 'stdin', Pipe(request)), patch.object(sys, 'stdout', Pipe()):
+            with self.assertRaises(bridge.Closed):
+                await bridge.requests(conn)
+        self.assertEqual(conn.sessions, set())
 
     async def test_wrong_health_does_not_become_ready(self):
         conn = Connection()

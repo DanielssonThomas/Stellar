@@ -24,6 +24,8 @@ fn fixture() -> (Session, std::path::PathBuf) {
         admission_id: Some("admission".into()),
         generation: Some(3),
         unsettled: true,
+        model: IvyModel::Terra,
+        route_verified: true,
     };
     journal.save(&record).unwrap();
     let shared = Shared {
@@ -126,6 +128,11 @@ fn inert_broker(terminal: bool) -> super::process::Broker {
 
 #[cfg(windows)]
 fn inert_outcome(terminal: bool, outcome: &str, text: &str) -> super::process::Broker {
+    inert_route(terminal, outcome, text, "gpt-6.1-terra")
+}
+
+#[cfg(windows)]
+fn inert_route(terminal: bool, outcome: &str, text: &str, model: &str) -> super::process::Broker {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let template = r#"
@@ -133,9 +140,9 @@ while ($line = [Console]::ReadLine()) {
   $request = $line | ConvertFrom-Json
   $receipt = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3;status='STATUS';outcome='OUTCOME';result=@{final_response='FINAL_TEXT'}}
   $result = switch ($request.method) {
-    'session.create' { @{session_id='session'} }
+    'session.create' { @{session_id='session';model='gpt-6.1-terra'} }
     'prompt.submit' { $receipt }
-    'session.resume' { @{session_id='session';pending=@(@{ref=@{session_id='session'};admission_id='admission';execution_generation=3;input_id='00000000-0000-0000-0000-000000000001'})} }
+    'session.resume' { @{session_id='session';model='MODEL';pending=@(@{ref=@{session_id='session'};admission_id='admission';execution_generation=3;input_id='00000000-0000-0000-0000-000000000001'})} }
     'prompt.receipt' { $receipt }
     'session.interrupt' { @{execution_generation=3;execution_state='running'} }
     default { @{unexpected=$true} }
@@ -149,7 +156,8 @@ while ($line = [Console]::ReadLine()) {
     let script = template
         .replace("STATUS", if terminal { "terminal" } else { "started" })
         .replace("OUTCOME", outcome)
-        .replace("FINAL_TEXT", text);
+        .replace("FINAL_TEXT", text)
+        .replace("MODEL", model);
     let mut command = Command::new("powershell.exe");
     command
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
@@ -266,6 +274,141 @@ fn terminal_failed_and_empty_cancelled_receipts_release_the_logical_turn() {
         assert!(snapshot.items.is_empty());
         drop(session);
         assert!(!Journal::open(&directory).unwrap().1.unsettled);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
+fn rotation_persists_intent_and_fences_old_completions() {
+    let (mut session, directory) = fixture();
+    assert!(matches!(
+        session.rotate(IvyModel::Sol, false),
+        Err(IvyErrorCode::Uncertain)
+    ));
+    session.record.unsettled = false;
+    session.rotate(IvyModel::Sol, false).unwrap();
+    assert_eq!(session.record.model, IvyModel::Sol);
+    assert!(session.record.session_id.is_none());
+    session.event(completion("admission", 3, "stale")).unwrap();
+    assert!(
+        session
+            .shared
+            .view
+            .lock()
+            .unwrap()
+            .snapshot
+            .items
+            .is_empty()
+    );
+    drop(session);
+    let (journal, record) = Journal::open(&directory).unwrap();
+    assert_eq!(record.model, IvyModel::Sol);
+    assert!(record.session_id.is_none());
+    drop(journal);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn failed_rotation_save_preserves_foreground() {
+    let (mut session, directory) = fixture();
+    session.record.unsettled = false;
+    std::fs::create_dir(directory.join("ivy-session.pending")).unwrap();
+    assert!(matches!(
+        session.rotate(IvyModel::Sol, false),
+        Err(IvyErrorCode::Storage)
+    ));
+    assert_eq!(session.record.session_id.as_deref(), Some("session"));
+    assert_eq!(session.record.model, IvyModel::Terra);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn legacy_route_is_verified_before_followup_without_rotating() {
+    let (mut session, directory) = fixture();
+    session.record.unsettled = false;
+    session.record.route_verified = false;
+    session.journal.save(&session.record).unwrap();
+    session.rotate(IvyModel::Terra, false).unwrap();
+    assert_eq!(session.record.session_id.as_deref(), Some("session"));
+    session.broker = Some(inert_broker(false));
+    session
+        .submit(IvySubmitRequest {
+            version: 1,
+            input_id: "00000000-0000-0000-0000-000000000002".into(),
+            text: "follow up".into(),
+        })
+        .unwrap();
+    assert_eq!(session.record.session_id.as_deref(), Some("session"));
+    assert!(session.record.route_verified);
+    drop(session);
+    let (journal, record) = Journal::open(&directory).unwrap();
+    assert_eq!(record.session_id.as_deref(), Some("session"));
+    assert!(record.route_verified);
+    drop(journal);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn legacy_mismatched_or_missing_route_refuses_without_changing_journal() {
+    for model in ["gpt-6.1-sol", ""] {
+        let (mut session, directory) = fixture();
+        session.record.unsettled = false;
+        session.record.route_verified = false;
+        session.journal.save(&session.record).unwrap();
+        session.broker = Some(inert_route(false, "completed", "answer", model));
+        assert_eq!(
+            session.submit(IvySubmitRequest {
+                version: 1,
+                input_id: "00000000-0000-0000-0000-000000000002".into(),
+                text: "follow up".into(),
+            }),
+            Err(IvyErrorCode::Unavailable)
+        );
+        assert!(!session.record.route_verified);
+        drop(session);
+        let (journal, record) = Journal::open(&directory).unwrap();
+        assert_eq!(record.session_id.as_deref(), Some("session"));
+        assert!(!record.route_verified);
+        assert!(!record.unsettled);
+        drop(journal);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn verified_sol_mismatch_revokes_public_verification_after_reconnect() {
+    for model in ["gpt-6.1-terra", ""] {
+        let (mut session, directory) = fixture();
+        session.record.unsettled = false;
+        session.record.model = IvyModel::Sol;
+        session.record.route_verified = true;
+        session.journal.save(&session.record).unwrap();
+        session.shared.update(session.epoch, |view| {
+            view.model = IvyModel::Sol;
+            view.verified_model = Some(IvyModel::Sol);
+            view.turn = IvyTurnState::Submitting;
+        });
+        session.broker = Some(inert_route(false, "completed", "answer", model));
+        let error = session
+            .submit(IvySubmitRequest {
+                version: 1,
+                input_id: "00000000-0000-0000-0000-000000000002".into(),
+                text: "follow up".into(),
+            })
+            .unwrap_err();
+        assert_eq!(error, IvyErrorCode::Unavailable);
+        super::host::fail(&mut session, error);
+        super::host::publish_ready(&session);
+        let snapshot = session.shared.view.lock().unwrap().snapshot.clone();
+        assert_eq!(snapshot.model, IvyModel::Sol);
+        assert_eq!(snapshot.verified_model, None);
+        assert_eq!(snapshot.connection, IvyConnectionState::Ready);
+        assert_eq!(session.record.session_id.as_deref(), Some("session"));
+        drop(session);
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

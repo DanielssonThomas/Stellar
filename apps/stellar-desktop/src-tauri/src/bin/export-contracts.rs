@@ -38,6 +38,8 @@ fn main() {
         IvyConnectionState::decl(&config),
         IvyTurnState::decl(&config),
         IvyErrorCode::decl(&config),
+        IvyModel::decl(&config),
+        IvySelectRequest::decl(&config),
         IvyRequest::decl(&config),
         IvySubmitRequest::decl(&config),
         IvyComponent::decl(&config),
@@ -78,6 +80,8 @@ fn main() {
         "ivyCancelCommand",
         "ivyReconcileCommand",
         "ivyDisconnectCommand",
+        "ivySelectSessionCommand",
+        "ivyClearConversationCommand",
     ]
     .iter()
     .zip(IVY_COMMANDS)
@@ -92,7 +96,7 @@ fn main() {
         serde_json::to_string(IVY_EVENT).unwrap()
     );
     println!(
-        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest }};"
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest }};"
     );
     for (name, command) in [
         "speechTranscribeCommand",

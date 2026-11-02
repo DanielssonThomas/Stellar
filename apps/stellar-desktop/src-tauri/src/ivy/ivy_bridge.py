@@ -17,7 +17,7 @@ REQUEST_LIMIT = 16384
 DEADLINE = 15
 METHODS = {
     'ping': {}, 'runtime.describe': {},
-    'session.create': {'request_id': str},
+    'session.create': {'request_id': str, 'model': str},
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str},
@@ -112,6 +112,8 @@ def validate(request):
             raise ValueError()
         if key == 'execution_generation' and value < 0:
             raise ValueError()
+    if method == 'session.create' and params['model'] not in {'gpt-6.1-terra', 'gpt-6.1-sol'}:
+        raise ValueError()
     return rid, method, params
 
 
@@ -206,7 +208,27 @@ async def requests(conn):
             emit({'id': None, 'error': {'code': 'invalid_request'}})
             continue
         try:
-            result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+            if method == 'session.create':
+                # The installed IvyConnection excludes launch routing; keep its session registry
+                # while invoking the gateway's explicitly advertised fixed-model contract.
+                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                fields = description.get('session_create', {}).get('parameters', [])
+                if not {'model', 'provider'} <= set(fields):
+                    raise Closed()
+                result = await asyncio.wait_for(conn.client.rpc(method, source='cli', cwd='D:/',
+                    request_id=params['request_id'], model=params['model'], provider='openai-codex'), DEADLINE)
+                sid = result.get('session_id')
+                if not string(sid):
+                    raise Closed()
+                conn.sessions.add(sid)
+                info = result.get('info', {})
+                launch = info.get('launch_request', {})
+                if (type(launch) is not dict or launch.get('model') != params['model'] or
+                        launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
+                    raise Closed()
+                result = {'session_id': sid, 'model': info['model']}
+            else:
+                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
             if method == 'runtime.describe':
                 if (type(result) is not dict or
                         os.path.normcase(result.get('profile_id', '')) != os.path.normcase(str(PROFILE)) or
@@ -219,6 +241,12 @@ async def requests(conn):
                 result = {'pong': result['pong']}
             else:
                 projected = project(result)
+                if method == 'session.create':
+                    projected['model'] = result['model']
+                elif method == 'session.resume':
+                    info = result.get('info', {})
+                    if type(info) is dict and string(info.get('model')):
+                        projected['model'] = info['model']
                 if method == 'prompt.receipt' and result.get('status') == 'terminal':
                     saved = result.get('result')
                     if type(saved) is dict and type(saved.get('final_response')) is str:

@@ -1,4 +1,4 @@
-use super::contracts::IvyErrorCode;
+use super::contracts::{IvyErrorCode, IvyModel};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File, OpenOptions},
@@ -14,6 +14,10 @@ pub struct Record {
     pub admission_id: Option<String>,
     pub generation: Option<u64>,
     pub unsettled: bool,
+    #[serde(default)]
+    pub model: IvyModel,
+    #[serde(default)]
+    pub route_verified: bool,
 }
 
 pub struct Journal {
