@@ -40,6 +40,7 @@ export class DesktopExperience {
     '(prefers-reduced-motion: reduce)',
   );
   private stage: ((command: unknown) => StageResult) | undefined;
+  private commandSequence: (() => number | null) | undefined;
   readonly session = new DesktopSession({
     automaticSummary: false,
     audio: {
@@ -55,7 +56,12 @@ export class DesktopExperience {
       },
     },
     onState: (state) => this.state.set(state),
-    onCommand: (command) => this.stage?.(command),
+    onCommand: (command) => {
+      const commandId =
+        this.commandSequence?.() ??
+        (this.commandSequence ? null : command.commandId);
+      if (commandId !== null) this.stage?.({ ...command, commandId });
+    },
   });
   readonly statusText = computed(() => {
     const audio = this.audio.state();
@@ -113,11 +119,16 @@ export class DesktopExperience {
       this.media?.removeEventListener('change', preference);
       this.session.dispose();
       this.stage = undefined;
+      this.commandSequence = undefined;
     });
   }
 
-  connect(stage: (command: unknown) => StageResult) {
+  connect(
+    stage: (command: unknown) => StageResult,
+    commandSequence?: () => number | null,
+  ) {
     this.stage = stage;
+    this.commandSequence = commandSequence;
   }
 
   present(command: unknown): StageResult {

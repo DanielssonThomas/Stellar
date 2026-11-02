@@ -41,7 +41,9 @@ export class PresentationTelemetryMolecule {
   readonly rows = computed(() =>
     this.view().rows.filter(
       (row) =>
-        !this.payload()?.project || row.project === this.payload()?.project,
+        !row.project ||
+        !this.payload()?.project ||
+        row.project === this.payload()?.project,
     ),
   );
   constructor() {

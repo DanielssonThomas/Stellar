@@ -26,12 +26,13 @@ export function desktopPresentationData(): PresentationData {
       const snapshot = await ivy.snapshot();
       if (current === generation) {
         observedAt.set(new Date().toISOString());
-        healthy.set(snapshot.connection === 'ready');
+        healthy.set(snapshot.connection === 'ready' && snapshot.error === null);
       }
     } catch {
       if (current === generation) healthy.set(false);
     } finally {
       pending = false;
+      if (current !== generation && owners > 0) void refresh();
     }
   };
   const workflow = computed<PresentationSourceView>(() => {
@@ -77,7 +78,7 @@ export function desktopPresentationData(): PresentationData {
       source: 'Native Ivy foreground snapshot',
       observedAt: observedAt(),
       state:
-        healthy() && snapshot.connection === 'ready'
+        healthy() && snapshot.connection === 'ready' && snapshot.error === null
           ? 'available'
           : 'unavailable',
       rows: [

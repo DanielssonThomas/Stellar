@@ -13,10 +13,12 @@ import { DesktopVoice } from './desktop-voice';
 import {
   DesktopAdapterService,
   IvyAdapterService,
+  WorkspaceToolsService,
 } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
 import { PRESENTATION_DATA } from '@stellar/ui-molecules';
 import { desktopPresentationData } from './desktop-presentation-data';
+import { desktopWorkspace } from './desktop-workspace';
 
 @Component({
   imports: [DesktopExperienceTemplate],
@@ -46,13 +48,31 @@ export class AppComponent {
   readonly capabilities = signal('');
   private readonly adapter = inject(DesktopAdapterService);
   private readonly ivy = inject(IvyAdapterService);
+  private readonly workspace = inject(WorkspaceToolsService);
 
   constructor() {
     afterNextRender(() => {
       void this.ivy.connect().catch(() => undefined);
     });
+    const destroy = inject(DestroyRef);
     afterNextRender(() => {
-      this.experience.connect((command) => this.view().dispatch(command));
+      this.experience.connect(
+        (command) => this.view().dispatch(command),
+        () => this.view().stage().nextCommandId(),
+      );
+      const unbind = this.workspace.bind(
+        desktopWorkspace({
+          stage: this.view().stage(),
+          present: (command) => this.experience.present(command),
+          available: () =>
+            !['suspended', 'shutdown'].includes(this.experience.state().phase),
+          isCurrent: (request) => this.workspace.isCurrent(request),
+        }),
+      );
+      destroy.onDestroy(unbind);
+      this.voice.bindForegroundClear(() => {
+        this.view().stage().closePresentations();
+      });
       this.assistant.bind(
         (command) => {
           const commandId = this.view().stage().nextCommandId();
