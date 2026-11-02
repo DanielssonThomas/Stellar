@@ -114,6 +114,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-shell-status',
     'allow-cleanup-refine',
     'allow-app-info',
+    'allow-telemetry-snapshot',
     'allow-ivy-connect',
     'allow-ivy-snapshot',
     'allow-ivy-submit',

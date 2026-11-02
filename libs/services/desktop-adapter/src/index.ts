@@ -48,6 +48,10 @@ export type {
 export { createNativePromptCleanup } from './lib/speech/native-prompt-cleanup';
 export type { CleanupInvoke } from './lib/speech/native-prompt-cleanup';
 export { PromptCleanupService } from './lib/services/prompt-cleanup.service';
+export {
+  DesktopTelemetryService,
+  DESKTOP_TELEMETRY_TRANSPORT,
+} from './lib/services/desktop-telemetry.service';
 export type {
   VoiceComposition,
   VoiceModel,

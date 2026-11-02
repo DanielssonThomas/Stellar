@@ -76,6 +76,7 @@ if (action === 'smoke') {
               'allow-shell-status',
               'allow-cleanup-refine',
               'allow-app-info',
+              'allow-telemetry-snapshot',
               'core:event:allow-listen',
               'core:event:allow-unlisten',
               'allow-smoke-result',

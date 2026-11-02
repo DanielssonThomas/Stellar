@@ -80,3 +80,19 @@ export {
 export type { CleanupRequest, CleanupReply } from './generated';
 export { cleanupRefineCommand } from './generated';
 export { decodeCleanupReply } from './lib/cleanup-codec';
+export type {
+  TelemetrySnapshot,
+  TelemetryAgent,
+  TelemetrySource,
+  TelemetryUsage,
+  TelemetryEvent,
+  TelemetryProject,
+  TelemetryState,
+  TelemetryHealth,
+  TelemetrySourceKind,
+  TelemetryEventKind,
+  TelemetryError,
+} from './generated';
+export { decodeTelemetrySnapshot } from './lib/telemetry-codec';
+
+export { telemetrySnapshotCommand } from './generated';
