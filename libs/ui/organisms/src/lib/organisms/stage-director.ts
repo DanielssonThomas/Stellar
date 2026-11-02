@@ -15,6 +15,7 @@ export interface StageLayoutItem {
 
 export interface StageLayout {
   readonly emblem: StageRect;
+  readonly composer?: StageRect;
   readonly surfaces: readonly (StageRect & { readonly instanceId: string })[];
 }
 
@@ -67,6 +68,7 @@ export function directStage(
   viewport: Readonly<{ width: number; height: number }>,
   instances: readonly StageLayoutItem[],
   target?: EmblemTarget,
+  composing = false,
 ): StageLayout {
   const dimension = (value: number) =>
     Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -76,25 +78,57 @@ export function directStage(
   const visible = instances
     .filter((instance) => !instance.minimized)
     .slice(0, 4);
-  const docked = visible.length > 0 || target === 'docked';
-  const size = docked
-    ? Math.min(
-        144,
-        Math.max(64, width * 0.09),
-        width - padding * 2,
-        height * 0.18,
+  const docked = !composing && (visible.length > 0 || target === 'docked');
+  const composerHeight = Math.min(
+    240,
+    Math.max(80, height * 0.25),
+    height * 0.4,
+  );
+  const composerGap = Math.min(20, height * 0.035);
+  const size = composing
+    ? Math.max(
+        0,
+        Math.min(
+          480,
+          width - padding * 2,
+          height - padding * 2 - composerHeight - composerGap,
+        ),
       )
-    : Math.min(
-        target === 'focused' ? 320 : target === 'center' ? 480 : 280,
-        width - padding * 2,
-        height - padding * 2,
-      );
+    : docked
+      ? Math.min(
+          144,
+          Math.max(64, width * 0.09),
+          width - padding * 2,
+          height * 0.18,
+        )
+      : Math.min(
+          target === 'focused' ? 320 : target === 'center' ? 480 : 280,
+          width - padding * 2,
+          height - padding * 2,
+        );
   const emblem = {
     x: docked ? Math.max(padding, width - padding - size) : (width - size) / 2,
-    y: docked ? height - padding - size : (height - size) / 2,
+    y: composing
+      ? (height - size - composerHeight - composerGap) / 2
+      : docked
+        ? height - padding - size
+        : (height - size) / 2,
     width: size,
     height: size,
   };
-  if (!visible.length) return { emblem, surfaces: [] };
-  return { emblem, surfaces: tile({ x: 0, y: 0, width, height }, visible) };
+  const composerWidth = Math.min(800, width - padding * 2);
+  return {
+    emblem,
+    ...(composing
+      ? {
+          composer: {
+            x: (width - composerWidth) / 2,
+            y: emblem.y + size + composerGap,
+            width: composerWidth,
+            height: composerHeight,
+          },
+        }
+      : {}),
+    surfaces: tile({ x: 0, y: 0, width, height }, visible),
+  };
 }

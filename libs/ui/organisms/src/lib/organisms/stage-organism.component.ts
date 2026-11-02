@@ -47,6 +47,7 @@ export class StageOrganism {
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
+  readonly composing = input(false);
   readonly dismissOnClose = input(true);
   readonly focusFallback = input<HTMLElement | null>(null);
   readonly presentationChange = output<boolean>();
@@ -77,7 +78,12 @@ export class StageOrganism {
   private readonly viewport = signal({ width: 0, height: 0 });
   private readonly instances = signal(this.registry.snapshot());
   readonly layout = computed(() =>
-    directStage(this.viewport(), this.instances(), this.emblemTarget()),
+    directStage(
+      this.viewport(),
+      this.instances(),
+      this.emblemTarget(),
+      this.composing(),
+    ),
   );
   readonly surfaces = computed(() =>
     this.layout().surfaces.flatMap((rect) => {
@@ -139,7 +145,7 @@ export class StageOrganism {
     });
     afterRenderEffect(() => {
       const requested = this.focusRequest();
-      if (!requested || this.loading()) return;
+      if (!requested || this.loading() || this.composing()) return;
       const panel = this.panels().find(
         (entry) =>
           !entry.nativeElement.classList.contains('pane-leave') &&

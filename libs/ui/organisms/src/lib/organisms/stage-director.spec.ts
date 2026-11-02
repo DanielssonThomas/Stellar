@@ -13,6 +13,32 @@ const overlaps = (a: StageRect, b: StageRect) =>
   a.y + a.height > b.y;
 
 describe('Stage director', () => {
+  it.each([
+    { width: 1440, height: 900 },
+    { width: 1100, height: 760 },
+    { width: 480, height: 360 },
+  ])(
+    'reserves readable composition space below the emblem without changing pane rectangles %o',
+    (viewport) => {
+      const workspace = directStage(viewport, instances, 'docked');
+      const composition = directStage(viewport, instances, 'docked', true);
+      expect(composition.surfaces).toEqual(workspace.surfaces);
+      const composer = composition.composer;
+      if (!composer) throw Error('Composition area missing');
+      expect(composer.height).toBeGreaterThanOrEqual(80);
+      expect(overlaps(composer, composition.emblem)).toBe(false);
+      expect(composer.y).toBeGreaterThan(
+        composition.emblem.y + composition.emblem.height,
+      );
+      for (const rect of [composition.emblem, composer]) {
+        expect(rect.x).toBeGreaterThanOrEqual(0);
+        expect(rect.y).toBeGreaterThanOrEqual(0);
+        expect(rect.x + rect.width).toBeLessThanOrEqual(viewport.width);
+        expect(rect.y + rect.height).toBeLessThanOrEqual(viewport.height);
+      }
+      expect(directStage(viewport, instances, 'docked')).toEqual(workspace);
+    },
+  );
   it('honors controller targets without panes and docks whenever a workspace is visible', () => {
     const viewport = { width: 1000, height: 800 };
     const dock = directStage(viewport, [], 'docked');

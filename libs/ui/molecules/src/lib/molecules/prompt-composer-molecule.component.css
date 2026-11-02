@@ -1,0 +1,79 @@
+:host {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+}
+.composer {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  width: 100%;
+  max-height: 100%;
+  min-height: min(3.75rem, 100%);
+  font-size: var(--composer-text-size, clamp(1rem, 1.8vw, 1.5rem));
+  line-height: 1.45;
+  opacity: 1;
+}
+.text-stack {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 1.5rem;
+  padding: 0.5rem 1rem;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.prompt-text {
+  width: 100%;
+}
+.background-tone {
+  position: absolute;
+  inset: 0 1.5rem;
+  transform-origin: center;
+  background: color-mix(
+    in srgb,
+    var(--stellar-color-foreground) 3%,
+    var(--stellar-color-canvas)
+  );
+}
+.brace {
+  position: absolute;
+  top: 0;
+  width: 1.5rem;
+  height: 100%;
+  fill: none;
+  stroke: var(--stellar-color-primary);
+  stroke-width: 1.35;
+  overflow: visible;
+}
+.left-brace {
+  left: 0;
+}
+.right-brace {
+  right: 0;
+  transform: scaleX(-1);
+}
+.star {
+  fill: var(--stellar-color-primary);
+  stroke-width: 0.5;
+}
+.composer:not(.opened) .brace,
+.composer:not(.opened) .background-tone,
+.composer:not(.opened) .text-stack {
+  opacity: 0;
+}
+.dissolved {
+  opacity: 0;
+}

@@ -17,10 +17,23 @@
   >
     <ng-content select="[stage-emblem]" />
   </div>
+  <div
+    class="composer-slot"
+    [style.display]="layout().composer ? null : 'none'"
+    [style.left.px]="layout().composer?.x"
+    [style.top.px]="layout().composer?.y"
+    [style.width.px]="layout().composer?.width"
+    [style.height.px]="layout().composer?.height"
+  >
+    <ng-content select="[stage-composer]" />
+  </div>
   @for (surface of surfaces(); track surface.instanceId) {
     <section
       #panel
       [class]="surface.classes"
+      [class.composition-concealed]="composing()"
+      [attr.inert]="composing() ? '' : null"
+      [attr.aria-hidden]="composing() ? 'true' : null"
       [attr.data-instance-id]="surface.instanceId"
       [attr.aria-label]="surface.title"
       role="region"

@@ -1,0 +1,39 @@
+@if (visible()) {
+  @if (loading()) {
+    <stellar-skeleton-atom shape="text" />
+  } @else {
+    <div #group [class]="classes()" role="region" aria-label="Spoken prompt">
+      <svg
+        class="brace left-brace"
+        viewBox="-8 -3 48 118"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M28 2C8 2 10 26 10 38C10 50 5 54 1 56C5 58 10 62 10 74C10 86 8 110 28 110"
+        />
+        <path class="star" d="M10 46 12 54 20 56 12 58 10 66 8 58 0 56 8 54Z" />
+      </svg>
+      <div class="background-tone" aria-hidden="true"></div>
+      <div
+        class="text-stack"
+        aria-label="Prompt text"
+        [attr.aria-live]="status() === 'finalizing' ? 'off' : 'polite'"
+        aria-atomic="true"
+      >
+        <span class="prompt-text">{{ displayText() }}</span>
+      </div>
+      <svg
+        class="brace right-brace"
+        viewBox="-8 -3 48 118"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M28 2C8 2 10 26 10 38C10 50 5 54 1 56C5 58 10 62 10 74C10 86 8 110 28 110"
+        />
+        <path class="star" d="M10 46 12 54 20 56 12 58 10 66 8 58 0 56 8 54Z" />
+      </svg>
+    </div>
+  }
+}

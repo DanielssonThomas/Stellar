@@ -25,3 +25,4 @@ export {
   PRESENTATION_DATA,
   type PresentationData,
 } from './lib/molecules/presentation-data';
+export * from './lib/molecules/prompt-composer-molecule.component';
