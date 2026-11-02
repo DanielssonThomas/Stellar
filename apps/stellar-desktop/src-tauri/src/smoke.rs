@@ -8,6 +8,13 @@ fn smoke_result(app: tauri::AppHandle, success: bool) {
     app.exit(if success { 0 } else { 1 });
 }
 
+#[tauri::command]
+fn smoke_hold_ivy(
+    host: tauri::State<'_, crate::ivy::IvyHost>,
+) -> Result<(), crate::ivy::contracts::IvyErrorCode> {
+    host.smoke_hold()
+}
+
 fn check_page(window: Webview) {
     let script = r#"
         (async () => {
@@ -23,6 +30,20 @@ fn check_page(window: Webview) {
                 let malformedRejected = false;
                 try { await invoke('app_info', { request: { version: '1', sequence: '0' } }); }
                 catch (error) { malformedRejected = error.code === 'malformed_request'; }
+                const selected = await invoke('ivy_select_session', { request: { version: 1, model: 'sol' } });
+                const cleared = await invoke('ivy_clear_conversation', { request: { version: 1 } });
+                const sessionsOk = selected.model === 'sol' && selected.verified_model === null &&
+                    cleared.model === 'terra' && cleared.verified_model === null && cleared.turn === 'idle' && cleared.turn_id === null;
+                await invoke('smoke_hold_ivy');
+                const pending = invoke('ivy_select_session', { request: { version: 1, model: 'sol' } }).then(() => false, () => true);
+                await new Promise(resolve => setTimeout(resolve, 100));
+                let snapshotBusy = false;
+                try { await invoke('ivy_snapshot', { request: { version: 1 } }); }
+                catch (error) { snapshotBusy = error === 'busy'; }
+                const beforeDisconnect = performance.now();
+                await invoke('ivy_disconnect', { request: { version: 1 } });
+                const disconnectResponsive = performance.now() - beforeDisconnect < 750;
+                const cancelledRotation = await pending;
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
                 const root = document.querySelector('stellar-root');
                 const adapterReady = root?.getAttribute('data-desktop-ready') === 'true' &&
@@ -49,7 +70,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { success: sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -64,6 +85,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
             crate::app_info::app_info,
+            crate::ivy::ivy_select_session,
+            crate::ivy::ivy_clear_conversation,
+            crate::ivy::ivy_disconnect,
+            crate::ivy::ivy_snapshot,
+            smoke_hold_ivy,
             smoke_result
         ])
         .on_page_load(|window, payload| {
