@@ -10,6 +10,7 @@ export class VoiceCaptureGate {
   private generation = 0;
   private pending: Promise<void> = Promise.resolve();
   private identity?: CaptureIdentity;
+  private failedRequestId: number | null = null;
   private disposed = false;
 
   constructor(
@@ -39,6 +40,7 @@ export class VoiceCaptureGate {
           generation !== this.generation ||
           !now.available ||
           now.requestId !== identity.requestId ||
+          now.requestId === this.failedRequestId ||
           now.deviceId !== identity.deviceId ||
           now.status !== 'turn-paused'
         )
@@ -62,9 +64,17 @@ export class VoiceCaptureGate {
 
   async waitForRelease(): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const pending = this.pending;
+    const identity = this.identity;
+    const generation = this.generation;
     try {
+      if (
+        identity?.requestId === this.failedRequestId &&
+        identity?.requestId !== null
+      )
+        throw new Error('Capture release previously timed out');
       await Promise.race([
-        this.pending,
+        pending,
         new Promise<never>((_resolve, reject) => {
           timer = setTimeout(
             () => reject(new Error('Capture release timed out')),
@@ -77,13 +87,18 @@ export class VoiceCaptureGate {
       if (
         !this.disposed &&
         this.paused &&
-        this.identity &&
+        this.identity === identity &&
+        this.pending === pending &&
+        this.generation === generation &&
+        identity &&
         now.available &&
-        now.requestId === this.identity.requestId &&
-        now.deviceId === this.identity.deviceId &&
+        now.requestId === identity.requestId &&
+        now.deviceId === identity.deviceId &&
         now.status === 'turn-paused'
-      )
+      ) {
+        this.failedRequestId = identity.requestId;
         this.onFailure();
+      }
       throw error;
     } finally {
       if (timer !== undefined) clearTimeout(timer);
@@ -106,6 +121,13 @@ export class VoiceCaptureGate {
       return;
     }
     if (!['capturing', 'requesting'].includes(identity.status)) return;
+    if (
+      this.failedRequestId !== null &&
+      this.failedRequestId !== identity.requestId
+    ) {
+      this.pending = Promise.resolve();
+      this.failedRequestId = null;
+    }
     this.identity = identity;
     this.pending = Promise.all([this.pending, this.release()])
       .then(() => undefined)
