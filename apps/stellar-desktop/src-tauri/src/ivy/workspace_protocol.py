@@ -14,6 +14,7 @@ MAX_PANES = 4
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
 SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'workflow',
                       'session', 'assistant-message'})
+METADATA_SURFACES = SURFACES | {'activity-summary'}
 PROMINENCE = frozenset({'primary', 'secondary'})
 PAYLOAD_LIMITS = {'rich-text': 65536, 'image': 65536, 'assistant-message': 65536,
                   'diagram': 16384, 'browser': 4096, 'workflow': 2048, 'session': 2048}
@@ -114,7 +115,7 @@ def validate_outcome(outcome, operation):
     for pane in panes:
         if (type(pane) is not dict or set(pane) != {'instance_id', 'surface', 'prominence', 'minimized'}
                 or not _identity(pane['instance_id']) or pane['instance_id'] in ids
-                or type(pane['surface']) is not str or pane['surface'] not in SURFACES
+                or type(pane['surface']) is not str or pane['surface'] not in METADATA_SURFACES
                 or type(pane['prominence']) is not str or pane['prominence'] not in PROMINENCE
                 or type(pane['minimized']) is not bool):
             raise WorkspaceRefused()

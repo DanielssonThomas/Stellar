@@ -66,6 +66,7 @@ export class WorkspaceToolsService {
   private readonly listening = signal(false);
   private handler?: WorkspaceToolHandler;
   private pending = false;
+  private deadline?: { id: string; monotonic: number };
   private disposed = false;
   private unlisten?: () => void;
   readonly ready = this.listening.asReadonly();
@@ -105,6 +106,9 @@ export class WorkspaceToolsService {
     const state = this.ivy.state();
     return (
       !this.disposed &&
+      Date.now() < Number(request.expires_at_ms) &&
+      this.deadline?.id === request.request_id &&
+      performance.now() < this.deadline.monotonic &&
       state.connection === 'ready' &&
       state.workspace_epoch === request.epoch &&
       state.turn_id === request.turn_id &&
@@ -120,6 +124,9 @@ export class WorkspaceToolsService {
       return;
     }
     if (!this.transport || this.disposed || this.pending) return;
+    const remaining = Number(request.expires_at_ms) - Date.now();
+    if (remaining <= 0 || remaining > 15000) return;
+    this.deadline = { id: request.request_id, monotonic: performance.now() + remaining };
     this.pending = true;
     let outcome: WorkspaceToolOutcome = { kind: 'rejected' };
     try {
@@ -146,6 +153,7 @@ export class WorkspaceToolsService {
       /* The native owner may already have cancelled or timed out. */
     } finally {
       this.pending = false;
+      this.deadline = undefined;
     }
   }
 }

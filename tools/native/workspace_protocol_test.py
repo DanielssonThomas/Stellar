@@ -15,7 +15,7 @@ class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
                  'payload_json': '{"text":"hello"}', 'prominence': 'primary'}
         self.assertEqual(workspace.validate_operation(valid), valid)
         for change in ({'extra': 1}, {'instance_id': '../other'}, {'surface': 'script'},
-                       {'surface': []}, {'prominence': []}, {'payload_json': '{"x":1,"x":2}'},
+                       {'surface': []}, {'surface': 'activity-summary'}, {'prominence': []}, {'payload_json': '{"x":1,"x":2}'},
                        {'payload_json': '{"x":NaN}'}, {'payload_json': '{"x":1e999}'},
                        {'payload_json': '\ud800'}, {'payload_json': '[]'},
                        {'payload_json': '{"x":"' + 'a' * 65536 + '"}'}):
@@ -37,7 +37,7 @@ class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
             await gate.call({'kind': 'clear'}, token)
         reply = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
         reply['outcome'] = {'kind': 'inspection', 'panes': [
-            {'instance_id': 'a', 'surface': 'image', 'prominence': 'primary', 'minimized': False}]}
+            {'instance_id': 'a', 'surface': 'activity-summary', 'prominence': 'primary', 'minimized': False}]}
         with self.assertRaises(workspace.WorkspaceRefused):
             gate.reply({**reply, 'epoch': '5'})
         gate.reply(reply)

@@ -3,7 +3,7 @@ import { decodeWorkspaceToolOutcome, decodeWorkspaceToolRequest } from './worksp
 
 const envelope = {
   version: 1, request_id: '1234567890abcdef1234567890abcdef', epoch: '2',
-  turn_id: '00000000-0000-4000-8000-000000000001',
+  turn_id: '00000000-0000-4000-8000-000000000001', expires_at_ms: '1700000015000',
   operation: { kind: 'open', instance_id: 'pane', surface: 'rich-text', payload_json: '{"body":"hello"}', prominence: 'primary' },
 };
 
