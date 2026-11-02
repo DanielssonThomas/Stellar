@@ -141,6 +141,19 @@ img {
 
 img {
   object-fit: contain;
+  transition: filter 1s ease;
+}
+.filter-definitions {
+  position: absolute;
+  pointer-events: none;
+}
+.motion-reduced img {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  img {
+    transition: none;
+  }
 }
 
 .ambience {

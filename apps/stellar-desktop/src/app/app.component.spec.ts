@@ -9,6 +9,39 @@ import {
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
+  it('records unexpected interface faults without retaining the raw error and releases the listener', async () => {
+    const snapshot = { ...initialIvySnapshot(), connection: 'ready' as const };
+    const ivy = {
+      state: signal(snapshot),
+      connect: vi.fn(async () => snapshot),
+      snapshot: vi.fn(async () => snapshot),
+    };
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [{ provide: IvyAdapterService, useValue: ivy }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.whenStable();
+    globalThis.dispatchEvent(
+      new ErrorEvent('error', {
+        message: 'private-path-and-prompt-must-not-be-retained',
+      }),
+    );
+    const faults = fixture.componentInstance.faults;
+    expect(faults.entries().some((entry) => entry.category === 'Desktop')).toBe(
+      true,
+    );
+    expect(JSON.stringify(faults.entries())).not.toContain(
+      'private-path-and-prompt',
+    );
+    const count = faults.entries().length;
+    fixture.destroy();
+    globalThis.dispatchEvent(
+      new ErrorEvent('error', { message: 'another-private-error' }),
+    );
+    expect(faults.entries()).toHaveLength(count);
+  });
+
   it('renders the application name', async () => {
     const ivy = {
       state: signal(initialIvySnapshot()),

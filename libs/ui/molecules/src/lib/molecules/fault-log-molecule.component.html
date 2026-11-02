@@ -1,0 +1,95 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="text" />
+} @else {
+  <section
+    class="fault-log relative grid h-full min-h-0"
+    [class.motion-reduced]="reducedMotion()"
+    aria-label="Recent errors"
+  >
+    <svg
+      class="brace left-brace"
+      viewBox="-8 -3 48 118"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M28 2C8 2 10 26 10 38C10 50 5 54 1 56C5 58 10 62 10 74C10 86 8 110 28 110"
+      />
+      <path class="star" d="M10 46 12 54 20 56 12 58 10 66 8 58 0 56 8 54Z" />
+    </svg>
+    <div class="log-content min-h-0">
+      <h2 aria-live="polite">
+        {{ active() ? 'Something needs attention' : 'Recovered' }}
+      </h2>
+      <ol aria-label="Error history">
+        @for (entry of shown(); track entry.id) {
+          <li>
+            <div class="entry-heading">
+              <time [attr.datetime]="entry.time">{{ time(entry.time) }}</time
+              ><span>{{ entry.category }}</span
+              ><span class="entry-state"
+                >{{
+                  entry.status === 'recovering'
+                    ? 'Checking…'
+                    : entry.status === 'resolved'
+                      ? 'Resolved'
+                      : 'Active'
+                }}{{ entry.count > 1 ? ' · ×' + entry.count : '' }}</span
+              >
+            </div>
+            <p>{{ entry.message }}</p>
+          </li>
+        }
+      </ol>
+      <footer>
+        @if (active() && recoverable()) {
+          <button
+            type="button"
+            [disabled]="recovering()"
+            (click)="retry.emit()"
+          >
+            {{ recovering() ? 'Checking recovery…' : 'Try recovery' }}
+          </button>
+        } @else if (active()) {
+          <button type="button" (click)="controls.emit()">Open controls</button>
+        } @else {
+          <button type="button" (click)="dismiss.emit()">
+            Dismiss history
+          </button>
+        }
+        @if (pages() > 1) {
+          <nav aria-label="Error history pages">
+            <button
+              type="button"
+              [disabled]="currentPage() === 0"
+              (click)="page.set(currentPage() - 1)"
+              aria-label="Newer errors"
+            >
+              ←
+            </button>
+            <span>{{ currentPage() + 1 }} / {{ pages() }}</span>
+            <button
+              type="button"
+              [disabled]="currentPage() === pages() - 1"
+              (click)="page.set(currentPage() + 1)"
+              aria-label="Older errors"
+            >
+              →
+            </button>
+          </nav>
+        }
+      </footer>
+    </div>
+    <svg
+      class="brace right-brace"
+      viewBox="-8 -3 48 118"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M28 2C8 2 10 26 10 38C10 50 5 54 1 56C5 58 10 62 10 74C10 86 8 110 28 110"
+      />
+      <path class="star" d="M10 46 12 54 20 56 12 58 10 66 8 58 0 56 8 54Z" />
+    </svg>
+  </section>
+}

@@ -37,6 +37,7 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
+  readonly sessionUnavailable = computed(() => this.sessionError());
   readonly state = computed(() =>
     this.sessionError()
       ? {
@@ -154,9 +155,9 @@ export class DesktopVoice {
   stop() {
     this.conversation.stopVoice();
   }
-  retry() {
+  async retry(): Promise<void> {
     this.conversation.retry();
-    if (!this.sessionKnown() || this.sessionError()) void this.refreshSession();
+    if (!this.sessionKnown() || this.sessionError()) await this.refreshSession();
   }
 
   bindPromptPresentation(callback: PromptPresentation): () => void {

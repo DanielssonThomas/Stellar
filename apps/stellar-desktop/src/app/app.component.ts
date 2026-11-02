@@ -2,6 +2,7 @@ import {
   afterNextRender,
   Component,
   DestroyRef,
+  effect,
   inject,
   signal,
   viewChild,
@@ -19,6 +20,7 @@ import { capabilityLabel } from '@stellar/desktop-contracts';
 import { PRESENTATION_DATA } from '@stellar/ui-molecules';
 import { desktopPresentationData } from './desktop-presentation-data';
 import { desktopWorkspace } from './desktop-workspace';
+import { DesktopFaults } from './desktop-faults';
 
 @Component({
   imports: [DesktopExperienceTemplate],
@@ -26,6 +28,7 @@ import { desktopWorkspace } from './desktop-workspace';
     DesktopExperience,
     DesktopAssistant,
     DesktopVoice,
+    DesktopFaults,
     { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
   ],
   selector: 'stellar-root',
@@ -42,6 +45,8 @@ export class AppComponent {
   readonly experience = inject(DesktopExperience);
   readonly assistant = inject(DesktopAssistant);
   readonly voice = inject(DesktopVoice);
+  readonly faults = inject(DesktopFaults);
+  readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
   readonly eventSeen = signal(false);
@@ -51,6 +56,64 @@ export class AppComponent {
   private readonly workspace = inject(WorkspaceToolsService);
 
   constructor() {
+    let hadActiveFault = false;
+    let recoveredTimer: ReturnType<typeof setTimeout> | undefined;
+    inject(DestroyRef).onDestroy(() => clearTimeout(recoveredTimer));
+    const runtimeError = () => this.faults.observe('desktop', 'runtime');
+    const scriptError = (event: ErrorEvent) => {
+      if (event.error || event.message) runtimeError();
+    };
+    globalThis.addEventListener('error', scriptError);
+    globalThis.addEventListener('unhandledrejection', runtimeError);
+    inject(DestroyRef).onDestroy(() => {
+      globalThis.removeEventListener('error', scriptError);
+      globalThis.removeEventListener('unhandledrejection', runtimeError);
+    });
+    effect(() => {
+      const ivy = this.assistant.state();
+      const browserPreview = !Object.hasOwn(globalThis, '__TAURI__');
+      this.faults.observe(
+        'assistant',
+        (browserPreview && ivy.error === 'unavailable' && ivy.turn === 'idle'
+          ? null
+          : ivy.error) ??
+          (ivy.turn === 'uncertain'
+            ? 'uncertain'
+            : ivy.turn === 'failed'
+              ? 'failed'
+              : ivy.connection === 'unavailable' && !browserPreview
+                ? 'unavailable'
+                : null),
+      );
+      this.faults.observe(
+        'voice',
+        this.voice.state().error && !browserPreview
+          ? this.voice.sessionUnavailable()
+            ? 'session'
+            : 'failure'
+          : null,
+      );
+      this.faults.observe(
+        'artwork',
+        this.experience.assetError() ? 'unavailable' : null,
+      );
+      const mic = this.experience.state().microphone.status;
+      this.faults.observe(
+        'microphone',
+        ['denied', 'missing', 'disconnected'].includes(mic) ? mic : null,
+      );
+      if (this.assistant.recovery() === 'checking')
+        this.faults.beginRecovery('assistant');
+      else if (['failed', 'unchanged'].includes(this.assistant.recovery()))
+        this.faults.endRecovery('assistant', false);
+      const active = this.faults.active();
+      if (active) clearTimeout(recoveredTimer);
+      else if (hadActiveFault)
+        recoveredTimer = setTimeout(() => {
+          if (!this.faults.active()) this.faults.dismiss();
+        }, 2000);
+      hadActiveFault = active;
+    });
     afterNextRender(() => {
       void this.ivy.connect().catch(() => undefined);
     });
@@ -126,5 +189,27 @@ export class AppComponent {
         unsubscribe();
       }
     })();
+  }
+
+  async recoverFault() {
+    if (this.faultRecovering()) return;
+    this.faultRecovering.set(true);
+    this.faults.beginRecovery('assistant');
+    this.faults.beginRecovery('voice');
+    try {
+      if (this.assistant.uncertain()) await this.assistant.reconcile();
+      else await this.assistant.retry();
+      await this.voice.retry();
+    } finally {
+      this.faultRecovering.set(false);
+      const state = this.assistant.state();
+      this.faults.endRecovery(
+        'assistant',
+        state.connection === 'ready' &&
+          !state.error &&
+          state.turn !== 'uncertain',
+      );
+      this.faults.endRecovery('voice', !this.voice.state().error);
+    }
   }
 }

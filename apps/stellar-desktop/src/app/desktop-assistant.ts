@@ -1,4 +1,11 @@
-import { computed, effect, inject, Injectable, signal } from '@angular/core';
+import {
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  Injectable,
+  signal,
+} from '@angular/core';
 import { IvyAdapterService } from '@stellar/service-desktop-adapter';
 import {
   decodeIvySubmitRequest,
@@ -39,6 +46,12 @@ export class DesktopAssistant {
   private activityIds: () => readonly string[] = () => [];
   private readonly closeTargets = new Map<string, readonly string[]>();
   private readonly cancelRequested = signal(false);
+  private readonly recoveryState = signal<
+    'idle' | 'checking' | 'recovered' | 'unchanged' | 'failed'
+  >('idle');
+  readonly recovery = this.recoveryState.asReadonly();
+  private recoveryStop?: () => void;
+  private destroyed = false;
   private commandId = 0;
   readonly busy = computed(() =>
     ['submitting', 'admitted'].includes(this.state().turn),
@@ -62,6 +75,20 @@ export class DesktopAssistant {
       return 'Message is invalid or exceeds the 8 KiB text limit.';
     if (this.presentationError())
       return 'Requested content could not be shown.';
+    if (this.recovery() === 'checking') return 'Checking Ivy recovery…';
+    if (this.recovery() === 'failed') {
+      if (snapshot.error === 'protocol')
+        return 'Ivy recovery failed: the response was invalid. Reconnect and try again; nothing was resent.';
+      if (snapshot.error === 'timeout')
+        return 'Ivy recovery timed out. Check the connection and try again; nothing was resent.';
+      if (snapshot.error === 'busy')
+        return 'Ivy is busy. Wait, then check the response again; nothing was resent.';
+      if (snapshot.error === 'storage')
+        return 'Ivy recovery could not read or save its local state. Check local storage; nothing was resent.';
+      return 'Ivy recovery failed. Check the connection and retry; the response was not resent.';
+    }
+    if (this.recovery() === 'unchanged' && snapshot.turn === 'uncertain')
+      return 'Ivy response remains uncertain. Check the connection and try Check response again.';
     if (snapshot.turn === 'uncertain')
       return 'Ivy response is uncertain. Check response before sending again.';
     if (snapshot.turn === 'failed')
@@ -78,6 +105,10 @@ export class DesktopAssistant {
   });
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.destroyed = true;
+      this.recoveryStop?.();
+    });
     effect(() => {
       const snapshot = this.state();
       if (this.ready()) this.consume(snapshot);
@@ -132,11 +163,7 @@ export class DesktopAssistant {
     }
   }
   async retry() {
-    try {
-      await this.adapter.connect();
-    } catch {
-      return;
-    }
+    return this.recover(() => this.adapter.connect());
   }
   async cancel() {
     this.cancelRequested.set(true);
@@ -148,11 +175,69 @@ export class DesktopAssistant {
   }
   async reconcile() {
     // A receipt lookup cannot restore expired eligibility to open presentation content.
-    try {
-      await this.adapter.reconcile();
-    } catch {
-      return;
-    }
+    return this.recover(() => this.adapter.reconcile());
+  }
+
+  private async recover(action: () => Promise<IvySnapshot>): Promise<void> {
+    if (this.destroyed || this.recovery() === 'checking') return;
+    const before = this.state();
+    this.recoveryState.set('checking');
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      let polling = false;
+      let timer: ReturnType<typeof setInterval> | undefined;
+      const finish = (outcome: 'recovered' | 'unchanged' | 'failed') => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        if (timer !== undefined) clearInterval(timer);
+        this.recoveryStop = undefined;
+        if (!this.destroyed) this.recoveryState.set(outcome);
+        resolve();
+      };
+      const deadline = setTimeout(() => finish('unchanged'), 20000);
+      this.recoveryStop = () => finish('unchanged');
+      const inspect = (snapshot: IvySnapshot) => {
+        if (
+          snapshot.connection === 'ready' &&
+          !snapshot.error &&
+          !['uncertain', 'submitting', 'admitted'].includes(snapshot.turn)
+        ) {
+          finish(
+            before.connection === 'ready' &&
+              !before.error &&
+              !['uncertain', 'submitting', 'admitted'].includes(before.turn)
+              ? 'unchanged'
+              : 'recovered',
+          );
+        } else if (
+          (snapshot.error || snapshot.connection === 'unavailable') &&
+          (snapshot.revision !== before.revision ||
+            snapshot.error !== before.error ||
+            snapshot.connection !== before.connection)
+        ) {
+          finish('failed');
+        }
+      };
+      void action()
+        .then(() => {
+          if (settled) return;
+          inspect(this.state());
+          if (settled) return;
+          timer = setInterval(() => {
+            if (settled || polling) return;
+            polling = true;
+            void this.adapter
+              .snapshot()
+              .then(inspect)
+              .catch(() => finish('failed'))
+              .finally(() => {
+                polling = false;
+              });
+          }, 250);
+        })
+        .catch(() => finish('failed'));
+    });
   }
 
   private consume(snapshot: IvySnapshot) {

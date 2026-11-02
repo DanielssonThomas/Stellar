@@ -143,8 +143,22 @@ impl Session {
         {
             return Err(IvyErrorCode::Protocol);
         }
-        self.record.admission_id = Some(bounded_id(value.get("admission_id"))?);
-        self.record.generation = value.get("execution_generation").and_then(Value::as_u64);
+        let admission = bounded_id(value.get("admission_id"))?;
+        let generation = value.get("execution_generation").and_then(Value::as_u64);
+        if self
+            .record
+            .admission_id
+            .as_ref()
+            .is_some_and(|known| known != &admission)
+            || self
+                .record
+                .generation
+                .is_some_and(|known| Some(known) != generation)
+        {
+            return Err(IvyErrorCode::Uncertain);
+        }
+        self.record.admission_id = Some(admission);
+        self.record.generation = generation;
         self.journal.save(&self.record)
     }
 
@@ -230,6 +244,15 @@ impl Session {
             json!({"session_id":sid,"admission_id":admission,"include_result":true}),
         )?;
         if receipt.get("admission_id").and_then(Value::as_str) != Some(&admission) {
+            return Err(IvyErrorCode::Protocol);
+        }
+        if receipt.get("status").and_then(Value::as_str) == Some("terminal")
+            && receipt.get("outcome").and_then(Value::as_str) == Some("completed")
+            && receipt
+                .pointer("/result/final_response")
+                .and_then(Value::as_str)
+                .is_none()
+        {
             return Err(IvyErrorCode::Protocol);
         }
         self.accept_receipt(&receipt)?;

@@ -69,6 +69,35 @@ describe('EmblemMotionMolecule', () => {
     vi.restoreAllMocks();
   });
 
+  it('explodes a fault without changing canonical layers and restores the selected pose after recovery', async () => {
+    fixture.componentRef.setInput('phase', 'listening');
+    fixture.componentRef.setInput('solActive', true);
+    fixture.componentRef.setInput('fault', true);
+    fixture.componentRef.setInput('reducedMotion', true);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.posePhase()).toBe('idle');
+    expect(
+      fixture.nativeElement.querySelector('.fault-identity'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.sol-accents')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.idle-motion')).toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('[role="img"]')
+        .getAttribute('aria-label'),
+    ).toContain('error state');
+    expect(fixture.nativeElement.querySelector('img').style.filter).toContain(
+      'fault-light',
+    );
+    expect(fixture.componentInstance.layers().map((layer) => layer.id)).toEqual(
+      ['outer', 'inner'],
+    );
+    fixture.componentRef.setInput('fault', false);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.posePhase()).toBe('listening');
+    expect(fixture.nativeElement.querySelector('img').style.filter).toBe('');
+  });
+
   it('shows a separate star ring only while waiting and suppresses it on suspension', async () => {
     fixture.componentRef.setInput('phase', 'listening');
     fixture.componentRef.setInput('waiting', true);
@@ -170,7 +199,14 @@ describe('EmblemMotionMolecule', () => {
     expect(
       fixture.nativeElement.querySelector('.plane').style.transformOrigin,
     ).toBe('50% 50%');
-    expect(fixture.nativeElement.querySelector('svg,object,iframe')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector(
+        'svg:not(.filter-definitions),object,iframe',
+      ),
+    ).toBeNull();
+    expect(
+      fixture.nativeElement.querySelectorAll('.filter-definitions filter'),
+    ).toHaveLength(2);
     expect(
       animate.mock.calls.filter((call) => call[1]?.iterations !== Infinity),
     ).toHaveLength(0);

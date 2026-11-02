@@ -5,6 +5,8 @@ mod journal;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+#[cfg(test)]
+mod recovery_tests;
 mod rotation;
 pub(crate) mod runtime;
 mod session;

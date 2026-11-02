@@ -8,7 +8,7 @@
     [loading]="loading()"
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
-    [composing]="composing()"
+    [composing]="composing() || faultVisible()"
     [dismissOnClose]="false"
     [focusFallback]="menuTrigger"
     (retainedPresentations)="requestedContent.set($event)"
@@ -22,6 +22,7 @@
       [manifest]="manifest()"
       assetBasePath="emblem"
       [phase]="emblemPhase()"
+      [fault]="faultActive()"
       [solActive]="solActive()"
       [waiting]="
         assistantActive() && assistantWaiting() && !assistantNarrating()
@@ -30,10 +31,25 @@
       [reducedMotion]="state().reducedMotion"
       [loading]="loading()"
       [error]="assetError()"
+      (assetUnavailable)="assetUnavailable.emit()"
     >
     </stellar-emblem-motion-molecule>
+    @if (faultVisible()) {
+      <stellar-fault-log-molecule
+        stage-composer
+        [entries]="faultEntries()"
+        [active]="faultActive()"
+        [recovering]="faultRecovering()"
+        [reducedMotion]="state().reducedMotion"
+        [loading]="loading()"
+        (retry)="recoverFault.emit()"
+        (controls)="openFaultControls()"
+        (dismiss)="dismissFaults.emit()"
+      />
+    }
     <stellar-prompt-composer-molecule
       stage-composer
+      [style.display]="faultVisible() ? 'none' : null"
       [raw]="promptRaw()"
       [draft]="promptDraft()"
       [preview]="promptPreview()"
@@ -67,6 +83,11 @@
     >
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      @if (faultEntries().length) {
+        <button type="button" (click)="showFaults.emit(); menu.close()">
+          Recent errors
+        </button>
+      }
       <button
         type="button"
         [attr.aria-pressed]="voiceMuted()"
