@@ -36,6 +36,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       turn_id,
       model: 'terra',
       verified_model: null,
+      workspace_tools: 'unavailable',
+      workspace_epoch: '0',
       connection: 'ready',
       turn: 'idle',
       items: [],

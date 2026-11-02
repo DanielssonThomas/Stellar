@@ -1,3 +1,4 @@
+mod connection;
 pub mod contracts;
 mod host;
 mod journal;
@@ -10,12 +11,21 @@ mod session;
 #[cfg(test)]
 mod session_tests;
 mod state;
+mod workspace_capture;
+pub mod workspace_contracts;
+mod workspace_data;
+mod workspace_hub;
+mod workspace_validate;
+#[cfg(test)]
+mod workspace_validate_tests;
 
 use contracts::{
     IvyErrorCode, IvyModel, IvyRequest, IvySelectRequest, IvySnapshot, IvySubmitRequest,
 };
 use host::Action;
 pub use host::IvyHost;
+#[cfg(windows)]
+pub use workspace_capture::capture as capture_workspace_window;
 
 fn validate(request: Option<serde_json::Value>) -> Result<(), IvyErrorCode> {
     let request: IvyRequest =
@@ -109,4 +119,15 @@ pub async fn ivy_clear_conversation(
     tauri::async_runtime::spawn_blocking(move || pending.wait())
         .await
         .map_err(|_| IvyErrorCode::Unavailable)?
+}
+
+#[tauri::command]
+pub fn workspace_tool_reply(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<(), IvyErrorCode> {
+    let reply: workspace_contracts::WorkspaceToolReply =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    host.workspace_reply(reply)
 }

@@ -122,6 +122,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-ivy-disconnect',
     'allow-ivy-select-session',
     'allow-ivy-clear-conversation',
+    'allow-workspace-tool-reply',
     'allow-speech-transcribe',
     'allow-speech-speak',
     'allow-speech-stop',

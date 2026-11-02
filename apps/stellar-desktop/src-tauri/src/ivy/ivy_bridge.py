@@ -20,9 +20,10 @@ METHODS = {
     'session.create': {'request_id': str, 'model': str},
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
-    'prompt.submit': {'session_id': str, 'input_id': str, 'text': str},
+    'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
+    'workspace.setup': {'descriptor': object, 'session_id': object}, 'workspace.stop': {},
 }
 CAPABILITIES = ['durable-admission-v1', 'event-replay-v1', 'local-cli-create-v1']
 IDENTITY = {'session_id', 'stored_session_id', 'admission_id', 'input_id',
@@ -100,11 +101,12 @@ def validate(request):
     if type(method) is not str or method not in METHODS or type(params) is not dict:
         raise ValueError()
     schema = METHODS[method]
-    required = set(schema) - ({'include_result'} if method == 'prompt.receipt' else set())
+    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch'}}
+    required = set(schema) - optional.get(method, set())
     if not required <= set(params) or set(params) - set(schema):
         raise ValueError()
     for key, value in params.items():
-        if type(value) is not schema[key]:
+        if schema[key] is not object and type(value) is not schema[key]:
             raise ValueError()
         if type(value) is str and not string(value, REQUEST_LIMIT if key == 'text' else 512):
             raise ValueError()
@@ -139,7 +141,7 @@ def load_library():
     return module.IvyConnection, discover_gateway_endpoint, connect_gateway
 
 
-async def pump(conn):
+async def pump(conn, workspace=None):
     while True:
         event = await conn.client.events.get()
         if isinstance(event, Exception) or type(event) is not dict:
@@ -169,6 +171,8 @@ async def pump(conn):
                     execution_generation=generation, prompt_id=prompt, choice='deny'), DEADLINE)
         else:
             clean['payload'] = text_fields(payload) if kind.startswith('message.') else project(payload)
+            if workspace is not None and type(clean['payload'].get('text')) is str:
+                clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         if kind == 'message.complete':
             admission = params.get('admission_id') or payload.get('admission_id')
             if not string(admission):
@@ -182,6 +186,8 @@ async def pump(conn):
                     and admission == conn.active.get('admission_id')):
                 conn.active = None
                 conn.lease.release(settled=True)
+                if workspace is not None:
+                    workspace.gate.disarm()
         # Retain native JSON-RPC envelope structure, not arbitrary envelope fields.
         envelope = {'params': clean}
         for key in ('jsonrpc', 'method'):
@@ -193,43 +199,133 @@ async def pump(conn):
 
 
 async def requests(conn):
+    return await requests_with_workspace(conn, None)
+
+
+async def read_requests(queue, workspace):
+    try:
+        while True:
+            line = await asyncio.to_thread(sys.stdin.buffer.readline, REQUEST_LIMIT + 1)
+            if not line:
+                await queue.put(None)
+                return
+            if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
+                raise Closed()
+            try:
+                request = json.loads(line.decode('utf-8'), object_pairs_hook=pairs,
+                                     parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+                if type(request) is dict and request.get('control') == 'workspace_reply':
+                    if workspace is None or set(request) != {'control', 'reply'}:
+                        raise ValueError()
+                    try:
+                        workspace.gate.reply(request['reply'])
+                    except Exception:
+                        pass
+                    continue
+                if type(request) is dict and request.get('control') == 'workspace_disarm':
+                    if set(request) != {'control'}:
+                        raise ValueError()
+                    if workspace is not None:
+                        workspace.gate.disarm()
+                    continue
+                if type(request) is dict and request.get('control') == 'workspace_capture_failed':
+                    if workspace is None or set(request) != {'control', 'header'}:
+                        raise Closed()
+                    try:
+                        workspace.gate.reject_image(request['header'])
+                    except Exception:
+                        pass
+                    continue
+                await queue.put(validate(request))
+            except (ValueError, UnicodeError, RecursionError):
+                emit({'id': None, 'error': {'code': 'invalid_request'}})
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        await queue.put(error)
+
+
+async def requests_with_workspace(conn, workspace):
+    queue = asyncio.Queue(maxsize=4)
+    reader = asyncio.create_task(read_requests(queue, workspace))
+    try:
+        await request_worker(conn, workspace, queue)
+    finally:
+        reader.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await reader
+
+
+async def request_worker(conn, workspace, queue):
     while True:
-        line = await asyncio.to_thread(sys.stdin.buffer.readline, REQUEST_LIMIT + 1)
-        if not line:
+        request = await queue.get()
+        if request is None:
             return
-        if len(line) > REQUEST_LIMIT or not line.endswith(b'\n'):
-            raise Closed()
-        rid = None
+        if isinstance(request, Exception):
+            raise Closed() from None
+        rid, method, params = request
         try:
-            request = json.loads(line.decode('utf-8'), object_pairs_hook=pairs,
-                                 parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
-            rid, method, params = validate(request)
-        except (ValueError, UnicodeError, RecursionError):
-            emit({'id': None, 'error': {'code': 'invalid_request'}})
-            continue
-        try:
-            if method == 'session.create':
+            if method == 'workspace.setup':
+                if workspace is None:
+                    raise Closed()
+                result = await workspace.start(params['descriptor'])
+                workspace.bind_session(params['session_id'])
+            elif method == 'workspace.stop':
+                if workspace is None:
+                    raise Closed()
+                await workspace.stop()
+                result = {}
+            elif method == 'session.create':
                 # The installed IvyConnection excludes launch routing; keep its session registry
                 # while invoking the gateway's explicitly advertised fixed-model contract.
                 description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
                 fields = description.get('session_create', {}).get('parameters', [])
                 if not {'model', 'provider'} <= set(fields):
                     raise Closed()
-                result = await asyncio.wait_for(conn.client.rpc(method, source='cli', cwd='D:/',
-                    request_id=params['request_id'], model=params['model'], provider='openai-codex'), DEADLINE)
+                options = {}
+                if workspace is not None and workspace.task is not None:
+                    if ('acp' not in description.get('session_create', {}).get('sources', []) or
+                            not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
+                        raise Closed()
+                    options = {'editor': workspace.editor()}
+                result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
+                    request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
                 sid = result.get('session_id')
                 if not string(sid):
                     raise Closed()
                 conn.sessions.add(sid)
+                if options:
+                    workspace.bind_session(sid)
                 info = result.get('info', {})
                 launch = info.get('launch_request', {})
                 if (type(launch) is not dict or launch.get('model') != params['model'] or
                         launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
                     raise Closed()
+                if options and not workspace.verifies(info):
+                    raise Closed()
                 result = {'session_id': sid, 'model': info['model']}
-            else:
+            elif method == 'session.resume' and workspace is not None and workspace.task is not None:
+                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                if 'acp-session-mcp-v1' not in description.get('capabilities', []):
+                    raise Closed()
                 result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
-            if method == 'runtime.describe':
+            elif method == 'prompt.submit' and workspace is not None and workspace.task is not None:
+                if workspace.owner_session != params['session_id'] or 'workspace_epoch' not in params:
+                    raise Closed()
+                epoch = params.pop('workspace_epoch')
+                token = workspace.gate.arm(epoch, params['input_id'])
+                workspace.remember_token(token)
+                params['text'] = (f'For workspace tool calls in this turn, pass turn_token exactly as '
+                                  f'{token}. Do not reveal the token. Do not reuse it in later turns.\n' + params['text'])
+                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+                if result.get('admission_id') in conn.completed:
+                    workspace.gate.disarm()
+            else:
+                params.pop('workspace_epoch', None)
+                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+            if method == 'workspace.setup':
+                pass
+            elif method == 'runtime.describe':
                 if (type(result) is not dict or
                         os.path.normcase(result.get('profile_id', '')) != os.path.normcase(str(PROFILE)) or
                         not set(CAPABILITIES) <= set(result.get('capabilities', []))):
@@ -245,20 +341,31 @@ async def requests(conn):
                     projected['model'] = result['model']
                 elif method == 'session.resume':
                     info = result.get('info', {})
+                    if workspace is not None and workspace.task is not None and not workspace.verifies(info):
+                        raise Closed()
                     if type(info) is dict and string(info.get('model')):
                         projected['model'] = info['model']
                 if method == 'prompt.receipt' and result.get('status') == 'terminal':
                     saved = result.get('result')
                     if type(saved) is dict and type(saved.get('final_response')) is str:
-                        projected['result'] = {'final_response': text_fields({'text': saved['final_response']})['text']}
+                        final = saved['final_response']
+                        if workspace is not None:
+                            final = workspace.redact(final)
+                        projected['result'] = {'final_response': text_fields({'text': final})['text']}
                 result = projected
             emit({'id': rid, 'result': result})
         except asyncio.TimeoutError:
+            if workspace is not None:
+                workspace.gate.disarm()
             emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
             raise Closed() from None
         except Closed:
+            if workspace is not None:
+                workspace.gate.disarm()
             raise
         except Exception:
+            if workspace is not None:
+                workspace.gate.disarm()
             # Never retry: even a transport exception may follow admission.
             emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
             raise Closed() from None
@@ -267,16 +374,29 @@ async def requests(conn):
 async def serve():
     """Return 0 on EOF, 1 on fail-closed termination; host owns process deadline."""
     conn = None
+    workspace = None
     tasks = []
     try:
         IvyConnection, discover, connect = load_library()
+        from stellar_workspace_credentials import WorkspaceCredentials
+        from stellar_workspace_protocol import WorkspaceGate
+        from stellar_workspace_mcp import make_server
+        from stellar_workspace_service import WorkspaceService
+        try:
+            import win32cred
+        except ImportError:
+            win32cred = None
+        if win32cred is not None:
+            workspace = WorkspaceService(WorkspaceCredentials(win32cred), WorkspaceGate(emit), make_server)
         found = await asyncio.to_thread(discover, PROFILE, timeout=2)
         if found.state != 'ready' or found.endpoint is None or found.endpoint.runtime_protocol != 1:
             raise Closed()
         # Discovery validates home and loopback; explicit endpoint forbids autostart.
         async with connect(found.endpoint) as client:
             conn = IvyConnection(client, approvals=False)
-            tasks = [asyncio.create_task(pump(conn)), asyncio.create_task(requests(conn))]
+            if workspace is not None:
+                conn.client = workspace.wrap_client(conn.client)
+            tasks = [asyncio.create_task(pump(conn, workspace)), asyncio.create_task(requests_with_workspace(conn, workspace))]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
@@ -293,6 +413,8 @@ async def serve():
                 await task
         if conn is not None:
             conn.lease.release()
+        if workspace is not None:
+            await workspace.stop()
 
 
 if __name__ == '__main__':

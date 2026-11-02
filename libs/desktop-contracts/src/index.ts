@@ -30,6 +30,14 @@ export type {
   IvyPresentation,
   IvySnapshot,
   IvyCommands,
+  WorkspaceToolsState,
+  WorkspaceSurface,
+  WorkspaceProminence,
+  WorkspaceToolOperation,
+  WorkspaceToolRequest,
+  WorkspacePaneMetadata,
+  WorkspaceToolOutcome,
+  WorkspaceToolReply,
 } from './generated';
 export {
   ivyConnectCommand,
@@ -41,6 +49,8 @@ export {
   ivySelectSessionCommand,
   ivyClearConversationCommand,
   ivyEvent,
+  workspaceToolEvent,
+  workspaceToolReplyCommand,
 } from './generated';
 export {
   decodeIvyRequest,
@@ -49,6 +59,10 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
 } from './lib/ivy-codec';
+export {
+  decodeWorkspaceToolRequest,
+  decodeWorkspaceToolOutcome,
+} from './lib/workspace-codec';
 export type {
   SpeechState,
   SpeechError,

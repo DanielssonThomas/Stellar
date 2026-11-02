@@ -7,6 +7,8 @@ const snapshot = () => ({
   turn_id: id,
   model: 'terra',
   verified_model: null,
+  workspace_tools: 'unavailable',
+  workspace_epoch: '0',
   connection: 'ready',
   turn: 'completed',
   items: [

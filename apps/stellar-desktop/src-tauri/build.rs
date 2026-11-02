@@ -15,6 +15,7 @@ fn main() {
         "smoke_result",
         telemetry_name::TELEMETRY_COMMAND,
         "smoke_hold_ivy",
+        "smoke_capture_window",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],
         ivy_names::IVY_COMMANDS[2],
@@ -23,12 +24,14 @@ fn main() {
         ivy_names::IVY_COMMANDS[5],
         ivy_names::IVY_COMMANDS[6],
         ivy_names::IVY_COMMANDS[7],
+        ivy_names::WORKSPACE_REPLY_COMMAND,
         speech_names::SPEECH_COMMANDS[0],
         speech_names::SPEECH_COMMANDS[1],
         speech_names::SPEECH_COMMANDS[2],
         speech_names::SPEECH_COMMANDS[3],
     ];
     let _ = ivy_names::IVY_EVENT;
+    let _ = ivy_names::WORKSPACE_EVENT;
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS));
     tauri_build::try_build(attributes).expect("Invalid desktop configuration");
