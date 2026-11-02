@@ -112,6 +112,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
   assert.deepEqual(config.app.security.capabilities, ['desktop-main']);
   assert.deepEqual(capability.permissions, [
     'allow-shell-status',
+    'allow-cleanup-refine',
     'allow-app-info',
     'allow-telemetry-snapshot',
     'allow-ivy-connect',
