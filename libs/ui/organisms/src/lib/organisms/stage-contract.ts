@@ -14,17 +14,19 @@ export type Prominence = 'primary' | 'secondary';
 type Shared = {
   readonly contractVersion: 1;
   readonly commandId: number;
+};
+type InstanceShared = Shared & {
   readonly instanceId: string;
 };
 type PayloadCommand<P extends object> = {
   [K in Surface<P>]:
-    | (Shared & {
+    | (InstanceShared & {
         readonly action: 'open';
         readonly surface: K;
         readonly payload: P[K];
         readonly prominence: Prominence;
       })
-    | (Shared & {
+    | (InstanceShared & {
         readonly action: 'update';
         readonly surface: K;
         readonly payload: P[K];
@@ -32,7 +34,12 @@ type PayloadCommand<P extends object> = {
 }[Surface<P>];
 export type StageCommand<P extends object> =
   | PayloadCommand<P>
-  | (Shared & { readonly action: 'focus' | 'minimize' | 'close' });
+  | (InstanceShared & { readonly action: 'focus' | 'minimize' | 'close' })
+  | (Shared & { readonly action: 'clear' })
+  | (Shared & {
+      readonly action: 'arrange';
+      readonly instanceIds: readonly string[];
+    });
 export type StageInstance<P extends object> = {
   [K in Surface<P>]: {
     readonly instanceId: string;
@@ -45,7 +52,14 @@ export type StageInstance<P extends object> = {
 export type StageResult = {
   readonly status: 'applied' | 'duplicate' | 'rejected';
   readonly reason?: string;
-  readonly action?: 'open' | 'update' | 'focus' | 'minimize' | 'close';
+  readonly action?:
+    | 'open'
+    | 'update'
+    | 'focus'
+    | 'minimize'
+    | 'close'
+    | 'clear'
+    | 'arrange';
   readonly instanceId?: string;
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
@@ -161,12 +175,39 @@ export function decodeStageCommand<P extends object>(
       contractVersion !== 1 ||
       typeof commandId !== 'number' ||
       !Number.isSafeInteger(commandId) ||
-      commandId < 1 ||
+      commandId < 1
+    )
+      return null;
+    const workspaceShared = { contractVersion: 1 as const, commandId };
+    const workspaceKeys = ['contractVersion', 'commandId', 'action'];
+    if (action === 'clear')
+      return exactKeys(input, workspaceKeys)
+        ? Object.freeze({ ...workspaceShared, action })
+        : null;
+    if (action === 'arrange') {
+      const ids = input['instanceIds'];
+      if (
+        !exactKeys(input, [...workspaceKeys, 'instanceIds']) ||
+        !Array.isArray(ids) ||
+        ids.length > 4 ||
+        !ids.every(
+          (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(id),
+        ) ||
+        new Set(ids).size !== ids.length
+      )
+        return null;
+      return Object.freeze({
+        ...workspaceShared,
+        action,
+        instanceIds: Object.freeze([...ids]),
+      });
+    }
+    if (
       typeof instanceId !== 'string' ||
       !/^[a-zA-Z0-9_-]{1,64}$/.test(instanceId)
     )
       return null;
-    const shared = { contractVersion: 1 as const, commandId, instanceId };
+    const shared = { ...workspaceShared, instanceId };
     const keys = ['contractVersion', 'commandId', 'instanceId', 'action'];
     if (action === 'focus' || action === 'minimize' || action === 'close')
       return exactKeys(input, keys)

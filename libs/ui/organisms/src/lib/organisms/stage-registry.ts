@@ -13,6 +13,12 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
   let highWater = 0;
   let disposed = false;
 
+  function snapshot(): readonly StageInstance<P>[] {
+    return freezeJson(
+      JSON.parse(canonicalJson(instances)),
+    ) as readonly StageInstance<P>[];
+  }
+
   function interact(
     action: 'focus' | 'minimize' | 'close',
     instanceId: string,
@@ -55,11 +61,31 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
       if (command.commandId <= highWater)
         return { status: 'rejected', reason: 'stale-command' };
       highWater = command.commandId;
-      const existing = instances.findIndex(
-        (instance) => instance.instanceId === command.instanceId,
-      );
       let result: StageResult;
-      if (command.action === 'open') {
+      if (command.action === 'clear') {
+        instances = [];
+        result = { status: 'applied', action: 'clear' };
+      } else if (command.action === 'arrange') {
+        const byId = new Map(
+          instances.map((instance) => [instance.instanceId, instance]),
+        );
+        if (
+          command.instanceIds.length !== instances.length ||
+          command.instanceIds.some((id) => !byId.has(id))
+        )
+          result = { status: 'rejected', reason: 'instance-set-mismatch' };
+        else {
+          instances = [...instances].sort(
+            (left, right) =>
+              command.instanceIds.indexOf(left.instanceId) -
+              command.instanceIds.indexOf(right.instanceId),
+          );
+          result = { status: 'applied', action: 'arrange' };
+        }
+      } else if (command.action === 'open') {
+        const existing = instances.findIndex(
+          (instance) => instance.instanceId === command.instanceId,
+        );
         if (existing >= 0 || instances.length >= 4)
           result = {
             status: 'rejected',
@@ -80,6 +106,9 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
           };
         }
       } else if (command.action === 'update') {
+        const existing = instances.findIndex(
+          (instance) => instance.instanceId === command.instanceId,
+        );
         if (existing < 0 || instances[existing].surface !== command.surface)
           result = { status: 'rejected', reason: 'surface-mismatch' };
         else {
@@ -102,11 +131,8 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
         history.delete(history.keys().next().value as number);
       return result;
     },
-    snapshot(): readonly StageInstance<P>[] {
-      return freezeJson(
-        JSON.parse(canonicalJson(instances)),
-      ) as readonly StageInstance<P>[];
-    },
+    snapshot,
+    inspect: snapshot,
     // Local keyboard controls remain available even if external sequence IDs are exhausted.
     interact,
     dispose() {

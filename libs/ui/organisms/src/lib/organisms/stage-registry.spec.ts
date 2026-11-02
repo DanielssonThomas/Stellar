@@ -174,4 +174,123 @@ describe('Stage command boundary and registry', () => {
     expect(registry.dispatch(open()).reason).toBe('disposed');
     expect(registry.interact('focus', 'summary').reason).toBe('disposed');
   });
+
+  it('inspects and arranges all four panes without changing their state or old snapshots', () => {
+    const registry = createStageRegistry(catalogue);
+    expect(registry.inspect()).toEqual([]);
+    expect(
+      registry.dispatch({
+        contractVersion: 1,
+        commandId: 1,
+        action: 'arrange',
+        instanceIds: [],
+      }).status,
+    ).toBe('applied');
+    for (let id = 2; id <= 5; id++) registry.dispatch(open(id, `item${id}`));
+    registry.dispatch(control(6, 'minimize', 'item3'));
+    const before = registry.inspect();
+    expect(Object.isFrozen(before)).toBe(true);
+    expect(Object.isFrozen(before[1])).toBe(true);
+    const ids = ['item5', 'item3', 'item2', 'item4'];
+    const command = {
+      contractVersion: 1,
+      commandId: 7,
+      action: 'arrange',
+      instanceIds: ids,
+    };
+    expect(registry.dispatch(command)).toEqual({
+      status: 'applied',
+      action: 'arrange',
+    });
+    ids.reverse();
+    const after = registry.inspect();
+    expect(after.map((item) => item.instanceId)).toEqual([
+      'item5',
+      'item3',
+      'item2',
+      'item4',
+    ]);
+    expect(after[1]).toEqual(before[1]);
+    expect(after[1].minimized).toBe(true);
+    expect(before.map((item) => item.instanceId)).toEqual([
+      'item2',
+      'item3',
+      'item4',
+      'item5',
+    ]);
+  });
+
+  it('rejects malformed and mismatched permutations atomically, consuming only valid commands', () => {
+    const registry = createStageRegistry(catalogue);
+    registry.dispatch(open(1, 'one'));
+    registry.dispatch(open(2, 'two'));
+    const before = registry.inspect();
+    for (const ids of [
+      ['one', 'one'],
+      ['one', 'bad/id'],
+      ['one', 'two', 'three', 'four', 'five'],
+    ])
+      expect(
+        registry.dispatch({
+          contractVersion: 1,
+          commandId: 3,
+          action: 'arrange',
+          instanceIds: ids,
+        }).reason,
+      ).toBe('invalid-command');
+    const mismatch = {
+      contractVersion: 1,
+      commandId: 3,
+      action: 'arrange',
+      instanceIds: ['one', 'missing'],
+    };
+    expect(registry.dispatch(mismatch).reason).toBe('instance-set-mismatch');
+    expect(registry.dispatch(mismatch)).toEqual({
+      status: 'duplicate',
+      reason: 'instance-set-mismatch',
+    });
+    expect(
+      registry.dispatch({ ...mismatch, instanceIds: ['two', 'one'] }).reason,
+    ).toBe('command-id-conflict');
+    expect(registry.inspect()).toEqual(before);
+    expect(
+      registry.dispatch({
+        contractVersion: 1,
+        commandId: 4,
+        action: 'arrange',
+        instanceIds: ['one'],
+      }).reason,
+    ).toBe('instance-set-mismatch');
+    expect(registry.inspect()).toEqual(before);
+  });
+
+  it('clears atomically, fences replays, and keeps disposal terminal', () => {
+    const registry = createStageRegistry(catalogue);
+    const clear = { contractVersion: 1, commandId: 1, action: 'clear' };
+    expect(registry.dispatch({ ...clear, instanceId: 'one' }).reason).toBe(
+      'invalid-command',
+    );
+    expect(registry.dispatch(clear)).toEqual({
+      status: 'applied',
+      action: 'clear',
+    });
+    registry.dispatch(open(2, 'one'));
+    const secondClear = { ...clear, commandId: 3 };
+    expect(registry.dispatch(secondClear).status).toBe('applied');
+    registry.dispatch(open(4, 'two'));
+    expect(registry.dispatch(secondClear).status).toBe('duplicate');
+    expect(
+      registry.dispatch({
+        ...secondClear,
+        action: 'arrange',
+        instanceIds: ['two'],
+      }).reason,
+    ).toBe('command-id-conflict');
+    expect(registry.inspect().map((item) => item.instanceId)).toEqual(['two']);
+    registry.dispose();
+    expect(registry.inspect()).toEqual([]);
+    expect(registry.dispatch({ ...clear, commandId: 5 }).reason).toBe(
+      'disposed',
+    );
+  });
 });
