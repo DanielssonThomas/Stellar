@@ -21,6 +21,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_startup.rs"]
+mod startup;
+
 pub enum Action {
     Connect,
     Submit(IvySubmitRequest),
@@ -79,6 +82,7 @@ impl IvyHost {
     }
     pub fn new(directory: &Path, publish: Publisher) -> Self {
         let opened = Journal::open(directory);
+        let directory = directory.to_path_buf();
         let mut snapshot = IvySnapshot::default();
         match &opened {
             Ok((_, record)) => {
@@ -107,7 +111,9 @@ impl IvyHost {
         let state = shared.clone();
         let owned = child.clone();
         std::thread::spawn(move || {
-            let Ok((journal, record)) = opened else {
+            let Some((journal, record, first)) =
+                startup::acquire(opened, &directory, &receiver, &state, &rotations)
+            else {
                 return;
             };
             let mut session = Session {
@@ -121,8 +127,13 @@ impl IvyHost {
                 replay: None,
             };
             let mut deadline: Option<Instant> = None;
+            let mut first = first;
             loop {
-                match receiver.recv_timeout(Duration::from_millis(25)) {
+                let incoming = first
+                    .take()
+                    .map(Ok)
+                    .unwrap_or_else(|| receiver.recv_timeout(Duration::from_millis(25)));
+                match incoming {
                     Ok(work) => {
                         if !state.current(work.epoch) {
                             if let Action::Rotate(_, _, ticket, reply) = work.action {
@@ -306,6 +317,14 @@ impl IvyHost {
             .view
             .lock()
             .map_err(|_| IvyErrorCode::Unavailable)?;
+        let action = if matches!(action, Action::Connect)
+            && view.snapshot.connection == IvyConnectionState::Ready
+            && view.snapshot.turn == IvyTurnState::Uncertain
+        {
+            Action::Reconcile
+        } else {
+            action
+        };
         match &action {
             Action::Connect
                 if matches!(
@@ -455,3 +474,7 @@ pub fn validate_submit(request: &IvySubmitRequest) -> Result<(), IvyErrorCode> {
 #[cfg(test)]
 #[path = "host_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "host_recovery_tests.rs"]
+mod recovery_tests;

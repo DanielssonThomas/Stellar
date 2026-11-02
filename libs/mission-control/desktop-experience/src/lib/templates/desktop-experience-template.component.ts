@@ -17,6 +17,8 @@ import {
 import {
   EmblemMotionMolecule,
   PromptComposerMolecule,
+  FaultLogMolecule,
+  type FaultLogEntry,
   type ComposerFinalizedText,
   type PromptComposerStatus,
   type EmblemManifest,
@@ -32,7 +34,12 @@ export interface MicrophoneOption {
 @Component({
   selector: 'stellar-desktop-experience-template',
   standalone: true,
-  imports: [StageOrganism, EmblemMotionMolecule, PromptComposerMolecule],
+  imports: [
+    StageOrganism,
+    EmblemMotionMolecule,
+    PromptComposerMolecule,
+    FaultLogMolecule,
+  ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
   host: {
@@ -58,6 +65,13 @@ export class DesktopExperienceTemplate {
   readonly assistantNarrating = input(false);
   readonly conversationActive = input(false);
   readonly solActive = input(false);
+  readonly faultActive = input(false);
+  readonly faultVisible = input(false);
+  readonly faultEntries = input<readonly FaultLogEntry[]>([]);
+  readonly faultRecovering = input(false);
+  readonly recoverFault = output<void>();
+  readonly dismissFaults = output<void>();
+  readonly showFaults = output<void>();
   readonly promptRaw = input('');
   readonly promptDraft = input<string | null>(null);
   readonly promptPreview = input('');
@@ -67,6 +81,8 @@ export class DesktopExperienceTemplate {
   readonly composing = computed(
     () =>
       this.solActive() &&
+      !this.faultActive() &&
+      !this.faultVisible() &&
       ['composing', 'refining', 'finalizing', 'error'].includes(
         this.promptStatus(),
       ) &&
@@ -80,11 +96,13 @@ export class DesktopExperienceTemplate {
       (this.assistantWaiting() || this.assistantNarrating()),
   );
   readonly emblemPhase = computed(() =>
-    this.assistantActive() ||
-    (this.conversationActive() &&
-      !['suspended', 'shutdown'].includes(this.state().phase))
-      ? ('listening' as const)
-      : this.state().phase,
+    this.faultActive()
+      ? ('idle' as const)
+      : this.assistantActive() ||
+          (this.conversationActive() &&
+            !['suspended', 'shutdown'].includes(this.state().phase))
+        ? ('listening' as const)
+        : this.state().phase,
   );
   readonly retryIvy = output<void>();
   readonly cancelIvy = output<void>();
@@ -106,6 +124,7 @@ export class DesktopExperienceTemplate {
   readonly manifest = input<EmblemManifest | null>(null);
   readonly loading = input(false);
   readonly assetError = input<string | null>(null);
+  readonly assetUnavailable = output<void>();
   readonly level = input(0);
   readonly statusText = input('Ready');
   readonly inputs = input<readonly MicrophoneOption[]>([]);
@@ -138,6 +157,9 @@ export class DesktopExperienceTemplate {
 
   dispatch(command: unknown) {
     return this.stage().dispatch(command);
+  }
+  openFaultControls() {
+    if (!this.menu.open()) this.menu.toggle();
   }
   presentFinalizedPrompt(text: ComposerFinalizedText, signal: AbortSignal) {
     return this.promptComposer().presentFinalized(text, signal);

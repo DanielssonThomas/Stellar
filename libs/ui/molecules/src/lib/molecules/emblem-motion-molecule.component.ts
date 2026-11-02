@@ -7,6 +7,7 @@ import {
   ElementRef,
   inject,
   input,
+  output,
   signal,
   viewChildren,
   viewChild,
@@ -49,6 +50,11 @@ export class EmblemMotionMolecule {
   readonly manifest = input<EmblemManifest | null>(null);
   readonly assetBasePath = input('');
   readonly phase = input<Phase>('idle');
+  readonly fault = input(false);
+  readonly assetUnavailable = output<void>();
+  readonly posePhase = computed(() => (this.fault() ? 'idle' : this.phase()));
+  readonly faultFilterId = `${this.solMaskId}-fault`;
+  readonly faultLightFilterId = `${this.solMaskId}-fault-light`;
   readonly audioLevel = input(0);
   readonly waiting = input(false);
   readonly solActive = input(false);
@@ -75,7 +81,7 @@ export class EmblemMotionMolecule {
   private readonly settledPhase = signal<Phase | null>(null);
   private readonly motion = createEmblemLayerMotion(
     this.document.defaultView,
-    () => this.settledPhase.set(this.phase()),
+    () => this.settledPhase.set(this.posePhase()),
   );
   private readonly ambient = createEmblemAmbientMotion(
     this.document.defaultView,
@@ -98,8 +104,8 @@ export class EmblemMotionMolecule {
     () =>
       !this.active() ||
       !this.visible() ||
-      this.phase() === 'suspended' ||
-      this.phase() === 'shutdown' ||
+      this.posePhase() === 'suspended' ||
+      this.posePhase() === 'shutdown' ||
       this.motionReduced(),
   );
   readonly motionReduced = computed(
@@ -108,18 +114,24 @@ export class EmblemMotionMolecule {
   readonly level = computed(() => clampAudioLevel(this.audioLevel()));
   readonly showWaiting = computed(
     () =>
+      !this.fault() &&
       this.waiting() &&
       this.active() &&
       this.visible() &&
-      !['suspended', 'shutdown'].includes(this.phase()),
+      !['suspended', 'shutdown'].includes(this.posePhase()),
   );
   readonly assembled = computed(
     () =>
-      !isExplodedPhase(this.phase()) && this.settledPhase() === this.phase(),
+      !isExplodedPhase(this.posePhase()) &&
+      this.settledPhase() === this.posePhase(),
   );
   readonly showSol = computed(
     () =>
-      this.solActive() && this.active() && this.visible() && this.assembled(),
+      !this.fault() &&
+      this.solActive() &&
+      this.active() &&
+      this.visible() &&
+      this.assembled(),
   );
   readonly classes = computed(() =>
     clsx('emblem relative block h-full w-full', {
@@ -128,7 +140,9 @@ export class EmblemMotionMolecule {
       'waiting-response': this.showWaiting(),
       'sol-identity': this.solActive(),
       'with-environment': this.environment(),
-      'idle-motion': idleMotionEnabled(this.phase(), this.paused()),
+      'idle-motion':
+        !this.fault() && idleMotionEnabled(this.posePhase(), this.paused()),
+      'fault-identity': this.fault(),
     }),
   );
   readonly aspectRatio = computed(() => {
@@ -142,7 +156,8 @@ export class EmblemMotionMolecule {
     if (!manifest || this.unavailable() || this.loading()) return [];
     const base = this.assetBasePath();
     const unified =
-      this.settledPhase() === this.phase() && !isExplodedPhase(this.phase());
+      this.settledPhase() === this.posePhase() &&
+      !isExplodedPhase(this.posePhase());
     const drawn = new Set<string>();
     const completeFiles = unified
       ? consolidatedClipFiles(manifest)
@@ -181,7 +196,7 @@ export class EmblemMotionMolecule {
     afterRenderEffect(() => {
       const manifest = this.manifest();
       const layers = this.layers();
-      const phase = this.phase();
+      const phase = this.posePhase();
       const reduced = this.motionReduced();
       const paused = this.paused();
       const planes = this.planes();
@@ -217,9 +232,11 @@ export class EmblemMotionMolecule {
           : [],
         paused
           ? 0
-          : phase === 'returning'
-            ? motionDurations.return
-            : motionDurations.focus,
+          : this.fault()
+            ? 1000
+            : phase === 'returning'
+              ? motionDurations.return
+              : motionDurations.focus,
       );
       this.settledPhase.set(this.motion.settled() ? phase : null);
       this.ambient.update(
@@ -235,13 +252,14 @@ export class EmblemMotionMolecule {
               ]
             : [];
         }),
-        idleMotionEnabled(phase, paused),
+        !this.fault() && idleMotionEnabled(phase, paused),
         paused,
       );
     });
   }
 
   assetFailed() {
+    this.assetUnavailable.emit();
     this.failedAsset.set({
       manifest: this.manifest(),
       base: this.assetBasePath(),

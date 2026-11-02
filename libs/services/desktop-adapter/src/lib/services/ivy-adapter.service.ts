@@ -42,6 +42,10 @@ export class IvyAdapterService {
   private readonly current = signal(initialIvySnapshot());
   readonly state = this.current.asReadonly();
   private highestRevision = -1n;
+  private authoritative = initialIvySnapshot();
+  private operationSequence = 0;
+  private latestOutcome = 0;
+  private localFailure?: Partial<Pick<IvySnapshot, 'connection' | 'error'>>;
   private disposed = false;
   private subscription?: Promise<() => void>;
   private connecting?: Promise<IvySnapshot>;
@@ -117,13 +121,15 @@ export class IvyAdapterService {
 
   private listen(): Promise<() => void> {
     if (!this.subscription) {
+      const operation = ++this.operationSequence;
       const pending = this.adapter.subscribe(
-        (snapshot) => this.accept(snapshot),
-        (error) => this.failed(error),
+        (snapshot) => this.accept(snapshot, ++this.operationSequence, false),
+        (error) => this.failed(error, ++this.operationSequence),
       );
       this.subscription = pending;
-      void pending.catch(() => {
+      void pending.catch((error) => {
         if (this.subscription === pending) this.subscription = undefined;
+        this.failed(error, operation);
       });
     }
     return this.subscription;
@@ -132,30 +138,45 @@ export class IvyAdapterService {
     command: K,
     request: IvyCommands[K],
   ): Promise<IvySnapshot> {
+    const operation = ++this.operationSequence;
     try {
       const snapshot = await this.adapter.request(command, request);
-      this.accept(snapshot);
+      this.accept(snapshot, operation, true);
       return this.current();
     } catch (error) {
-      if (!this.disposed) this.failed(error);
+      if (!this.disposed) this.failed(error, operation);
       throw error;
     }
   }
-  private accept(snapshot: IvySnapshot) {
+  private accept(
+    snapshot: IvySnapshot,
+    operation: number,
+    allowEqual: boolean,
+  ) {
     if (this.disposed) return;
     const revision = BigInt(snapshot.revision);
-    if (revision <= this.highestRevision) return;
-    this.highestRevision = revision;
-    this.current.set(snapshot);
+    if (
+      revision < this.highestRevision ||
+      (revision === this.highestRevision && !allowEqual)
+    )
+      return;
+    if (revision > this.highestRevision) {
+      this.highestRevision = revision;
+      this.authoritative = snapshot;
+    }
+    if (operation >= this.latestOutcome) {
+      this.latestOutcome = operation;
+      this.localFailure = undefined;
+    }
+    this.current.set({ ...this.authoritative, ...this.localFailure });
   }
-  private failed(error: unknown) {
-    if (!this.disposed)
-      this.current.update((state) =>
-        error instanceof IvyAdapterError &&
-        error.kind === 'native' &&
-        error.code
-          ? { ...state, error: error.code }
-          : { ...state, connection: 'unavailable', error: 'protocol' },
-      );
+  private failed(error: unknown, operation: number) {
+    if (this.disposed || operation < this.latestOutcome) return;
+    this.latestOutcome = operation;
+    this.localFailure =
+      error instanceof IvyAdapterError && error.kind === 'native' && error.code
+        ? { error: error.code }
+        : { connection: 'unavailable', error: 'protocol' };
+    this.current.set({ ...this.authoritative, ...this.localFailure });
   }
 }

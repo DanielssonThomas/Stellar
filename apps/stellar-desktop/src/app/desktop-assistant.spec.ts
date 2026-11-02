@@ -25,6 +25,7 @@ function setup(
     connect: vi.fn(async () => state()),
     cancel: vi.fn(async () => state()),
     reconcile: vi.fn(async () => state()),
+    snapshot: vi.fn(async () => state()),
   };
   TestBed.configureTestingModule({
     providers: [
@@ -43,6 +44,61 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('waits for authoritative recovery rather than queue acceptance', async () => {
+    vi.useFakeTimers();
+    const { assistant, state, adapter } = setup();
+    state.set({ ...state(), revision: '5', turn: 'uncertain' });
+    const pending = assistant.reconcile();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(assistant.recovery()).toBe('checking');
+    expect(assistant.status()).toContain('Checking');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(assistant.recovery()).toBe('checking');
+    state.set({ ...state(), revision: '7', turn: 'completed' });
+    await vi.advanceTimersByTimeAsync(250);
+    await pending;
+    expect(assistant.recovery()).toBe('recovered');
+    expect(adapter.submit).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('reports unchanged on timeout and failed on a later authoritative error', async () => {
+    vi.useFakeTimers();
+    const { assistant, state } = setup();
+    state.set({ ...state(), revision: '2', turn: 'uncertain' });
+    const pending = assistant.reconcile();
+    await vi.advanceTimersByTimeAsync(20000);
+    await pending;
+    expect(assistant.recovery()).toBe('unchanged');
+    expect(assistant.status()).toContain('remains uncertain');
+    const retry = assistant.reconcile();
+    await Promise.resolve();
+    await Promise.resolve();
+    state.set({
+      ...state(),
+      revision: '4',
+      connection: 'unavailable',
+      error: 'protocol',
+    });
+    await vi.advanceTimersByTimeAsync(250);
+    await retry;
+    expect(assistant.recovery()).toBe('failed');
+    expect(assistant.status()).toContain('failed');
+    vi.useRealTimers();
+  });
+
+  it('cancels a pending bounded recovery on destruction', async () => {
+    vi.useFakeTimers();
+    const { assistant, state } = setup();
+    state.set({ ...state(), turn: 'uncertain' });
+    const pending = assistant.reconcile();
+    TestBed.resetTestingModule();
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
   it('closes only activities captured by the explicit turn, once, even after replay', async () => {
     let activities = ['current', 'minimized'];
     const { assistant, adapter, state, present } = setup(
@@ -141,8 +197,14 @@ describe('desktop Ivy composition', () => {
       turn_id: first,
     });
     TestBed.tick();
-    await assistant.reconcile();
+    vi.useFakeTimers();
+    const recovery = assistant.reconcile();
+    await Promise.resolve();
+    await Promise.resolve();
     state.set({ ...state(), revision: '67', turn: 'completed' });
+    await vi.advanceTimersByTimeAsync(250);
+    await recovery;
+    vi.useRealTimers();
     TestBed.tick();
     expect(present).toHaveBeenCalledTimes(65);
   });
@@ -240,6 +302,7 @@ describe('desktop Ivy composition', () => {
     expect(present).toHaveBeenCalledOnce();
   });
   it('exposes failure and uncertain recovery without automatically repeating a request', async () => {
+    vi.useFakeTimers();
     const { assistant, adapter, state, present } = setup();
     state.set({
       ...state(),
@@ -257,7 +320,9 @@ describe('desktop Ivy composition', () => {
       error: 'unavailable',
     });
     TestBed.tick();
-    await assistant.retry();
+    const connect = assistant.retry();
+    await vi.advanceTimersByTimeAsync(20000);
+    await connect;
     expect(adapter.connect).toHaveBeenCalledOnce();
     expect(adapter.submit).not.toHaveBeenCalled();
     state.set({
@@ -269,8 +334,11 @@ describe('desktop Ivy composition', () => {
     TestBed.tick();
     await assistant.submit('Do not resend');
     expect(adapter.submit).not.toHaveBeenCalled();
-    await assistant.reconcile();
+    const check = assistant.reconcile();
+    await vi.advanceTimersByTimeAsync(20000);
+    await check;
     expect(adapter.reconcile).toHaveBeenCalledOnce();
     expect(present).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

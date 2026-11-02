@@ -2,6 +2,8 @@
   --stellar-color-canvas: #030303;
   --stellar-color-divider: rgb(203 166 74 / 25%);
   --stellar-color-primary: #d5b76a;
+  --stellar-color-fault: #ff6173;
+  --stellar-color-fault-text: #ffd4d9;
   display: block;
   height: 100%;
   min-height: 0;
