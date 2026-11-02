@@ -111,7 +111,8 @@ export class StageOrganism {
       const requested = this.focusRequest();
       if (!requested || this.loading()) return;
       const panel = this.panels().find(
-        (entry) => entry.nativeElement.dataset['instanceId'] === requested.instanceId,
+        (entry) =>
+          entry.nativeElement.dataset['instanceId'] === requested.instanceId,
       );
       if (panel) {
         const target = requested.descendant;
