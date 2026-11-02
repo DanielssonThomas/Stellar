@@ -4,6 +4,7 @@ import { AudioActivityService } from '@stellar/service-audio-activity';
 import {
   IvyAdapterService,
   SpeechAdapterService,
+  PromptCleanupService,
   initialIvySnapshot,
   initialSpeechSnapshot,
 } from '@stellar/service-desktop-adapter';
@@ -21,6 +22,16 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
   TestBed.configureTestingModule({
     providers: [
       DesktopVoice,
+      {
+        provide: PromptCleanupService,
+        useValue: {
+          refine: vi.fn(async (raw: string) => ({
+            raw,
+            text: raw,
+            status: 'fallback',
+          })),
+        },
+      },
       { provide: IvyAdapterService, useValue: ivy },
       {
         provide: AudioActivityService,
@@ -117,6 +128,170 @@ describe('desktop voice session composition', () => {
       status: 'idle',
       error: '',
     });
+    TestBed.resetTestingModule();
+  });
+});
+import type {
+  AudioActivityState,
+  PcmEvent,
+} from '@stellar/service-audio-activity';
+
+describe('desktop voice cleanup integration', () => {
+  async function setup(transcript: string, refine: ReturnType<typeof vi.fn>) {
+    let receive!: (event: PcmEvent) => void;
+    const audio = signal<AudioActivityState>({
+      status: 'capturing',
+      activity: {
+        calibrating: false,
+        active: false,
+        level: 0.1,
+        peakLevel: 0.1,
+        durationMs: 0,
+        noiseFloor: 0.001,
+        clipped: false,
+      },
+    });
+    const assistant = {
+      state: signal({ ...initialIvySnapshot(), connection: 'ready' as const }),
+      submit: vi.fn(async (text: string, id: string) => {
+        void text;
+        void id;
+        return true;
+      }),
+    };
+    const speech = {
+      state: signal(initialSpeechSnapshot()),
+      transcribe: vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+        version: 1,
+        utterance_id,
+        text: transcript,
+      })),
+      stop: vi.fn(async () => undefined),
+    };
+    const snapshot = vi.fn(async () => initialIvySnapshot());
+    TestBed.configureTestingModule({
+      providers: [
+        DesktopVoice,
+        {
+          provide: IvyAdapterService,
+          useValue: { snapshot, selectSession: vi.fn(async () => true) },
+        },
+        { provide: PromptCleanupService, useValue: { refine } },
+        {
+          provide: AudioActivityService,
+          useValue: {
+            state: audio,
+            subscribePcm: (callback: (event: PcmEvent) => void) => {
+              receive = callback;
+              return () => undefined;
+            },
+          },
+        },
+        { provide: SpeechAdapterService, useValue: speech },
+        { provide: DesktopAssistant, useValue: assistant },
+        {
+          provide: DesktopExperience,
+          useValue: { state: signal({ phase: 'idle' }) },
+        },
+      ],
+    });
+    const voice = TestBed.inject(DesktopVoice);
+    await vi.waitFor(() => expect(snapshot).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    TestBed.tick();
+    let sequence = 0;
+    const utterance = () => {
+      for (const [active, count] of [
+        [true, 5],
+        [false, 35],
+      ] as const) {
+        audio.update((state) => ({
+          ...state,
+          activity: { ...state.activity, active },
+        }));
+        TestBed.tick();
+        for (let i = 0; i < count; i++)
+          receive({
+            type: 'chunk',
+            chunk: {
+              sampleRate: 16000,
+              sequence: sequence++,
+              samples: new Int16Array(640).fill(active ? 2000 : 0),
+            },
+          });
+      }
+    };
+    return { voice, assistant, utterance, receive };
+  }
+
+  it('calls the actual cleanup port once for end prompt and submits its result once with raw retained', async () => {
+    const refine = vi.fn(async (raw: string) => ({
+      raw,
+      text: 'Refined ALPHA-42',
+      status: 'refined',
+    }));
+    const f = await setup('end prompt', refine);
+    f.voice.setDraft(' Um ALPHA-42 ');
+    f.utterance();
+    await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
+    expect(refine).toHaveBeenCalledOnce();
+    expect(refine.mock.calls[0][0]).toBe(' Um ALPHA-42 ');
+    expect(f.assistant.submit.mock.calls[0][0]).toBe('Refined ALPHA-42');
+    expect(f.voice.composition().lastSubmittedRaw).toBe(' Um ALPHA-42 ');
+    TestBed.resetTestingModule();
+  });
+
+  it('submits the raw fallback once when cleanup is unavailable', async () => {
+    const refine = vi.fn(async (raw: string) => ({
+      raw,
+      text: raw,
+      status: 'fallback',
+    }));
+    const f = await setup('end prompt', refine);
+    f.voice.setDraft(' Keep ALPHA-42 ');
+    f.utterance();
+    await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
+    expect(refine).toHaveBeenCalledOnce();
+    expect(f.assistant.submit.mock.calls[0][0]).toBe(' Keep ALPHA-42 ');
+    TestBed.resetTestingModule();
+  });
+
+  it('does not call cleanup for an ordinary speech turn', async () => {
+    const refine = vi.fn();
+    const f = await setup('ordinary request', refine);
+    f.utterance();
+    await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
+    expect(refine).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+  });
+
+  it('aborts actual cleanup on capture reset and never submits a late result', async () => {
+    let resolve!: (value: {
+      raw: string;
+      text: string;
+      status: string;
+    }) => void;
+    const refine = vi.fn((raw: string, signal: AbortSignal) => {
+      void raw;
+      void signal;
+      return new Promise<{ raw: string; text: string; status: string }>(
+        (done) => {
+          resolve = done;
+        },
+      );
+    });
+    const f = await setup('end prompt', refine);
+    f.voice.setDraft('raw prompt');
+    f.utterance();
+    await vi.waitFor(() => expect(refine).toHaveBeenCalledOnce());
+    const abort = refine.mock.calls[0][1] as AbortSignal;
+    f.receive({ type: 'reset' });
+    expect(abort.aborted).toBe(true);
+    resolve({ raw: 'raw prompt', text: 'late output', status: 'refined' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(f.assistant.submit).not.toHaveBeenCalled();
+    expect(f.voice.composition().raw).toBe('raw prompt');
     TestBed.resetTestingModule();
   });
 });
