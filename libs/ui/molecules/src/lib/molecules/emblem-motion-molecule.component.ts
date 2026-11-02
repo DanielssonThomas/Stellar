@@ -117,6 +117,7 @@ export class EmblemMotionMolecule {
       'motion-paused': this.paused(),
       'motion-reduced': this.motionReduced(),
       'waiting-response': this.showWaiting(),
+      'sol-identity': this.solActive(),
       'with-environment': this.environment(),
       'idle-motion': idleMotionEnabled(this.phase(), this.paused()),
     }),

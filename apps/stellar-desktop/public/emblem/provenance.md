@@ -2,14 +2,14 @@
 
 Runtime files are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md). Issue #176 supplied the hybrid raster artwork and editable SVG geometry; #204 composes its four stars into the outer frame, adds three matching inner circles and assigns eleven uniformly spaced logical planes. #211 divides each existing body into three registered clips, yielding fifteen logical planes over the same eleven image files. The manifest retains production-candidate status. All files share a 1280 square origin and all assembled transforms remain zero. The #221 correction re-registers the two body exports inside their hair apertures; all six generated source cutouts remain unchanged, as do the other four exported raster images.
 
-The exported runtime payload is 2,743,954 bytes for the manifest and eleven unique registered image files. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the original raster artwork; #221 only changes deterministic registration. Native performance and physical microphones require separate verification.
+The exported runtime payload is 2,743,982 bytes for the manifest and eleven unique registered image files. Text newline conventions can change that count on another platform. Original references, generated masters, registration, history and previews remain in the source library. Imagegen supplied the original raster artwork; #221 only changes deterministic registration. Native performance and physical microphones require separate verification.
 
 Copy integrity was checked byte-for-byte against source files on this checkout. SHA-256 hashes below normalize JSON/SVG text to LF and preserve exact PNG bytes.
 
 | Runtime file               | SHA-256                                                          |
 | -------------------------- | ---------------------------------------------------------------- |
 | manifest.json              | 5d19f26cbeb4bd01eaa4cec1963eaaecb281087179b36b0c537128e3ef2dd992 |
-| layers/violet-body.png     | c77ca373d592c55ce75b96255d54fff58af82dbcb1c67d6fa786671016de3d04 |
+| layers/violet-body.png     | a32c4cc76d2472fb4fe71403e0c510f4f7594b42eb2c9ca846fe543f2b46e3a4 |
 | layers/violet-hair.png     | 5ca76606302c0758dd55b520c5ce0cd751bda9e9b8c827ff2e78920c19938da3 |
 | layers/violet-ornament.png | 693fdcba33e399e0585d05c27ca3fac38b93bd66d4d61c0cd08ecdd0647d09ef |
 | layers/gold-body.png       | e4f0044e8b4a320b312c0071596cf0d91912136915cb322fec9dd96446aa3e9c |

@@ -39,17 +39,21 @@ img {
   overflow: visible;
   color: var(--stellar-color-sol, #ff2525);
   filter: drop-shadow(
-    0 0 0.3cqw
-      color-mix(in srgb, var(--stellar-color-sol, #ff2525) 45%, transparent)
+    0 0 0.5cqw
+      color-mix(in srgb, var(--stellar-color-sol, #ff2525) 65%, transparent)
   );
 }
 .sol-ring {
   fill: none;
   stroke: currentColor;
-  stroke-width: 6;
+  stroke-width: clamp(1.2px, 0.45cqw, 2.5px);
+  vector-effect: non-scaling-stroke;
 }
 .sol-eye {
   fill: currentColor;
+}
+.sol-eye-core {
+  fill: #fff0db;
 }
 .sol-enter {
   animation: sol-arrive 360ms ease both;
@@ -84,6 +88,12 @@ img {
 
 .waiting-response .emblem-presence {
   transform: scale(0.86);
+  opacity: 0.68;
+}
+.waiting-response.sol-identity .emblem-presence {
+  opacity: 1;
+}
+.waiting-response.sol-identity .camera {
   opacity: 0.68;
 }
 
