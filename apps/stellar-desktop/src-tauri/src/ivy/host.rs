@@ -21,6 +21,7 @@ pub enum Action {
     Cancel,
     Reconcile,
     Disconnect,
+    Rotate(IvyModel, bool, mpsc::SyncSender<Result<(), IvyErrorCode>>),
 }
 struct Work {
     epoch: u64,
@@ -30,6 +31,7 @@ pub struct IvyHost {
     shared: Shared,
     child: OwnedChild,
     sender: SyncSender<Work>,
+    gate: Mutex<()>,
 }
 
 impl IvyHost {
@@ -45,6 +47,8 @@ impl IvyHost {
         match &opened {
             Ok((_, record)) => {
                 snapshot.turn_id = record.input_id.clone();
+                snapshot.model = record.model;
+                snapshot.verified_model = None;
                 if record.unsettled {
                     snapshot.turn = IvyTurnState::Uncertain;
                 }
@@ -91,6 +95,11 @@ impl IvyHost {
                             }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
+                            Action::Rotate(model, force, reply) => {
+                                let result = session.rotate(model, force);
+                                let _ = reply.send(result);
+                                Ok(())
+                            }
                             Action::Disconnect => {
                                 session.broker = None;
                                 session.restore_admission_state();
@@ -129,6 +138,7 @@ impl IvyHost {
             shared,
             child,
             sender,
+            gate: Mutex::new(()),
         }
     }
 
@@ -140,7 +150,32 @@ impl IvyHost {
             .map_err(|_| IvyErrorCode::Unavailable)
     }
 
+    pub fn rotate(&self, model: IvyModel, force: bool) -> Result<IvySnapshot, IvyErrorCode> {
+        let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
+        let view = self
+            .shared
+            .view
+            .lock()
+            .map_err(|_| IvyErrorCode::Unavailable)?;
+        if matches!(
+            view.snapshot.turn,
+            IvyTurnState::Submitting | IvyTurnState::Admitted | IvyTurnState::Uncertain
+        ) {
+            return Err(IvyErrorCode::Busy);
+        }
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.sender
+            .try_send(Work {
+                epoch: view.epoch,
+                action: Action::Rotate(model, force, tx),
+            })
+            .map_err(|_| IvyErrorCode::Busy)?;
+        drop(view);
+        rx.recv().map_err(|_| IvyErrorCode::Unavailable)??;
+        self.snapshot()
+    }
     pub fn request(&self, action: Action) -> Result<IvySnapshot, IvyErrorCode> {
+        let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         let mut view = self
             .shared
             .view
@@ -195,6 +230,9 @@ impl IvyHost {
             view.snapshot.turn = IvyTurnState::Submitting;
             view.snapshot.turn_id = Some(id);
             view.snapshot.items.clear();
+        }
+        if disconnect {
+            view.snapshot.verified_model = None;
         }
         if disconnect
             && matches!(

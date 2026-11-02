@@ -51,14 +51,30 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = if let Some(sid) = self.record.session_id.clone() {
+            if !self.record.route_verified {
+                return Err(IvyErrorCode::Unavailable);
+            }
             let resumed = self.call("session.resume", json!({"session_id":sid}))?;
             if resumed.get("session_id").and_then(Value::as_str) != Some(&sid) {
                 return Err(IvyErrorCode::Protocol);
             }
+            if resumed.get("model").and_then(Value::as_str) != Some(model_route(self.record.model))
+            {
+                return Err(IvyErrorCode::Unavailable);
+            }
             sid
         } else {
-            let created = self.call("session.create", json!({"request_id":request.input_id}))?;
-            bounded_id(created.get("session_id"))?
+            let created = self.call(
+                "session.create",
+                json!({"request_id":request.input_id, "model": model_route(self.record.model)}),
+            )?;
+            let sid = bounded_id(created.get("session_id"))?;
+            if created.get("model").and_then(Value::as_str) != Some(model_route(self.record.model))
+            {
+                return Err(IvyErrorCode::Unavailable);
+            }
+            self.record.route_verified = true;
+            sid
         };
         let text = format!(
             "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
@@ -73,6 +89,8 @@ impl Session {
             admission_id: None,
             generation: None,
             unsettled: true,
+            model: self.record.model,
+            route_verified: self.record.route_verified,
         };
         self.journal.save(&self.record)?;
         self.replay = None;
@@ -88,6 +106,7 @@ impl Session {
             .call("prompt.submit", params, &mut self.buffered)?;
         self.accept_receipt(&receipt)?;
         self.shared.update(self.epoch, |snapshot| {
+            snapshot.verified_model = self.record.route_verified.then_some(self.record.model);
             snapshot.turn = IvyTurnState::Admitted;
             snapshot.turn_id = self.record.input_id.clone();
             snapshot.error = None;
@@ -106,6 +125,34 @@ impl Session {
         self.journal.save(&self.record)
     }
 
+    pub fn rotate(&mut self, model: IvyModel, force: bool) -> Result<(), IvyErrorCode> {
+        if self.record.unsettled {
+            return Err(IvyErrorCode::Uncertain);
+        }
+        if !force
+            && self.record.model == model
+            && (self.record.session_id.is_none() || self.record.route_verified)
+        {
+            return Ok(());
+        }
+        let next = Record {
+            model,
+            ..Record::default()
+        };
+        self.journal.save(&next)?;
+        self.record = next;
+        self.buffered.clear();
+        self.replay = None;
+        self.shared.update(self.epoch, |view| {
+            view.model = model;
+            view.verified_model = None;
+            view.turn = IvyTurnState::Idle;
+            view.turn_id = None;
+            view.items.clear();
+            view.error = None;
+        });
+        Ok(())
+    }
     pub fn cancel(&mut self) -> Result<(), IvyErrorCode> {
         if !self.record.unsettled {
             return Ok(());
@@ -281,4 +328,11 @@ fn bounded_id(value: Option<&Value>) -> Result<String, IvyErrorCode> {
         .filter(|id| !id.is_empty() && id.len() <= 512)
         .map(str::to_owned)
         .ok_or(IvyErrorCode::Protocol)
+}
+
+fn model_route(model: IvyModel) -> &'static str {
+    match model {
+        IvyModel::Terra => "gpt-6.1-terra",
+        IvyModel::Sol => "gpt-6.1-sol",
+    }
 }

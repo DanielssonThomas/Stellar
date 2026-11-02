@@ -17,6 +17,8 @@ fn main() {
         ivy_names::IVY_COMMANDS[3],
         ivy_names::IVY_COMMANDS[4],
         ivy_names::IVY_COMMANDS[5],
+        ivy_names::IVY_COMMANDS[6],
+        ivy_names::IVY_COMMANDS[7],
         speech_names::SPEECH_COMMANDS[0],
         speech_names::SPEECH_COMMANDS[1],
         speech_names::SPEECH_COMMANDS[2],

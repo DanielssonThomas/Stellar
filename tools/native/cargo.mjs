@@ -78,6 +78,8 @@ if (action === 'smoke') {
               'core:event:allow-listen',
               'core:event:allow-unlisten',
               'allow-smoke-result',
+              'allow-ivy-select-session',
+              'allow-ivy-clear-conversation',
             ],
           },
         ],

@@ -14,6 +14,7 @@ fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
             shared,
             child: Arc::new(Mutex::new(None)),
             sender,
+            gate: Mutex::new(()),
         },
         receiver,
     )

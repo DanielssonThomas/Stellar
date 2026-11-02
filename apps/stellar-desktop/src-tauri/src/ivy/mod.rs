@@ -10,7 +10,9 @@ mod session;
 mod session_tests;
 mod state;
 
-use contracts::{IvyErrorCode, IvyRequest, IvySnapshot, IvySubmitRequest};
+use contracts::{
+    IvyErrorCode, IvyModel, IvyRequest, IvySelectRequest, IvySnapshot, IvySubmitRequest,
+};
 use host::Action;
 pub use host::IvyHost;
 
@@ -78,4 +80,26 @@ pub fn ivy_disconnect(
 ) -> Result<IvySnapshot, IvyErrorCode> {
     validate(request)?;
     host.request(Action::Disconnect)
+}
+
+#[tauri::command]
+pub fn ivy_select_session(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: IvySelectRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    if request.version != 1 {
+        return Err(IvyErrorCode::MalformedRequest);
+    }
+    host.rotate(request.model, false)
+}
+#[tauri::command]
+pub fn ivy_clear_conversation(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    validate(request)?;
+    host.rotate(IvyModel::Terra, true)
 }

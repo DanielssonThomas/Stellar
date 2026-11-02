@@ -70,4 +70,27 @@ describe('Ivy service startup and revision ownership', () => {
     expect(service.state().connection).toBe('ready');
     expect(service.state().error).toBe('busy');
   });
+  it('reports durable selection and refuses a busy clear without changing the selection', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...initialIvySnapshot(),
+        revision: '1',
+        model: 'sol',
+      })
+      .mockRejectedValueOnce('busy');
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: IVY_TRANSPORT,
+          useValue: { invoke, listen: async () => vi.fn() },
+        },
+      ],
+    });
+    const service = TestBed.inject(IvyAdapterService);
+    expect(await service.selectSession('sol')).toBe(true);
+    expect(service.state().verified_model).toBeNull();
+    expect(await service.clearConversation()).toBe(false);
+    expect(service.state().model).toBe('sol');
+  });
 });

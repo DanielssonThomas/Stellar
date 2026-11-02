@@ -11,6 +11,9 @@ import {
   ivyCancelCommand,
   ivyReconcileCommand,
   ivyDisconnectCommand,
+  ivySelectSessionCommand,
+  ivyClearConversationCommand,
+  type IvyModel,
   type IvyCommands,
   type IvySnapshot,
 } from '@stellar/desktop-contracts';
@@ -80,6 +83,32 @@ export class IvyAdapterService {
   }
   disconnect() {
     return this.invoke(ivyDisconnectCommand, { version: 1 });
+  }
+
+  async selectSession(model: IvyModel): Promise<boolean> {
+    try {
+      const state = await this.invoke(ivySelectSessionCommand, {
+        version: 1,
+        model,
+      });
+      return state.model === model;
+    } catch {
+      return false;
+    }
+  }
+  async clearConversation(): Promise<boolean> {
+    try {
+      const state = await this.invoke(ivyClearConversationCommand, {
+        version: 1,
+      });
+      return (
+        state.model === 'terra' &&
+        state.turn === 'idle' &&
+        state.turn_id === null
+      );
+    } catch {
+      return false;
+    }
   }
 
   private listen(): Promise<() => void> {

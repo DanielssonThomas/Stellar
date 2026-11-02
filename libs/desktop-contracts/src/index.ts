@@ -22,6 +22,8 @@ export type {
   IvyConnectionState,
   IvyTurnState,
   IvyErrorCode,
+  IvyModel,
+  IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
   IvyComponent,
@@ -36,10 +38,13 @@ export {
   ivyCancelCommand,
   ivyReconcileCommand,
   ivyDisconnectCommand,
+  ivySelectSessionCommand,
+  ivyClearConversationCommand,
   ivyEvent,
 } from './generated';
 export {
   decodeIvyRequest,
+  decodeIvySelectRequest,
   decodeIvySubmitRequest,
   decodeIvyError,
   decodeIvySnapshot,

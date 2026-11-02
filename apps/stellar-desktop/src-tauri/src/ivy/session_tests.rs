@@ -24,6 +24,8 @@ fn fixture() -> (Session, std::path::PathBuf) {
         admission_id: Some("admission".into()),
         generation: Some(3),
         unsettled: true,
+        model: IvyModel::Terra,
+        route_verified: true,
     };
     journal.save(&record).unwrap();
     let shared = Shared {
@@ -133,9 +135,9 @@ while ($line = [Console]::ReadLine()) {
   $request = $line | ConvertFrom-Json
   $receipt = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3;status='STATUS';outcome='OUTCOME';result=@{final_response='FINAL_TEXT'}}
   $result = switch ($request.method) {
-    'session.create' { @{session_id='session'} }
+    'session.create' { @{session_id='session';model='gpt-6.1-terra'} }
     'prompt.submit' { $receipt }
-    'session.resume' { @{session_id='session';pending=@(@{ref=@{session_id='session'};admission_id='admission';execution_generation=3;input_id='00000000-0000-0000-0000-000000000001'})} }
+    'session.resume' { @{session_id='session';model='gpt-6.1-terra';pending=@(@{ref=@{session_id='session'};admission_id='admission';execution_generation=3;input_id='00000000-0000-0000-0000-000000000001'})} }
     'prompt.receipt' { $receipt }
     'session.interrupt' { @{execution_generation=3;execution_state='running'} }
     default { @{unexpected=$true} }
@@ -268,4 +270,49 @@ fn terminal_failed_and_empty_cancelled_receipts_release_the_logical_turn() {
         assert!(!Journal::open(&directory).unwrap().1.unsettled);
         std::fs::remove_dir_all(directory).unwrap();
     }
+}
+
+#[test]
+fn rotation_persists_intent_and_fences_old_completions() {
+    let (mut session, directory) = fixture();
+    assert!(matches!(
+        session.rotate(IvyModel::Sol, false),
+        Err(IvyErrorCode::Uncertain)
+    ));
+    session.record.unsettled = false;
+    session.rotate(IvyModel::Sol, false).unwrap();
+    assert_eq!(session.record.model, IvyModel::Sol);
+    assert!(session.record.session_id.is_none());
+    session.event(completion("admission", 3, "stale")).unwrap();
+    assert!(
+        session
+            .shared
+            .view
+            .lock()
+            .unwrap()
+            .snapshot
+            .items
+            .is_empty()
+    );
+    drop(session);
+    let (journal, record) = Journal::open(&directory).unwrap();
+    assert_eq!(record.model, IvyModel::Sol);
+    assert!(record.session_id.is_none());
+    drop(journal);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn failed_rotation_save_preserves_foreground() {
+    let (mut session, directory) = fixture();
+    session.record.unsettled = false;
+    std::fs::create_dir(directory.join("ivy-session.pending")).unwrap();
+    assert!(matches!(
+        session.rotate(IvyModel::Sol, false),
+        Err(IvyErrorCode::Storage)
+    ));
+    assert_eq!(session.record.session_id.as_deref(), Some("session"));
+    assert_eq!(session.record.model, IvyModel::Terra);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
 }
