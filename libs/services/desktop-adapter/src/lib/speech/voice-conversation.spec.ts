@@ -656,8 +656,10 @@ describe('spoken prompt composition', () => {
     await say('end prompt is a phrase');
     expect(state.raw).toBe(' First clause \nend prompt is a phrase');
     expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(refinePrompt).not.toHaveBeenCalled();
     await say('end prompt');
     expect(selectSession).toHaveBeenCalledExactlyOnceWith('sol');
+    expect(refinePrompt).toHaveBeenCalledOnce();
     expect(refinePrompt.mock.calls[0][0]).toBe(
       ' First clause \nend prompt is a phrase',
     );

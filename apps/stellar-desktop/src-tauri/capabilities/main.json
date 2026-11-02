@@ -4,6 +4,7 @@
   "windows": ["main"],
   "permissions": [
     "allow-shell-status",
+    "allow-cleanup-refine",
     "allow-app-info",
     "allow-telemetry-snapshot",
     "allow-ivy-connect",
