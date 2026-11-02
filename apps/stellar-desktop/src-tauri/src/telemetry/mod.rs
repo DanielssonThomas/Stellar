@@ -138,4 +138,37 @@ mod tests {
         assert!(matches!(result, Err(TelemetryError::Timeout)));
         server.join().unwrap();
     }
+
+    #[test]
+    #[ignore = "requires the explicitly started local telemetry collector"]
+    fn live_collector_matches_the_native_contract() {
+        let snapshot = tauri::async_runtime::block_on(fetch(URL)).expect("live collector contract");
+        let available = snapshot
+            .agents
+            .iter()
+            .filter(|agent| {
+                matches!(
+                    agent.source.health,
+                    super::contracts::TelemetryHealth::Available
+                )
+            })
+            .count();
+        let hermes = snapshot
+            .agents
+            .iter()
+            .filter(|agent| {
+                matches!(
+                    agent.source.kind,
+                    super::contracts::TelemetrySourceKind::HermesTurnLease
+                )
+            })
+            .count();
+        println!(
+            "agents={} available={} hermes={} codex={}",
+            snapshot.agents.len(),
+            available,
+            hermes,
+            snapshot.agents.len() - hermes
+        );
+    }
 }

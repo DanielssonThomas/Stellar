@@ -25,7 +25,7 @@ fn check_page(window: Webview) {
                     await new Promise(resolve => setTimeout(resolve, 100));
                 let telemetryOk = false;
                 try { const snapshot = await invoke('telemetry_snapshot'); telemetryOk = snapshot.schemaVersion === 1; }
-                catch (error) { telemetryOk = ['unavailable', 'timeout', 'invalid'].includes(error); }
+                catch (error) { telemetryOk = !__TELEMETRY_EXPECT_LIVE__ && ['unavailable', 'timeout', 'invalid'].includes(error); }
                 const reply = await invoke('shell_status', { request: { version: 1 } });
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
@@ -78,7 +78,15 @@ fn check_page(window: Webview) {
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
     "#;
-    if window.eval(script).is_err() {
+    let script = script.replace(
+        "__TELEMETRY_EXPECT_LIVE__",
+        if std::env::var_os("STELLAR_TELEMETRY_SMOKE_EXPECT_LIVE").is_some() {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    if window.eval(&script).is_err() {
         window.app_handle().exit(1);
     }
 }
