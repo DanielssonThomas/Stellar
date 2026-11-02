@@ -112,6 +112,11 @@ describe('desktop voice session composition', () => {
     await vi.waitFor(() => expect(voice.state().error).toBe(true));
     expect(await voice.refreshSession()).toBe(true);
     expect(voice.state().error).toBe(false);
+    expect(voice.composition()).toMatchObject({
+      raw: '',
+      status: 'idle',
+      error: '',
+    });
     TestBed.resetTestingModule();
   });
 });

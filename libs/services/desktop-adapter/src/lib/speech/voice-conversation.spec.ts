@@ -117,6 +117,48 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('voice conversation ownership', () => {
+  it('dispatches ordinary speech after an idle session refresh', async () => {
+    let composition!: VoiceComposition;
+    const f = fixture({
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    expect(f.controller.reconcileSession('terra')).toBe(true);
+    expect(composition).toMatchObject({ raw: '', status: 'idle', error: '' });
+    f.utterance();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    expect(f.ports.submit).toHaveBeenCalledWith('A spoken request', id);
+  });
+
+  it('preserves an empty explicit prompt and an over-limit draft on refresh', async () => {
+    let composition!: VoiceComposition;
+    const f = fixture({
+      onComposition: (value) => {
+        composition = value;
+      },
+    });
+    f.ports.transcribe.mockResolvedValueOnce({
+      version: 1,
+      utterance_id: id,
+      text: 'prompt',
+    });
+    f.utterance();
+    await flush();
+    expect(composition).toMatchObject({ raw: '', status: 'composing' });
+    f.controller.reconcileSession('sol');
+    expect(composition).toMatchObject({ raw: '', status: 'composing' });
+    f.controller.setDraft('x'.repeat(8193));
+    const error = composition.error;
+    f.controller.reconcileSession('terra');
+    expect(composition).toMatchObject({
+      raw: 'x'.repeat(8193),
+      status: 'error',
+      error,
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
   it('resets the foreground only after confirmation and retains a refused draft', async () => {
     const clearConversation = vi
       .fn()

@@ -247,8 +247,6 @@ export class VoiceConversation {
     this.setComposition({
       ...this.composition,
       model,
-      status: 'error',
-      error: 'Conversation state refreshed. Your text is retained.',
     });
     this.publish();
     return true;
