@@ -8,6 +8,12 @@ import type {
   SpeechSnapshot,
   SpeechTranscript,
 } from '@stellar/desktop-contracts';
+import {
+  fitsVoicePrompt,
+  voiceCommand,
+  type VoiceComposition,
+  type VoiceModel,
+} from './voice-composition';
 
 export interface VoiceContext {
   readonly audio: AudioActivityState;
@@ -33,6 +39,10 @@ export interface VoicePorts {
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
   readonly onChange: (view: VoiceView) => void;
+  readonly selectSession?: (model: VoiceModel) => Promise<boolean>;
+  readonly clearConversation?: () => Promise<boolean>;
+  readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
+  readonly onComposition?: (state: VoiceComposition) => void;
 }
 
 export class VoiceConversation {
@@ -50,6 +60,15 @@ export class VoiceConversation {
   private disposed = false;
   private stopping = false;
   private unconfirmedStop = false;
+  private composition: VoiceComposition = {
+    raw: '',
+    lastSubmittedRaw: '',
+    model: 'terra',
+    status: 'idle',
+    error: '',
+  };
+  private refinement?: AbortController;
+  private dispatchUncertain = false;
 
   constructor(private readonly ports: VoicePorts) {}
 
@@ -150,6 +169,216 @@ export class VoiceConversation {
     if (this.disposed) return;
     this.invalidate();
     this.disposed = true;
+    this.composition = {
+      raw: '',
+      lastSubmittedRaw: '',
+      model: 'terra',
+      status: 'idle',
+      error: '',
+    };
+  }
+
+  setModel(model: VoiceModel) {
+    if (!this.disposed && this.composition.status !== 'finalizing')
+      this.setComposition({ ...this.composition, model });
+  }
+
+  setDraft(raw: string) {
+    if (this.disposed || this.composition.status === 'finalizing') return;
+    if (raw !== this.composition.raw) this.dispatchUncertain = false;
+    this.setComposition({
+      ...this.composition,
+      raw,
+      status: fitsVoicePrompt(raw) ? 'composing' : 'error',
+      error: fitsVoicePrompt(raw)
+        ? ''
+        : 'Prompt exceeds the 8 KiB limit. Edit it before sending.',
+    });
+  }
+
+  private setComposition(state: VoiceComposition) {
+    this.composition = Object.freeze(state);
+    this.ports.onComposition?.(this.composition);
+  }
+
+  private compositionError(error: string) {
+    this.phase = null;
+    this.voiceTurn = null;
+    this.setComposition({ ...this.composition, status: 'error', error });
+    this.publish();
+  }
+
+  private async recognize(text: string, id: string, generation: number) {
+    const command = voiceCommand(text);
+    if (command === 'prompt') {
+      this.phase = null;
+      this.setComposition({
+        ...this.composition,
+        model: 'sol',
+        status: 'composing',
+        error: '',
+      });
+      this.publish();
+      return;
+    }
+    if (command === 'clear' || command === 'done') {
+      if (!this.ports.clearConversation) {
+        this.compositionError('Conversation could not be cleared.');
+        return;
+      }
+      try {
+        const cleared = await this.ports.clearConversation();
+        if (!this.current(generation)) return;
+        if (!cleared) throw new Error();
+        this.dispatchUncertain = false;
+        this.phase = null;
+        this.setComposition({
+          raw: '',
+          lastSubmittedRaw: '',
+          model: 'terra',
+          status: 'idle',
+          error: '',
+        });
+        this.publish();
+      } catch {
+        if (this.current(generation))
+          this.compositionError('Conversation could not be cleared.');
+      }
+      return;
+    }
+    if (command === 'end prompt') {
+      if (this.composition.status === 'idle' || !this.composition.raw.trim()) {
+        this.phase = null;
+        this.publish();
+        return;
+      }
+      await this.finalize(id, generation);
+      return;
+    }
+    if (this.composition.status !== 'idle') {
+      const raw = this.composition.raw
+        ? `${this.composition.raw}\n${text}`
+        : text;
+      this.phase = null;
+      this.setComposition({
+        ...this.composition,
+        raw,
+        status: fitsVoicePrompt(raw) ? 'composing' : 'error',
+        error: fitsVoicePrompt(raw)
+          ? ''
+          : 'Prompt exceeds the 8 KiB limit. Clear it before sending.',
+      });
+      this.publish();
+      return;
+    }
+    if (this.ports.selectSession) {
+      try {
+        const selected = await this.ports.selectSession('terra');
+        if (!this.current(generation)) return;
+        if (!selected) throw new Error();
+      } catch {
+        if (this.current(generation)) {
+          this.setComposition({
+            raw: text,
+            lastSubmittedRaw: this.composition.lastSubmittedRaw,
+            model: 'terra',
+            status: 'error',
+            error: 'Could not select the conversation. Your text is retained.',
+          });
+          this.phase = null;
+          this.publish();
+        }
+        return;
+      }
+    }
+    const accepted = await this.submit(text.trim(), id, generation);
+    if (this.current(generation) && accepted)
+      this.setComposition({ ...this.composition, lastSubmittedRaw: text });
+  }
+
+  private async finalize(id: string, generation: number) {
+    const { raw, model } = this.composition;
+    if (this.dispatchUncertain) {
+      this.compositionError(
+        'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
+      );
+      return;
+    }
+    if (!fitsVoicePrompt(raw)) {
+      this.compositionError(
+        'Prompt exceeds the 8 KiB limit. Clear it before sending.',
+      );
+      return;
+    }
+    this.setComposition({
+      ...this.composition,
+      status: 'finalizing',
+      error: '',
+    });
+    try {
+      if (!this.current(generation)) return;
+      if (model === 'sol' && !this.ports.selectSession) throw new Error();
+      if (this.ports.selectSession && !(await this.ports.selectSession(model)))
+        throw new Error();
+      if (!this.current(generation)) return;
+      const controller = new AbortController();
+      this.refinement = controller;
+      const text = this.ports.refinePrompt
+        ? await this.ports.refinePrompt(raw, controller.signal)
+        : raw;
+      if (!this.current(generation)) return;
+      this.refinement = undefined;
+      if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
+      this.dispatchUncertain = true;
+      const accepted = await this.submit(text, id, generation);
+      if (!this.current(generation)) return;
+      if (!accepted) {
+        this.compositionError(
+          'The previous send may have completed. Check Ivy before editing or clearing this prompt.',
+        );
+        return;
+      }
+      this.dispatchUncertain = false;
+      this.setComposition({
+        raw: '',
+        lastSubmittedRaw: raw,
+        model,
+        status: 'idle',
+        error: '',
+      });
+    } catch {
+      if (this.current(generation))
+        this.compositionError(
+          this.dispatchUncertain
+            ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
+            : 'Prompt could not be prepared. Your text is retained.',
+        );
+    }
+  }
+
+  private async submit(
+    text: string,
+    id: string,
+    generation: number,
+  ): Promise<boolean> {
+    this.voiceTurn = id;
+    this.phase = 'waiting';
+    this.publish();
+    if (!this.current(generation)) return false;
+    const accepted = await this.ports.submit(text, id);
+    if (
+      this.current(generation) &&
+      !accepted &&
+      this.phase === 'waiting' &&
+      this.voiceTurn === id
+    ) {
+      this.voiceTurn = null;
+      this.phase = null;
+      this.failure =
+        'Message was not sent. Check Ivy in the menu; it will not be resent.';
+      this.publish();
+    }
+    return accepted;
   }
 
   private canCollect(context: VoiceContext): boolean {
@@ -180,29 +409,14 @@ export class VoiceConversation {
     try {
       const transcript = await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
-      const text = transcript.text.trim();
+      const text = transcript.text;
       if (transcript.utterance_id !== id) throw new Error();
-      if (!text) {
+      if (!text.trim()) {
         this.phase = null;
         this.publish();
         return;
       }
-      this.voiceTurn = id;
-      this.phase = 'waiting';
-      this.publish();
-      const accepted = await this.ports.submit(text, id);
-      if (
-        this.current(generation) &&
-        !accepted &&
-        this.phase === 'waiting' &&
-        this.voiceTurn === id
-      ) {
-        this.voiceTurn = null;
-        this.phase = null;
-        this.failure =
-          'Message was not sent. Check Ivy in the menu; it will not be resent.';
-        this.publish();
-      }
+      await this.recognize(text, id, generation);
     } catch {
       if (this.current(generation))
         this.fail('Local recognition unavailable. Retry voice or use text.');
@@ -291,6 +505,16 @@ export class VoiceConversation {
           this.context.speech.state,
         ));
     ++this.generation;
+    this.refinement?.abort();
+    this.refinement = undefined;
+    if (this.composition.status === 'finalizing')
+      this.setComposition({
+        ...this.composition,
+        status: 'error',
+        error: this.dispatchUncertain
+          ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
+          : 'Prompt preparation interrupted. Your text is retained.',
+      });
     this.phase = null;
     this.voiceTurn = null;
     this.playbackAcknowledged = false;
