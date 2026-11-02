@@ -14,7 +14,6 @@ PROFILE = Path('D:/Hermes/profiles/ivy')
 INSTALL = 'D:/Hermes/hermes-agent'
 INTEGRATION = PROFILE / 'integration'
 REQUEST_LIMIT = 16384
-OUTPUT_LIMIT = 65536
 DEADLINE = 15
 METHODS = {
     'ping': {}, 'runtime.describe': {},
@@ -43,8 +42,6 @@ def emit(value):
                           separators=(',', ':')) + '\n').encode('utf-8')
     except (ValueError, TypeError, UnicodeError):
         raise Closed() from None
-    if len(raw) > OUTPUT_LIMIT:
-        raise Closed()
     sys.stdout.buffer.write(raw)
     sys.stdout.buffer.flush()
 
@@ -88,7 +85,7 @@ def text_fields(payload):
     for key in ('text', 'delta'):
         if key in payload:
             value = payload[key]
-            if type(value) is not str or len(value.encode('utf-8')) > REQUEST_LIMIT:
+            if type(value) is not str:
                 raise Closed()
             out[key] = value
     return out

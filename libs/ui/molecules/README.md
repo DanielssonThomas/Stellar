@@ -10,6 +10,7 @@
   assetBasePath="/assets/emblem"
   [phase]="interaction.phase"
   [audioLevel]="audioLevel"
+  [waiting]="assistantWaiting"
   [reducedMotion]="reducedMotion"
   [active]="windowVisible"
   [loading]="assetsLoading"
@@ -27,6 +28,8 @@ Separate camera, assembly and ambient wrappers own their transforms. Camera/laye
 
 `environment` defaults to `false` and controls only the optional audio-reactive glow. Idle in-plane ring rotation and character float do not depend on it. Layers explicitly marked `spin` rotate in opposite directions; other layers float. Motion uses owned Web Animations without a frame loop or new dependency.
 
+`waiting` defaults to `false`. It adds a separate rotating four-star ring and scales the artwork to 86% at 68% opacity; clearing it restores full presence. Supply an assembled phase while waiting or narrating. Reduced motion keeps the ring static and removes the size/opacity transition; hidden, inactive, suspended and shutdown states suppress the ring.
+
 The desktop supplies the reviewed #176 hybrid pack. Its canonical assembly is unchanged by #202; corrected depth metadata and the common camera reveal separated planes at idle. The source library retains the original reference and earlier study. Native visual acceptance and physical audio qualification remain separate gates.
 
 ## Verification
@@ -37,4 +40,4 @@ The 1 November 2026 browser fixture used the actual Angular component, interacti
 
 Optional registered clip rectangles split a source image into independent planes without changing its pixels. Invalid/noninteger/out-of-bounds rectangles fail manifest validation. Real animation settlement consolidates assembled repeated sources to one original, preventing scaled clip seams; returning restores clipped fragments. Legacy manifests retain the unclipped path.
 
-AssistantMessageMolecule renders only its requested title/body payload through Angular text interpolation and exposes a skeleton loading state. It interprets neither HTML nor Markdown.
+AssistantMessageMolecule renders its complete requested title/body through Angular text bindings, wraps long strings and exposes a skeleton loading state. It interprets neither HTML nor Markdown; Stage owns scrolling.

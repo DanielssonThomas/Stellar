@@ -18,4 +18,5 @@ pub enum IvyPresentation {
         title: String,
         body: String,
     },
+    CloseActivity,
 }

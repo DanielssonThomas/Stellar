@@ -20,7 +20,10 @@
       stage-emblem
       [manifest]="manifest()"
       assetBasePath="emblem"
-      [phase]="state().phase"
+      [phase]="emblemPhase()"
+      [waiting]="
+        assistantActive() && assistantWaiting() && !assistantNarrating()
+      "
       [audioLevel]="level()"
       [reducedMotion]="state().reducedMotion"
       [loading]="loading()"

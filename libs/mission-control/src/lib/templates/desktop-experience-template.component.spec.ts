@@ -14,6 +14,23 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
+  it('assembles while waiting, restores presence for narration and removes waiting on suspension', async () => {
+    fixture.componentRef.setInput('assistantWaiting', true);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('assistantNarrating', true);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'suspended',
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('suspended');
+    expect(fixture.componentInstance.assistantActive()).toBe(false);
+  });
+
   it('keeps the launch empty and delegates manual activity without requesting a microphone', async () => {
     const action = vi.fn();
     fixture.componentInstance.action.subscribe(action);

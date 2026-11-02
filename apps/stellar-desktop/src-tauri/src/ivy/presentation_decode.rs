@@ -1,17 +1,30 @@
 use super::presentation::{IvyComponent, IvyPresentation};
 use serde::Deserialize;
-const MAX_TEXT: usize = 16_384;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PresentationError {
-    Oversized,
-}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Envelope {
-    stellar_presentation: Message,
+    stellar_presentation: Presentation,
     text: String,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Presentation {
+    Message(Message),
+    Close(CloseActivity),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CloseActivity {
+    action: CloseAction,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum CloseAction {
+    CloseActivity,
 }
 
 #[derive(Deserialize)]
@@ -22,19 +35,12 @@ struct Message {
     body: String,
 }
 
-fn bounded(value: &str, maximum: usize) -> bool {
-    !value.trim().is_empty() && value.len() <= maximum
-}
-
 /// Parse a canonical completion's plain text. Text is never a Stage-open command.
 /// Consumers must display Text literally and render only the fixed component enum.
-/// Invalid envelopes remain literal text; oversized completions are rejected.
-pub fn parse_presentation(text: &str) -> Result<Vec<IvyPresentation>, PresentationError> {
-    if text.len() > MAX_TEXT {
-        return Err(PresentationError::Oversized);
-    }
+/// Invalid envelopes remain literal text. Content has no application byte ceiling.
+pub fn parse_presentation(text: &str) -> Vec<IvyPresentation> {
     if text.trim().is_empty() {
-        return Ok(vec![]);
+        return vec![];
     }
     let ordinary = || {
         vec![IvyPresentation::Text {
@@ -42,25 +48,32 @@ pub fn parse_presentation(text: &str) -> Result<Vec<IvyPresentation>, Presentati
         }]
     };
     let Ok(envelope) = serde_json::from_str::<Envelope>(text) else {
-        return Ok(ordinary());
+        return ordinary();
     };
-    let message = envelope.stellar_presentation;
-    if !bounded(&message.title, 160)
-        || !bounded(&message.body, 8192)
-        || !bounded(&envelope.text, MAX_TEXT)
-    {
-        return Ok(ordinary());
+    if envelope.text.trim().is_empty() {
+        return ordinary();
     }
-    Ok(vec![
+    let presentation = match envelope.stellar_presentation {
+        Presentation::Message(message) => {
+            if message.title.trim().is_empty() || message.body.trim().is_empty() {
+                return ordinary();
+            }
+            IvyPresentation::Component {
+                component: message.component,
+                title: message.title,
+                body: message.body,
+            }
+        }
+        Presentation::Close(CloseActivity {
+            action: CloseAction::CloseActivity,
+        }) => IvyPresentation::CloseActivity,
+    };
+    vec![
         IvyPresentation::Text {
             text: envelope.text,
         },
-        IvyPresentation::Component {
-            component: message.component,
-            title: message.title,
-            body: message.body,
-        },
-    ])
+        presentation,
+    ]
 }
 
 #[cfg(test)]
@@ -78,22 +91,22 @@ mod tests {
         ] {
             assert_eq!(
                 parse_presentation(raw),
-                Ok(vec![IvyPresentation::Text { text: raw.into() }])
+                vec![IvyPresentation::Text { text: raw.into() }]
             );
         }
     }
 
     #[test]
-    fn known_bounded_envelope_is_accepted() {
+    fn complete_long_unicode_envelope_is_preserved() {
         let raw = serde_json::json!({
             "stellar_presentation": {
-                "component": "assistant_message", "title": "å".repeat(80),
-                "body": "b".repeat(8192)
+                "component": "assistant_message", "title": "å".repeat(1000),
+                "body": "🪐\\\"\n".repeat(100_000)
             },
             "text": "ordinary reply"
         })
         .to_string();
-        let parsed = parse_presentation(&raw).unwrap();
+        let parsed = parse_presentation(&raw);
         assert_eq!(parsed.len(), 2);
         assert_eq!(
             parsed[0],
@@ -103,26 +116,35 @@ mod tests {
         );
         assert!(matches!(&parsed[1], IvyPresentation::Component {
             component: IvyComponent::AssistantMessage, title, body
-        } if title.len() == 160 && body.len() == 8192));
+        } if title == &"å".repeat(1000) && body == &"🪐\\\"\n".repeat(100_000)));
     }
 
     #[test]
-    fn oversized_completion_fails_and_oversized_component_stays_text() {
+    fn long_ordinary_text_and_explicit_close_are_supported() {
+        let text = "å".repeat(100_000);
         assert_eq!(
-            parse_presentation(&"å".repeat(8193)),
-            Err(PresentationError::Oversized)
+            parse_presentation(&text),
+            vec![IvyPresentation::Text { text }]
         );
-        for (title, body) in [
-            ("t".repeat(161), "b".into()),
-            ("T".into(), "b".repeat(8193)),
+        assert_eq!(
+            parse_presentation(
+                r#"{"text":"Closed","stellar_presentation":{"action":"close_activity"}}"#
+            ),
+            vec![
+                IvyPresentation::Text {
+                    text: "Closed".into()
+                },
+                IvyPresentation::CloseActivity
+            ]
+        );
+        for raw in [
+            r#"{"text":"Closed","stellar_presentation":{"action":"close_all"}}"#,
+            r#"{"text":"Closed","stellar_presentation":{"action":"close_activity","extra":true}}"#,
+            r#"{"text":"Closed","stellar_presentation":{"action":"close_activity","action":"close_activity"}}"#,
         ] {
-            let raw = serde_json::json!({
-                "stellar_presentation": {"component":"assistant_message", "title":title, "body":body},
-                "text":"reply"
-            }).to_string();
             assert_eq!(
-                parse_presentation(&raw),
-                Ok(vec![IvyPresentation::Text { text: raw }])
+                parse_presentation(raw),
+                vec![IvyPresentation::Text { text: raw.into() }]
             );
         }
     }

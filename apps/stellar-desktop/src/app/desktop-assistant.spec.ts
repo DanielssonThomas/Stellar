@@ -6,9 +6,13 @@ import {
   IvyAdapterService,
 } from '@stellar/service-desktop-adapter';
 import type { IvySnapshot } from '@stellar/desktop-contracts';
+import type { StageCommand, ProductionPayloadMap } from '@stellar/ui-organisms';
 import { DesktopAssistant } from './desktop-assistant';
 
-function setup(available: () => boolean = () => true) {
+function setup(
+  available: () => boolean = () => true,
+  activities: () => readonly string[] = () => [],
+) {
   const state = signal<IvySnapshot>({
     ...initialIvySnapshot(),
     connection: 'ready',
@@ -29,14 +33,72 @@ function setup(available: () => boolean = () => true) {
     ],
   });
   const assistant = TestBed.inject(DesktopAssistant);
-  const present = vi.fn(() => ({ status: 'applied' as const }));
-  assistant.bind(present, available);
+  const present = vi.fn<
+    (command: StageCommand<ProductionPayloadMap>) => { status: 'applied' }
+  >(() => ({ status: 'applied' }));
+  assistant.bind(present, available, activities);
   TestBed.tick();
   return { assistant, adapter, state, present };
 }
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('closes only activities captured by the explicit turn, once, even after replay', async () => {
+    let activities = ['current', 'minimized'];
+    const { assistant, adapter, state, present } = setup(
+      () => true,
+      () => activities,
+    );
+    await assistant.submit('Close this activity');
+    const id = adapter.submit.mock.calls[0][1];
+    activities = ['newer-content'];
+    state.set({
+      ...state(),
+      revision: '1',
+      turn: 'completed',
+      turn_id: id,
+      items: [{ kind: 'text', text: 'Closed' }, { kind: 'close_activity' }],
+    });
+    TestBed.tick();
+    expect(present.mock.calls.map(([command]) => command)).toEqual([
+      {
+        contractVersion: 1,
+        commandId: 1,
+        instanceId: 'current',
+        action: 'close',
+      },
+      {
+        contractVersion: 1,
+        commandId: 2,
+        instanceId: 'minimized',
+        action: 'close',
+      },
+    ]);
+    state.set({ ...state(), revision: '2' });
+    TestBed.tick();
+    expect(present).toHaveBeenCalledTimes(2);
+    expect(assistant.reply()).toBe('Closed');
+  });
+  it('clears waiting for cancellation, approval, uncertain, failure and completion', async () => {
+    const { assistant, state } = setup();
+    state.set({ ...state(), turn: 'admitted' });
+    expect(assistant.waiting()).toBe(true);
+    for (const turn of [
+      'completed',
+      'failed',
+      'cancelled',
+      'uncertain',
+    ] as const) {
+      state.set({ ...state(), turn });
+      expect(assistant.waiting()).toBe(false);
+    }
+    state.set({ ...state(), turn: 'admitted', error: 'approval_required' });
+    expect(assistant.waiting()).toBe(false);
+    state.set({ ...state(), error: null });
+    expect(assistant.waiting()).toBe(true);
+    await assistant.cancel();
+    expect(assistant.waiting()).toBe(false);
+  });
   it('accepts a voice collectors stable UUID through the same eligibility path', async () => {
     const { assistant, adapter } = setup();
     const id = '00000000-0000-0000-0000-000000000001';

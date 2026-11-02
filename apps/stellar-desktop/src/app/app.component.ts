@@ -50,6 +50,7 @@ export class AppComponent {
         (command) => this.experience.present(command),
         () =>
           !['suspended', 'shutdown'].includes(this.experience.state().phase),
+        () => this.view().stage().presentationIds(),
       );
     });
     let destroyed = false;

@@ -41,6 +41,7 @@ export class EmblemMotionMolecule {
   readonly assetBasePath = input('');
   readonly phase = input<Phase>('idle');
   readonly audioLevel = input(0);
+  readonly waiting = input(false);
   readonly reducedMotion = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
@@ -95,9 +96,18 @@ export class EmblemMotionMolecule {
     () => this.reducedMotion() || this.systemReduced(),
   );
   readonly level = computed(() => clampAudioLevel(this.audioLevel()));
+  readonly showWaiting = computed(
+    () =>
+      this.waiting() &&
+      this.active() &&
+      this.visible() &&
+      !['suspended', 'shutdown'].includes(this.phase()),
+  );
   readonly classes = computed(() =>
     clsx('emblem relative block h-full w-full', {
       'motion-paused': this.paused(),
+      'motion-reduced': this.motionReduced(),
+      'waiting-response': this.showWaiting(),
       'with-environment': this.environment(),
       'idle-motion': idleMotionEnabled(this.phase(), this.paused()),
     }),

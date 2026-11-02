@@ -19,6 +19,33 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('preserves full Unicode replies and presentation content beyond former caps', () => {
+    const content = '🪐"\\\n'.repeat(100_000);
+    const value = {
+      ...snapshot(),
+      items: [
+        { kind: 'text', text: content },
+        {
+          kind: 'component',
+          component: 'assistant_message',
+          title: 'é'.repeat(1000),
+          body: content,
+        },
+      ],
+    };
+    expect(decodeIvySnapshot(value)).toEqual(value);
+    expect(
+      decodeIvySnapshot({ ...snapshot(), items: [{ kind: 'close_activity' }] })
+        .items,
+    ).toEqual([{ kind: 'close_activity' }]);
+    for (const item of [
+      { kind: 'close_activity', extra: true },
+      { kind: 'close_all' },
+    ])
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), items: [item] }),
+      ).toThrow();
+  });
   it('accepts settled failure and empty cancellation snapshots without a fake text item', () => {
     expect(
       decodeIvySnapshot({

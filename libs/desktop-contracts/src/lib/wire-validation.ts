@@ -40,7 +40,7 @@ export function boundedString(value: unknown, bytes: number): string {
   if (
     typeof value !== 'string' ||
     value.length > bytes ||
-    new TextEncoder().encode(value).length > bytes
+    (Number.isFinite(bytes) && new TextEncoder().encode(value).length > bytes)
   )
     throw new DesktopContractError('malformed');
   for (const character of value) {

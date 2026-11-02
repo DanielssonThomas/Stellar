@@ -1,5 +1,6 @@
 import {
   DestroyRef,
+  computed,
   effect,
   inject,
   Injectable,
@@ -29,6 +30,16 @@ export class DesktopVoice {
     busy: false,
   });
   readonly state = this.current.asReadonly();
+  readonly waiting = computed(
+    () =>
+      !['suspended', 'shutdown'].includes(this.experience.state().phase) &&
+      ['transcribing', 'synthesizing'].includes(this.speech.state().state),
+  );
+  readonly narrating = computed(
+    () =>
+      !['suspended', 'shutdown'].includes(this.experience.state().phase) &&
+      this.speech.state().state === 'speaking',
+  );
   private readonly conversation = new VoiceConversation({
     transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
     submit: (text, id) => this.assistant.submit(text, id),

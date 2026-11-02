@@ -123,9 +123,17 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
                 () =>
                   emit(
                     'speech-state',
+                    speech('speaking', String(request['utterance_id'])),
+                  ),
+                1800,
+              );
+              setTimeout(
+                () =>
+                  emit(
+                    'speech-state',
                     speech('idle', String(request['utterance_id'])),
                   ),
-                100,
+                3600,
               );
               return accepted;
             }
@@ -204,6 +212,10 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
           .length,
     )
     .toBe(1);
+  await expect(page.locator('.waiting-ring')).toBeVisible();
+  await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
+  await expect(page.locator('.waiting-ring')).toHaveCount(0);
+  await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);
   expect(result.sampleCount).toBeGreaterThan(24000);

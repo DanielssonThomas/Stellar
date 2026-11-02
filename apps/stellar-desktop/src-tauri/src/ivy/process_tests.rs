@@ -28,7 +28,7 @@ fn inert_child_reply_is_correlated_and_owned_process_is_reaped() {
 }
 
 #[test]
-fn malformed_foreign_and_oversized_child_frames_fail_closed() {
+fn malformed_and_foreign_child_frames_fail_closed() {
     for script in [
         "$null=[Console]::ReadLine(); [Console]::WriteLine('not json')",
         "$null=[Console]::ReadLine(); [Console]::WriteLine('{\"id\":9,\"result\":{}}')",
@@ -40,6 +40,15 @@ fn malformed_foreign_and_oversized_child_frames_fail_closed() {
             Err(IvyErrorCode::Protocol)
         ));
     }
+}
+
+#[test]
+fn long_completion_frame_is_preserved_without_a_transport_size_ceiling() {
+    let mut broker = fixture(
+        "$null=[Console]::ReadLine(); [Console]::WriteLine(('{\"id\":1,\"result\":{\"text\":\"' + ('a' * 200000) + '\"}}'))",
+    );
+    let response = broker.call("ping", json!({}), &mut vec![]).unwrap();
+    assert_eq!(response["text"].as_str().unwrap(), "a".repeat(200000));
 }
 
 #[test]
