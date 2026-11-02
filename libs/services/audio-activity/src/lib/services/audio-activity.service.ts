@@ -53,6 +53,16 @@ export class AudioActivityService {
     return this.zone.runOutsideAngular(() => this.controller.stop('muted'));
   }
 
+  reportUnavailable(): Promise<void> {
+    return this.zone.runOutsideAngular(() =>
+      this.controller.stop('unavailable'),
+    );
+  }
+
+  pauseForTurn(): Promise<void> {
+    return this.zone.runOutsideAngular(() => this.controller.pauseForTurn());
+  }
+
   suspend(): Promise<void> {
     return this.zone.runOutsideAngular(() => this.controller.suspend());
   }

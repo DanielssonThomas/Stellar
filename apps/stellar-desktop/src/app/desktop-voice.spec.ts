@@ -53,7 +53,11 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
       },
       {
         provide: DesktopExperience,
-        useValue: { state: signal({ phase: 'idle' }) },
+        useValue: {
+          state: signal({ phase: 'idle' }),
+          setVoiceCapturePaused: vi.fn(),
+          waitForVoiceCaptureRelease: vi.fn(async () => undefined),
+        },
       },
     ],
   });
@@ -191,7 +195,11 @@ describe('desktop voice cleanup integration', () => {
         { provide: DesktopAssistant, useValue: assistant },
         {
           provide: DesktopExperience,
-          useValue: { state: signal({ phase: 'idle' }) },
+          useValue: {
+            state: signal({ phase: 'idle' }),
+            setVoiceCapturePaused: vi.fn(),
+            waitForVoiceCaptureRelease: vi.fn(async () => undefined),
+          },
         },
       ],
     });

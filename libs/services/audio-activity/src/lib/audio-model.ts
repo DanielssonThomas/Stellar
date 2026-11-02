@@ -11,6 +11,7 @@ export type AudioStatus =
   | 'idle'
   | 'requesting'
   | 'capturing'
+  | 'turn-paused'
   | 'suspended'
   | 'denied'
   | 'missing'
