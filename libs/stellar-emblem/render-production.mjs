@@ -75,11 +75,11 @@ const characterLayers = registration.layers.flatMap((item) =>
     : [item],
 );
 const planeOrder = [
-  'violet-hair',
   'violet-body-upper',
   'violet-body-middle',
-  'violet-ornament',
   'violet-body-lower',
+  'violet-hair',
+  'violet-ornament',
   'inner-circle',
   'inner-circle-2',
   'outer-frame',
@@ -92,6 +92,16 @@ const planeOrder = [
   'gold-ornament',
 ];
 for (const character of ['violet', 'gold']) {
+  if (
+    bodyClips.some(
+      ([part]) =>
+        planeOrder.indexOf(`${character}-body-${part}`) >=
+        planeOrder.indexOf(`${character}-hair`),
+    )
+  )
+    throw new Error(
+      'Body fragments must remain behind their hair throughout assembly',
+    );
   if (
     planeOrder.indexOf(`${character}-ornament`) <=
     planeOrder.indexOf(`${character}-hair`)
@@ -236,11 +246,29 @@ try {
         );
         const final = ctx.getImageData(0, 0, size, size).data;
         let finalTransparent = 0,
-          finalVisible = 0;
+          finalVisible = 0,
+          visibleRadius = 0;
         for (let i = 3; i < final.length; i += 4) {
           if (final[i] === 0) finalTransparent++;
           else finalVisible++;
+          if (final[i] >= 24) {
+            const pixel = (i - 3) / 4;
+            visibleRadius = Math.max(
+              visibleRadius,
+              Math.hypot(
+                (pixel % size) + 0.5 - size / 2,
+                Math.floor(pixel / size) + 0.5 - size / 2,
+              ),
+            );
+          }
         }
+        if (
+          ['violet-body', 'violet-hair'].includes(item.id) &&
+          visibleRadius > 495.5
+        )
+          throw new Error(
+            'Violet artwork must clear the outer frame inner edge by two source units',
+          );
         if (!finalTransparent || !finalVisible)
           throw new Error('Export lost artwork or transparent background');
         for (let p = 0; p < size; p++)
@@ -261,6 +289,7 @@ try {
           partial,
           finalTransparent,
           finalVisible,
+          visibleRadius,
         };
       },
       { src: `data:image/png;base64,${input.toString('base64')}`, item, size },
@@ -284,6 +313,7 @@ try {
         transparent: result.finalTransparent,
         visible: result.finalVisible,
       },
+      visibleRadius: result.visibleRadius,
     });
   }
   fs.writeFileSync(

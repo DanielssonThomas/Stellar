@@ -11,7 +11,7 @@
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 1,
+      "planeIndex": 0,
       "clip": [0, 0, 1280, 512]
     },
     {
@@ -21,7 +21,7 @@
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 2,
+      "planeIndex": 1,
       "clip": [0, 512, 1280, 128]
     },
     {
@@ -31,7 +31,7 @@
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 4,
+      "planeIndex": 2,
       "clip": [0, 640, 1280, 640]
     },
     {
@@ -41,7 +41,7 @@
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 0
+      "planeIndex": 3
     },
     {
       "id": "violet-ornament",
@@ -50,7 +50,7 @@
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 3
+      "planeIndex": 4
     },
     {
       "id": "gold-body-upper",

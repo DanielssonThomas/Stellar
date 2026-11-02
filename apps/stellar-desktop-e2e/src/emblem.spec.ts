@@ -1,5 +1,48 @@
 import { expect, test } from '@playwright/test';
 
+test('purple hair stays in front of every body fragment before settlement', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const menu = page.getByRole('button', {
+    name: 'Experience menu',
+    exact: true,
+  });
+  await menu.click();
+  await page
+    .getByRole('button', { name: 'Start activity', exact: true })
+    .click();
+  const scene = page.locator('.camera');
+  await expect
+    .poll(() => scene.evaluate((element) => element.getAnimations().length))
+    .toBe(1);
+  const ordering = await scene.evaluate((element) => {
+    const animations = element.getAnimations({ subtree: true });
+    for (const animation of animations) {
+      animation.pause();
+      animation.currentTime = 900;
+    }
+    const planes = Array.from(element.querySelectorAll<HTMLElement>('.plane'));
+    const hair = planes.find((plane) =>
+      plane.querySelector('img')?.src.endsWith('/violet-hair.png'),
+    );
+    const bodies = planes.filter((plane) =>
+      plane.querySelector('img')?.src.endsWith('/violet-body.png'),
+    );
+    if (!hair || bodies.length !== 3)
+      throw Error('Missing purple artwork planes');
+    const depth = (plane: HTMLElement) =>
+      new DOMMatrix(getComputedStyle(plane).transform).m43;
+    const result = { hair: depth(hair), bodies: bodies.map(depth) };
+    for (const animation of animations) animation.play();
+    return result;
+  });
+  expect(ordering.hair).toBeLessThan(0);
+  for (const body of ordering.bodies)
+    expect(ordering.hair).toBeGreaterThan(body);
+  await menu.click();
+});
+
 test('settled face assembly is pixel-identical to the original unclipped image stack at supported sizes', async ({
   page,
 }) => {

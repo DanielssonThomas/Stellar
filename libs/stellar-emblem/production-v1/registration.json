@@ -3,9 +3,9 @@
   "layers": [
     {
       "id": "violet-body",
-      "scale": 0.8,
-      "x": 15,
-      "y": 65,
+      "scale": 0.72,
+      "x": 37,
+      "y": 131,
       "anchor": [410, 600],
       "exploded": [-45, 4, -3]
     },
