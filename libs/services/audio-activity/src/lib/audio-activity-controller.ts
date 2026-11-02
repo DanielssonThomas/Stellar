@@ -81,7 +81,10 @@ export class AudioActivityController {
         deviceId,
       );
     } catch {
-      if (generation === this.generation) await this.stop('unavailable');
+      if (generation === this.generation) {
+        this.source = source;
+        await this.stop('unavailable');
+      }
     }
   }
 
@@ -98,6 +101,41 @@ export class AudioActivityController {
         level: 0,
       });
     await cleanup;
+  }
+
+  async pauseForTurn(): Promise<void> {
+    if (
+      this.disposed ||
+      !['capturing', 'requesting'].includes(this.current.status)
+    )
+      return;
+    const generation = ++this.generation;
+    const source = this.source;
+    this.source = undefined;
+    let cleanup: Promise<void>;
+    try {
+      cleanup = source
+        ? source.stop()
+        : Promise.reject(new Error('Capture source unavailable'));
+    } catch {
+      cleanup = Promise.reject(new Error('Capture release failed'));
+    }
+    if (generation === this.generation) {
+      this.emitPcm({ type: 'turn-pause' });
+      if (generation === this.generation) {
+        this.detector.pause();
+        this.publish('turn-paused', {
+          ...this.detector.snapshot(),
+          active: false,
+          level: 0,
+        });
+      }
+    }
+    try {
+      await cleanup;
+    } catch {
+      if (generation === this.generation) await this.stop('unavailable');
+    }
   }
 
   suspend(): Promise<void> {

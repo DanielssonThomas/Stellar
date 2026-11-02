@@ -101,6 +101,58 @@ describe('audio lifecycle owner', () => {
     });
     await owner.dispose();
   });
+  it('fails closed if turn capture release fails', async () => {
+    const owner = new AudioActivityController(() => undefined);
+    const source = fixtureSource();
+    await owner.start(source.source);
+    vi.mocked(source.source.stop).mockRejectedValueOnce(
+      new Error('stop failed'),
+    );
+    const events: string[] = [];
+    owner.subscribePcm((event) => events.push(event.type));
+    await owner.pauseForTurn();
+    expect(owner.snapshot().status).toBe('unavailable');
+    expect(events).toEqual(['turn-pause', 'reset']);
+    await owner.dispose();
+  });
+
+  it('does not pause a replacement started synchronously during release', async () => {
+    const owner = new AudioActivityController(() => undefined);
+    const first = fixtureSource();
+    const replacement = fixtureSource();
+    const events: string[] = [];
+    owner.subscribePcm((event) => events.push(event.type));
+    await owner.start(first.source);
+    events.length = 0;
+    vi.mocked(first.source.stop).mockImplementationOnce(async () => {
+      void owner.start(replacement.source);
+    });
+    await owner.pauseForTurn();
+    expect(owner.snapshot().status).toBe('capturing');
+    expect(replacement.source.stop).not.toHaveBeenCalled();
+    expect(events).not.toContain('turn-pause');
+    await owner.dispose();
+  });
+
+  it('releases capture for a voice turn without emitting a cancellation reset', async () => {
+    const owner = new AudioActivityController(() => undefined);
+    const source = fixtureSource();
+    const events: string[] = [];
+    owner.subscribePcm((event) => events.push(event.type));
+    await owner.start(source.source);
+    events.length = 0;
+    await owner.pauseForTurn();
+    expect(source.source.stop).toHaveBeenCalledOnce();
+    expect(owner.snapshot().status).toBe('turn-paused');
+    expect(events).toEqual(['turn-pause']);
+    source.sink().pcm?.({
+      type: 'chunk',
+      chunk: { sampleRate: 16000, sequence: 1, samples: new Int16Array(100) },
+    });
+    expect(events).toEqual(['turn-pause']);
+    await owner.dispose();
+  });
+
   it('clears activity on audio-context suspension and requires fresh activity after resume', async () => {
     const owner = new AudioActivityController(() => undefined, {
       calibrationMs: 0,

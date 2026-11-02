@@ -17,6 +17,7 @@ import { decodeEmblemManifest } from '@stellar/ui-molecules';
 import type { StageResult } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
 import { MicrophoneInputs } from './microphone-inputs';
+import { VoiceCaptureGate } from './voice-capture-gate';
 
 @Injectable()
 export class DesktopExperience {
@@ -31,6 +32,21 @@ export class DesktopExperience {
         : 'Quiet';
   });
   private readonly capturePaused = signal(false);
+  private readonly voiceCapture = new VoiceCaptureGate(
+    () => ({
+      requestId: this.state().microphone.requestId,
+      deviceId: this.inputs.selectedId(),
+      available:
+        !this.document.hidden &&
+        !['suspended', 'shutdown'].includes(this.state().phase),
+      status: this.audio.state().status,
+    }),
+    () => this.audio.pauseForTurn(),
+    (deviceId) => this.audio.startMicrophone(deviceId),
+    () => {
+      void this.audio.reportUnavailable();
+    },
+  );
   readonly state = signal(initialState);
   readonly manifest = signal(decodeEmblemManifest(emblemManifest));
   readonly loading = signal(false);
@@ -66,6 +82,8 @@ export class DesktopExperience {
       return 'Microphone permission denied. You can still start activity manually.';
     if (['missing', 'disconnected'].includes(state.microphone.status))
       return 'Microphone unavailable. You can still start activity manually.';
+    if (audio.status === 'turn-paused')
+      return 'Microphone paused during voice turn';
     if (audio.status === 'requesting')
       return 'Waiting for microphone permission';
     if (this.capturePaused())
@@ -81,7 +99,10 @@ export class DesktopExperience {
   });
 
   constructor() {
-    effect(() => this.session.updateAudio(this.audio.state()));
+    effect(() => {
+      this.session.updateAudio(this.audio.state());
+      this.voiceCapture.refresh();
+    });
     const visibility = () =>
       this.session.dispatch({
         type: this.document.hidden ? 'hidden' : 'resume',
@@ -105,6 +126,7 @@ export class DesktopExperience {
     this.document.defaultView?.addEventListener('focus', focus);
     this.media?.addEventListener('change', preference);
     inject(DestroyRef).onDestroy(() => {
+      this.voiceCapture.dispose();
       this.inputs.dispose();
       this.document.removeEventListener('visibilitychange', visibility);
       this.document.defaultView?.removeEventListener('pagehide', pagehide);
@@ -138,6 +160,14 @@ export class DesktopExperience {
         ? { ...event, enabled: event.enabled || (this.media?.matches ?? false) }
         : event,
     );
+  }
+
+  waitForVoiceCaptureRelease(): Promise<void> {
+    return this.voiceCapture.waitForRelease();
+  }
+
+  setVoiceCapturePaused(paused: boolean) {
+    this.voiceCapture.setPaused(paused);
   }
 
   selectInput(deviceId: string) {

@@ -91,6 +91,9 @@ export class DesktopVoice {
     readSession: () => this.readSession(),
     id: () => crypto.randomUUID(),
     onChange: (view) => this.zone.run(() => this.current.set(view)),
+    onCapturePauseChange: (paused) =>
+      this.experience.setVoiceCapturePaused(paused),
+    waitForCapturePause: () => this.experience.waitForVoiceCaptureRelease(),
     onComposition: (value) =>
       this.zone.run(() => {
         this.compositionState.set(value);
