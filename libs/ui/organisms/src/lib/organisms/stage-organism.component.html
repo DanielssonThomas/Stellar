@@ -29,31 +29,20 @@
       [style.top.px]="surface.y"
       [style.width.px]="surface.width"
       [style.height.px]="surface.height"
+      [style.--emblem-clearance.px]="layout().emblem.height + 48"
+      animate.enter="pane-enter"
+      (animate.leave)="retire($event)"
     >
-      <header class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-lg font-medium">{{ surface.title }}</h2>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            class="rounded-stellar px-2 py-1 text-sm"
-            [attr.aria-label]="'Minimize ' + surface.title"
-            (click)="control('minimize', surface.instanceId)"
-          >
-            Minimize
-          </button>
-          <button
-            type="button"
-            class="rounded-stellar px-2 py-1 text-sm"
-            [attr.aria-label]="'Close ' + surface.title"
-            (click)="control('close', surface.instanceId)"
-          >
-            Close
-          </button>
-        </div>
-      </header>
-      <ng-container
-        *ngComponentOutlet="surface.component; inputs: surface.inputs"
-      />
+      <div
+        class="surface-content"
+        tabindex="0"
+        role="group"
+        [attr.aria-label]="surface.title + ' content'"
+      >
+        <ng-container
+          *ngComponentOutlet="surface.component; inputs: surface.inputs"
+        />
+      </div>
     </section>
   }
 }

@@ -2,6 +2,7 @@ import { NgComponentOutlet } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
+  type AnimationCallbackEvent,
   Component,
   computed,
   DestroyRef,
@@ -24,6 +25,7 @@ import { STAGE_CATALOGUE } from './stage-catalogue';
 import { StageResult } from './stage-contract';
 import { directStage } from './stage-director';
 import { createStageRegistry } from './stage-registry';
+import { createStageMotion } from './stage-motion';
 
 @Component({
   selector: 'stellar-stage-organism',
@@ -34,10 +36,14 @@ import { createStageRegistry } from './stage-registry';
   host: {
     '[attr.aria-busy]': 'loading()',
     '[class.motion-reduced]': 'reducedMotion()',
+    '[class.keyboard-focus]': 'keyboardFocus()',
+    '(keydown.tab)': 'keyboardFocus.set(true)',
+    '(pointerdown)': 'keyboardFocus.set(false)',
     '(keydown.escape)': 'escape($event)',
   },
 })
 export class StageOrganism {
+  readonly keyboardFocus = signal(false);
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
@@ -62,6 +68,7 @@ export class StageOrganism {
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly panels = viewChildren<ElementRef<HTMLElement>>('panel');
+  private readonly motion = createStageMotion(this.document.defaultView);
   private readonly origins = new Map<string, HTMLElement>();
   private readonly focusRequest = signal<{
     instanceId: string;
@@ -84,10 +91,14 @@ export class StageOrganism {
           ...rect,
           ...definition,
           inputs: { payload: instance.payload },
-          classes: clsx(
-            'surface rounded-stellar bg-stellar-canvas text-stellar-foreground shadow-stellar-card',
-            { 'primary-surface': instance.prominence === 'primary' },
-          ),
+          classes: clsx('surface text-stellar-foreground', {
+            'primary-surface': instance.prominence === 'primary',
+            'boundary-left': rect.x > 0,
+            'boundary-top': rect.y > 0,
+            'emblem-reserve':
+              rect.x + rect.width > this.layout().emblem.x &&
+              rect.y + rect.height > this.layout().emblem.y,
+          }),
         },
       ];
     }),
@@ -97,6 +108,7 @@ export class StageOrganism {
     let observer: ResizeObserver | undefined;
     const measure = () => {
       const bounds = this.host.nativeElement.getBoundingClientRect();
+      this.motion.capture(this.panels().map((panel) => panel.nativeElement));
       this.viewport.set({ width: bounds.width, height: bounds.height });
     };
     afterNextRender(() => {
@@ -106,6 +118,24 @@ export class StageOrganism {
         observer.observe(this.host.nativeElement);
       }
       this.document.defaultView?.addEventListener('resize', measure);
+    });
+    afterRenderEffect(() => {
+      const surfaces = this.surfaces();
+      this.motion.update(
+        this.panels().flatMap((panel) => {
+          if (panel.nativeElement.classList.contains('pane-leave')) return [];
+          const surface = surfaces.find(
+            (surface) =>
+              surface.instanceId === panel.nativeElement.dataset['instanceId'],
+          );
+          return surface ? [{ ...surface, element: panel.nativeElement }] : [];
+        }),
+        this.reducedMotion() ||
+          (this.document.defaultView?.matchMedia?.(
+            '(prefers-reduced-motion: reduce)',
+          ).matches ??
+            false),
+      );
     });
     afterRenderEffect(() => {
       const requested = this.focusRequest();
@@ -135,13 +165,17 @@ export class StageOrganism {
         origin?.focus();
       }
       this.origins.clear();
+      this.motion.dispose();
       this.registry.dispose();
     });
   }
 
   dispatch(command: unknown): StageResult {
+    this.motion.capture(this.panels().map((panel) => panel.nativeElement));
     const origin = this.document.activeElement;
     const result = this.registry.dispatch(command);
+    if (result.status === 'applied' && result.action === 'open')
+      this.keyboardFocus.set(false);
     if (
       result.status === 'applied' &&
       result.action === 'open' &&
@@ -154,7 +188,25 @@ export class StageOrganism {
   }
 
   control(action: 'focus' | 'minimize' | 'close', instanceId: string) {
+    this.motion.capture(this.panels().map((panel) => panel.nativeElement));
     this.afterAction(this.registry.interact(action, instanceId));
+  }
+
+  retire(event: AnimationCallbackEvent) {
+    if (!(event.target instanceof HTMLElement)) {
+      event.animationComplete();
+      return;
+    }
+    this.motion.retire(
+      event.target,
+      this.layout().surfaces,
+      this.reducedMotion() ||
+        (this.document.defaultView?.matchMedia?.(
+          '(prefers-reduced-motion: reduce)',
+        ).matches ??
+          false),
+      () => event.animationComplete(),
+    );
   }
 
   closePresentations() {

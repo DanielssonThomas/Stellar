@@ -174,8 +174,11 @@ describe('StageOrganism', () => {
     await fixture.whenStable();
     fixture.componentInstance.dispatch(open(2, 'second'));
     await fixture.whenStable();
-    const focusedControl: HTMLButtonElement =
-      fixture.nativeElement.querySelector('[data-instance-id="second"] button');
+    const focusedControl = document.createElement('button');
+    focusedControl.textContent = 'Pane control';
+    fixture.nativeElement
+      .querySelector('[data-instance-id="second"] .surface-content')
+      .append(focusedControl);
     focusedControl.focus();
     expect(
       fixture.componentInstance.dispatch({
