@@ -132,7 +132,10 @@ export class WorkspaceToolsService {
     if (!this.transport || this.disposed || this.pending) return;
     const remaining = Number(request.expires_at_ms) - Date.now();
     if (!this.clockIsStable() || remaining <= 0 || remaining > 15000) return;
-    this.deadline = { id: request.request_id, monotonic: performance.now() + remaining };
+    this.deadline = {
+      id: request.request_id,
+      monotonic: performance.now() + remaining,
+    };
     this.pending = true;
     let outcome: WorkspaceToolOutcome = { kind: 'rejected' };
     try {

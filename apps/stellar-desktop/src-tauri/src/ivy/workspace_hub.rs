@@ -82,14 +82,17 @@ impl WorkspaceHub {
 
     pub fn handle(self: &Arc<Self>, frame: Value) -> Result<(), IvyErrorCode> {
         let started = Instant::now();
-        let deadline = SystemTime::now()
+        let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| IvyErrorCode::Unavailable)?
-            .as_millis()
-            .checked_add(15_000)
-            .ok_or(IvyErrorCode::Unavailable)?;
+            .as_millis();
         let mut data = frame.get("data").cloned().ok_or(IvyErrorCode::Protocol)?;
         let object = data.as_object_mut().ok_or(IvyErrorCode::Protocol)?;
+        let issued = object
+            .remove("issued_at_ms")
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .ok_or(IvyErrorCode::Protocol)?;
+        let deadline = super::workspace_deadline::deadline(now, &issued)?;
         if object
             .insert("expires_at_ms".into(), deadline.to_string().into())
             .is_some()
@@ -106,7 +109,8 @@ impl WorkspaceHub {
             .view
             .lock()
             .map_err(|_| IvyErrorCode::Unavailable)?;
-        if request.epoch != current.snapshot.workspace_epoch
+        if deadline <= now
+            || request.epoch != current.snapshot.workspace_epoch
             || current.snapshot.turn_id.as_deref() != Some(&request.turn_id)
             || !matches!(
                 current.snapshot.turn,
@@ -114,6 +118,11 @@ impl WorkspaceHub {
             )
         {
             drop(current);
+            if matches!(request.operation, WorkspaceToolOperation::CaptureWindow) {
+                let header = json!({"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id});
+                let _ = self.send(&json!({"control":"workspace_capture_failed","header":header}));
+                return Ok(());
+            }
             let reply = WorkspaceToolReply {
                 version: 1,
                 request_id: request.request_id,

@@ -57,7 +57,7 @@ fn cancellation_revokes_workspace_generation_without_disconnect_or_turn_replay()
     assert_eq!(after.turn_id.as_deref(), Some(turn));
     assert_ne!(before.workspace_epoch, after.workspace_epoch);
     let old = json!({"event":"workspace_tool","data":{"version":1,
-        "request_id":"0123456789abcdef0123456789abcdef","epoch":before.workspace_epoch,
+        "request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":before.workspace_epoch,
         "turn_id":turn,"operation":{"kind":"clear"}}});
     assert_eq!(host.workspace.handle(old), Ok(()));
     assert_eq!(
@@ -81,7 +81,7 @@ fn early_workspace_callback_can_read_snapshot_and_reply_during_admission() {
     });
     let script = r#"
 $null=[Console]::ReadLine()
-[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"clear"}}}')
+[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"clear"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
 $reply=[Console]::ReadLine() | ConvertFrom-Json
 if ($reply.control -eq 'workspace_reply' -and $reply.reply.outcome.kind -eq 'applied') { [Console]::WriteLine('{"id":1,"result":{"admitted":true}}') }
 "#;
@@ -151,7 +151,7 @@ fn early_window_capture_uses_private_binary_reply_during_admission() {
     .unwrap();
     let script = r#"
 $null=[Console]::ReadLine()
-[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"capture_window"}}}')
+[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"capture_window"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
 $reply=[Console]::ReadLine() | ConvertFrom-Json
 if ($reply.control -eq 'test_ack') { [Console]::WriteLine('{"id":1,"result":{"captured":true}}') }
 "#;
