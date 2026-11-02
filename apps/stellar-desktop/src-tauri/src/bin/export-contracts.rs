@@ -12,6 +12,10 @@ mod ivy;
 mod speech;
 #[path = "../speech/command_names.rs"]
 mod speech_names;
+#[path = "../telemetry/contracts.rs"]
+mod telemetry;
+#[path = "../telemetry/command_name.rs"]
+mod telemetry_name;
 
 use app_info_contracts::{
     APP_INFO_EVENT, AppCapability, AppInfoError, AppInfoEvent, AppInfoReply, AppInfoRequest,
@@ -21,6 +25,7 @@ use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
 use speech::*;
+use telemetry::*;
 use ts_rs::TS;
 
 fn main() {
@@ -45,6 +50,17 @@ fn main() {
         IvyComponent::decl(&config),
         IvyPresentation::decl(&config),
         IvySnapshot::decl(&config),
+        TelemetryProject::decl(&config),
+        TelemetryState::decl(&config),
+        TelemetryHealth::decl(&config),
+        TelemetrySourceKind::decl(&config),
+        TelemetryEventKind::decl(&config),
+        TelemetryError::decl(&config),
+        TelemetryUsage::decl(&config),
+        TelemetrySource::decl(&config),
+        TelemetryEvent::decl(&config),
+        TelemetryAgent::decl(&config),
+        TelemetrySnapshot::decl(&config),
         SpeechState::decl(&config),
         SpeechError::decl(&config),
         SpeechRequest::decl(&config),
@@ -73,6 +89,10 @@ fn main() {
         "export type DesktopCommands = {{ [appInfoCommand]: {{ request: AppInfoRequest; reply: AppInfoReply }} }};"
     );
     println!("export type DesktopEvents = {{ [appInfoEvent]: AppInfoEvent }};");
+    println!(
+        "export const telemetrySnapshotCommand = {} as const;",
+        serde_json::to_string(telemetry_name::TELEMETRY_COMMAND).unwrap()
+    );
     for (name, command) in [
         "ivyConnectCommand",
         "ivySnapshotCommand",
