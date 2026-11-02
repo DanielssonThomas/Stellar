@@ -42,6 +42,7 @@ export class EmblemMotionMolecule {
   readonly phase = input<Phase>('idle');
   readonly audioLevel = input(0);
   readonly waiting = input(false);
+  readonly solActive = input(false);
   readonly reducedMotion = input(false);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
@@ -102,6 +103,14 @@ export class EmblemMotionMolecule {
       this.active() &&
       this.visible() &&
       !['suspended', 'shutdown'].includes(this.phase()),
+  );
+  readonly showSol = computed(
+    () =>
+      this.solActive() &&
+      this.active() &&
+      this.visible() &&
+      !isExplodedPhase(this.phase()) &&
+      this.settledPhase() === this.phase(),
   );
   readonly classes = computed(() =>
     clsx('emblem relative block h-full w-full', {

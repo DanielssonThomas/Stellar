@@ -30,6 +30,57 @@ img {
     transform 450ms ease,
     opacity 450ms ease;
 }
+.sol-accents {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  color: var(--stellar-color-sol, #ff2525);
+  filter: drop-shadow(
+    0 0 0.3cqw
+      color-mix(in srgb, var(--stellar-color-sol, #ff2525) 45%, transparent)
+  );
+}
+.sol-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+}
+.sol-eye {
+  fill: currentColor;
+}
+.sol-enter {
+  animation: sol-arrive 360ms ease both;
+}
+.sol-leave {
+  animation: sol-depart 260ms ease both;
+}
+@keyframes sol-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sol-depart {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.motion-reduced .sol-accents {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sol-accents {
+    animation: none;
+  }
+}
 
 .waiting-response .emblem-presence {
   transform: scale(0.86);

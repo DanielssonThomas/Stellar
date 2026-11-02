@@ -96,6 +96,33 @@ describe('EmblemMotionMolecule', () => {
     expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
   });
 
+  it('shows one concentric Sol ring and two eye glints only after assembly settles', async () => {
+    fixture.componentRef.setInput('solActive', true);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.sol-accents')).toBeNull();
+    fixture.componentRef.setInput('phase', 'listening');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.sol-accents')).toBeNull();
+    for (const animation of animations) animation.onfinish?.();
+    await fixture.whenStable();
+    const ring = fixture.nativeElement.querySelector('.sol-ring');
+    expect(fixture.nativeElement.querySelectorAll('.sol-ring')).toHaveLength(1);
+    expect([
+      ring.getAttribute('cx'),
+      ring.getAttribute('cy'),
+      ring.getAttribute('r'),
+    ]).toEqual(['640', '640', '510']);
+    expect(
+      fixture.nativeElement
+        .querySelector('.sol-eye')
+        .getAttribute('d')
+        .match(/M/g),
+    ).toHaveLength(2);
+    fixture.componentRef.setInput('solActive', false);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.sol-accents')).toBeNull();
+  });
+
   it('keeps body fragments during motion and consolidates only after real settlement', async () => {
     fixture.componentRef.setInput('manifest', {
       ...manifest,

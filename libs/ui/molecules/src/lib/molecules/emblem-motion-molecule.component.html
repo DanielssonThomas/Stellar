@@ -72,6 +72,21 @@
           </div>
         }
       </div>
+      @if (showSol()) {
+        <svg
+          class="sol-accents"
+          viewBox="0 0 1280 1280"
+          aria-hidden="true"
+          animate.enter="sol-enter"
+          animate.leave="sol-leave"
+        >
+          <circle class="sol-ring" cx="640" cy="640" r="510" />
+          <path
+            class="sol-eye"
+            d="M343 551 371 543 349 554Z M942 545 964 554 946 553Z"
+          />
+        </svg>
+      }
     </div>
   </div>
 }

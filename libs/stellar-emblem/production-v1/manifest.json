@@ -59,7 +59,7 @@
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 14,
+      "planeIndex": 11,
       "clip": [0, 0, 1280, 512]
     },
     {
@@ -98,7 +98,7 @@
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 11
+      "planeIndex": 14
     },
     {
       "id": "outer-frame",

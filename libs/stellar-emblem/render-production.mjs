@@ -86,11 +86,20 @@ const planeOrder = [
   'inner-circle-3',
   'inner-circle-4',
   'gold-body-lower',
-  'gold-ornament',
+  'gold-body-upper',
   'gold-body-middle',
   'gold-hair',
-  'gold-body-upper',
+  'gold-ornament',
 ];
+for (const character of ['violet', 'gold']) {
+  if (
+    planeOrder.indexOf(`${character}-ornament`) <=
+    planeOrder.indexOf(`${character}-hair`)
+  )
+    throw new Error(
+      'Hair ornaments must remain in front of their hair throughout assembly',
+    );
+}
 const zero = { x: 0, y: 0, rotation: 0 };
 const entry = (item, z, extension) => ({
   id: item.id,

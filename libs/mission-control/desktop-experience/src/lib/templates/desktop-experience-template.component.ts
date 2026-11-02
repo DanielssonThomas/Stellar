@@ -53,6 +53,7 @@ export class DesktopExperienceTemplate {
   readonly assistantUncertain = input(false);
   readonly assistantWaiting = input(false);
   readonly assistantNarrating = input(false);
+  readonly solActive = input(false);
   readonly assistantActive = computed(
     () =>
       !['suspended', 'shutdown'].includes(this.state().phase) &&
