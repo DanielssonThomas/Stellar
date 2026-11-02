@@ -47,3 +47,12 @@ export type {
   VoiceView,
   VoicePorts,
 } from './lib/speech/voice-conversation';
+export {
+  DesktopTelemetryService,
+  DESKTOP_TELEMETRY_TRANSPORT,
+} from './lib/services/desktop-telemetry.service';
+export type {
+  VoiceComposition,
+  VoiceModel,
+  VoiceCommand,
+} from './lib/speech/voice-composition';
