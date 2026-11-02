@@ -70,7 +70,10 @@ export class StageOrganism {
   private readonly panels = viewChildren<ElementRef<HTMLElement>>('panel');
   private readonly motion = createStageMotion(this.document.defaultView);
   private readonly origins = new Map<string, HTMLElement>();
-  private readonly focusRequest = signal<string | null>(null);
+  private readonly focusRequest = signal<{
+    instanceId: string;
+    descendant?: HTMLElement;
+  } | null>(null);
   private readonly viewport = signal({ width: 0, height: 0 });
   private readonly instances = signal(this.registry.snapshot());
   readonly layout = computed(() =>
@@ -138,10 +141,15 @@ export class StageOrganism {
       const requested = this.focusRequest();
       if (!requested || this.loading()) return;
       const panel = this.panels().find(
-        (entry) => entry.nativeElement.dataset['instanceId'] === requested,
+        (entry) =>
+          entry.nativeElement.dataset['instanceId'] === requested.instanceId,
       );
       if (panel) {
-        panel.nativeElement.focus({ preventScroll: true });
+        const target = requested.descendant;
+        (target?.isConnected && panel.nativeElement.contains(target)
+          ? target
+          : panel.nativeElement
+        ).focus({ preventScroll: true });
         this.focusRequest.set(null);
       }
     });
@@ -229,9 +237,51 @@ export class StageOrganism {
   }
 
   private afterAction(result: StageResult) {
-    if (result.status !== 'applied' || !result.instanceId) return;
+    if (result.status !== 'applied') return;
     const { instanceId, action } = result;
-    if (action === 'close' || action === 'minimize') {
+    if (action === 'arrange') {
+      const activePanel = this.panels().find((entry) =>
+        entry.nativeElement.contains(this.document.activeElement),
+      );
+      const instanceId = activePanel?.nativeElement.dataset['instanceId'];
+      const active = this.document.activeElement;
+      if (instanceId && active instanceof HTMLElement)
+        this.focusRequest.set({ instanceId, descendant: active });
+    }
+    if (action === 'clear') {
+      const focusedPanel = this.panels().find((entry) =>
+        entry.nativeElement.contains(this.document.activeElement),
+      )?.nativeElement;
+      let origin = focusedPanel?.dataset['instanceId']
+        ? this.origins.get(focusedPanel.dataset['instanceId'])
+        : undefined;
+      const visited = new Set<HTMLElement>();
+      while (
+        origin &&
+        this.host.nativeElement.contains(origin) &&
+        !visited.has(origin)
+      ) {
+        visited.add(origin);
+        const parent = origin.closest<HTMLElement>('[data-instance-id]');
+        origin = parent?.dataset['instanceId']
+          ? this.origins.get(parent.dataset['instanceId'])
+          : undefined;
+      }
+      if (origin && this.host.nativeElement.contains(origin))
+        origin = undefined;
+      if (focusedPanel) {
+        const target =
+          origin?.isConnected && origin !== this.document.body
+            ? origin
+            : this.focusFallback();
+        if (target?.isConnected) target.focus();
+      }
+      this.origins.clear();
+      this.focusRequest.set(null);
+      if (this.instances().length && this.dismissOnClose())
+        this.interaction.emit({ type: 'dismiss' });
+    }
+    if (instanceId && (action === 'close' || action === 'minimize')) {
       const panel = this.panels().find(
         (entry) => entry.nativeElement.dataset['instanceId'] === instanceId,
       )?.nativeElement;
@@ -257,7 +307,7 @@ export class StageOrganism {
     this.presentationChange.emit(
       this.registry.snapshot().some((instance) => !instance.minimized),
     );
-    if (action === 'open' || action === 'focus')
-      this.focusRequest.set(instanceId);
+    if (instanceId && (action === 'open' || action === 'focus'))
+      this.focusRequest.set({ instanceId });
   }
 }
