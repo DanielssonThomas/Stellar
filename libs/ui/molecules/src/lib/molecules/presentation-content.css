@@ -39,6 +39,8 @@
   margin-bottom: 0.4rem;
 }
 .presentation pre {
+  font-size: var(--stellar-presentation-body, 1rem);
+  line-height: 1.5;
   padding: 1rem 0;
   overflow: auto;
   white-space: pre;

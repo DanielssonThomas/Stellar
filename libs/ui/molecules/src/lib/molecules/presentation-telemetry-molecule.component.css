@@ -1,4 +1,9 @@
 @import './presentation-content.css';
+.presentation .source-detail {
+  margin-top: 0.4rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
 .source-row {
   border-bottom: 1px solid
     var(--stellar-color-divider, var(--stellar-color-line));

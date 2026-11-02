@@ -4,14 +4,14 @@
   <article class="presentation">
     <h2>{{ content.title }}</h2>
     @if (image(); as image) {
-      <figure class="m-0">
+      <figure class="media-frame m-0">
         @if (pending()) {
-          <div role="status" aria-label="Loading image">
+          <div class="image-status" role="status" aria-label="Loading image">
             <stellar-skeleton-atom shape="text" />
           </div>
         }
         <img
-          class="block max-h-[65dvh] w-full object-contain"
+          class="media-image"
           [src]="image.src"
           [alt]="image.alt"
           (load)="settle($event, false)"
@@ -19,7 +19,9 @@
           [hidden]="currentResult()?.failed"
         />
         @if (currentResult()?.failed) {
-          <p role="status" class="muted">Image unavailable. {{ image.alt }}</p>
+          <p role="status" class="image-status muted">
+            Image unavailable. {{ image.alt }}
+          </p>
         }
         @if (image.caption) {
           <figcaption class="mt-4 text-sm text-stellar-muted">

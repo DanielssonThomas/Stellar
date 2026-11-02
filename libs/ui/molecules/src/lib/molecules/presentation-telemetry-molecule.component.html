@@ -17,7 +17,7 @@
             <dt class="text-sm text-stellar-muted">{{ row.label }}</dt>
             <dd class="m-0">{{ live() ? row.value : 'Unavailable' }}</dd>
             @if (live() && row.detail) {
-              <p class="muted mb-0">{{ row.detail }}</p>
+              <p class="source-detail muted mb-0">{{ row.detail }}</p>
             }
           </div>
         }

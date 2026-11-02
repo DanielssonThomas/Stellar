@@ -15,10 +15,17 @@ import {
   IvyAdapterService,
 } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
+import { PRESENTATION_DATA } from '@stellar/ui-molecules';
+import { desktopPresentationData } from './desktop-presentation-data';
 
 @Component({
   imports: [DesktopExperienceTemplate],
-  providers: [DesktopExperience, DesktopAssistant, DesktopVoice],
+  providers: [
+    DesktopExperience,
+    DesktopAssistant,
+    DesktopVoice,
+    { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
+  ],
   selector: 'stellar-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
@@ -47,7 +54,12 @@ export class AppComponent {
     afterNextRender(() => {
       this.experience.connect((command) => this.view().dispatch(command));
       this.assistant.bind(
-        (command) => this.experience.present(command),
+        (command) => {
+          const commandId = this.view().stage().nextCommandId();
+          return commandId === null
+            ? { status: 'rejected', reason: 'sequence-exhausted' }
+            : this.experience.present({ ...command, commandId });
+        },
         () =>
           !['suspended', 'shutdown'].includes(this.experience.state().phase),
         () => this.view().stage().presentationIds(),
