@@ -44,6 +44,7 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
         provide: SpeechAdapterService,
         useValue: {
           state: signal(initialSpeechSnapshot()),
+          initialize: vi.fn(async () => undefined),
           stop: vi.fn(async () => undefined),
         },
       },
@@ -55,9 +56,8 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
         provide: DesktopExperience,
         useValue: {
           state: signal({ phase: 'idle' }),
+          startListening: vi.fn(),
           setPassiveListening: vi.fn(),
-          setVoiceCapturePaused: vi.fn(),
-          waitForVoiceCaptureRelease: vi.fn(async () => undefined),
         },
       },
     ],
@@ -66,6 +66,18 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
 }
 
 describe('desktop voice session composition', () => {
+  it('starts continuous microphone capture only after local speech initialization succeeds', async () => {
+    const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
+    const speech = TestBed.inject(SpeechAdapterService);
+    const experience = TestBed.inject(DesktopExperience);
+    await voice.startListening();
+    expect(speech.initialize).toHaveBeenCalledOnce();
+    expect(experience.startListening).toHaveBeenCalledOnce();
+    vi.mocked(speech.initialize).mockRejectedValueOnce(Error('Unavailable'));
+    await voice.startListening();
+    expect(experience.startListening).toHaveBeenCalledOnce();
+    TestBed.resetTestingModule();
+  });
   it('loads a persisted model without overwriting a draft edited while the snapshot is pending', async () => {
     let resolve!: (value: ReturnType<typeof initialIvySnapshot>) => void;
     const snapshot = vi.fn(
@@ -304,7 +316,7 @@ describe('desktop voice cleanup integration', () => {
 
   it('does not call cleanup for an ordinary speech turn', async () => {
     const refine = vi.fn();
-    const f = await setup('ordinary request', refine);
+    const f = await setup('Ivy, ordinary request', refine);
     f.utterance();
     await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
     expect(refine).not.toHaveBeenCalled();

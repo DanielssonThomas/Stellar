@@ -80,6 +80,7 @@ export class DesktopVoice {
     submit: (text, id) => this.assistant.submit(text, id),
     speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
+    onForegroundEnd: () => this.foregroundCleared?.('clear'),
     selectSession: (model) => this.ivy.selectSession(model),
     clearConversation: async () => {
       const cleared = await this.ivy.clearConversation();
@@ -102,9 +103,6 @@ export class DesktopVoice {
         this.current.set(view);
         this.experience.setPassiveListening(view.passive ?? false);
       }),
-    onCapturePauseChange: (paused) =>
-      this.experience.setVoiceCapturePaused(paused),
-    waitForCapturePause: () => this.experience.waitForVoiceCaptureRelease(),
     onComposition: (value) =>
       this.zone.run(() => {
         this.compositionState.set(value);
@@ -136,6 +134,15 @@ export class DesktopVoice {
 
   setMuted(muted: boolean) {
     this.conversation.setMuted(muted);
+  }
+
+  async startListening(): Promise<void> {
+    try {
+      await this.speech.initialize();
+      this.experience.startListening();
+    } catch {
+      // An unavailable local speech boundary cannot admit voice interactions.
+    }
   }
 
   submitText(text: string): Promise<boolean> {
