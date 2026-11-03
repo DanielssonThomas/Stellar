@@ -325,6 +325,8 @@ export class VoiceConversation {
         // A spoken prefix followed by a thinking pause is still dictation.
         // The acoustic event is provisional until this separate action boundary.
         if ((this.speechActivity?.quietMs() ?? 0) >= 1000) {
+          // Retire all hypotheses from the continued phrase before rearming.
+          if (this.suppressControls) this.fastCommands?.reset();
           this.suppressControls = false;
           if (this.pendingControl) {
             const command = this.pendingControl;

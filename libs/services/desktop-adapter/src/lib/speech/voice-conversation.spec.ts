@@ -87,6 +87,42 @@ describe('dedicated command recognition integration', () => {
     expect(cleared).not.toHaveBeenCalled();
     f.controller.dispose();
   });
+  it('fences a delayed second candidate when a continued phrase reaches the quiet boundary', async () => {
+    const second = deferred<KeywordReply>();
+    const cleared = vi.fn(async () => true);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) =>
+        sequence === 26
+          ? second.promise
+          : {
+              sequence,
+              detection:
+                sequence === 10 ? { command: 'clear', end_sample: 3200 } : null,
+            },
+      clearConversation: cleared,
+    });
+    await f.controller.withCaptureReleased(async () => true);
+    f.feed(true, 5);
+    f.feed(false, 6);
+    await settle();
+    f.feed(true, 10);
+    f.feed(false, 6);
+    await settle();
+    f.feed(false, 19);
+    second.resolve({
+      sequence: 26,
+      detection: { command: 'clear', end_sample: 6400 },
+    });
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    f.feed(false, 15);
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
   async function provisionalControl() {
     const cleared = vi.fn(async () => true);
     const f = fixture({

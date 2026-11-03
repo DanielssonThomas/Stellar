@@ -6,7 +6,7 @@
   "acceptance": "NOT READY; draft. No merge authorized.",
   "baselineHead": "5410a319733d63b5f6c6f5e4e58db35fae4d8cfa",
   "source": {
-    "coordinatorSha256Lf": "8151f3c24e04a9198e1190446ecfbaf54cc504471092ea3e03624ba5598ddbae"
+    "coordinatorSha256Lf": "c78ea268cc755e877118ed24315dcb340c2a96ed4cefae8ffd040c69e5b80b88"
   },
   "methodology": {
     "actions": "Actual VoiceConversation with ActivityDetector/assembler, real CPU recognition engines, inert action ports, one second leading quiet and three seconds tail; each frame drained deterministically.",
@@ -31,7 +31,7 @@
       "corpusWavMapSha256": "a59f1fa630567b6048200c264f3b16edba07b9ebd66e90c8cb362b4d5492b4bd",
       "source": {
         "baseline": false,
-        "coordinatorSha256": "8151f3c24e04a9198e1190446ecfbaf54cc504471092ea3e03624ba5598ddbae"
+        "coordinatorSha256": "c78ea268cc755e877118ed24315dcb340c2a96ed4cefae8ffd040c69e5b80b88"
       },
       "baselineSummary": {
         "ivy": {
@@ -516,7 +516,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [126.50220000000036]
+          "sttComputationsMs": [125.96210000000019]
         },
         {
           "id": "af_heart-1-wake-request",
@@ -528,7 +528,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [120.56550000000016]
+          "sttComputationsMs": [109.26779999999962]
         },
         {
           "id": "af_heart-1.2-wake-request",
@@ -540,7 +540,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [107.24890000000005]
+          "sttComputationsMs": [102.7470000000003]
         },
         {
           "id": "af_heart-0.85-done",
@@ -576,7 +576,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [105.6859999999997]
+          "sttComputationsMs": [87.47059999999965]
         },
         {
           "id": "af_heart-0.85-im-done",
@@ -696,7 +696,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [68.59930000000077]
+          "sttComputationsMs": [66.82960000000003]
         },
         {
           "id": "af_heart-1-cancel",
@@ -708,7 +708,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [69.8104000000003]
+          "sttComputationsMs": [71.03080000000045]
         },
         {
           "id": "af_heart-1.2-cancel",
@@ -720,7 +720,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [69.10829999999987]
+          "sttComputationsMs": [68.01180000000022]
         },
         {
           "id": "af_heart-0.85-reset",
@@ -804,7 +804,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.91529999999966]
+          "sttComputationsMs": [144.20030000000042]
         },
         {
           "id": "af_heart-1-embedded-clear",
@@ -816,7 +816,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.6196]
+          "sttComputationsMs": [138.40219999999954]
         },
         {
           "id": "af_heart-1.2-embedded-clear",
@@ -828,7 +828,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [128.9323000000004]
+          "sttComputationsMs": [126.49330000000009]
         },
         {
           "id": "af_heart-0.85-embedded-done",
@@ -840,7 +840,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [161.15800000000036]
+          "sttComputationsMs": [161.53789999999935]
         },
         {
           "id": "af_heart-1-embedded-done",
@@ -852,7 +852,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.1194999999998]
+          "sttComputationsMs": [149.52089999999953]
         },
         {
           "id": "af_heart-1.2-embedded-done",
@@ -864,7 +864,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [128.83660000000054]
+          "sttComputationsMs": [140.59770000000026]
         },
         {
           "id": "af_heart-0.85-prefix-clear",
@@ -876,7 +876,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [153.60149999999976]
+          "sttComputationsMs": [153.35030000000006]
         },
         {
           "id": "af_heart-1-prefix-clear",
@@ -888,7 +888,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.83759999999984]
+          "sttComputationsMs": [135.3212999999996]
         },
         {
           "id": "af_heart-1.2-prefix-clear",
@@ -900,7 +900,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [128.23859999999968]
+          "sttComputationsMs": [137.23070000000007]
         },
         {
           "id": "af_heart-0.85-near-wake",
@@ -1020,7 +1020,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [110.55049999999937]
+          "sttComputationsMs": [109.8117999999995]
         },
         {
           "id": "af_heart-1-cancel-idle",
@@ -1032,7 +1032,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [107.75140000000101]
+          "sttComputationsMs": [107.39960000000065]
         },
         {
           "id": "af_heart-1.2-cancel-idle",
@@ -1044,7 +1044,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.76009999999951]
+          "sttComputationsMs": [107.8822999999993]
         },
         {
           "id": "af_heart-0.85-short-clear",
@@ -1056,7 +1056,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [102.22580000000016]
+          "sttComputationsMs": [97.42330000000038]
         },
         {
           "id": "af_heart-1-short-clear",
@@ -1068,7 +1068,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [102.95139999999992]
+          "sttComputationsMs": [96.87289999999848]
         },
         {
           "id": "af_heart-1.2-short-clear",
@@ -1080,7 +1080,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [98.03009999999995]
+          "sttComputationsMs": [98.17679999999928]
         },
         {
           "id": "af_heart-0.85-short-done",
@@ -1092,7 +1092,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.68709999999919]
+          "sttComputationsMs": [103.35950000000048]
         },
         {
           "id": "af_heart-1-short-done",
@@ -1104,7 +1104,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [100.53989999999976]
+          "sttComputationsMs": [102.7489999999998]
         },
         {
           "id": "af_heart-1.2-short-done",
@@ -1116,7 +1116,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [106.47370000000046]
+          "sttComputationsMs": [105.64749999999913]
         },
         {
           "id": "af_heart-0.85-short-prompt",
@@ -1128,7 +1128,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [117.04620000000068]
+          "sttComputationsMs": [114.21099999999933]
         },
         {
           "id": "af_heart-1-short-prompt",
@@ -1140,7 +1140,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [111.3773999999994]
+          "sttComputationsMs": [107.87480000000141]
         },
         {
           "id": "af_heart-1.2-short-prompt",
@@ -1152,7 +1152,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [113.69650000000001]
+          "sttComputationsMs": [105.04600000000028]
         },
         {
           "id": "af_heart-0.85-prefix-clear-short",
@@ -1164,7 +1164,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [131.0565999999999]
+          "sttComputationsMs": [120.59130000000005]
         },
         {
           "id": "af_heart-1-prefix-clear-short",
@@ -1176,7 +1176,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [118.42209999999977]
+          "sttComputationsMs": [111.07969999999841]
         },
         {
           "id": "af_heart-1.2-prefix-clear-short",
@@ -1188,7 +1188,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [106.70449999999983]
+          "sttComputationsMs": [107.35859999999957]
         },
         {
           "id": "af_heart-0.85-prefix-prompt-short",
@@ -1200,7 +1200,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [111.48619999999937]
+          "sttComputationsMs": [120.07470000000103]
         },
         {
           "id": "af_heart-1-prefix-prompt-short",
@@ -1212,7 +1212,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [113.70930000000044]
+          "sttComputationsMs": [125.66519999999946]
         },
         {
           "id": "af_heart-1.2-prefix-prompt-short",
@@ -1224,7 +1224,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [104.8742999999995]
+          "sttComputationsMs": [104.9390000000003]
         },
         {
           "id": "af_heart-0.85-suffix-reset",
@@ -1236,7 +1236,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [135.26699999999983]
+          "sttComputationsMs": [129.4985000000015]
         },
         {
           "id": "af_heart-1-suffix-reset",
@@ -1248,7 +1248,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [123.64689999999973]
+          "sttComputationsMs": [122.15669999999955]
         },
         {
           "id": "af_heart-1.2-suffix-reset",
@@ -1260,7 +1260,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [113.20650000000023]
+          "sttComputationsMs": [110.375]
         },
         {
           "id": "af_heart-0.85-suffix-reload",
@@ -1272,7 +1272,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [145.81830000000082]
+          "sttComputationsMs": [141.8189000000002]
         },
         {
           "id": "af_heart-1-suffix-reload",
@@ -1284,7 +1284,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [134.5552000000007]
+          "sttComputationsMs": [133.53230000000076]
         },
         {
           "id": "af_heart-1.2-suffix-reload",
@@ -1296,7 +1296,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [122.57359999999971]
+          "sttComputationsMs": [137.03169999999955]
         },
         {
           "id": "af_heart-0.85-long",
@@ -1308,7 +1308,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [486.3189000000002]
+          "sttComputationsMs": [487.9904000000006]
         },
         {
           "id": "af_heart-1-long",
@@ -1320,7 +1320,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [409.2662]
+          "sttComputationsMs": [415.39290000000074]
         },
         {
           "id": "af_heart-1.2-long",
@@ -1332,7 +1332,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [356.5684999999994]
+          "sttComputationsMs": [382.2556000000004]
         },
         {
           "id": "bf_emma-0.85-wake",
@@ -1380,7 +1380,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [147.3199999999997]
+          "sttComputationsMs": [122.35200000000077]
         },
         {
           "id": "bf_emma-1-wake-request",
@@ -1392,7 +1392,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [131.077299999999]
+          "sttComputationsMs": [126.89229999999952]
         },
         {
           "id": "bf_emma-1.2-wake-request",
@@ -1404,7 +1404,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [121.08170000000064]
+          "sttComputationsMs": [117.41790000000037]
         },
         {
           "id": "bf_emma-0.85-done",
@@ -1452,7 +1452,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [118.1166000000012]
+          "sttComputationsMs": [137.46520000000055]
         },
         {
           "id": "bf_emma-1-im-done",
@@ -1524,7 +1524,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [104.86339999999836]
+          "sttComputationsMs": [117.67239999999947]
         },
         {
           "id": "bf_emma-1-prompt",
@@ -1536,7 +1536,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [108.83389999999781]
+          "sttComputationsMs": [124.72429999999804]
         },
         {
           "id": "bf_emma-1.2-prompt",
@@ -1560,7 +1560,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [79.51039999999921, 130.60280000000057]
+          "sttComputationsMs": [75.91310000000158, 132.20739999999932]
         },
         {
           "id": "bf_emma-1-cancel",
@@ -1572,7 +1572,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [75.22950000000128]
+          "sttComputationsMs": [87.77549999999974]
         },
         {
           "id": "bf_emma-1.2-cancel",
@@ -1584,7 +1584,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [70.73080000000118]
+          "sttComputationsMs": [83.84200000000055]
         },
         {
           "id": "bf_emma-0.85-reset",
@@ -1596,7 +1596,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [115.5486000000019]
+          "sttComputationsMs": [130.47629999999845]
         },
         {
           "id": "bf_emma-1-reset",
@@ -1632,7 +1632,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [139.08940000000075]
+          "sttComputationsMs": [167.2628999999979]
         },
         {
           "id": "bf_emma-1-reload",
@@ -1644,7 +1644,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [128.31040000000212]
+          "sttComputationsMs": [135.48879999999917]
         },
         {
           "id": "bf_emma-1.2-reload",
@@ -1668,7 +1668,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [151.36549999999988]
+          "sttComputationsMs": [186.737000000001]
         },
         {
           "id": "bf_emma-1-embedded-clear",
@@ -1680,7 +1680,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [143.64879999999903]
+          "sttComputationsMs": [159.33079999999973]
         },
         {
           "id": "bf_emma-1.2-embedded-clear",
@@ -1692,7 +1692,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [139.69900000000052]
+          "sttComputationsMs": [170.16010000000097]
         },
         {
           "id": "bf_emma-0.85-embedded-done",
@@ -1704,7 +1704,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [168.01469999999972]
+          "sttComputationsMs": [193.20570000000225]
         },
         {
           "id": "bf_emma-1-embedded-done",
@@ -1716,7 +1716,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [149.41380000000208]
+          "sttComputationsMs": [169.0048999999999]
         },
         {
           "id": "bf_emma-1.2-embedded-done",
@@ -1728,7 +1728,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [150.91979999999967]
+          "sttComputationsMs": [158.11449999999968]
         },
         {
           "id": "bf_emma-0.85-prefix-clear",
@@ -1740,7 +1740,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [162.62349999999788]
+          "sttComputationsMs": [184.27270000000135]
         },
         {
           "id": "bf_emma-1-prefix-clear",
@@ -1752,7 +1752,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [146.48869999999806]
+          "sttComputationsMs": [171.20190000000002]
         },
         {
           "id": "bf_emma-1.2-prefix-clear",
@@ -1764,7 +1764,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [133.16049999999814]
+          "sttComputationsMs": [156.60540000000037]
         },
         {
           "id": "bf_emma-0.85-near-wake",
@@ -1884,7 +1884,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [127.74339999999938]
+          "sttComputationsMs": [136.39120000000185]
         },
         {
           "id": "bf_emma-1-cancel-idle",
@@ -1896,7 +1896,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [124.89129999999932]
+          "sttComputationsMs": [128.20290000000023]
         },
         {
           "id": "bf_emma-1.2-cancel-idle",
@@ -1908,7 +1908,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [116.75870000000214]
+          "sttComputationsMs": [112.09619999999995]
         },
         {
           "id": "bf_emma-0.85-short-clear",
@@ -1920,7 +1920,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [123.17619999999806]
+          "sttComputationsMs": [113.22210000000268]
         },
         {
           "id": "bf_emma-1-short-clear",
@@ -1932,7 +1932,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [123.99699999999939]
+          "sttComputationsMs": [108.00929999999789]
         },
         {
           "id": "bf_emma-1.2-short-clear",
@@ -1944,7 +1944,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [115.2583999999988]
+          "sttComputationsMs": [106.58439999999973]
         },
         {
           "id": "bf_emma-0.85-short-done",
@@ -1956,7 +1956,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [129.12129999999888]
+          "sttComputationsMs": [123.17900000000009]
         },
         {
           "id": "bf_emma-1-short-done",
@@ -1968,7 +1968,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [112.34289999999964]
+          "sttComputationsMs": [119.0515000000014]
         },
         {
           "id": "bf_emma-1.2-short-done",
@@ -1980,7 +1980,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [117.8090000000011]
+          "sttComputationsMs": [105.75919999999678]
         },
         {
           "id": "bf_emma-0.85-short-prompt",
@@ -1992,7 +1992,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [129.65810000000056]
+          "sttComputationsMs": [119.57050000000163]
         },
         {
           "id": "bf_emma-1-short-prompt",
@@ -2004,7 +2004,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [125.22130000000107]
+          "sttComputationsMs": [109.78970000000118]
         },
         {
           "id": "bf_emma-1.2-short-prompt",
@@ -2016,7 +2016,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [110.25249999999869]
+          "sttComputationsMs": [105.17959999999948]
         },
         {
           "id": "bf_emma-0.85-prefix-clear-short",
@@ -2028,7 +2028,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [137.3623000000007]
+          "sttComputationsMs": [136.89229999999952]
         },
         {
           "id": "bf_emma-1-prefix-clear-short",
@@ -2040,7 +2040,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [131.70420000000013]
+          "sttComputationsMs": [124.87330000000293]
         },
         {
           "id": "bf_emma-1.2-prefix-clear-short",
@@ -2052,7 +2052,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [118.48679999999877]
+          "sttComputationsMs": [119.48949999999968]
         },
         {
           "id": "bf_emma-0.85-prefix-prompt-short",
@@ -2064,7 +2064,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [126.515199999998]
+          "sttComputationsMs": [123.11579999999958]
         },
         {
           "id": "bf_emma-1-prefix-prompt-short",
@@ -2076,7 +2076,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [116.46580000000176]
+          "sttComputationsMs": [113.74090000000069]
         },
         {
           "id": "bf_emma-1.2-prefix-prompt-short",
@@ -2088,7 +2088,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [110.14789999999994]
+          "sttComputationsMs": [112.65940000000046]
         },
         {
           "id": "bf_emma-0.85-suffix-reset",
@@ -2100,7 +2100,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [157.1280000000006]
+          "sttComputationsMs": [141.91909999999916]
         },
         {
           "id": "bf_emma-1-suffix-reset",
@@ -2112,7 +2112,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.8718000000008]
+          "sttComputationsMs": [129.05069999999978]
         },
         {
           "id": "bf_emma-1.2-suffix-reset",
@@ -2124,7 +2124,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.5880999999972]
+          "sttComputationsMs": [124.98210000000108]
         },
         {
           "id": "bf_emma-0.85-suffix-reload",
@@ -2136,7 +2136,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [157.6395999999986]
+          "sttComputationsMs": [167.26369999999952]
         },
         {
           "id": "bf_emma-1-suffix-reload",
@@ -2148,7 +2148,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [159.71069999999963]
+          "sttComputationsMs": [183.02390000000014]
         },
         {
           "id": "bf_emma-1.2-suffix-reload",
@@ -2160,7 +2160,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [156.5600000000013]
+          "sttComputationsMs": [161.97920000000158]
         },
         {
           "id": "bf_emma-0.85-long",
@@ -2172,7 +2172,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [508.57990000000063]
+          "sttComputationsMs": [507.6981999999989]
         },
         {
           "id": "bf_emma-1-long",
@@ -2184,7 +2184,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [473.7924000000021]
+          "sttComputationsMs": [417.1206999999995]
         },
         {
           "id": "bf_emma-1.2-long",
@@ -2196,7 +2196,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [421.751400000001]
+          "sttComputationsMs": [368.4380999999994]
         }
       ]
     },
@@ -2206,7 +2206,7 @@
       "corpusWavMapSha256": "a0a0e709a3bb7026d13d5e5a73e6031772437d940a372f8ae473de7f0086ca4d",
       "source": {
         "baseline": false,
-        "coordinatorSha256": "8151f3c24e04a9198e1190446ecfbaf54cc504471092ea3e03624ba5598ddbae"
+        "coordinatorSha256": "c78ea268cc755e877118ed24315dcb340c2a96ed4cefae8ffd040c69e5b80b88"
       },
       "baselineSummary": {
         "ivy": {
@@ -2739,7 +2739,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [171.21530000000075]
+          "sttComputationsMs": [136.88440000000037]
         },
         {
           "id": "af_bella-0.85-done",
@@ -2787,7 +2787,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [124.32679999999982]
+          "sttComputationsMs": [118.63499999999931]
         },
         {
           "id": "af_bella-0.85-that-is-all",
@@ -2811,7 +2811,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [256.6198999999997]
+          "sttComputationsMs": [108.67640000000029]
         },
         {
           "id": "af_bella-0.85-prompt",
@@ -2835,7 +2835,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [202.33429999999953]
+          "sttComputationsMs": [78.81590000000051]
         },
         {
           "id": "af_bella-0.85-reset",
@@ -2859,7 +2859,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [341.5722999999998]
+          "sttComputationsMs": [265.9366]
         },
         {
           "id": "af_bella-0.85-down",
@@ -2871,7 +2871,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [350.6887000000006]
+          "sttComputationsMs": [290.23039999999946]
         },
         {
           "id": "af_bella-0.85-im-down",
@@ -2883,7 +2883,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [348.9312000000009]
+          "sttComputationsMs": [317.9246999999996]
         },
         {
           "id": "af_bella-0.85-well-done",
@@ -2895,7 +2895,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [290.1193999999996]
+          "sttComputationsMs": [316.02949999999964]
         },
         {
           "id": "af_bella-0.85-all-done",
@@ -2907,7 +2907,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [283.40800000000127]
+          "sttComputationsMs": [243.3747000000003]
         },
         {
           "id": "af_bella-0.85-promptly",
@@ -2919,7 +2919,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [388.1705000000002]
+          "sttComputationsMs": [540.9611999999997]
         },
         {
           "id": "af_bella-0.85-prompt-me",
@@ -2931,7 +2931,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [282.73549999999886]
+          "sttComputationsMs": [725.6480999999994]
         },
         {
           "id": "af_bella-0.85-cancellation",
@@ -2944,7 +2944,7 @@
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
           "sttComputationsMs": [
-            153.85519999999997, 294.6291000000001, 376.34170000000086
+            802.7717999999986, 871.3888000000006, 1819.860700000001
           ]
         },
         {
@@ -2957,7 +2957,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [237.47420000000056]
+          "sttComputationsMs": [839.9030999999995]
         },
         {
           "id": "af_bella-0.85-clear-prefix",
@@ -2969,7 +2969,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [206.1988999999994]
+          "sttComputationsMs": [915.4883000000009]
         },
         {
           "id": "af_bella-0.85-embedded-done",
@@ -2981,7 +2981,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [221.39810000000034]
+          "sttComputationsMs": [967.5290999999997]
         },
         {
           "id": "af_bella-0.85-embedded-prompt",
@@ -2993,7 +2993,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [251.48879999999917]
+          "sttComputationsMs": [893.0569000000014]
         },
         {
           "id": "af_bella-0.85-embedded-reset",
@@ -3005,7 +3005,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [248.0681000000004]
+          "sttComputationsMs": [372.94560000000274]
         },
         {
           "id": "af_bella-0.85-reset-suffix",
@@ -3017,7 +3017,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [308.2469000000001]
+          "sttComputationsMs": [304.27890000000116]
         },
         {
           "id": "af_bella-0.85-reload-suffix",
@@ -3029,7 +3029,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [355.10020000000077]
+          "sttComputationsMs": [311.58190000000104]
         },
         {
           "id": "af_bella-0.85-cancel-idle",
@@ -3041,7 +3041,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [208.6831999999995]
+          "sttComputationsMs": [234.47439999999915]
         },
         {
           "id": "af_bella-0.85-prompt-composing",
@@ -3053,7 +3053,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [109.26119999999901, 133.0082999999995]
+          "sttComputationsMs": [121.03470000000016, 124.63110000000233]
         },
         {
           "id": "af_bella-0.85-near-wake",
@@ -3101,7 +3101,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [989.6897000000026]
+          "sttComputationsMs": [809.8983000000007]
         },
         {
           "id": "af_bella-0.85-paused-clear-250",
@@ -3113,7 +3113,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [233.9421000000002]
+          "sttComputationsMs": [196.45010000000184]
         },
         {
           "id": "af_bella-0.85-paused-clear-450",
@@ -3125,7 +3125,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [203.51529999999912]
+          "sttComputationsMs": [208.3032000000021]
         },
         {
           "id": "af_bella-0.85-paused-clear-800",
@@ -3137,7 +3137,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [204.6815999999999]
+          "sttComputationsMs": [208.35000000000218]
         },
         {
           "id": "af_bella-1.2-wake",
@@ -3161,7 +3161,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [134.45130000000063]
+          "sttComputationsMs": [109.22820000000138]
         },
         {
           "id": "af_bella-1.2-done",
@@ -3209,7 +3209,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [115.166500000003]
+          "sttComputationsMs": [106.59879999999976]
         },
         {
           "id": "af_bella-1.2-that-is-all",
@@ -3257,7 +3257,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [83.45759999999791]
+          "sttComputationsMs": [75.46080000000075]
         },
         {
           "id": "af_bella-1.2-reset",
@@ -3269,7 +3269,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [122.82400000000052]
+          "sttComputationsMs": [112.00569999999789]
         },
         {
           "id": "af_bella-1.2-reload",
@@ -3293,7 +3293,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [118.3601000000017]
+          "sttComputationsMs": [102.40020000000004]
         },
         {
           "id": "af_bella-1.2-im-down",
@@ -3305,7 +3305,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [131.12660000000324]
+          "sttComputationsMs": [125.50379999999859]
         },
         {
           "id": "af_bella-1.2-well-done",
@@ -3317,7 +3317,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [109.38340000000244]
+          "sttComputationsMs": [114.27739999999903]
         },
         {
           "id": "af_bella-1.2-all-done",
@@ -3329,7 +3329,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [109.64660000000003]
+          "sttComputationsMs": [111.67919999999867]
         },
         {
           "id": "af_bella-1.2-promptly",
@@ -3341,7 +3341,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [149.3214999999982]
+          "sttComputationsMs": [150.38000000000102]
         },
         {
           "id": "af_bella-1.2-prompt-me",
@@ -3353,7 +3353,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [131.02999999999884]
+          "sttComputationsMs": [136.57770000000164]
         },
         {
           "id": "af_bella-1.2-cancellation",
@@ -3365,7 +3365,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [81.67380000000048, 147.78029999999853]
+          "sttComputationsMs": [79.78150000000096, 156.75450000000274]
         },
         {
           "id": "af_bella-1.2-clear-sentence",
@@ -3377,7 +3377,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [261.4178000000029]
+          "sttComputationsMs": [149.5126999999993]
         },
         {
           "id": "af_bella-1.2-clear-prefix",
@@ -3389,7 +3389,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [236.1159000000007]
+          "sttComputationsMs": [140.56230000000141]
         },
         {
           "id": "af_bella-1.2-embedded-done",
@@ -3401,7 +3401,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [255.90099999999802]
+          "sttComputationsMs": [171.8905999999988]
         },
         {
           "id": "af_bella-1.2-embedded-prompt",
@@ -3413,7 +3413,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [233.55629999999655]
+          "sttComputationsMs": [161.11019999999917]
         },
         {
           "id": "af_bella-1.2-embedded-reset",
@@ -3425,7 +3425,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [225.80159999999887]
+          "sttComputationsMs": [135.60189999999784]
         },
         {
           "id": "af_bella-1.2-reset-suffix",
@@ -3437,7 +3437,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [234.40169999999853]
+          "sttComputationsMs": [155.1378999999979]
         },
         {
           "id": "af_bella-1.2-reload-suffix",
@@ -3449,7 +3449,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [285.8796000000002]
+          "sttComputationsMs": [168.94380000000092]
         },
         {
           "id": "af_bella-1.2-cancel-idle",
@@ -3461,7 +3461,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [129.12260000000242]
+          "sttComputationsMs": [141.53770000000077]
         },
         {
           "id": "af_bella-1.2-prompt-composing",
@@ -3473,7 +3473,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [95.40810000000056, 99.82289999999921]
+          "sttComputationsMs": [95.47030000000086, 120.44750000000204]
         },
         {
           "id": "af_bella-1.2-near-wake",
@@ -3521,7 +3521,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [550.7429000000011]
+          "sttComputationsMs": [686.4133999999976]
         },
         {
           "id": "af_bella-1.2-paused-clear-250",
@@ -3533,7 +3533,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [141.3063000000002]
+          "sttComputationsMs": [179.1175000000003]
         },
         {
           "id": "af_bella-1.2-paused-clear-450",
@@ -3545,7 +3545,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [147.42979999999807]
+          "sttComputationsMs": [190.308100000002]
         },
         {
           "id": "af_bella-1.2-paused-clear-800",
@@ -3557,7 +3557,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [158.16879999999946]
+          "sttComputationsMs": [233.78020000000106]
         },
         {
           "id": "af_sarah-0.85-wake",
@@ -3581,7 +3581,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [117.08030000000144]
+          "sttComputationsMs": [368.14300000000003]
         },
         {
           "id": "af_sarah-0.85-done",
@@ -3593,7 +3593,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.5106999999989]
+          "sttComputationsMs": [373.5597999999991]
         },
         {
           "id": "af_sarah-0.85-im-done",
@@ -3653,7 +3653,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.28429999999935]
+          "sttComputationsMs": [365.372199999998]
         },
         {
           "id": "af_sarah-0.85-prompt",
@@ -3665,7 +3665,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [102.18409999999858]
+          "sttComputationsMs": [355.8948999999993]
         },
         {
           "id": "af_sarah-0.85-cancel",
@@ -3677,7 +3677,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [72.25859999999739]
+          "sttComputationsMs": [282.65810000000056]
         },
         {
           "id": "af_sarah-0.85-reset",
@@ -3701,7 +3701,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [120.10310000000027]
+          "sttComputationsMs": [527.5357000000004]
         },
         {
           "id": "af_sarah-0.85-down",
@@ -3713,7 +3713,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [100.18990000000122]
+          "sttComputationsMs": [261.8599000000031]
         },
         {
           "id": "af_sarah-0.85-im-down",
@@ -3725,7 +3725,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [121.75990000000093]
+          "sttComputationsMs": [242.18119999999908]
         },
         {
           "id": "af_sarah-0.85-well-done",
@@ -3737,7 +3737,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [109.39890000000014]
+          "sttComputationsMs": [162.0836000000054]
         },
         {
           "id": "af_sarah-0.85-all-done",
@@ -3749,7 +3749,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [113.9351999999999]
+          "sttComputationsMs": [171.80490000000282]
         },
         {
           "id": "af_sarah-0.85-promptly",
@@ -3761,7 +3761,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [139.80579999999827]
+          "sttComputationsMs": [154.44019999999728]
         },
         {
           "id": "af_sarah-0.85-prompt-me",
@@ -3773,7 +3773,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [134.58820000000196]
+          "sttComputationsMs": [137.30139999999665]
         },
         {
           "id": "af_sarah-0.85-cancellation",
@@ -3786,7 +3786,7 @@
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
           "sttComputationsMs": [
-            69.23089999999866, 135.98329999999987, 141.21990000000005
+            78.7989000000016, 165.00390000000334, 161.27509999999893
           ]
         },
         {
@@ -3799,7 +3799,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [156.18639999999868]
+          "sttComputationsMs": [160.95240000000194]
         },
         {
           "id": "af_sarah-0.85-clear-prefix",
@@ -3811,7 +3811,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [141.54949999999735]
+          "sttComputationsMs": [146.97490000000107]
         },
         {
           "id": "af_sarah-0.85-embedded-done",
@@ -3823,7 +3823,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [161.01090000000113]
+          "sttComputationsMs": [183.50910000000295]
         },
         {
           "id": "af_sarah-0.85-embedded-prompt",
@@ -3835,7 +3835,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [154.1942999999992]
+          "sttComputationsMs": [164.3335999999981]
         },
         {
           "id": "af_sarah-0.85-embedded-reset",
@@ -3847,7 +3847,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.6334999999999]
+          "sttComputationsMs": [140.38380000000325]
         },
         {
           "id": "af_sarah-0.85-reset-suffix",
@@ -3859,7 +3859,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [148.4277000000002]
+          "sttComputationsMs": [153.174500000001]
         },
         {
           "id": "af_sarah-0.85-reload-suffix",
@@ -3871,7 +3871,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [157.8507000000027]
+          "sttComputationsMs": [160.10719999999856]
         },
         {
           "id": "af_sarah-0.85-cancel-idle",
@@ -3883,7 +3883,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [121.57869999999821]
+          "sttComputationsMs": [122.27590000000055]
         },
         {
           "id": "af_sarah-0.85-prompt-composing",
@@ -3895,7 +3895,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [74.32259999999951, 98.704899999997]
+          "sttComputationsMs": [70.01799999999639, 99.60640000000421]
         },
         {
           "id": "af_sarah-0.85-near-wake",
@@ -3943,7 +3943,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [624.4502999999968]
+          "sttComputationsMs": [650.8732999999993]
         },
         {
           "id": "af_sarah-0.85-paused-clear-250",
@@ -3955,7 +3955,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [180.44110000000364]
+          "sttComputationsMs": [163.37540000000445]
         },
         {
           "id": "af_sarah-0.85-paused-clear-450",
@@ -3967,7 +3967,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [181.48160000000644]
+          "sttComputationsMs": [182.08299999999872]
         },
         {
           "id": "af_sarah-0.85-paused-clear-800",
@@ -3979,7 +3979,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [193.27730000000156]
+          "sttComputationsMs": [218.6747000000032]
         },
         {
           "id": "af_sarah-1.2-wake",
@@ -4003,7 +4003,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [107.48419999999896]
+          "sttComputationsMs": [103.10119999999733]
         },
         {
           "id": "af_sarah-1.2-done",
@@ -4099,7 +4099,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [67.83239999999932]
+          "sttComputationsMs": [78.67629999999917]
         },
         {
           "id": "af_sarah-1.2-reset",
@@ -4135,7 +4135,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [99.80589999999938]
+          "sttComputationsMs": [99.41809999999532]
         },
         {
           "id": "af_sarah-1.2-im-down",
@@ -4147,7 +4147,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [128.79409999999916]
+          "sttComputationsMs": [114.78779999999824]
         },
         {
           "id": "af_sarah-1.2-well-done",
@@ -4159,7 +4159,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [97.08580000000075]
+          "sttComputationsMs": [111.31390000000101]
         },
         {
           "id": "af_sarah-1.2-all-done",
@@ -4171,7 +4171,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [98.26840000000084]
+          "sttComputationsMs": [120.42470000000321]
         },
         {
           "id": "af_sarah-1.2-promptly",
@@ -4183,7 +4183,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [126.21019999999407]
+          "sttComputationsMs": [141.76929999999993]
         },
         {
           "id": "af_sarah-1.2-prompt-me",
@@ -4195,7 +4195,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [122.75980000000709]
+          "sttComputationsMs": [127.81380000000354]
         },
         {
           "id": "af_sarah-1.2-cancellation",
@@ -4207,7 +4207,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [82.43329999999696, 136.94980000000214]
+          "sttComputationsMs": [87.29290000000037, 146.6490000000049]
         },
         {
           "id": "af_sarah-1.2-clear-sentence",
@@ -4219,7 +4219,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [137.0578999999998]
+          "sttComputationsMs": [151.0358999999953]
         },
         {
           "id": "af_sarah-1.2-clear-prefix",
@@ -4231,7 +4231,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [134.10919999999896]
+          "sttComputationsMs": [132.99009999999544]
         },
         {
           "id": "af_sarah-1.2-embedded-done",
@@ -4243,7 +4243,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [135.34939999999915]
+          "sttComputationsMs": [175.11419999999634]
         },
         {
           "id": "af_sarah-1.2-embedded-prompt",
@@ -4255,7 +4255,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.21880000000237]
+          "sttComputationsMs": [148.18209999999817]
         },
         {
           "id": "af_sarah-1.2-embedded-reset",
@@ -4267,7 +4267,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [121.52520000000368]
+          "sttComputationsMs": [139.543700000002]
         },
         {
           "id": "af_sarah-1.2-reset-suffix",
@@ -4279,7 +4279,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [129.30419999999867]
+          "sttComputationsMs": [146.52160000000003]
         },
         {
           "id": "af_sarah-1.2-reload-suffix",
@@ -4291,7 +4291,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [140.35710000000108]
+          "sttComputationsMs": [148.20490000000427]
         },
         {
           "id": "af_sarah-1.2-cancel-idle",
@@ -4303,7 +4303,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [103.49429999999847]
+          "sttComputationsMs": [104.96719999999914]
         },
         {
           "id": "af_sarah-1.2-prompt-composing",
@@ -4315,7 +4315,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [76.99330000000191, 93.280399999996]
+          "sttComputationsMs": [65.68649999999616, 87.98449999999866]
         },
         {
           "id": "af_sarah-1.2-near-wake",
@@ -4363,7 +4363,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [546.2392000000036]
+          "sttComputationsMs": [546.4755000000005]
         },
         {
           "id": "af_sarah-1.2-paused-clear-250",
@@ -4375,7 +4375,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [150.55349999999453]
+          "sttComputationsMs": [150.32530000000406]
         },
         {
           "id": "af_sarah-1.2-paused-clear-450",
@@ -4387,7 +4387,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [167.95449999999983]
+          "sttComputationsMs": [163.01670000000013]
         },
         {
           "id": "af_sarah-1.2-paused-clear-800",
@@ -4399,7 +4399,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [167.89960000000428]
+          "sttComputationsMs": [235.84100000000035]
         },
         {
           "id": "af_heart-0.85-wake",
@@ -4423,7 +4423,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [114.76340000000346]
+          "sttComputationsMs": [189.0069999999978]
         },
         {
           "id": "af_heart-0.85-done",
@@ -4435,7 +4435,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [214.4311000000016]
+          "sttComputationsMs": [132.84919999999693]
         },
         {
           "id": "af_heart-0.85-im-done",
@@ -4459,7 +4459,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [238.24579999999696]
+          "sttComputationsMs": [133.2001999999993]
         },
         {
           "id": "af_heart-0.85-thats-all",
@@ -4507,7 +4507,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [216.69980000000214]
+          "sttComputationsMs": [135.90969999999652]
         },
         {
           "id": "af_heart-0.85-cancel",
@@ -4519,7 +4519,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [161.9760000000024]
+          "sttComputationsMs": [83.91270000000077]
         },
         {
           "id": "af_heart-0.85-reset",
@@ -4531,7 +4531,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [248.10780000000523]
+          "sttComputationsMs": [126.05539999999746]
         },
         {
           "id": "af_heart-0.85-reload",
@@ -4543,7 +4543,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [297.4236000000019]
+          "sttComputationsMs": [152.85280000000057]
         },
         {
           "id": "af_heart-0.85-down",
@@ -4555,7 +4555,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [175.84529999999359]
+          "sttComputationsMs": [119.04330000000482]
         },
         {
           "id": "af_heart-0.85-im-down",
@@ -4567,7 +4567,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.95219999999972]
+          "sttComputationsMs": [136.37400000000343]
         },
         {
           "id": "af_heart-0.85-well-done",
@@ -4579,7 +4579,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [103.08929999999964]
+          "sttComputationsMs": [131.7488000000012]
         },
         {
           "id": "af_heart-0.85-all-done",
@@ -4591,7 +4591,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [100.58460000000196]
+          "sttComputationsMs": [133.02500000000146]
         },
         {
           "id": "af_heart-0.85-promptly",
@@ -4603,7 +4603,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.17690000000584]
+          "sttComputationsMs": [183.46229999999923]
         },
         {
           "id": "af_heart-0.85-prompt-me",
@@ -4615,7 +4615,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [150.03250000000116]
+          "sttComputationsMs": [214.09130000000005]
         },
         {
           "id": "af_heart-0.85-cancellation",
@@ -4628,7 +4628,7 @@
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
           "sttComputationsMs": [
-            69.96690000000672, 145.6012000000046, 162.95209999999497
+            102.98349999999482, 188.47260000000097, 184.57889999999315
           ]
         },
         {
@@ -4641,7 +4641,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [164.14280000000144]
+          "sttComputationsMs": [175.07140000000072]
         },
         {
           "id": "af_heart-0.85-clear-prefix",
@@ -4653,7 +4653,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [140.46809999999823]
+          "sttComputationsMs": [173.4719000000041]
         },
         {
           "id": "af_heart-0.85-embedded-done",
@@ -4665,7 +4665,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [172.25970000000234]
+          "sttComputationsMs": [216.32860000000073]
         },
         {
           "id": "af_heart-0.85-embedded-prompt",
@@ -4677,7 +4677,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [151.1290999999983]
+          "sttComputationsMs": [202.52049999999872]
         },
         {
           "id": "af_heart-0.85-embedded-reset",
@@ -4689,7 +4689,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [132.53839999999764]
+          "sttComputationsMs": [158.9655000000057]
         },
         {
           "id": "af_heart-0.85-reset-suffix",
@@ -4701,7 +4701,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [146.46770000000106]
+          "sttComputationsMs": [183.01659999999538]
         },
         {
           "id": "af_heart-0.85-reload-suffix",
@@ -4713,7 +4713,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [149.1736000000019]
+          "sttComputationsMs": [181.91109999999753]
         },
         {
           "id": "af_heart-0.85-cancel-idle",
@@ -4725,7 +4725,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [107.50650000000314]
+          "sttComputationsMs": [120.41509999999835]
         },
         {
           "id": "af_heart-0.85-prompt-composing",
@@ -4737,7 +4737,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [68.89250000000175, 92.46459999999934]
+          "sttComputationsMs": [76.31870000000345, 110.47769999999582]
         },
         {
           "id": "af_heart-0.85-near-wake",
@@ -4785,7 +4785,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [638.9578000000038]
+          "sttComputationsMs": [731.7334000000046]
         },
         {
           "id": "af_heart-0.85-paused-clear-250",
@@ -4797,7 +4797,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [161.0923000000039]
+          "sttComputationsMs": [224.7448000000004]
         },
         {
           "id": "af_heart-0.85-paused-clear-450",
@@ -4809,7 +4809,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [172.80860000000393]
+          "sttComputationsMs": [206.11599999999453]
         },
         {
           "id": "af_heart-0.85-paused-clear-800",
@@ -4821,7 +4821,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [186.45939999999973]
+          "sttComputationsMs": [235.9881000000023]
         },
         {
           "id": "af_heart-1.2-wake",
@@ -4845,7 +4845,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [118.64159999999538]
+          "sttComputationsMs": [121.40050000000338]
         },
         {
           "id": "af_heart-1.2-done",
@@ -4941,7 +4941,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [77.43339999999444]
+          "sttComputationsMs": [81.5460000000021]
         },
         {
           "id": "af_heart-1.2-reset",
@@ -4977,7 +4977,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [97.53789999999572]
+          "sttComputationsMs": [114.3038000000015]
         },
         {
           "id": "af_heart-1.2-im-down",
@@ -4989,7 +4989,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [125.78589999999531]
+          "sttComputationsMs": [132.95390000000043]
         },
         {
           "id": "af_heart-1.2-well-done",
@@ -5001,7 +5001,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.98319999999512]
+          "sttComputationsMs": [127.36219999999594]
         },
         {
           "id": "af_heart-1.2-all-done",
@@ -5013,7 +5013,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [106.14299999999639]
+          "sttComputationsMs": [131.308100000002]
         },
         {
           "id": "af_heart-1.2-promptly",
@@ -5025,7 +5025,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [139.24369999999908]
+          "sttComputationsMs": [168.60039999999572]
         },
         {
           "id": "af_heart-1.2-prompt-me",
@@ -5037,7 +5037,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [123.05179999999382]
+          "sttComputationsMs": [131.2036999999982]
         },
         {
           "id": "af_heart-1.2-cancellation",
@@ -5049,7 +5049,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [73.95590000000084, 129.9554999999964]
+          "sttComputationsMs": [76.82020000000193, 135.95639999999548]
         },
         {
           "id": "af_heart-1.2-clear-sentence",
@@ -5061,7 +5061,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [140.07749999999942]
+          "sttComputationsMs": [130.97350000000006]
         },
         {
           "id": "af_heart-1.2-clear-prefix",
@@ -5073,7 +5073,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [119.8347999999969]
+          "sttComputationsMs": [125.03830000000016]
         },
         {
           "id": "af_heart-1.2-embedded-done",
@@ -5085,7 +5085,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [179.53390000000218]
+          "sttComputationsMs": [151.4383999999991]
         },
         {
           "id": "af_heart-1.2-embedded-prompt",
@@ -5097,7 +5097,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [154.83870000000024]
+          "sttComputationsMs": [135.67029999999795]
         },
         {
           "id": "af_heart-1.2-embedded-reset",
@@ -5109,7 +5109,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [135.99729999999545]
+          "sttComputationsMs": [120.25510000000213]
         },
         {
           "id": "af_heart-1.2-reset-suffix",
@@ -5121,7 +5121,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [157.42990000000282]
+          "sttComputationsMs": [138.28609999999753]
         },
         {
           "id": "af_heart-1.2-reload-suffix",
@@ -5133,7 +5133,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [167.9597999999969]
+          "sttComputationsMs": [142.59530000000086]
         },
         {
           "id": "af_heart-1.2-cancel-idle",
@@ -5145,7 +5145,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [116.74040000000241]
+          "sttComputationsMs": [100.70760000000155]
         },
         {
           "id": "af_heart-1.2-prompt-composing",
@@ -5157,7 +5157,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [84.31229999999778, 124.77880000000005]
+          "sttComputationsMs": [68.63990000000194, 87.65770000000339]
         },
         {
           "id": "af_heart-1.2-near-wake",
@@ -5205,7 +5205,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [538.1490000000049]
+          "sttComputationsMs": [524.7379000000001]
         },
         {
           "id": "af_heart-1.2-paused-clear-250",
@@ -5217,7 +5217,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [155.87000000000262]
+          "sttComputationsMs": [156.62230000000272]
         },
         {
           "id": "af_heart-1.2-paused-clear-450",
@@ -5229,7 +5229,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [156.87629999999626]
+          "sttComputationsMs": [154.5633999999991]
         },
         {
           "id": "af_heart-1.2-paused-clear-800",
@@ -5241,7 +5241,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [161.80059999999503]
+          "sttComputationsMs": [167.2624999999971]
         },
         {
           "id": "bf_emma-0.85-wake",
@@ -5277,7 +5277,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [96.08570000000327]
+          "sttComputationsMs": [102.15209999999206]
         },
         {
           "id": "bf_emma-0.85-im-done",
@@ -5289,7 +5289,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [119.6481000000058]
+          "sttComputationsMs": [121.06419999999343]
         },
         {
           "id": "bf_emma-0.85-i-am-done",
@@ -5301,7 +5301,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [121.87860000000364]
+          "sttComputationsMs": [120.73430000001099]
         },
         {
           "id": "bf_emma-0.85-thats-all",
@@ -5313,7 +5313,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [127.86070000000473]
+          "sttComputationsMs": [129.9134999999951]
         },
         {
           "id": "bf_emma-0.85-that-is-all",
@@ -5325,7 +5325,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [124.6958999999988]
+          "sttComputationsMs": [158.10510000000068]
         },
         {
           "id": "bf_emma-0.85-clear",
@@ -5337,7 +5337,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [105.6195000000007]
+          "sttComputationsMs": [102.67949999999837]
         },
         {
           "id": "bf_emma-0.85-prompt",
@@ -5349,7 +5349,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [114.07770000000164]
+          "sttComputationsMs": [109.7563999999984]
         },
         {
           "id": "bf_emma-0.85-cancel",
@@ -5361,7 +5361,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [78.41270000000077, 122.74109999999928]
+          "sttComputationsMs": [71.99720000001253, 118.46249999999418]
         },
         {
           "id": "bf_emma-0.85-reset",
@@ -5373,7 +5373,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [120.69169999999576]
+          "sttComputationsMs": [112.7332000000024]
         },
         {
           "id": "bf_emma-0.85-reload",
@@ -5385,7 +5385,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.9218000000037]
+          "sttComputationsMs": [124.56840000000375]
         },
         {
           "id": "bf_emma-0.85-down",
@@ -5397,7 +5397,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [117.66560000000027]
+          "sttComputationsMs": [101.07839999999851]
         },
         {
           "id": "bf_emma-0.85-im-down",
@@ -5409,7 +5409,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [132.21749999999884]
+          "sttComputationsMs": [133.85520000000542]
         },
         {
           "id": "bf_emma-0.85-well-done",
@@ -5421,7 +5421,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [118.88460000000487]
+          "sttComputationsMs": [111.39010000000417]
         },
         {
           "id": "bf_emma-0.85-all-done",
@@ -5433,7 +5433,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [113.15989999999874]
+          "sttComputationsMs": [118.0569000000105]
         },
         {
           "id": "bf_emma-0.85-promptly",
@@ -5445,7 +5445,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [139.82500000000437]
+          "sttComputationsMs": [146.9192999999941]
         },
         {
           "id": "bf_emma-0.85-prompt-me",
@@ -5457,7 +5457,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [144.1658000000025]
+          "sttComputationsMs": [131.45320000000356]
         },
         {
           "id": "bf_emma-0.85-cancellation",
@@ -5470,7 +5470,7 @@
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
           "sttComputationsMs": [
-            69.91389999999956, 136.05299999999988, 149.84320000000298
+            70.16679999999178, 128.93400000000838, 155.33209999999963
           ]
         },
         {
@@ -5483,7 +5483,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [159.37860000000364]
+          "sttComputationsMs": [155.86639999999898]
         },
         {
           "id": "bf_emma-0.85-clear-prefix",
@@ -5495,7 +5495,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [163.19569999999658]
+          "sttComputationsMs": [144.50319999999192]
         },
         {
           "id": "bf_emma-0.85-embedded-done",
@@ -5507,7 +5507,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [201.45119999999588]
+          "sttComputationsMs": [174.28989999998885]
         },
         {
           "id": "bf_emma-0.85-embedded-prompt",
@@ -5519,7 +5519,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [173.53859999999986]
+          "sttComputationsMs": [156.9213000000018]
         },
         {
           "id": "bf_emma-0.85-embedded-reset",
@@ -5531,7 +5531,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [151.8053]
+          "sttComputationsMs": [141.05629999999655]
         },
         {
           "id": "bf_emma-0.85-reset-suffix",
@@ -5543,7 +5543,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [159.53720000000612]
+          "sttComputationsMs": [143.81980000001204]
         },
         {
           "id": "bf_emma-0.85-reload-suffix",
@@ -5555,7 +5555,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [168.84049999999843]
+          "sttComputationsMs": [164.123700000011]
         },
         {
           "id": "bf_emma-0.85-cancel-idle",
@@ -5567,7 +5567,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [123.92789999999513]
+          "sttComputationsMs": [121.33490000000165]
         },
         {
           "id": "bf_emma-0.85-prompt-composing",
@@ -5579,7 +5579,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [68.8295999999973, 96.58039999999892]
+          "sttComputationsMs": [68.9545999999973, 100.13830000000598]
         },
         {
           "id": "bf_emma-0.85-near-wake",
@@ -5627,7 +5627,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [601.3515000000043]
+          "sttComputationsMs": [577.5708000000013]
         },
         {
           "id": "bf_emma-0.85-paused-clear-250",
@@ -5639,7 +5639,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [167.86810000000696]
+          "sttComputationsMs": [169.19040000000678]
         },
         {
           "id": "bf_emma-0.85-paused-clear-450",
@@ -5651,7 +5651,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [173.04439999999886]
+          "sttComputationsMs": [180.86389999999665]
         },
         {
           "id": "bf_emma-0.85-paused-clear-800",
@@ -5663,7 +5663,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [192.98060000000987]
+          "sttComputationsMs": [187.5685999999987]
         },
         {
           "id": "bf_emma-1.2-wake",
@@ -5687,7 +5687,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [103.7276000000129]
+          "sttComputationsMs": [118.05879999999888]
         },
         {
           "id": "bf_emma-1.2-done",
@@ -5699,7 +5699,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [96.56979999999749]
+          "sttComputationsMs": [124.61000000000058]
         },
         {
           "id": "bf_emma-1.2-im-done",
@@ -5735,7 +5735,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [97.01429999999527]
+          "sttComputationsMs": [114.23570000000473]
         },
         {
           "id": "bf_emma-1.2-that-is-all",
@@ -5783,7 +5783,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": true,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [67.33150000000023]
+          "sttComputationsMs": [77.55719999999565]
         },
         {
           "id": "bf_emma-1.2-reset",
@@ -5819,7 +5819,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [104.35060000000522]
+          "sttComputationsMs": [117.54690000000119]
         },
         {
           "id": "bf_emma-1.2-im-down",
@@ -5831,7 +5831,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [116.83999999999651]
+          "sttComputationsMs": [135.39220000000205]
         },
         {
           "id": "bf_emma-1.2-well-done",
@@ -5843,7 +5843,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [101.25430000000051]
+          "sttComputationsMs": [117.10289999999804]
         },
         {
           "id": "bf_emma-1.2-all-done",
@@ -5855,7 +5855,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [104.28269999999611]
+          "sttComputationsMs": [108.15620000001218]
         },
         {
           "id": "bf_emma-1.2-promptly",
@@ -5867,7 +5867,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [130.22230000000854]
+          "sttComputationsMs": [139.8619999999937]
         },
         {
           "id": "bf_emma-1.2-prompt-me",
@@ -5879,7 +5879,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [127.3179999999993]
+          "sttComputationsMs": [130.00860000000102]
         },
         {
           "id": "bf_emma-1.2-cancellation",
@@ -5891,7 +5891,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [70.91279999999097, 136.21960000001127]
+          "sttComputationsMs": [92.58160000000498, 155.42350000000442]
         },
         {
           "id": "bf_emma-1.2-clear-sentence",
@@ -5903,7 +5903,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [142.43000000000757]
+          "sttComputationsMs": [155.6131000000023]
         },
         {
           "id": "bf_emma-1.2-clear-prefix",
@@ -5915,7 +5915,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [126.94169999999576]
+          "sttComputationsMs": [133.2948000000033]
         },
         {
           "id": "bf_emma-1.2-embedded-done",
@@ -5927,7 +5927,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [140.96369999999297]
+          "sttComputationsMs": [145.1252999999997]
         },
         {
           "id": "bf_emma-1.2-embedded-prompt",
@@ -5939,7 +5939,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [148.27520000000368]
+          "sttComputationsMs": [137.93959999999788]
         },
         {
           "id": "bf_emma-1.2-embedded-reset",
@@ -5951,7 +5951,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [254.46259999999893]
+          "sttComputationsMs": [134.233899999992]
         },
         {
           "id": "bf_emma-1.2-reset-suffix",
@@ -5963,7 +5963,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [223.4661999999953]
+          "sttComputationsMs": [148.1929999999993]
         },
         {
           "id": "bf_emma-1.2-reload-suffix",
@@ -5975,7 +5975,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [224.38670000000275]
+          "sttComputationsMs": [147.08660000000964]
         },
         {
           "id": "bf_emma-1.2-cancel-idle",
@@ -5987,7 +5987,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [162.16110000001208]
+          "sttComputationsMs": [119.347299999994]
         },
         {
           "id": "bf_emma-1.2-prompt-composing",
@@ -5999,7 +5999,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [117.19629999999597, 132.81530000000203]
+          "sttComputationsMs": [71.30460000000312, 102.25659999999334]
         },
         {
           "id": "bf_emma-1.2-near-wake",
@@ -6047,7 +6047,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [488.5368000000017]
+          "sttComputationsMs": [504.59330000000773]
         },
         {
           "id": "bf_emma-1.2-paused-clear-250",
@@ -6059,7 +6059,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [175.08289999999397]
+          "sttComputationsMs": [159.7225000000035]
         },
         {
           "id": "bf_emma-1.2-paused-clear-450",
@@ -6071,7 +6071,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [160.67499999998836]
+          "sttComputationsMs": [166.50740000000224]
         },
         {
           "id": "bf_emma-1.2-paused-clear-800",
@@ -6083,7 +6083,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [171.1877000000095]
+          "sttComputationsMs": [177.84279999999853]
         }
       ]
     },
@@ -6093,7 +6093,7 @@
       "corpusWavMapSha256": "ef546f5bf87430705d6f770d3b190673ae88ccab72c34c75d7af9a38d26d5ea3",
       "source": {
         "baseline": false,
-        "coordinatorSha256": "8151f3c24e04a9198e1190446ecfbaf54cc504471092ea3e03624ba5598ddbae"
+        "coordinatorSha256": "c78ea268cc755e877118ed24315dcb340c2a96ed4cefae8ffd040c69e5b80b88"
       },
       "baselineSummary": {
         "ivy": {
@@ -6626,7 +6626,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": true,
           "followingRequestSubmitted": true,
-          "sttComputationsMs": [115.94129999999996]
+          "sttComputationsMs": [117.28879999999981]
         },
         {
           "id": "done",
@@ -6686,7 +6686,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [57.06240000000025, 110.9350999999997]
+          "sttComputationsMs": [56.21489999999994, 105.2768000000001]
         },
         {
           "id": "reset",
@@ -6710,7 +6710,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [143.38749999999982]
+          "sttComputationsMs": [117.2796000000003]
         },
         {
           "id": "done-fast",
@@ -6722,7 +6722,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [111.82549999999992]
+          "sttComputationsMs": [90.61360000000013]
         },
         {
           "id": "im-done-soft",
@@ -6734,7 +6734,7 @@
           "matchingSttAvailable": true,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [104.97680000000037]
+          "sttComputationsMs": [96.51240000000053]
         },
         {
           "id": "prompt-fast",
@@ -6758,7 +6758,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [152.47510000000057]
+          "sttComputationsMs": [152.2487000000001]
         },
         {
           "id": "pause",
@@ -6770,7 +6770,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [154.6918999999998]
+          "sttComputationsMs": [153.48750000000018]
         },
         {
           "id": "near-done",
@@ -6782,7 +6782,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [126.72689999999966]
+          "sttComputationsMs": [124.59820000000036]
         },
         {
           "id": "near-wake",
@@ -6806,7 +6806,7 @@
           "matchingSttAvailable": false,
           "keywordCandidate": false,
           "followingRequestSubmitted": null,
-          "sttComputationsMs": [804.6507000000001]
+          "sttComputationsMs": [756.6927999999998]
         },
         {
           "id": "background",
@@ -6985,16 +6985,16 @@
     }
   },
   "validation": {
-    "frontend": "nx run-many --targets=lint,test --projects=service-desktop-adapter,service-audio-activity,desktop-contracts,stellar-desktop passed (8 tasks, four cached).",
+    "frontend": "Affected lint and 404 unit tests passed; adapter 206 after delayed-second-candidate regression.",
     "build": "nx build stellar-desktop passed.",
-    "e2e": "nx e2e stellar-desktop-e2e --skip-nx-cache: 34 passed.",
+    "e2e": "nx e2e stellar-desktop-e2e --skip-nx-cache --workers=4: 34 passed after review fix. Prior 14-worker run had one activity-meter timing failure (33 passed); failure retained, assertion unchanged.",
     "native": "node tools/native/cargo.mjs test with RUST_TEST_THREADS=4: 116 desktop + 7 size tests; 5 explicit external tests ignored; 54 Python tests passed. Default high-concurrency attempt hit three pre-existing TTS startup timeouts; limited-concurrency rerun passed.",
     "clippy": "node tools/native/cargo.mjs clippy passed warnings denied; existing ts-rs macro serde diagnostics printed.",
     "contracts": "node tools/native/cargo.mjs contract-check passed.",
     "node": "node --test tools/native/*.spec.mjs: 25 passed.",
     "python": "recognition_metrics_test.py: 2 passed; recognition_policy_test.py: 5 passed.",
     "collector": "live-recognition.browser.mjs --run-synthetic passed all 18 save steps, resume after two and final capture release.",
-    "independentReview": "Fresh review requested on final committed head; result recorded in PR/issue, not a claim of the disabled paid critical review gate."
+    "independentReview": "Review of 10a8770 found delayed second-candidate fencing and missing collector flag; corrected with regression. Fresh final-head review result recorded on PR/issue. Advisory route does not satisfy disabled paid critical gate."
   },
   "remaining": [
     "Held-out actual-pronunciation and app microphone/session/playback qualification.",
@@ -7003,5 +7003,692 @@
     "Audible background media, long-run false activations/hour and independently annotated physical latency.",
     "Rapid consecutive speech and natural pauses beyond the guard under real microphone conditions.",
     "Sustained capture CPU, VRAM and long-run memory/worker lifecycle under actual use."
-  ]
+  ],
+  "rawFrozenRerun": {
+    "fixtureKind": "synthetic",
+    "role": "calibration/stress, not held-out acceptance",
+    "workerSha256": "4d945d1199a98e1aeee391c395a3807f7165fc933082c65261aa93a437a833d0",
+    "threshold": 0.008,
+    "commandSilenceMs": 240.0,
+    "timing": "Synthetic last absolute PCM >=262 proxy only; human and wake-request ends unannotated",
+    "scope": "CPU keyword engine; excludes capture, native IPC, application scheduling and fallback",
+    "summary": {
+      "ivy": {
+        "trials": 12,
+        "correct": 12,
+        "misses": 0,
+        "falseActivations": 0,
+        "recall": 1.0,
+        "latencyEligibleTrials": 12,
+        "unmeasuredOrMissedLatencies": 6,
+        "successfulProxyMedianMs": 466.35,
+        "proxyWithinDeadline": {
+          "250": 0,
+          "500": 4,
+          "1000": 6
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "done": {
+        "trials": 12,
+        "correct": 8,
+        "misses": 4,
+        "falseActivations": 0,
+        "recall": 0.6666666666666666,
+        "latencyEligibleTrials": 12,
+        "unmeasuredOrMissedLatencies": 4,
+        "successfulProxyMedianMs": 270.95000000000005,
+        "proxyWithinDeadline": {
+          "250": 3,
+          "500": 8,
+          "1000": 8
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "clear": {
+        "trials": 6,
+        "correct": 6,
+        "misses": 0,
+        "falseActivations": 0,
+        "recall": 1.0,
+        "latencyEligibleTrials": 6,
+        "unmeasuredOrMissedLatencies": 0,
+        "successfulProxyMedianMs": 241.3,
+        "proxyWithinDeadline": {
+          "250": 4,
+          "500": 6,
+          "1000": 6
+        },
+        "missInclusiveProxyP95Ms": 314.7
+      },
+      "prompt": {
+        "trials": 6,
+        "correct": 4,
+        "misses": 2,
+        "falseActivations": 0,
+        "recall": 0.6666666666666666,
+        "latencyEligibleTrials": 6,
+        "unmeasuredOrMissedLatencies": 2,
+        "successfulProxyMedianMs": 275.2,
+        "proxyWithinDeadline": {
+          "250": 1,
+          "500": 4,
+          "1000": 4
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "prompt cancel": {
+        "trials": 6,
+        "correct": 5,
+        "misses": 1,
+        "falseActivations": 0,
+        "recall": 0.8333333333333334,
+        "latencyEligibleTrials": 6,
+        "unmeasuredOrMissedLatencies": 1,
+        "successfulProxyMedianMs": 238.5,
+        "proxyWithinDeadline": {
+          "250": 3,
+          "500": 5,
+          "1000": 5
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "new session": {
+        "trials": 6,
+        "correct": 5,
+        "misses": 1,
+        "falseActivations": 0,
+        "recall": 0.8333333333333334,
+        "latencyEligibleTrials": 6,
+        "unmeasuredOrMissedLatencies": 1,
+        "successfulProxyMedianMs": 252.3,
+        "proxyWithinDeadline": {
+          "250": 2,
+          "500": 5,
+          "1000": 5
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "reload mcp": {
+        "trials": 6,
+        "correct": 5,
+        "misses": 1,
+        "falseActivations": 0,
+        "recall": 0.8333333333333334,
+        "latencyEligibleTrials": 6,
+        "unmeasuredOrMissedLatencies": 1,
+        "successfulProxyMedianMs": 238.4,
+        "proxyWithinDeadline": {
+          "250": 3,
+          "500": 5,
+          "1000": 5
+        },
+        "missInclusiveProxyP95Ms": null
+      },
+      "negative": {
+        "trials": 90,
+        "correct": 90,
+        "misses": 0,
+        "falseActivations": 0,
+        "recall": 1.0,
+        "latencyEligibleTrials": 0,
+        "unmeasuredOrMissedLatencies": 0,
+        "successfulProxyMedianMs": null,
+        "proxyWithinDeadline": {
+          "250": 0,
+          "500": 0,
+          "1000": 0
+        },
+        "missInclusiveProxyP95Ms": null
+      }
+    },
+    "variants": {
+      "0.85": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 466.35,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 473.0
+        },
+        "done": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 274.3,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "clear": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 232.55,
+          "proxyWithinDeadline": {
+            "250": 2,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 233.8
+        },
+        "prompt": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 255.6,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "prompt cancel": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 238.5,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "new session": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 223.2,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "reload mcp": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 226.3,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "negative": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "1": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 561.0,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 563.7
+        },
+        "done": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 15.2,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "clear": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 249.65,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 282.6
+        },
+        "prompt": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 353.7,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "prompt cancel": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 244.3,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 253.9
+        },
+        "new session": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 288.95,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 357.8
+        },
+        "reload mcp": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 231.4,
+          "proxyWithinDeadline": {
+            "250": 2,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 238.4
+        },
+        "negative": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "1.2": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 337.55,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 342.8
+        },
+        "done": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 267.6,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "clear": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 281.75,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 314.7
+        },
+        "prompt": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 267.8,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 294.8
+        },
+        "prompt cancel": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 306.9,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 382.2
+        },
+        "new session": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 288.55,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 324.8
+        },
+        "reload mcp": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 271.5,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 278.6
+        },
+        "negative": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "done-0.85": {
+        "done": {
+          "trials": 2,
+          "correct": 1,
+          "misses": 1,
+          "falseActivations": 0,
+          "recall": 0.5,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 1,
+          "successfulProxyMedianMs": 227.9,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 1,
+            "1000": 1
+          },
+          "missInclusiveProxyP95Ms": null
+        },
+        "negative": {
+          "trials": 4,
+          "correct": 4,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "done-1": {
+        "done": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 269.8,
+          "proxyWithinDeadline": {
+            "250": 1,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 303.7
+        },
+        "negative": {
+          "trials": 4,
+          "correct": 4,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "done-1.2": {
+        "done": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": 351.5,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 2,
+            "1000": 2
+          },
+          "missInclusiveProxyP95Ms": 413.1
+        },
+        "negative": {
+          "trials": 4,
+          "correct": 4,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 0,
+          "unmeasuredOrMissedLatencies": 0,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "request-0.85": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 2,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "request-1": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 2,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      },
+      "request-1.2": {
+        "ivy": {
+          "trials": 2,
+          "correct": 2,
+          "misses": 0,
+          "falseActivations": 0,
+          "recall": 1.0,
+          "latencyEligibleTrials": 2,
+          "unmeasuredOrMissedLatencies": 2,
+          "successfulProxyMedianMs": null,
+          "proxyWithinDeadline": {
+            "250": 0,
+            "500": 0,
+            "1000": 0
+          },
+          "missInclusiveProxyP95Ms": null
+        }
+      }
+    }
+  }
 }
