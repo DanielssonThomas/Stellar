@@ -89,6 +89,7 @@ export class EmblemMotionMolecule {
   } | null>(null);
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
   private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
+  private readonly drift = viewChild<ElementRef<HTMLElement>>('drift');
   private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
   private readonly settledPhase = signal<Phase | null>(null);
   private readonly motion = createEmblemLayerMotion(
@@ -247,6 +248,7 @@ export class EmblemMotionMolecule {
       const paused = this.paused();
       const planes = this.planes();
       const camera = this.camera();
+      const drift = this.drift();
       this.motion.update(
         manifest
           ? [
@@ -286,18 +288,21 @@ export class EmblemMotionMolecule {
       );
       this.settledPhase.set(this.motion.settled() ? phase : null);
       this.ambient.update(
-        this.artwork().flatMap((artwork, index) => {
-          const layer = layers[index];
-          return layer
-            ? [
-                {
-                  element: artwork.nativeElement,
-                  spin: layer.spin,
-                  order: index,
-                },
-              ]
-            : [];
-        }),
+        [
+          ...(drift ? [{ element: drift.nativeElement, order: 0 }] : []),
+          ...this.artwork().flatMap((artwork, index) => {
+            const layer = layers[index];
+            return layer?.spin
+              ? [
+                  {
+                    element: artwork.nativeElement,
+                    spin: layer.spin,
+                    order: index,
+                  },
+                ]
+              : [];
+          }),
+        ],
         !this.fault() && idleMotionEnabled(phase, paused),
         paused,
       );

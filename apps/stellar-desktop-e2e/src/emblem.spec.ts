@@ -1,5 +1,80 @@
 import { expect, test } from '@playwright/test';
 
+test('81 independent assembly planes share one idle drift and thirteen ring rotations', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const camera = page.locator('.camera');
+  await expect(page.locator('.plane')).toHaveCount(81);
+  await expect
+    .poll(() =>
+      camera.evaluate(
+        (element) =>
+          element
+            .getAnimations({ subtree: true })
+            .filter(
+              (animation) =>
+                animation.effect?.getTiming().iterations === Infinity,
+            ).length,
+      ),
+    )
+    .toBe(14);
+  await expect
+    .poll(() =>
+      page
+        .locator('.drift')
+        .evaluate((element) => element.getAnimations().length),
+    )
+    .toBe(1);
+  await expect
+    .poll(() =>
+      page
+        .locator('.artwork:not(.spin-clockwise):not(.spin-counter)')
+        .evaluateAll((elements) =>
+          elements.reduce(
+            (count, element) => count + element.getAnimations().length,
+            0,
+          ),
+        ),
+    )
+    .toBe(0);
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Start activity', exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      camera.evaluate(
+        (element) => element.getAnimations({ subtree: true }).length,
+      ),
+    )
+    .toBe(0);
+  await expect(page.locator('.plane')).toHaveCount(81);
+  await expect
+    .poll(() =>
+      page
+        .locator('.drift')
+        .evaluate((element) => getComputedStyle(element).transform),
+    )
+    .toBe('none');
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect
+    .poll(() =>
+      camera.evaluate(
+        (element) =>
+          element
+            .getAnimations({ subtree: true })
+            .filter(
+              (animation) =>
+                animation.effect?.getTiming().iterations === Infinity,
+            ).length,
+      ),
+    )
+    .toBe(14);
+});
+
 for (const [density, resolution, prefix] of [
   [1, 512, '/emblem/resolutions/512/layers/'],
   [2, 1024, '/emblem/resolutions/1024/layers/'],

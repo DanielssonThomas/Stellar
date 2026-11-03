@@ -269,6 +269,34 @@ describe('EmblemMotionMolecule', () => {
     expect(animate).toHaveBeenCalledTimes(animationCount);
   });
 
+  it('shares one drift animation across non-ring fragments while retaining independent ring spin', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: [
+        ...manifest.layers,
+        ...Array.from({ length: 20 }, (_, index) => ({
+          ...manifest.layers[0],
+          id: `fragment-${index}`,
+          z: index + 2,
+          spin: undefined,
+        })),
+      ],
+    });
+    animate.mockClear();
+    await fixture.whenStable();
+    const infinite = animate.mock.calls.filter(
+      (call) => call[1]?.iterations === Infinity,
+    );
+    // Existing drift and ring animations survive; new fragments add no animations.
+    expect(infinite).toHaveLength(0);
+    expect(
+      fixture.nativeElement.querySelectorAll('.drift .plane'),
+    ).toHaveLength(22);
+    expect(
+      fixture.nativeElement.querySelectorAll('.spin-clockwise,.spin-counter'),
+    ).toHaveLength(2);
+  });
+
   it('renders independent inert SVG images, accessible label and supplied origins', () => {
     const images: HTMLImageElement[] = Array.from(
       fixture.nativeElement.querySelectorAll('img'),
