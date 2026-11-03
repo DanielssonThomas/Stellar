@@ -338,6 +338,8 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   for (const ambient of [
     'ordinary ambient conversation',
     'ivory is a color',
+    'I mean',
+    'I mean, explain the next task',
     'prompt',
   ])
     await say(ambient);
@@ -360,11 +362,11 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   await page.evaluate(() => {
     (
       window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.transcript = 'Ivy';
+    ).__composerFixture.transcript = 'I.V.';
   });
   await say.feed(true, 18);
   await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion/);
-  await expect(transcript.getByRole('status')).toHaveText('Ivy');
+  await expect(transcript.getByRole('status')).toHaveText('I.V.');
   expect((await observed()).submissions).toEqual([]);
   await page.evaluate(() => {
     (
@@ -405,7 +407,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
   await say('another ambient request');
   expect((await observed()).submissions).toHaveLength(1);
-  await say('Ivy, prompt');
+  await say('I.V., prompt');
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();

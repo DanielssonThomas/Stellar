@@ -265,5 +265,35 @@
       "There is no alias from I think to Ivy or from Und dann to Im done. No shared Hermes configuration, model, VAD/confidence threshold or IPC contract is changed.",
       "Receipts contain only synthetic fixture text; no physical user recording is included."
     ]
+  },
+  "dottedWakeSpellingQualification": {
+    "purpose": "Accept the observed dotted I.V/I.V. spelling of Ivy at an utterance prefix; keep I mean and other ambient/common phrases out of the wake vocabulary.",
+    "diagnosticExecutableSha256": "62f1e9038c16e550e55ac8b1255eeacc3b763bfc36e67407635e1848dc406327",
+    "productionExecutableSha256": "e0123c9613999645680be75b6a1bc3ff08a537bf905c30c1fec74ba410466836",
+    "invocationSourceSha256": "6f7746b2d356ad16223f822398fa6df14e8b91c59a8830abe8edc0305627c0d1",
+    "privateReceiptSha256": "defbef54e81bbfa3e8aad4f95e4413274362cfbff062fd36d5b3554aa0d1b987",
+    "nativeMethod": "Synthetic Kokoro audio through real native WebView and English Whisper. For the dotted-spelling acceptance case only, a controlled fixture respelled the returned Ivy prefix to I.V.; this verifies the downstream native pipeline, not natural production of I.V. by ASR.",
+    "observations": {
+      "realIThinkOrIMeanSpeechNotAcceptedAsWake": "Actual I mean we should discuss the plan tomorrow fixture remained passive.",
+      "dottedWakeFixtureActivatedForeground": true,
+      "rawPanelPreservedDottedSpelling": true,
+      "dottedPromptFixtureOpenedSol": true,
+      "cancellationReturnedPassiveAndDiscardedBuffers": true,
+      "microphoneTracksAfterCancellation": 1,
+      "submittedRequestsInNativeControlOnlyRun": 0
+    },
+    "automatedVerification": {
+      "adapterTests": 215,
+      "desktopTests": 52,
+      "lintBuild": "Adapter, desktop and desktop E2E lint/test/build passed.",
+      "voiceAndComposerBrowserTests": "10/10 passed, including dotted early activation, raw input, Terra request, dotted Sol entry, cancellation and re-invocation.",
+      "nativeSmoke": "Production embedded WebView/styles/versioned IPC passed."
+    },
+    "limitations": [
+      "This is a specific transcript-spelling compatibility change, not a model accuracy improvement.",
+      "I mean remains an unresolved ASR substitution when the intended wake was Ivy; enabling that everyday phrase would violate ambient-speech rejection.",
+      "Bare IV, I.Vision, I.V.ory, possessives and mentions inside prompt dictation are not wake aliases.",
+      "No physical voice recording is included. Native dotted-spelling acceptance used explicit transcript substitution; simulated and natural recognition observations are distinguished."
+    ]
   }
 }

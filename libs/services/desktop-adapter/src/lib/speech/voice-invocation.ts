@@ -1,4 +1,4 @@
-/** An exact utterance-prefix gate; never interpret wake words inside dictation. */
+/** Wake spellings only at an utterance prefix, never inside dictation. */
 export class VoiceInvocation {
   private invoked = false;
 
@@ -19,7 +19,10 @@ export class VoiceInvocation {
     composing: boolean,
   ): { text: string; invoked: boolean } | null {
     const wake =
-      !composing && /^\s*ivy(?=$|[\s,.:;!?])(?:[\s,.:;!?]*)/iu.exec(text);
+      !composing &&
+      /^\s*(?:ivy(?=$|[\s,.:;!?])|i\.v(?=\.*(?:$|[\s,:;!?])))[\s,.:;!?]*/iu.exec(
+        text,
+      );
     if (wake) {
       this.activate();
       return { text: text.slice(wake[0].length), invoked: true };

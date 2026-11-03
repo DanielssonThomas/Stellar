@@ -10,6 +10,14 @@ describe('exact Ivy invocation', () => {
     'ivory',
     'I have a request',
     'I think.',
+    'I mean',
+    'I mean, start the activity',
+    'IV',
+    'IV fluids',
+    'I.Vision',
+    'I.V.ory',
+    "I.V.'s leaves",
+    'Tell I.V. to start',
     'Und dann',
     'Ivybridge',
     "Ivy's leaves",
@@ -35,13 +43,33 @@ describe('exact Ivy invocation', () => {
     expect(gate.accept('another request', false)).toBeNull();
   });
 
-  it('does not parse wake words inside active dictation, even after a long pause', () => {
-    const gate = new VoiceInvocation();
-    expect(gate.accept('Ivy, prompt about gardens', true)).toEqual({
-      text: 'Ivy, prompt about gardens',
-      invoked: false,
-    });
-  });
+  it.each(['I.V', 'I.V.', 'i.v.', '  I.V...'])(
+    'accepts the dotted phonetic spelling %s and requires re-invocation after reset',
+    (wake) => {
+      const gate = new VoiceInvocation();
+      expect(gate.accept(wake, false)).toEqual({ text: '', invoked: true });
+      expect(gate.accept('a normal request', false)?.text).toBe(
+        'a normal request',
+      );
+      gate.reset();
+      expect(gate.accept('I mean', false)).toBeNull();
+      expect(gate.accept(`${wake}, prompt the next task`, false)).toEqual({
+        text: 'prompt the next task',
+        invoked: true,
+      });
+    },
+  );
+
+  it.each(['Ivy, prompt about gardens', 'I.V., prompt about gardens'])(
+    'does not parse %s inside active dictation, even after a long pause',
+    (text) => {
+      const gate = new VoiceInvocation();
+      expect(gate.accept(text, true)).toEqual({
+        text,
+        invoked: false,
+      });
+    },
+  );
 });
 
 describe('prompt cancellation suffix', () => {

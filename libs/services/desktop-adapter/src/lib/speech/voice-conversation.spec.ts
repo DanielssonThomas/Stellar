@@ -359,6 +359,8 @@ describe('wake-word session lifecycle', () => {
       'prompt',
       'ivory',
       'I have a plan',
+      'I mean',
+      'I mean, explain this',
       "Ivy's leaves",
       'tell Ivy to start',
       'send prompt',
@@ -393,6 +395,33 @@ describe('wake-word session lifecycle', () => {
     expect(f.view().foregroundActive).toBe(false);
     await f.say('Ivy, start again');
     expect(f.ports.submit).toHaveBeenLastCalledWith('start again', id);
+  });
+
+  it('routes dotted I.V. to Terra and Sol, retaining the raw transcript and resetting after cancellation', async () => {
+    const f = setup();
+    await f.say('I.V, explain the plan');
+    expect(f.view().inputText).toBe('I.V, explain the plan');
+    expect(f.selectSession).toHaveBeenCalledExactlyOnceWith('terra');
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'explain the plan',
+      id,
+    );
+    f.settle();
+    await f.say('done');
+    await f.say('I mean, another request');
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    await f.say('I.V., prompt new draft');
+    expect(f.composition()).toMatchObject({
+      model: 'sol',
+      status: 'composing',
+      raw: 'new draft',
+    });
+    await f.say('prompt cancel');
+    expect(f.view().foregroundActive).toBe(false);
+    f.feed(false, 1);
+    await f.say('prompt');
+    expect(f.composition()?.status).toBe('idle');
+    expect(f.ports.submit).toHaveBeenCalledOnce();
   });
 
   it.each([
