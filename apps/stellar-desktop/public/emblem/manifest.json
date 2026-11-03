@@ -6,6 +6,7 @@
   "spacingProfile": "outer-dense",
   "planeCore": { "count": 13, "spacing": 80 },
   "radialTaper": 0.94,
+  "rasterSizes": [128, 256, 512, 768, 1024],
   "layers": [
     {
       "id": "violet-body-1",

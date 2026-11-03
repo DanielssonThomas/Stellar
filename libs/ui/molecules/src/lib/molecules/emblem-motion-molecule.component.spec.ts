@@ -194,7 +194,7 @@ describe('EmblemMotionMolecule', () => {
     });
     await fixture.whenStable();
     expect(fixture.componentInstance.assemblySources()).toEqual([
-      '/assets/emblem/layers/hair.png',
+      { src: '/assets/emblem/layers/hair.png', srcset: null },
     ]);
     fixture.componentRef.setInput('phase', 'focusing');
     await fixture.whenStable();
@@ -227,6 +227,46 @@ describe('EmblemMotionMolecule', () => {
       .dispatchEvent(new Event('error'));
     await fixture.whenStable();
     expect(fixture.componentInstance.unavailable()).toBe(true);
+  });
+
+  it('waits for container measurement and sizes fragments and preloaded originals without restarting motion', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      rasterSizes: [128, 256],
+      layers: manifest.layers.map((layer, index) => ({
+        ...layer,
+        file: `layers/hair-${index}.png`,
+        assembly: { file: 'layers/hair.png', index, count: 2 },
+      })),
+    });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('img')).toHaveLength(0);
+    expect(
+      fixture.nativeElement.querySelector('stellar-skeleton-atom'),
+    ).not.toBeNull();
+    const width = vi
+      .spyOn(fixture.nativeElement, 'clientWidth', 'get')
+      .mockReturnValue(96);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const images: HTMLImageElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('img'),
+    );
+    expect(images).toHaveLength(3);
+    expect(images.every((image) => image.sizes === '96px')).toBe(true);
+    expect(images[0].srcset).toContain(
+      '/assets/emblem/resolutions/128/layers/hair.png 128w',
+    );
+    expect(images[1].srcset).toContain(
+      '/assets/emblem/resolutions/256/layers/hair-0.png 256w',
+    );
+    expect(images[1].srcset).toContain('/assets/emblem/layers/hair-0.png 512w');
+    const animationCount = animate.mock.calls.length;
+    width.mockReturnValue(400);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    expect(images.every((image) => image.sizes === '400px')).toBe(true);
+    expect(animate).toHaveBeenCalledTimes(animationCount);
   });
 
   it('renders independent inert SVG images, accessible label and supplied origins', () => {

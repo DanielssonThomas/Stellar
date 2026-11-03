@@ -247,8 +247,45 @@
     }
   ],
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 6492456,
+  "runtimeBytes": 6492501,
   "budgetBytes": 8388608,
+  "responsiveImages": {
+    "rasterFiles": 86,
+    "tiers": [
+      {
+        "width": 128,
+        "runtimeBytes": 195937,
+        "rgbaBytes": 5636096
+      },
+      {
+        "width": 256,
+        "runtimeBytes": 478539,
+        "rgbaBytes": 22544384
+      },
+      {
+        "width": 512,
+        "runtimeBytes": 1352100,
+        "rgbaBytes": 90177536
+      },
+      {
+        "width": 768,
+        "runtimeBytes": 2549771,
+        "rgbaBytes": 202899456
+      },
+      {
+        "width": 1024,
+        "runtimeBytes": 4121654,
+        "rgbaBytes": 360710144
+      },
+      {
+        "width": 1280,
+        "runtimeBytes": 6492501,
+        "rgbaBytes": 563609600
+      }
+    ],
+    "distributionBytes": 14998507,
+    "budgetBytes": 16777216
+  },
   "activeSvgContent": false,
   "fragmentAssemblyPixelIdentical": false,
   "rasterizedRegistrationPixelIdentical": true,

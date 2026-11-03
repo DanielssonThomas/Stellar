@@ -1,5 +1,103 @@
 import { expect, test } from '@playwright/test';
 
+for (const [density, resolution, prefix] of [
+  [1, 512, '/emblem/resolutions/512/layers/'],
+  [2, 1024, '/emblem/resolutions/1024/layers/'],
+  [3, 1280, '/emblem/layers/'],
+] as const) {
+  test(`cold emblem load selects ${resolution}px rasters at ${density}x density`, async ({
+    browser,
+    baseURL,
+  }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: { width: 1100, height: 760 },
+      deviceScaleFactor: density,
+      reducedMotion: 'reduce',
+    });
+    try {
+      const page = await context.newPage();
+      const pngRequests = new Set<string>();
+      page.on('request', (request) => {
+        if (
+          request.resourceType() === 'image' &&
+          request.url().endsWith('.png')
+        )
+          pngRequests.add(new URL(request.url()).pathname);
+      });
+      await page.goto('/');
+      await expect(page.locator('.plane img')).toHaveCount(81);
+      await expect
+        .poll(() =>
+          page
+            .locator('.plane img')
+            .evaluateAll((images) =>
+              images.every(
+                (image) =>
+                  (image as HTMLImageElement).complete &&
+                  (image as HTMLImageElement).naturalWidth > 0,
+              ),
+            ),
+        )
+        .toBe(true);
+      const sources = await page
+        .locator('.emblem-presence img')
+        .evaluateAll((images) =>
+          images.map((image) => ({
+            source: (image as HTMLImageElement).currentSrc,
+            sizes: (image as HTMLImageElement).sizes,
+          })),
+        );
+      const rasters = sources.filter((image) => image.source.endsWith('.png'));
+      expect(rasters).toHaveLength(86);
+      expect(
+        rasters.every(
+          (image) => image.source.includes(prefix) && image.sizes === '480px',
+        ),
+      ).toBe(true);
+      expect(pngRequests.size).toBe(86);
+      expect([...pngRequests].every((url) => url.startsWith(prefix))).toBe(
+        true,
+      );
+      const png = await page.request.get(rasters[0].source);
+      expect((await png.body()).readUInt32BE(16)).toBe(resolution);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('resolution hints follow container and viewport resize without changing the 81-piece scene', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto('/');
+  const raster = page.locator('.plane img').first();
+  await expect(raster).toHaveAttribute('sizes', '480px');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Start activity', exact: true })
+    .click();
+  await expect(page.locator('.plane')).toHaveCount(81);
+  await expect.poll(() => raster.getAttribute('sizes')).toBe('320px');
+  await page.locator('stellar-emblem-motion-molecule').evaluate((element) => {
+    (element as HTMLElement).style.width = '96px';
+  });
+  await expect.poll(() => raster.getAttribute('sizes')).toBe('96px');
+  await page.locator('stellar-emblem-motion-molecule').evaluate((element) => {
+    (element as HTMLElement).style.width = '';
+  });
+  await expect.poll(() => raster.getAttribute('sizes')).toBe('320px');
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect.poll(() => raster.getAttribute('sizes')).toBe('480px');
+  await page.setViewportSize({ width: 360, height: 480 });
+  await expect.poll(() => raster.getAttribute('sizes')).toBe('312px');
+  await expect(page.locator('.plane')).toHaveCount(81);
+});
+
 test('all gold fragments stay on the gold side and all violet fragments stay on the violet side', async ({
   page,
 }) => {
@@ -428,7 +526,7 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
           images.every(
             (image) =>
               (image as HTMLImageElement).complete &&
-              (image as HTMLImageElement).naturalWidth === 1280,
+              (image as HTMLImageElement).naturalWidth > 0,
           ),
         ),
     )

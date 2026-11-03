@@ -44,6 +44,7 @@ export interface EmblemManifest {
   readonly spacingProfile?: EmblemSpacingProfile;
   readonly planeCore?: EmblemPlaneCore;
   readonly radialTaper?: number;
+  readonly rasterSizes?: readonly number[];
 }
 
 export function consolidatedFragmentFiles(
@@ -221,6 +222,20 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       return 'Invalid emblem manifest viewBox.';
     }
     const layers = manifest.layers;
+    if (
+      manifest.rasterSizes !== undefined &&
+      (!Array.isArray(manifest.rasterSizes) ||
+        manifest.rasterSizes.length === 0 ||
+        manifest.rasterSizes.length > 8 ||
+        manifest.rasterSizes.some(
+          (size, index, sizes) =>
+            !Number.isInteger(size) ||
+            size < 32 ||
+            size >= box[2] ||
+            (index > 0 && size <= sizes[index - 1]),
+        ))
+    )
+      return 'Invalid emblem raster sizes.';
     if (
       !Array.isArray(layers) ||
       layers.length === 0 ||

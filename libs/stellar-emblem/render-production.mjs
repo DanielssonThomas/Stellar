@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportStrands, measureFragmentCentroids } from './render-strands.mjs';
 import { exportRingArcs } from './render-ring-arcs.mjs';
+import { exportResolutions, rasterSizes } from './render-resolutions.mjs';
 
 const { chromium } = createRequire(import.meta.url)('@playwright/test');
 const { format } = createRequire(import.meta.url)('prettier');
@@ -200,6 +201,7 @@ const manifest = {
   spacingProfile: 'outer-dense',
   planeCore: { count: 13, spacing: 80 },
   radialTaper: 0.94,
+  rasterSizes,
   layers: [
     ...characterLayers.map((item, z) => entry(item, z, 'png')),
     ...ringLayers.map((item, z) =>
@@ -610,6 +612,7 @@ try {
     ].reduce((sum, file) => sum + fs.statSync(path.join(root, file)).size, 0);
   const budget = 8 * 1024 * 1024;
   if (bytes > budget) throw new Error(`Runtime byte budget exceeded: ${bytes}`);
+  const responsiveImages = await exportResolutions(page, root, manifest);
   const validation = {
     canvas: size,
     layers: layers.length,
@@ -621,6 +624,7 @@ try {
       'All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.',
     runtimeBytes: bytes,
     budgetBytes: budget,
+    responsiveImages,
     activeSvgContent: false,
     ...renders.comparison,
     canonicalUsesOriginalSources: true,

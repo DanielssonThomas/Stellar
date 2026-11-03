@@ -26,6 +26,27 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('accepts bounded increasing raster widths and rejects unsafe or ambiguous resolution metadata', () => {
+    expect(manifestError({ ...manifest, rasterSizes: [128, 256] })).toBeNull();
+    for (const rasterSizes of [
+      [],
+      [0],
+      [31],
+      [128.5],
+      [256, 128],
+      [128, 128],
+      [512],
+      [Infinity],
+      ['128'],
+      '../outside',
+    ]) {
+      expect(
+        manifestError({ ...manifest, rasterSizes } as EmblemManifest),
+      ).toBe('Invalid emblem raster sizes.');
+    }
+    expect(manifestError(manifest)).toBeNull();
+  });
+
   it('honors explicit arc depths in indexed stacks and bounds radial taper for extreme overrides', () => {
     const spaced: EmblemManifest = {
       ...manifest,

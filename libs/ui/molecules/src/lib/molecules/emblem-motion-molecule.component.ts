@@ -1,4 +1,5 @@
 import {
+  afterNextRender,
   afterRenderEffect,
   Component,
   computed,
@@ -19,6 +20,7 @@ import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
 import { emblemClipPath } from './emblem-clip';
+import { emblemImageSource } from './emblem-image-sources';
 import {
   clampAudioLevel,
   EmblemManifest,
@@ -38,7 +40,9 @@ let nextEmblemIdentity = 0;
   imports: [SkeletonAtom],
   templateUrl: './emblem-motion-molecule.component.html',
   styleUrl: './emblem-motion-molecule.component.css',
-  host: { '[attr.aria-busy]': 'loading()' },
+  host: {
+    '[attr.aria-busy]': 'loading() || (!unavailable() && awaitingSize())',
+  },
 })
 export class EmblemMotionMolecule {
   readonly solMaskId = `sol-stars-${++nextEmblemIdentity}`;
@@ -67,6 +71,13 @@ export class EmblemMotionMolecule {
   readonly label = input('Stellar emblem');
 
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly imageWidth = signal(0);
+  readonly imageSizes = computed(() => `${this.imageWidth()}px`);
+  readonly awaitingSize = computed(
+    () =>
+      Boolean(this.manifest()?.rasterSizes?.length) && this.imageWidth() <= 0,
+  );
   private readonly visible = signal(this.document.visibilityState !== 'hidden');
   private readonly media = this.document.defaultView?.matchMedia?.(
     '(prefers-reduced-motion: reduce)',
@@ -181,27 +192,39 @@ export class EmblemMotionMolecule {
       }
       return {
         ...layer,
-        src: base ? `${base}${base.endsWith('/') ? '' : '/'}${file}` : file,
+        ...emblemImageSource(file, base, manifest),
         origin: layerOrigin(layer, manifest),
         clipPath,
       };
     });
   });
   readonly assemblySources = computed(() => {
-    if (this.unavailable() || this.loading()) return [];
+    const manifest = this.manifest();
+    if (!manifest || this.unavailable() || this.loading()) return [];
     const base = this.assetBasePath();
     return [
       ...new Set(
-        this.manifest()?.layers.flatMap((layer) =>
+        manifest.layers.flatMap((layer) =>
           layer.assembly ? [layer.assembly.file] : [],
-        ) ?? [],
+        ),
       ),
-    ].map((file) =>
-      base ? `${base}${base.endsWith('/') ? '' : '/'}${file}` : file,
-    );
+    ].map((file) => emblemImageSource(file, base, manifest));
   });
 
   constructor() {
+    let sizeObserver: ResizeObserver | undefined;
+    const measure = () => {
+      const width = this.host.nativeElement.clientWidth;
+      if (width > 0) this.imageWidth.set(width);
+    };
+    afterNextRender(() => {
+      measure();
+      if (typeof ResizeObserver !== 'undefined') {
+        sizeObserver = new ResizeObserver(measure);
+        sizeObserver.observe(this.host.nativeElement);
+      }
+      this.document.defaultView?.addEventListener('resize', measure);
+    });
     const visibilityChanged = () =>
       this.visible.set(this.document.visibilityState !== 'hidden');
     const preferenceChanged = () =>
@@ -209,6 +232,8 @@ export class EmblemMotionMolecule {
     this.document.addEventListener('visibilitychange', visibilityChanged);
     this.media?.addEventListener('change', preferenceChanged);
     inject(DestroyRef).onDestroy(() => {
+      sizeObserver?.disconnect();
+      this.document.defaultView?.removeEventListener('resize', measure);
       this.document.removeEventListener('visibilitychange', visibilityChanged);
       this.media?.removeEventListener('change', preferenceChanged);
       this.motion.dispose();

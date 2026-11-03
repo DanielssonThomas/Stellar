@@ -1,4 +1,4 @@
-@if (loading()) {
+@if (loading() || (!unavailable() && awaitingSize())) {
   <div
     class="flex h-full w-full items-center justify-center"
     role="status"
@@ -61,10 +61,12 @@
       <div class="ambience" aria-hidden="true"></div>
     }
     <div class="emblem-presence">
-      @for (source of assemblySources(); track source) {
+      @for (source of assemblySources(); track source.src) {
         <img
           class="hidden"
-          [src]="source"
+          [attr.sizes]="source.srcset ? imageSizes() : null"
+          [attr.srcset]="source.srcset"
+          [src]="source.src"
           alt=""
           aria-hidden="true"
           (error)="assetFailed()"
@@ -87,6 +89,8 @@
               [style.transform-origin]="layer.origin"
             >
               <img
+                [attr.sizes]="layer.srcset ? imageSizes() : null"
+                [attr.srcset]="layer.srcset"
                 [src]="layer.src"
                 [style.filter]="
                   fault()
