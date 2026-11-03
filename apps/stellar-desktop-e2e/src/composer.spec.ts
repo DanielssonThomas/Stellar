@@ -347,12 +347,15 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   await page.evaluate(() => {
     (
       window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.transcript = 'Ivy, tell me the plan';
+    ).__composerFixture.transcript = 'Ivy';
   });
-  await say.feed(true, 32);
+  await say.feed(true, 18);
   await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion/);
   expect((await observed()).submissions).toEqual([]);
   await page.evaluate(() => {
+    (
+      window as unknown as { __composerFixture: ComposerFixture }
+    ).__composerFixture.transcript = 'tell me the plan';
     const observed = window as unknown as {
       __foregroundDropped?: boolean;
       __watchForeground?: boolean;
@@ -383,7 +386,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     (window as unknown as { __watchForeground?: boolean }).__watchForeground =
       false;
   });
-  await say("I'm done");
+  await say("Alright, I'm done!");
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
   await say('another ambient request');
   expect((await observed()).submissions).toHaveLength(1);

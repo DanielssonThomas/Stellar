@@ -40,9 +40,17 @@ export function voiceCommand(text: string): VoiceCommand | null {
   )
     return normalized;
   if (
-    ['done', 'thats all', 'that is all', 'im done', 'i am done'].includes(
-      normalized,
-    )
+    [
+      'done',
+      'thats all',
+      'that is all',
+      'im done',
+      'i am done',
+      'alright im done',
+      'alright i am done',
+      'all right im done',
+      'all right i am done',
+    ].includes(normalized)
   )
     return 'done';
   return null;

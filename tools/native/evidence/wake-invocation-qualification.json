@@ -1,61 +1,47 @@
 {
   "issue": 247,
   "currentQualification": {
-    "purpose": "Continuous microphone capture and wake-driven emblem presence; supersedes prior turn-release and idle-timeout behavior.",
-    "physicalStartup": "Actual native application automatically acquired one live physical microphone track; foreground remained inactive and emblem exploded. Final clean production app also showed Microphone on and Listening for Ivy.",
+    "purpose": "Activate immediately on the first exact leading Ivy result; trust it without final wake confirmation. Recognize alright/all right I am/Im done as whole completion commands.",
     "syntheticSpeech": true,
-    "method": "Kokoro WAV fixtures fed through Web Audio in the actual native WebView with real local Whisper, Ivy/Terra and native speech playback. RAF sampled foreground/emblem presence; wrappers observed capture ownership and submission boundaries.",
-    "diagnosticExecutableSha256": "500aecf3f1e2c2058ca55c2872a28ee3d2849f70f829399f26cd8a1003ba4597",
-    "cleanProductionExecutableSha256": "ee451f21a3428e05940709b93006979d823398715d7b34dea6ee0cf4fbc20b5f",
-    "privateReceiptSha256": "bca98bc9db5edcd8522257b793bb1450a712d34ebdb0b4de46e2b6fb1efd5149",
+    "method": "Kokoro fixture through synthetic Web Audio in the actual diagnostic native WebView; real local Whisper, verified Terra, and native speech playback. Separate clean production app startup verified through Windows UI.",
+    "diagnosticExecutableSha256": "09c99766d9fe4f5cf185486f08b949c8f4d4d39166bc3db830e0d986e6bdb884",
+    "cleanProductionExecutableSha256": "529547f1e8a25ef25af6c776419ad72d60583f9a4bcc86e16bdf07d039de948d",
+    "privateReceiptSha256": "35c751c812e99f5d25dae6a46c6b2e810f368f6f9554b7a2eb7992cde96e4977",
     "sourceSha256": {
-      "apps/stellar-desktop/src/app/app.component.ts": "8a658a75289d69e28091f96274ca9cf3551dedbfc8b354470fded3437b37d855",
-      "apps/stellar-desktop/src/app/desktop-experience.ts": "54c71c3f10eb44ab97e2991910285522f7d0c056a4738e6e52fd63231e6dc0d2",
-      "apps/stellar-desktop/src/app/desktop-session.ts": "e09331890c0ef560643231104d7a12b0faf3b74db02ea01576b2c9765cd86c60",
-      "apps/stellar-desktop/src/app/desktop-voice.ts": "4c87a812a3338b28ae6ee37aebd025675dfb8422f6be8aa42ed3933927c9b920",
-      "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "9041ab39fa5da6b62d50034f3f2a539b560ec2f4fcb93f311ca8a1e2c329c442",
-      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "b502d01fb9f8962c26d261be0d9636a0b039cca2d028397cc7256693ceab9e90",
-      "libs/services/audio-activity/src/lib/audio-activity-controller.ts": "b47af2efb7b7ee3c52a7fd37c983c7efee6661ea01c10c14db42fdb8aec88ff0"
+      "libs/services/desktop-adapter/src/lib/speech/draft-recognition.ts": "f5b5e1fe97954075c552637bd0c7f8e6e868c8026835966e252e2c29978c59e1",
+      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "925fdbaded7815bdb1845e5a256a14ffe12390989a9f834d3b326f87f3312f4a",
+      "libs/services/desktop-adapter/src/lib/speech/voice-composition.ts": "88622dedd7503e94b094b4da433835c01b27226b91785041a5f9ed7fe431fa74"
     },
     "observations": {
-      "ambientAndIvoryKeptForegroundInactiveAndEmblemExploded": true,
-      "exactIvyPreviewActivatedBeforeDispatch": true,
-      "approximatePreviewToDispatchMs": 3146,
-      "firstSentenceThinkingAndPlaybackExplodedDropouts": 0,
-      "totalPresenceSamples": 68949,
-      "foregroundRetainedAcrossSeveralMinutesOfQuiet": true,
-      "microphoneTracksAtTerraSelectionSubmissionAndNativeSpeechStart": 1,
-      "trackStopEventsDuringControlledFlow": 0,
-      "spokenImDoneReturnedToPassiveOnSameStream": true,
-      "ambientAfterDoneDidNotSubmit": true,
-      "ivyPromptOpenedSol": true,
-      "sentenceSuffixPromptCancelDiscardedRawRefinedAndPreview": true,
-      "cancellationAddedCleanupPasses": 0,
-      "cancellationAddedSubmissions": 0,
-      "cancellationReturnedToPassiveOnSameStream": true,
-      "finalCleanAppRunningWithRealMicrophone": true
+      "firstWakeSnapshotWindowMs": 500,
+      "firstExactIvyHitActivatedBeforeSentenceEnded": true,
+      "firstHitMsFromFixtureStart": 2924,
+      "firstHitMsBeforeAudioEnd": 1987,
+      "firstHitMsBeforeDispatch": 5748,
+      "foregroundObservedMsAfterHit": 7,
+      "firstRecognitionDurationMs": 1943,
+      "terraVerifiedBeforeSpokenCompletion": true,
+      "spokenAllRightImDoneRecognized": true,
+      "completionResetSucceeded": true,
+      "completionLeftPassiveExplodedWithEmptyBuffers": true,
+      "activeMicrophoneTracksAfterCompletion": 1,
+      "trackStopsDuringFlow": 0,
+      "finalProductionAppMicrophoneOnAndListeningForIvy": true
     },
     "automatedVerification": {
-      "unitTests": {
-        "adapter": 192,
-        "desktop": 52,
-        "audio": 56,
-        "interaction": 24,
-        "templates": 14,
-        "molecules": 107,
-        "organisms": 64,
-        "total": 509
-      },
-      "lintTestBuild": "Nx run-many passed for the eight affected projects and dependencies.",
-      "desktopBrowserTests": "29/29 passed in final full run.",
-      "nativeSmoke": "Production embedded WebView shell, computed styles and versioned IPC passed. Initial attempt failed WebView initialization while a diagnostic instance shared the profile with different browser flags; passed after closing that owned instance and rerunning.",
+      "adapterUnitTests": 197,
+      "desktopUnitTests": 52,
+      "desktopBrowserTests": "29/29 passed on final full run; the initial strengthened half-second test fed too few frames to include activity-onset confirmation, then passed after its fixture included that onset.",
+      "lintTestBuild": "Affected desktop, adapter and E2E Nx lint/test/build passed; E2E lint passed again after the frame-fixture correction.",
+      "nativeSmoke": "Production embedded WebView shell, styles and versioned IPC passed.",
       "documentation": "Documentation validator passed."
     },
     "limitations": [
-      "Physical capture startup is verified; speech fixtures are synthetic. No physical speech-accuracy, speaker-audibility or acoustic false-accept-rate claim.",
-      "Wake presence starts when an exact leading Ivy transcript is detected. An early I.V. preview was correctly rejected; the later valid preview activated before dispatch but after this fixture ended. No subsecond or before-utterance-end native guarantee.",
-      "Recognition input remains gated during thinking and Ivy playback even though the physical microphone stream remains open; this is not barge-in.",
-      "Private fixtures and detailed receipts stay in ignored artifacts; no user audio is included."
+      "A single synthetic speech observation, not latency percentiles or physical speech accuracy. The final production app uses the actual microphone; recognition and end-command checks used synthetic audio.",
+      "A native diagnostic instrumentation attempt timed out and was discarded; the owned diagnostic was restarted before the recorded passing run.",
+      "First-hit trust intentionally accepts an exact prefix even if a later transcript would revise it. Similar words without an Ivy hit and mentions inside dictation do not independently activate.",
+      "Whisper inference latency remains; this is not a dedicated acoustic wake detector. Command dispatch still waits for the finalized utterance and recognition input remains gated during thinking/playback.",
+      "Private fixtures and detailed receipts remain in ignored artifacts; no user audio is included."
     ]
   },
   "historicalQualification": {
@@ -115,6 +101,66 @@
       "Cleanup admitted before cancellation cannot be undone; cancellation aborts its frontend result and never adds final cleanup or dispatch.",
       "Native spoken suffix cancellation was exercised in the first run; buffered standalone cancellation and Terra gating were repeated on the final build.",
       "Private fixtures and detailed synthetic receipts remain under ignored artifacts; no user audio is included."
+    ]
+  },
+  "previousPresenceQualification": {
+    "sourceCommit": "95a4dc26e06f11d1a5ecb65b06cb3b925caa3202",
+    "note": "Historical continuous-capture evidence before first-hit trust replaced final wake confirmation.",
+    "purpose": "Continuous microphone capture and wake-driven emblem presence; supersedes prior turn-release and idle-timeout behavior.",
+    "physicalStartup": "Actual native application automatically acquired one live physical microphone track; foreground remained inactive and emblem exploded. Final clean production app also showed Microphone on and Listening for Ivy.",
+    "syntheticSpeech": true,
+    "method": "Kokoro WAV fixtures fed through Web Audio in the actual native WebView with real local Whisper, Ivy/Terra and native speech playback. RAF sampled foreground/emblem presence; wrappers observed capture ownership and submission boundaries.",
+    "diagnosticExecutableSha256": "500aecf3f1e2c2058ca55c2872a28ee3d2849f70f829399f26cd8a1003ba4597",
+    "cleanProductionExecutableSha256": "ee451f21a3428e05940709b93006979d823398715d7b34dea6ee0cf4fbc20b5f",
+    "privateReceiptSha256": "bca98bc9db5edcd8522257b793bb1450a712d34ebdb0b4de46e2b6fb1efd5149",
+    "sourceSha256": {
+      "apps/stellar-desktop/src/app/app.component.ts": "8a658a75289d69e28091f96274ca9cf3551dedbfc8b354470fded3437b37d855",
+      "apps/stellar-desktop/src/app/desktop-experience.ts": "54c71c3f10eb44ab97e2991910285522f7d0c056a4738e6e52fd63231e6dc0d2",
+      "apps/stellar-desktop/src/app/desktop-session.ts": "e09331890c0ef560643231104d7a12b0faf3b74db02ea01576b2c9765cd86c60",
+      "apps/stellar-desktop/src/app/desktop-voice.ts": "4c87a812a3338b28ae6ee37aebd025675dfb8422f6be8aa42ed3933927c9b920",
+      "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "9041ab39fa5da6b62d50034f3f2a539b560ec2f4fcb93f311ca8a1e2c329c442",
+      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "b502d01fb9f8962c26d261be0d9636a0b039cca2d028397cc7256693ceab9e90",
+      "libs/services/audio-activity/src/lib/audio-activity-controller.ts": "b47af2efb7b7ee3c52a7fd37c983c7efee6661ea01c10c14db42fdb8aec88ff0"
+    },
+    "observations": {
+      "ambientAndIvoryKeptForegroundInactiveAndEmblemExploded": true,
+      "exactIvyPreviewActivatedBeforeDispatch": true,
+      "approximatePreviewToDispatchMs": 3146,
+      "firstSentenceThinkingAndPlaybackExplodedDropouts": 0,
+      "totalPresenceSamples": 68949,
+      "foregroundRetainedAcrossSeveralMinutesOfQuiet": true,
+      "microphoneTracksAtTerraSelectionSubmissionAndNativeSpeechStart": 1,
+      "trackStopEventsDuringControlledFlow": 0,
+      "spokenImDoneReturnedToPassiveOnSameStream": true,
+      "ambientAfterDoneDidNotSubmit": true,
+      "ivyPromptOpenedSol": true,
+      "sentenceSuffixPromptCancelDiscardedRawRefinedAndPreview": true,
+      "cancellationAddedCleanupPasses": 0,
+      "cancellationAddedSubmissions": 0,
+      "cancellationReturnedToPassiveOnSameStream": true,
+      "finalCleanAppRunningWithRealMicrophone": true
+    },
+    "automatedVerification": {
+      "unitTests": {
+        "adapter": 192,
+        "desktop": 52,
+        "audio": 56,
+        "interaction": 24,
+        "templates": 14,
+        "molecules": 107,
+        "organisms": 64,
+        "total": 509
+      },
+      "lintTestBuild": "Nx run-many passed for the eight affected projects and dependencies.",
+      "desktopBrowserTests": "29/29 passed in final full run.",
+      "nativeSmoke": "Production embedded WebView shell, computed styles and versioned IPC passed. Initial attempt failed WebView initialization while a diagnostic instance shared the profile with different browser flags; passed after closing that owned instance and rerunning.",
+      "documentation": "Documentation validator passed."
+    },
+    "limitations": [
+      "Physical capture startup is verified; speech fixtures are synthetic. No physical speech-accuracy, speaker-audibility or acoustic false-accept-rate claim.",
+      "Wake presence starts when an exact leading Ivy transcript is detected. An early I.V. preview was correctly rejected; the later valid preview activated before dispatch but after this fixture ended. No subsecond or before-utterance-end native guarantee.",
+      "Recognition input remains gated during thinking and Ivy playback even though the physical microphone stream remains open; this is not barge-in.",
+      "Private fixtures and detailed receipts stay in ignored artifacts; no user audio is included."
     ]
   }
 }

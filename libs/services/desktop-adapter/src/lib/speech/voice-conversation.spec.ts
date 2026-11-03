@@ -133,22 +133,73 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('wake-word session lifecycle', () => {
-  it('rejects a provisional Ivy prefix when the finalized utterance corrects it to unrelated speech', async () => {
+  it('trusts the first Ivy hit without requiring a repeated wake in the final transcript', async () => {
     const states: VoiceView[] = [];
     const collect = vi
       .fn(async (_pcm: Int16Array, utterance_id: string) => ({
         version: 1,
         utterance_id,
-        text: 'Ivory is a color',
+        text: 'tell me the plan',
       }))
       .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'Ivy' });
     const f = fixture({ collect, onChange: (state) => states.push(state) });
-    f.feed(true, 30);
+    f.feed(true, 13);
     for (let i = 0; i < 3; i++) await flush();
     expect(states.at(-1)?.foregroundActive).toBe(true);
     f.feed(false, 35);
     for (let i = 0; i < 3; i++) await flush();
-    expect(states.at(-1)?.foregroundActive).toBe(false);
+    expect(states.at(-1)?.foregroundActive).toBe(true);
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'tell me the plan',
+      id,
+    );
+  });
+
+  it('accepts a wake hit that arrives after quiet has queued the full sentence', async () => {
+    const hit = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const final = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const collect = vi
+      .fn()
+      .mockReturnValueOnce(hit.promise)
+      .mockReturnValueOnce(final.promise);
+    const f = fixture({ collect });
+    f.feed(true, 13);
+    expect(collect).toHaveBeenCalledOnce();
+    f.feed(false, 35);
+    expect(f.ports.stop).not.toHaveBeenCalled();
+    hit.resolve({ version: 1, utterance_id: id, text: 'Ivy' });
+    await flush();
+    expect(f.view().foregroundActive).toBe(true);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(collect).toHaveBeenCalledTimes(2);
+    final.resolve({ version: 1, utterance_id: id, text: 'explain the plan' });
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'explain the plan',
+      id,
+    );
+  });
+
+  it('does not revive foreground from a wake preview after the microphone is stopped', async () => {
+    const hit = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const f = fixture({ collect: () => hit.promise });
+    f.feed(true, 13);
+    f.controller.accept({ type: 'reset' });
+    hit.resolve({ version: 1, utterance_id: id, text: 'Ivy' });
+    await flush();
+    expect(f.view().foregroundActive).toBe(false);
     expect(f.ports.submit).not.toHaveBeenCalled();
   });
 
@@ -299,18 +350,23 @@ describe('wake-word session lifecycle', () => {
     expect(f.ports.submit).toHaveBeenLastCalledWith('start again', id);
   });
 
-  it.each(['done', "that's all", "I'm done", 'that is all', 'I am done'])(
-    'requires a fresh wake after %s',
-    async (command) => {
-      const f = setup();
-      await f.say('Ivy');
-      expect(f.ports.submit).not.toHaveBeenCalled();
-      await f.say(command);
-      await f.say('new request');
-      expect(f.ports.submit).not.toHaveBeenCalled();
-      expect(f.view().foregroundActive).toBe(false);
-    },
-  );
+  it.each([
+    'done',
+    "that's all",
+    "I'm done",
+    'that is all',
+    'I am done',
+    "alright I'm done",
+    'all right I am done',
+  ])('requires a fresh wake after %s', async (command) => {
+    const f = setup();
+    await f.say('Ivy');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    await f.say(command);
+    await f.say('new request');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.view().foregroundActive).toBe(false);
+  });
 
   it('retains foreground invocation across long pauses until explicit completion', async () => {
     vi.useFakeTimers();
@@ -1635,6 +1691,10 @@ describe('spoken prompt composition', () => {
       'that is all',
       "I'm done.",
       'I am done',
+      "Alright, I'm done!",
+      'alright im done',
+      'All right, I’m done.',
+      'alright i am done',
       'clear',
     ])
       expect(voiceCommand(text)).toBe(text === 'clear' ? 'clear' : 'done');
@@ -1650,6 +1710,8 @@ describe('spoken prompt composition', () => {
       'send me the draft',
       'send prompt now',
       'I am done with this part',
+      'alright im done with this part',
+      'explain alright im done',
     ])
       expect(voiceCommand(text)).toBeNull();
   });

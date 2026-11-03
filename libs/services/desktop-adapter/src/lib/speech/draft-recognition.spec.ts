@@ -13,6 +13,36 @@ async function flush() {
 }
 
 describe('draft recognition scheduling', () => {
+  it('finishes an in-flight wake preview before the queued final without preemption', async () => {
+    const first = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const collect = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: 'final',
+        text: 'a request',
+      });
+    const completed = vi.fn();
+    const stop = vi.fn(async () => undefined);
+    const queue = new DraftRecognition(collect, stop, completed, vi.fn());
+    const preview = new Int16Array([1]);
+    const final = new Int16Array([2]);
+    queue.offer(preview, 'wake', false, true, 'wake');
+    queue.offer(final, 'final', true);
+    expect(stop).not.toHaveBeenCalled();
+    first.resolve({ version: 1, utterance_id: 'wake', text: 'Ivy' });
+    await flush();
+    expect(completed.mock.calls).toEqual([
+      ['Ivy', 'wake', false, true],
+      ['a request', 'final', true, true],
+    ]);
+    expect([...preview, ...final]).toEqual([0, 0]);
+  });
   it('does not publish an older partial once a newer partial is queued', async () => {
     const first = deferred<{
       version: number;

@@ -67,7 +67,6 @@ export interface VoicePorts {
 
 export class VoiceConversation {
   private readonly invocation = new VoiceInvocation();
-  private provisionalInvocation = false;
   private promptOpen = false;
   private readonly assembler = createUtteranceAssembler();
   private context?: VoiceContext;
@@ -266,13 +265,20 @@ export class VoiceConversation {
           } else if (
             (this.composition.status === 'composing' ||
               (!this.invocation.active() && context.audio.activity.active)) &&
-            this.previewSamples >= 16000 &&
+            this.previewSamples >=
+              (this.composition.status === 'composing' ? 16000 : 8000) &&
             this.draftRecognition.canPreview()
           ) {
             this.previewSamples = 0;
             const preview = this.assembler.snapshot();
             if (preview)
-              this.draftRecognition.offer(preview, this.ports.id(), false);
+              this.draftRecognition.offer(
+                preview,
+                this.ports.id(),
+                false,
+                !this.draftCapped,
+                this.composition.status === 'composing' ? 'draft' : 'wake',
+              );
           }
           if (
             !pcm &&
@@ -480,19 +486,10 @@ export class VoiceConversation {
   ) {
     if (this.disposed) return;
     if (!final && !this.promptOpen && !this.invocation.active()) {
-      if (this.invocation.accept(text, false)) {
-        this.provisionalInvocation = true;
+      if (commandAllowed && this.invocation.accept(text, false)) {
         this.publish();
       }
       return;
-    }
-    if (final && this.provisionalInvocation) {
-      this.provisionalInvocation = false;
-      if (!this.invocation.accept(text, false)?.invoked) {
-        this.invocation.reset();
-        this.publish();
-        return;
-      }
     }
     if (final && this.promptOpen && cancelsPrompt(text)) {
       this.cancelPrompt();
@@ -1151,8 +1148,6 @@ export class VoiceConversation {
   }
 
   private invalidate() {
-    if (this.provisionalInvocation) this.invocation.reset();
-    this.provisionalInvocation = false;
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();
