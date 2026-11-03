@@ -54,6 +54,7 @@ fn capture(stop: Arc<AtomicBool>, sink: Sink) -> Result<(), ()> {
     sink(None);
     let mut left_analyzer = Analyzer::new(48000);
     let mut right_analyzer = Analyzer::new(48000);
+    let mut tone = super::tone::ToneAnalyzer::new(48000);
     let mut buffer = Vec::new();
     let mut emitted = Instant::now();
     let mut device_checked = Instant::now();
@@ -73,14 +74,20 @@ fn capture(stop: Arc<AtomicBool>, sink: Sink) -> Result<(), ()> {
                 let right = f32::from_le_bytes(frame[4..8].try_into().map_err(|_| ())?);
                 left_analyzer.sample(left);
                 right_analyzer.sample(right);
+                tone.sample(left, right);
             }
             buffer.fill(0);
         }
         if emitted.elapsed() >= Duration::from_millis(33) {
-            sink(Some(super::dsp::stereo_levels(
-                left_analyzer.take(),
-                right_analyzer.take(),
-            )));
+            let levels = super::dsp::stereo_levels(left_analyzer.take(), right_analyzer.take());
+            sink(Some(super::host::MusicFrame {
+                tone: if levels.level > 0.005 {
+                    tone.current()
+                } else {
+                    None
+                },
+                levels,
+            }));
             emitted = Instant::now();
         }
         if device_checked.elapsed() >= Duration::from_millis(500) {

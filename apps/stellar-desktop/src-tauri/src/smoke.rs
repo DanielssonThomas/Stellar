@@ -43,7 +43,7 @@ fn check_page(window: Webview) {
                 let musicRejected = false;
                 try { await invoke('music_set_enabled', { request: { version: 2, enabled: true } }); }
                 catch (error) { musicRejected = error === 'unsupported_version'; }
-                const musicOk = musicRejected && music.status === 'idle' && Object.values(music.levels).every(value => value === 0);
+                const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }

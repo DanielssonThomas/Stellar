@@ -1,5 +1,6 @@
 import type { EmblemLayer } from './emblem-motion-model';
 import type { EmblemMusicDirection } from './emblem-music-directions';
+import { nextGlitterRegions } from './emblem-glitter';
 import {
   bassScaleReleasePerSecond,
   bassSizePush,
@@ -19,8 +20,9 @@ interface MusicTarget {
   readonly layer: EmblemLayer;
   readonly order: number;
   readonly direction?: EmblemMusicDirection;
+  readonly regions?: readonly HTMLElement[];
 }
-type PulseProperty = 'transform' | 'filter';
+type PulseProperty = 'transform' | 'filter' | 'opacity';
 const glitterRest = 'brightness(0.72)';
 const glitterPeak = 'brightness(3)';
 
@@ -37,6 +39,9 @@ export function createEmblemMusicPulses(
   let lastMode: EmblemMusicMode | undefined;
   let bassPulse: BassSizePulse | null = null;
   let disposed = false;
+  let lightCursor = 0;
+  let previousTone: number | null = null;
+  let lastLight = -Infinity;
 
   const cancel = (element: HTMLElement) => {
     const entry = running.get(element);
@@ -83,7 +88,10 @@ export function createEmblemMusicPulses(
           [
             from,
             Object.fromEntries(
-              properties.map((property) => [property, 'none']),
+              properties.map((property) => [
+                property,
+                property === 'opacity' ? '0' : 'none',
+              ]),
             ),
           ],
           160,
@@ -99,9 +107,18 @@ export function createEmblemMusicPulses(
       mode: EmblemMusicMode,
       active: boolean,
       paused: boolean,
+      tone: number | null = null,
     ) {
       if (disposed) return;
-      const elements = new Set(targets.map((target) => target.element));
+      const regions = targets.flatMap((target) =>
+        target.layer.spin ? [] : (target.regions ?? []),
+      );
+      const elements = new Set(
+        targets.flatMap((target) => [
+          target.element,
+          ...(target.regions ?? []),
+        ]),
+      );
       for (const element of running.keys())
         if (!elements.has(element)) cancel(element);
       if (!active || lastMode !== mode) {
@@ -109,8 +126,12 @@ export function createEmblemMusicPulses(
         previous = silentEmblemMusic;
         lastBeat = -Infinity;
         bassPulse = null;
+        previousTone = null;
+        lastLight = -Infinity;
+        lightCursor = 0;
       }
       lastMode = mode;
+      for (const region of regions) region.style.opacity = '0';
       const baseFilter = active && mode === 'flashy' ? glitterRest : 'none';
       for (const { element, layer, order, direction } of targets) {
         element.style.opacity = '1';
@@ -170,6 +191,36 @@ export function createEmblemMusicPulses(
         mid: values[1],
         treble: values[2],
       };
+      const energy = Math.max(...values);
+      if (
+        mode === 'flashy' &&
+        energy >= 0.08 &&
+        time - lastLight >= 120 &&
+        (attack >= 0.065 || (tone !== null && tone !== previousTone))
+      ) {
+        const route = nextGlitterRegions(
+          regions.length,
+          lightCursor,
+          tone,
+          previousTone,
+        );
+        lightCursor = route.cursor;
+        previousTone = tone;
+        lastLight = time;
+        for (const [index, regionIndex] of route.indices.entries()) {
+          animate(
+            regions[regionIndex],
+            [
+              { opacity: 0, offset: 0 },
+              { opacity: 1, offset: 0.18 },
+              { opacity: 0, offset: 1 },
+            ],
+            290,
+            ['opacity'],
+            (index % 4) * 12,
+          );
+        }
+      }
       const cooldown = mode === 'calm' ? 750 : mode === 'dynamic' ? 480 : 360;
       if (
         attack < (mode === 'calm' ? 0.15 : 0.065) ||
@@ -178,7 +229,6 @@ export function createEmblemMusicPulses(
       )
         return;
       lastBeat = time;
-      const dominant = values.indexOf(Math.max(...values));
       const kicks = targets.flatMap((target) => {
         const kick = nearRings.has(target.layer.id)
           ? null
@@ -220,21 +270,6 @@ export function createEmblemMusicPulses(
           mode === 'flashy' ? ['transform', 'filter'] : ['transform'],
         );
       }
-      if (mode === 'flashy')
-        for (const { element, layer, order } of targets) {
-          if (layer.spin || order % 3 !== dominant) continue;
-          animate(
-            element,
-            [
-              { filter: baseFilter, offset: 0 },
-              { filter: glitterPeak, offset: 0.22 },
-              { filter: baseFilter, offset: 1 },
-            ],
-            250,
-            ['filter'],
-            (order % 5) * 18,
-          );
-        }
     },
     dispose() {
       disposed = true;

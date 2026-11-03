@@ -47,6 +47,7 @@ export class MusicVisualizerService {
     sequence: '0',
     status: 'idle',
     levels: zero(),
+    tone: null,
   });
   readonly status = computed(
     () =>
@@ -71,6 +72,9 @@ export class MusicVisualizerService {
         }
       : zero();
   });
+  readonly tone = computed(() =>
+    this.enabled() && this.levels().level > 0 ? this.snapshot().tone : null,
+  );
   private disposed = false;
   private generation = 0;
   private highest = -1n;
@@ -121,6 +125,7 @@ export class MusicVisualizerService {
       ...current,
       status: enabled ? 'starting' : 'idle',
       levels: zero(),
+      tone: null,
     }));
     this.tail = this.tail.then(async () => {
       try {
@@ -154,6 +159,7 @@ export class MusicVisualizerService {
           ...current,
           status: 'unavailable',
           levels: zero(),
+          tone: null,
         }));
       }
     });
@@ -167,7 +173,11 @@ export class MusicVisualizerService {
     clearTimeout(this.staleTimer);
     if (snapshot.status === 'capturing')
       this.staleTimer = setTimeout(() => {
-        this.snapshot.update((current) => ({ ...current, levels: zero() }));
+        this.snapshot.update((current) => ({
+          ...current,
+          levels: zero(),
+          tone: null,
+        }));
       }, 350);
     if (snapshot.status === 'unavailable' || snapshot.status === 'idle')
       this.enabled.set(false);

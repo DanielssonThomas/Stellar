@@ -28,7 +28,7 @@ export function bassSizePush(
     return null;
   const extra =
     Math.min(1, bass) *
-    (mode === 'calm' ? 0.06 : mode === 'dynamic' ? 0.12 : 0.18);
+    (mode === 'calm' ? 0.18 : mode === 'dynamic' ? 0.6 : 0.9);
   return extra > bassSizeAt(pulse, time) + 0.0001 ? { extra, at: time } : null;
 }
 

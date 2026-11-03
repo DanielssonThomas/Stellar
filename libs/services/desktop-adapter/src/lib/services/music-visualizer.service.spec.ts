@@ -11,6 +11,7 @@ const frame = (sequence: string, status = 'capturing', level = 0.3) => ({
   sequence,
   status,
   levels: { level, bass: level, mid: level, treble: level },
+  tone: level > 0 ? 69 : null,
 });
 const flush = async () => {
   for (let n = 0; n < 12; n++) await Promise.resolve();
@@ -98,8 +99,10 @@ describe('local music visualizer', () => {
     vi.useFakeTimers();
     callback(frame('10'));
     expect(service.levels().level).toBe(0.3);
+    expect(service.tone()).toBe(69);
     vi.advanceTimersByTime(351);
     expect(service.levels().level).toBe(0);
+    expect(service.tone()).toBeNull();
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
     await flush();

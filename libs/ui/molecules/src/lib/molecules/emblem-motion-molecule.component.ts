@@ -25,6 +25,7 @@ import {
   type EmblemMusicMode,
 } from './emblem-music-motion';
 import { createEmblemMusicPulses } from './emblem-music-pulses';
+import { emblemLightMasks } from './emblem-glitter';
 import {
   emblemMusicDirections,
   type EmblemMusicDirection,
@@ -74,6 +75,7 @@ export class EmblemMotionMolecule {
   readonly audioLevel = input(0);
   readonly musicLevels = input<EmblemMusicLevels>(silentEmblemMusic);
   readonly musicMode = input<EmblemMusicMode>('dynamic');
+  readonly musicTone = input<number | null>(null);
   private readonly musicDirections = computed(() => {
     const manifest = this.manifest();
     return manifest
@@ -225,6 +227,7 @@ export class EmblemMotionMolecule {
         ...emblemImageSource(file, base, manifest),
         origin: layerOrigin(layer, manifest),
         clipPath,
+        lightMasks: layer.spin ? [] : emblemLightMasks(layer, manifest.viewBox),
       };
     });
   });
@@ -239,6 +242,27 @@ export class EmblemMotionMolecule {
         ),
       ),
     ].map((file) => emblemImageSource(file, base, manifest));
+  });
+  private readonly musicTargets = computed(() => {
+    const layers = this.layers();
+    const directions = this.musicDirections();
+    return this.musicPieces().flatMap((piece, order) =>
+      layers[order]
+        ? [
+            {
+              element: piece.nativeElement,
+              layer: layers[order],
+              order,
+              direction: directions.get(layers[order].id),
+              regions: Array.from(
+                piece.nativeElement.querySelectorAll<HTMLElement>(
+                  '.light-region',
+                ),
+              ),
+            },
+          ]
+        : [],
+    );
   });
 
   constructor() {
@@ -341,26 +365,15 @@ export class EmblemMotionMolecule {
       this.prepareImages();
     });
     afterRenderEffect(() => {
-      const layers = this.layers();
       const active =
         !this.fault() && idleMotionEnabled(this.posePhase(), this.paused());
       this.musicPulses.update(
-        this.musicPieces().flatMap((piece, order) =>
-          layers[order]
-            ? [
-                {
-                  element: piece.nativeElement,
-                  layer: layers[order],
-                  order,
-                  direction: this.musicDirections().get(layers[order].id),
-                },
-              ]
-            : [],
-        ),
+        this.musicTargets(),
         active ? this.musicLevels() : silentEmblemMusic,
         this.musicMode(),
         active,
         this.paused(),
+        this.musicTone(),
       );
     });
   }
@@ -380,6 +393,16 @@ export class EmblemMotionMolecule {
     this.preparation.schedule(
       this.images().map((image) => image.nativeElement),
     );
+  }
+
+  prepareLightRegions(event: Event) {
+    const image = event.target as HTMLImageElement;
+    for (const region of Array.from(
+      image.parentElement?.querySelectorAll<HTMLElement>('.light-region') ?? [],
+    )) {
+      region.style.backgroundImage = `url("${image.currentSrc}")`;
+    }
+    this.prepareImages();
   }
 
   assetFailed() {

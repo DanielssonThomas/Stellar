@@ -111,8 +111,15 @@
                   alt=""
                   draggable="false"
                   (error)="assetFailed()"
-                  (load)="prepareImages()"
+                  (load)="prepareLightRegions($event)"
                 />
+                @for (mask of layer.lightMasks; track $index) {
+                  <div
+                    class="light-region"
+                    [style.mask-image]="mask"
+                    [style.clip-path]="layer.clipPath"
+                  ></div>
+                }
               </div>
             </div>
           </div>

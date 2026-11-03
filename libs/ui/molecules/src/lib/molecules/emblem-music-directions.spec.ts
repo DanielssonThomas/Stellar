@@ -6,7 +6,7 @@ import type { EmblemLayer, EmblemManifest } from './emblem-motion-model';
 describe('outward music directions', () => {
   const layer: EmblemLayer = {
     id: 'right',
-    file: 'hair.png',
+    file: 'body.png',
     z: 1,
     anchor: { x: 640, y: 640 },
     centroid: { x: 800, y: 640 },
@@ -49,5 +49,28 @@ describe('outward music directions', () => {
     );
     expect(loud).toContain('-2.500%');
     expect(loud).not.toContain('rotate');
+  });
+  it.each([
+    'gold-hair.png',
+    'violet-hair.png',
+    'gold-ornament.png',
+    'violet-jewelry.png',
+  ])('only increases depth spacing for %s at any intensity', (file) => {
+    const hair = { ...layer, assembly: { file, index: 0, count: 2 } };
+    const direction = emblemMusicDirections({
+      ...manifest,
+      layers: [hair],
+    }).get(hair.id)!;
+    expect(direction.inwardX).toBe(0);
+    expect(direction.inwardY).toBe(0);
+    expect(
+      musicTransform(
+        hair,
+        0,
+        { level: 1, bass: 1, mid: 1, treble: 1 },
+        'flashy',
+        direction,
+      ),
+    ).toBe('translate3d(0.000%, 0.000%, 6.000cqw)');
   });
 });

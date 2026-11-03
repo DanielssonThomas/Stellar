@@ -2,7 +2,11 @@
 export type MusicRequest = { version: number, enabled: boolean, };
 export type MusicLevels = { level: number, bass: number, mid: number, treble: number, };
 export type MusicStatus = "idle" | "starting" | "capturing" | "unavailable";
-export type MusicSnapshot = { version: number, sequence: string, status: MusicStatus, levels: MusicLevels, };
+export type MusicSnapshot = { version: number, sequence: string, status: MusicStatus, levels: MusicLevels,
+/**
+ * Dominant note-centered bin (MIDI 36..95), null during silence/unavailability.
+ */
+tone: number | null, };
 export type MusicError = "malformed" | "unsupported_version" | "unavailable";
 export type CleanupRequest = { version: number, raw: string, };
 export type CleanupReply = { version: number, text: string | null, };

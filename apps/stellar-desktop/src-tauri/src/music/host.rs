@@ -6,7 +6,12 @@ use std::sync::{
 use std::thread::JoinHandle;
 
 pub type Publisher = Arc<dyn Fn(MusicSnapshot) + Send + Sync>;
-pub type Sink = Arc<dyn Fn(Option<MusicLevels>) + Send + Sync>;
+#[derive(Default)]
+pub struct MusicFrame {
+    pub levels: MusicLevels,
+    pub tone: Option<u8>,
+}
+pub type Sink = Arc<dyn Fn(Option<MusicFrame>) + Send + Sync>;
 pub type Capture = Arc<dyn Fn(Arc<AtomicBool>, Sink) -> Result<(), ()> + Send + Sync>;
 
 struct State {
@@ -40,6 +45,7 @@ impl MusicHost {
                     sequence: "0".into(),
                     status: MusicStatus::Idle,
                     levels: MusicLevels::default(),
+                    tone: None,
                 },
             })),
             worker: Mutex::new(None),
@@ -70,6 +76,7 @@ impl MusicHost {
                     MusicStatus::Idle
                 },
                 levels: MusicLevels::default(),
+                tone: None,
             };
             (state.generation, state.snapshot.clone())
         };
@@ -81,7 +88,7 @@ impl MusicHost {
         let state = self.state.clone();
         let publisher = self.publish.clone();
         let worker_stop = stop.clone();
-        let sink: Sink = Arc::new(move |levels| {
+        let sink: Sink = Arc::new(move |frame| {
             if worker_stop.load(Ordering::Acquire) {
                 return;
             }
@@ -95,7 +102,9 @@ impl MusicHost {
                 state.sequence += 1;
                 state.snapshot.sequence = state.sequence.to_string();
                 state.snapshot.status = MusicStatus::Capturing;
-                state.snapshot.levels = levels.unwrap_or_default();
+                let frame = frame.unwrap_or_default();
+                state.snapshot.levels = frame.levels;
+                state.snapshot.tone = frame.tone;
                 state.snapshot.clone()
             };
             publisher(snapshot);
@@ -122,6 +131,7 @@ impl MusicHost {
                             sequence: state.sequence.to_string(),
                             status: MusicStatus::Unavailable,
                             levels: MusicLevels::default(),
+                            tone: None,
                         };
                         state.snapshot.clone()
                     };

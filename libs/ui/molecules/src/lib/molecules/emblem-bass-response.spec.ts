@@ -14,12 +14,19 @@ describe('bass size response', () => {
     expect(loud).not.toBeNull();
     expect(bassSizeAt(quiet, 100) - bassSizeAt(quiet, 200)).toBeCloseTo(0.016);
     expect(bassSizeAt(loud, 100) - bassSizeAt(loud, 200)).toBeCloseTo(0.016);
-    expect(bassSizeAt(quiet, 500)).toBe(0);
-    expect(bassSizeAt(loud, 1000)).toBe(0);
+    expect(bassSizeAt(quiet, 2000)).toBe(0);
+    expect(bassSizeAt(loud, 4000)).toBe(0);
     expect(bassSizePush(loud, 1, 1, 100, 'dynamic')).toBeNull();
     expect(bassSizePush(loud, 0.1, 0, 100, 'dynamic')).toBeNull();
     const pushed = bassSizePush(quiet, 1, 0, 200, 'dynamic');
     expect(bassSizeAt(pushed, 200)).toBeGreaterThan(bassSizeAt(quiet, 200));
+  });
+  it('allows large bass expansions while preserving the same release speed', () => {
+    expect(bassSizePush(null, 1, 0, 0, 'calm')?.extra).toBe(0.18);
+    expect(bassSizePush(null, 1, 0, 0, 'dynamic')?.extra).toBe(0.6);
+    const flashy = bassSizePush(null, 1, 0, 0, 'flashy');
+    expect(flashy?.extra).toBe(0.9);
+    expect(bassSizeAt(flashy, 1000)).toBeCloseTo(0.74);
   });
   it('selects complete fragmented ring groups nearest the middle on either depth side', () => {
     const layer: EmblemLayer = {

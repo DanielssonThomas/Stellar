@@ -5,6 +5,7 @@ pub use command_names::MUSIC_EVENT;
 mod capture;
 mod dsp;
 mod host;
+mod tone;
 use contracts::{MusicError, MusicRequest, MusicSnapshot};
 pub use host::MusicHost;
 
@@ -34,5 +35,7 @@ fn decode_request(value: Option<serde_json::Value>) -> Result<MusicRequest, Musi
 
 #[cfg(test)]
 mod music_tests;
+#[cfg(test)]
+mod tone_tests;
 #[cfg(all(test, windows))]
 mod windows_tests;

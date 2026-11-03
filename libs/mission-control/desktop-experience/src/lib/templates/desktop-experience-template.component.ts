@@ -165,6 +165,7 @@ export class DesktopExperienceTemplate {
   }>();
   readonly musicControls = viewChild.required(AudioVisualizerMolecule);
   readonly musicMode = signal<EmblemMusicMode>('dynamic');
+  readonly musicTone = input<number | null>(null);
   readonly statusText = input('Ready');
   readonly inputs = input<readonly MicrophoneOption[]>([]);
   readonly inputsVisible = input(false);

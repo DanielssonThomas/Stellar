@@ -33,6 +33,8 @@ pub struct MusicSnapshot {
     pub sequence: String,
     pub status: MusicStatus,
     pub levels: MusicLevels,
+    /// Dominant note-centered bin (MIDI 36..95), null during silence/unavailability.
+    pub tone: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, TS)]

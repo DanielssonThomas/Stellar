@@ -34,6 +34,9 @@ export function emblemMusicDirections(
         layer.anchor.y + dx * sin + dy * cos + (pose.y * height) / 100;
       const towardX = x + width / 2 - centerX,
         towardY = y + height / 2 - centerY;
+      const spacingOnly = /hair|ornament|jewel/i.test(
+        layer.assembly?.file ?? layer.file,
+      );
       return [
         layer.id,
         {
@@ -41,8 +44,12 @@ export function emblemMusicDirections(
             Math.sign(pose.depth) *
             (0.4 + (0.6 * Math.abs(pose.depth)) / extent),
           // Undo the plane's rotation so the pull follows the common depth axis.
-          inwardX: ((towardX * cos + towardY * sin) / width) * 20,
-          inwardY: ((-towardX * sin + towardY * cos) / height) * 20,
+          inwardX: spacingOnly
+            ? 0
+            : ((towardX * cos + towardY * sin) / width) * 20,
+          inwardY: spacingOnly
+            ? 0
+            : ((-towardX * sin + towardY * cos) / height) * 20,
         },
       ];
     }),

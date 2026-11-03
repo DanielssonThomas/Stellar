@@ -23,7 +23,8 @@ function setup() {
   const elements = Array.from({ length: 3 }, () =>
     document.createElement('div'),
   );
-  for (const element of elements)
+  const region = document.createElement('div');
+  for (const element of [...elements, region])
     element.animate = vi.fn(() => {
       const animation = { cancel: vi.fn(), onfinish: null };
       animations.push(animation);
@@ -36,6 +37,7 @@ function setup() {
       element: elements[2],
       layer: { ...ring, spin: undefined, assembly: undefined },
       order: 3,
+      regions: [region],
     },
   ];
   const style = vi.fn(
@@ -43,6 +45,7 @@ function setup() {
       ({
         transform: 'matrix(1,0,0,1,10,0)',
         filter: 'brightness(1.6)',
+        opacity: '0.6',
       }) as CSSStyleDeclaration,
   );
   const pulses = createEmblemMusicPulses(
@@ -53,6 +56,7 @@ function setup() {
     pulses,
     targets,
     elements,
+    region,
     animations,
     style,
     advance: (value: number) => {
@@ -107,10 +111,10 @@ describe('music transients', () => {
           element.style.filter === 'brightness(0.72)',
       ),
     ).toBe(true);
-    expect(state.elements[2].animate).toHaveBeenCalledWith(
+    expect(state.region.animate).toHaveBeenCalledWith(
       expect.arrayContaining([
-        { filter: 'brightness(0.72)', offset: 1 },
-        { filter: 'brightness(3)', offset: 0.22 },
+        { opacity: 0, offset: 1 },
+        { opacity: 1, offset: 0.18 },
       ]),
       expect.any(Object),
     );
@@ -121,8 +125,8 @@ describe('music transients', () => {
       false,
       false,
     );
-    expect(state.elements[2].animate).toHaveBeenLastCalledWith(
-      [{ filter: 'brightness(1.6)' }, { filter: 'none' }],
+    expect(state.region.animate).toHaveBeenLastCalledWith(
+      [{ opacity: '0.6' }, { opacity: '0' }],
       expect.objectContaining({ duration: 160 }),
     );
     expect(state.elements[0].style.transform).toBe('none');
@@ -179,12 +183,12 @@ describe('music transients', () => {
     state.pulses.update(near, loud, 'dynamic', true, false);
     for (const element of state.elements.slice(0, 2)) {
       expect(element.animate).toHaveBeenCalledWith(
-        [{ transform: 'scale(1.108)' }, { transform: 'none' }],
+        [{ transform: 'scale(1.54)' }, { transform: 'none' }],
         expect.objectContaining({ easing: 'linear' }),
       );
       const options = vi.mocked(element.animate).mock
         .calls[0][1] as KeyframeAnimationOptions;
-      expect(options.duration).toBeCloseTo(675);
+      expect(options.duration).toBeCloseTo(3375);
     }
     expect(state.elements[2].animate).not.toHaveBeenCalled();
     state.advance(1000);

@@ -72,12 +72,18 @@ fn live_loopback_reads_local_playback_and_releases_capture() {
     let stopped = host.set_enabled(false).unwrap();
     assert_eq!(stopped.status, MusicStatus::Idle);
     assert_eq!(stopped.levels.level, 0.0);
+    assert_eq!(stopped.tone, None);
     let events = events.lock().unwrap();
     let active: Vec<_> = events
         .iter()
         .filter(|event| event.levels.level > 0.01)
         .collect();
     assert!(active.len() >= 10, "expected real loopback tone frames");
+    assert!(
+        active
+            .iter()
+            .any(|event| event.tone.is_some_and(|tone| (36..=95).contains(&tone)))
+    );
     assert!(active.iter().any(
         |event| event.levels.mid > event.levels.bass && event.levels.mid > event.levels.treble
     ));

@@ -90,13 +90,17 @@ fn owns_one_capture_and_fences_old_sinks_after_stop_and_restart() {
     assert_eq!(starts.load(Ordering::SeqCst), 1);
     let stopped = host.set_enabled(false).unwrap();
     let count = events.lock().unwrap().len();
-    sinks.lock().unwrap()[0](Some(MusicLevels {
-        level: 1.0,
-        ..Default::default()
+    sinks.lock().unwrap()[0](Some(super::host::MusicFrame {
+        levels: MusicLevels {
+            level: 1.0,
+            ..Default::default()
+        },
+        tone: Some(69),
     }));
     assert_eq!(events.lock().unwrap().len(), count);
     assert_eq!(stopped.status, MusicStatus::Idle);
     assert_eq!(stopped.levels.level, 0.0);
+    assert_eq!(stopped.tone, None);
     host.set_enabled(true).unwrap();
     host.shutdown();
     let events = events.lock().unwrap();

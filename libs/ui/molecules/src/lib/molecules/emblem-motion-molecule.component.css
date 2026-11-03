@@ -28,6 +28,16 @@ img {
     transform 140ms ease-out,
     filter 220ms ease-out;
 }
+.light-region {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: brightness(4.2);
+  opacity: 0;
+}
 .motion-reduced .music-piece,
 .motion-paused .music-piece {
   transition: none;

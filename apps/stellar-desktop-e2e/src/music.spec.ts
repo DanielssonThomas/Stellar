@@ -8,11 +8,16 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     const callbacks = new Map<string, (event: { payload: unknown }) => void>();
     const calls: boolean[] = [];
     let sequence = 0;
-    const frame = (level: number, status = 'capturing') => ({
+    const frame = (
+      level: number,
+      status = 'capturing',
+      tone: number | null = 69,
+    ) => ({
       version: 1,
       sequence: String(++sequence),
       status,
       levels: { level, bass: level, mid: level, treble: level },
+      tone: level > 0 ? tone : null,
     });
     const ivy: IvySnapshot = {
       version: 1,
@@ -32,8 +37,10 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     Object.assign(window, {
       __musicFixture: {
         calls,
-        pulse: (value: number) =>
-          callbacks.get('stellar://music')?.({ payload: frame(value) }),
+        pulse: (value: number, tone?: number) =>
+          callbacks.get('stellar://music')?.({
+            payload: frame(value, 'capturing', tone),
+          }),
       },
       __TAURI__: {
         event: {
@@ -94,15 +101,15 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     )
     .toBe(81);
   const initial = await floats();
-  const pulse = (value: number) =>
+  const pulse = (value: number, tone = 69) =>
     page.evaluate(
-      (value) =>
+      ({ value, tone }) =>
         (
           window as unknown as {
-            __musicFixture: { pulse(value: number): void };
+            __musicFixture: { pulse(value: number, tone: number): void };
           }
-        ).__musicFixture.pulse(value),
-      value,
+        ).__musicFixture.pulse(value, tone),
+      { value, tone },
     );
   const calls = () =>
     page.evaluate(
@@ -131,6 +138,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     'Listening to desktop audio',
   );
   await pulse(0.4);
+  await expect(page.locator('.light-region')).toHaveCount(136);
   await page.waitForFunction(() =>
     [...document.querySelectorAll('.music-piece')].some(
       (element) => element.getAnimations().length > 0,
@@ -161,19 +169,34 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
               .some((frame) => String(frame.transform).startsWith('scale(')),
           ),
       ).length,
-      blinks: elements.filter((element) =>
-        element
-          .getAnimations()
-          .some((animation) =>
-            animation.effect
-              ?.getKeyframes()
-              .some((frame) => frame.filter === 'brightness(3)'),
-          ),
+      blinks: [...document.querySelectorAll('.light-region')].filter(
+        (element) =>
+          element
+            .getAnimations()
+            .some((animation) =>
+              animation.effect
+                ?.getKeyframes()
+                .some((frame) => frame.opacity === '1'),
+            ),
       ).length,
     }));
   expect(pulseCounts.rings).toBe(6);
   expect(pulseCounts.bassRings).toBe(6);
-  expect(pulseCounts.blinks).toBeGreaterThan(10);
+  expect(pulseCounts.blinks).toBe(21);
+  expect(
+    await page.locator('.light-region').evaluateAll((regions) =>
+      regions.every((region) => {
+        const image = region.parentElement?.querySelector('img');
+        return (
+          image &&
+          (region as HTMLElement).style.backgroundImage.includes(
+            image.currentSrc,
+          ) &&
+          (region as HTMLElement).style.maskImage.includes('radial-gradient')
+        );
+      }),
+    ),
+  ).toBe(true);
   expect(
     await page
       .locator('.music-piece')
@@ -206,6 +229,25 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
       return early - late;
     });
   expect(sizeDecay).toBeCloseTo(0.016, 3);
+  const takeHighlights = () =>
+    page.locator('.light-region').evaluateAll((regions) =>
+      regions.flatMap((region, index) => {
+        const animations = region.getAnimations();
+        for (const animation of animations) animation.finish();
+        return animations.length ? [index] : [];
+      }),
+    );
+  const firstHighlights = await takeHighlights();
+  await page.waitForTimeout(140);
+  await pulse(0.4, 70);
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.light-region')].some(
+      (region) => region.getAnimations().length > 0,
+    ),
+  );
+  const nextHighlights = await takeHighlights();
+  expect(nextHighlights).toHaveLength(21);
+  expect(nextHighlights).not.toEqual(firstHighlights);
   await expect(dialog.locator('p[role="status"]')).toHaveText(
     'Listening to desktop audio',
   );
