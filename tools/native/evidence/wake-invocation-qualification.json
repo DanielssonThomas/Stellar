@@ -42,7 +42,9 @@
       "First-hit trust intentionally accepts an exact prefix even if a later transcript would revise it. Similar words without an Ivy hit and mentions inside dictation do not independently activate.",
       "Whisper inference latency remains; this is not a dedicated acoustic wake detector. Command dispatch still waits for the finalized utterance and recognition input remains gated during thinking/playback.",
       "Private fixtures and detailed receipts remain in ignored artifacts; no user audio is included."
-    ]
+    ],
+    "sourceCommit": "b8e7e8557341460384f63043dbbd51cf2d54b151",
+    "scopeNote": "Wake-timing observations recorded before adding the read-only transcript panel; transcript visibility qualification is recorded separately below."
   },
   "historicalQualification": {
     "sourceCommit": "c2cb415089cdd2e1f8fb4e282a7352d46696bc30",
@@ -161,6 +163,48 @@
       "Wake presence starts when an exact leading Ivy transcript is detected. An early I.V. preview was correctly rejected; the later valid preview activated before dispatch but after this fixture ended. No subsecond or before-utterance-end native guarantee.",
       "Recognition input remains gated during thinking and Ivy playback even though the physical microphone stream remains open; this is not barge-in.",
       "Private fixtures and detailed receipts stay in ignored artifacts; no user audio is included."
+    ]
+  },
+  "transcriptPanelQualification": {
+    "purpose": "Show the latest raw Whisper input in a small bottom-left panel; hide and discard it throughout prompt composition.",
+    "syntheticSpeech": true,
+    "method": "Kokoro ambient, Ivy prompt and prompt cancel fixtures through the actual native diagnostic WebView, Web Audio and real local Whisper. Actual Windows screenshot visually inspected for size, placement and readability.",
+    "diagnosticExecutableSha256": "100491701fecb369c41586b6f0f50b706069431896ae19a2df2a983922e81b2d",
+    "finalProductionExecutableSha256": "025f2eb6746c94de76e5cf1d80817d09fcaf99f700fdecb42465c40e027d3a04",
+    "privateReceiptSha256": "c481f8f50b08ffe3773d1a8ec05bdbf377eedb51ac46ef529eeb95d0355b8e69",
+    "sourceSha256": {
+      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "a3962d0c0cde449bc135c1c0db9989c332b4b2b82810a65bf529f42dced0ef54",
+      "libs/ui/molecules/src/lib/molecules/voice-transcript-molecule.component.ts": "ddf2517813d735019b8d3e756c198d2f64bcd8cbdc196617412fe80836d3b8d6",
+      "libs/ui/molecules/src/lib/molecules/voice-transcript-molecule.component.html": "1263abe4de4acb9c31c2511f3fd062a87740e06b349aa6d639165dfe267cdc16"
+    },
+    "observations": {
+      "nativePanelDisplaysRawWhisperResult": true,
+      "ambientTranscriptDidNotActivateForeground": true,
+      "panelWidthPx": 320,
+      "leftInsetPx": 16,
+      "bottomInsetPx": 16,
+      "nativePromptEntryHidPanel": true,
+      "nativeCancelLeftPanelEmpty": true,
+      "cancelKeptMicrophoneTrackActive": true,
+      "cancelAddedSubmissions": 0,
+      "cleanProductionAppRunningWithRealMicrophone": true
+    },
+    "automatedVerification": {
+      "adapterTests": 199,
+      "moleculeTests": 109,
+      "templateTests": 15,
+      "desktopTests": 52,
+      "totalUnitTests": 375,
+      "lintBuild": "Five-project affected Nx lint/test/build passed. Final E2E lint after geometry assertion cleanup passed without warnings.",
+      "browser": "Full desktop run passed 29/29 on rerun; the initial run had a transient unrelated workspace retirement opacity check failure. Final targeted voice/transcript acceptance passed after refining the Terra-error visibility guard and removing geometry assertion lint warnings.",
+      "nativeSmoke": "Production embedded WebView shell, styles and versioned IPC passed.",
+      "documentation": "Documentation validation passed."
+    },
+    "qualificationNotes": [
+      "The native diagnostic run used synthetic speech; the final clean app automatically acquired the actual microphone. No physical speech-accuracy claim.",
+      "The final template guard also preserves visibility on Terra errors; covered by template unit and final browser acceptance. The recorded native prompt-hiding path is unchanged.",
+      "An initial packaging attempt overlapped frontend output writes and failed to read an asset; serial rebuilding and final native smoke passed.",
+      "Only the latest transcript is retained in renderer memory. Prompt entry, cancellation and capture reset clear it; there is no added recording, transcript history, refinement or dispatch. Private synthetic receipts remain in ignored artifacts."
     ]
   }
 }

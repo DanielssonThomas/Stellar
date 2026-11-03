@@ -18,6 +18,7 @@ import {
   EmblemMotionMolecule,
   PromptComposerMolecule,
   FaultLogMolecule,
+  VoiceTranscriptMolecule,
   type FaultLogEntry,
   type ComposerFinalizedText,
   type PromptComposerStatus,
@@ -39,6 +40,7 @@ export interface MicrophoneOption {
     EmblemMotionMolecule,
     PromptComposerMolecule,
     FaultLogMolecule,
+    VoiceTranscriptMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -109,6 +111,7 @@ export class DesktopExperienceTemplate {
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
+  readonly voiceInputText = input('');
   readonly voiceMuted = input(false);
   readonly voiceBusy = input(false);
   readonly voiceError = input(false);

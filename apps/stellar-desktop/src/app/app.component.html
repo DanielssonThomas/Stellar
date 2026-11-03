@@ -37,6 +37,7 @@
     [promptStatus]="voice.composition().status"
     [conversationActive]="voice.state().foregroundActive ?? false"
     [voiceStatus]="voice.state().status"
+    [voiceInputText]="voice.state().inputText ?? ''"
     [voiceMuted]="voice.state().muted"
     [voiceBusy]="voice.state().busy"
     [voiceError]="voice.state().error"

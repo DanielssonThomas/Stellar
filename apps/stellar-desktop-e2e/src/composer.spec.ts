@@ -344,6 +344,19 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   expect((await observed()).sessions).toEqual([]);
   expect((await observed()).submissions).toEqual([]);
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
+  const transcript = page.getByRole('region', {
+    name: 'Whisper input',
+    exact: true,
+  });
+  await expect(transcript.getByRole('status')).toHaveText('prompt');
+  const bounds = await transcript.evaluate((element) => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height, viewportHeight: window.innerHeight };
+  });
+  expect(bounds.x).toBeGreaterThanOrEqual(12);
+  expect(bounds.x).toBeLessThan(32);
+  expect(bounds.width).toBeLessThanOrEqual(340);
+  expect(bounds.y + bounds.height).toBeCloseTo(bounds.viewportHeight - 16, 0);
   await page.evaluate(() => {
     (
       window as unknown as { __composerFixture: ComposerFixture }
@@ -351,6 +364,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   });
   await say.feed(true, 18);
   await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion/);
+  await expect(transcript.getByRole('status')).toHaveText('Ivy');
   expect((await observed()).submissions).toEqual([]);
   await page.evaluate(() => {
     (
@@ -375,6 +389,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     .poll(async () => (await observed()).submissions)
     .toEqual([{ text: 'tell me the plan', dissolved: false }]);
   expect((await observed()).sessions).toEqual(['terra']);
+  await expect(transcript.getByRole('status')).toHaveText('tell me the plan');
   expect(
     await page.evaluate(
       () =>
@@ -395,6 +410,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
   expect((await observed()).composition.status).toBe('composing');
+  await expect(transcript).toHaveCount(0);
   await say('Keep this draft private. Prompt cancel.');
   await expect(page.getByRole('region', { name: 'Spoken prompt' })).toHaveCount(
     0,
@@ -405,6 +421,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     status: 'idle',
   });
   expect((await observed()).cleanups).toEqual([]);
+  await expect(transcript).toHaveCount(0);
   expect((await observed()).submissions).toHaveLength(1);
   await say('prompt');
   await say('unrelated background speech');

@@ -133,6 +133,51 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('wake-word session lifecycle', () => {
+  it('shows raw Whisper previews and final words without admitting passive speech', async () => {
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'miss herd words',
+    }));
+    const f = fixture({ collect });
+    f.feed(true, 13);
+    await flush();
+    expect(f.view().inputText).toBe('miss herd words');
+    expect(f.view().foregroundActive).toBe(false);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    collect.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'Ivy, miss herd the request.',
+    });
+    f.feed(false, 35);
+    await flush();
+    expect(f.view().inputText).toBe('Ivy, miss herd the request.');
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'miss herd the request.',
+      id,
+    );
+    f.controller.accept({ type: 'reset' });
+    expect(f.view().inputText).toBe('');
+  });
+
+  it('discards the transcript on prompt entry and does not expose cancelled prompt dictation', async () => {
+    const f = setup();
+    await f.say('unrelated background input');
+    expect(f.view().inputText).toBe('unrelated background input');
+    await f.say('Ivy, prompt');
+    expect(f.view().inputText).toBe('');
+    await f.say('private prompt words');
+    expect(f.view().inputText).toBe('');
+    await f.say('prompt cancel');
+    expect(f.view().inputText).toBe('');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.feed(false, 1);
+    await f.say('the next ambient sentence');
+    expect(f.view().inputText).toBe('the next ambient sentence');
+    expect(f.view().foregroundActive).toBe(false);
+  });
+
   it('trusts the first Ivy hit without requiring a repeated wake in the final transcript', async () => {
     const states: VoiceView[] = [];
     const collect = vi

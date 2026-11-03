@@ -36,6 +36,7 @@ export interface VoiceContext {
 }
 
 export interface VoiceView {
+  readonly inputText?: string;
   readonly foregroundActive?: boolean;
   readonly status: string;
   readonly muted: boolean;
@@ -66,6 +67,7 @@ export interface VoicePorts {
 }
 
 export class VoiceConversation {
+  private inputText = '';
   private readonly invocation = new VoiceInvocation();
   private promptOpen = false;
   private readonly assembler = createUtteranceAssembler();
@@ -474,6 +476,7 @@ export class VoiceConversation {
   }
 
   private setComposition(state: VoiceComposition) {
+    if (state.status === 'composing') this.inputText = '';
     this.composition = Object.freeze(state);
     this.ports.onComposition?.(this.composition);
   }
@@ -485,6 +488,7 @@ export class VoiceConversation {
     commandAllowed: boolean,
   ) {
     if (this.disposed) return;
+    this.observeInput(text);
     if (!final && !this.promptOpen && !this.invocation.active()) {
       if (commandAllowed && this.invocation.accept(text, false)) {
         this.publish();
@@ -1057,6 +1061,7 @@ export class VoiceConversation {
       if (!this.current(generation)) return;
       const text = transcript.text;
       if (transcript.utterance_id !== id) throw new Error();
+      this.observeInput(text);
       if (!text.trim()) {
         this.phase = null;
         this.publish();
@@ -1148,6 +1153,7 @@ export class VoiceConversation {
   }
 
   private invalidate() {
+    this.inputText = '';
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();
@@ -1211,6 +1217,12 @@ export class VoiceConversation {
     return !this.disposed && generation === this.generation;
   }
 
+  private observeInput(text: string) {
+    if (this.promptOpen || !text.trim()) return;
+    this.inputText = text;
+    this.publish();
+  }
+
   private publish() {
     const paused =
       Boolean(this.typedLease) ||
@@ -1230,6 +1242,7 @@ export class VoiceConversation {
     }
     const context = this.context;
     this.ports.onChange({
+      inputText: this.inputText,
       foregroundActive: this.promptOpen || this.invocation.active(),
       muted: this.muted,
       error: !!this.failure || this.routeUncertain,
