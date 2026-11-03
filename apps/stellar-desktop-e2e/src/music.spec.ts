@@ -129,7 +129,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
   ).toHaveAttribute('value', '0.8');
   expect(await floats()).toEqual(initial);
   await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
+  await expect(dialog).toBeHidden();
   await pulse(0.8);
   const piece = page.locator('.music-piece').nth(1);
   await expect
@@ -142,7 +142,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     .click();
   const draft = page.getByRole('textbox', { name: 'Message Ivy' });
   await draft.fill('p');
-  await expect(dialog).not.toBeVisible();
+  await expect(dialog).toBeHidden();
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
