@@ -36,11 +36,123 @@ for (const role of ['architect', 'foreman', 'peon']) {
       /fallback/,
     );
     assert.throws(
-      () => validateCloudConfig(role, config.replace('    - terminal\n', '')),
+      () =>
+        validateCloudConfig(role, config.replace(/    - terminal\r?\n/, '')),
       /terminal/,
     );
   });
 }
+
+for (const role of ['foreman', 'peon']) {
+  test(`${role} personal coding mode opts into file and terminal with normal approvals`, async (t) => {
+    const config = await readFile(
+      `config/hermes-cloud/${role}/personal-config.yaml`,
+      'utf8',
+    );
+    assert.doesNotThrow(() =>
+      validateCloudConfig(role, config, { personalCoding: true }),
+    );
+    assert.throws(() => validateCloudConfig(role, config), /terminal/);
+    for (const altered of [
+      config.replace(
+        '[terminal, file, skills]',
+        '[terminal, file, skills, browser]',
+      ),
+      config.replace('mode: smart', 'mode: yolo'),
+      config.replace('single_query_mode: deny', 'single_query_mode: allow'),
+      config.replace('unattended_mode: deny', 'unattended_mode: allow'),
+      config.replace('max_turns: 24', 'max_turns: 500'),
+      config.replace(/    - delegation\r?\n/, ''),
+      config.replace(/    - connections\r?\n/, ''),
+    ])
+      assert.throws(() =>
+        validateCloudConfig(role, altered, { personalCoding: true }),
+      );
+
+    const home = await mkdtemp(
+      path.join(os.tmpdir(), 'stellar-personal-coding-'),
+    );
+    t.after(() => rm(home, { recursive: true, force: true }));
+    const profile = path.join(home, 'profiles', `${role}-cloud`);
+    const commandRunner = (args) => {
+      assert.ok(!args.includes('chat') && !args.includes('run'));
+      if (args[0] === 'profile') return `Path: ${profile}\n`;
+      if (args.at(-1) === 'model.default')
+        return role === 'peon' ? 'gpt-6-luna' : 'gpt-6.1-sol';
+      if (args.at(-1) === 'model.provider') return 'openai-codex';
+      if (args.includes('fallback')) return 'No fallback providers configured.';
+      if (args.includes('tools'))
+        return '✓ enabled terminal\n✓ enabled file\n✓ enabled skills';
+      if (args.includes('prompt-size'))
+        return JSON.stringify({
+          toolsets_breakdown: ['terminal', 'file', 'skills'].map((toolset) => ({
+            toolset,
+          })),
+          skills_breakdown: [
+            'technical-dispatch',
+            'code-review',
+            'reconciliation',
+          ].map((name) => ({ name })),
+        });
+      throw new Error(`Unexpected command: ${args.join(' ')}`);
+    };
+    const result = await provisionCloudProfile(role, {
+      personalCoding: true,
+      replace: true,
+      commandRunner,
+    });
+    assert.equal(result.personalCoding, true);
+    assert.equal(result.inferenceStarted, false);
+    assert.equal(
+      await readFile(path.join(profile, 'config.yaml'), 'utf8'),
+      config,
+    );
+    assert.match(
+      await readFile(path.join(profile, 'SOUL.md'), 'utf8'),
+      /personal Windows cloud profile/,
+    );
+    await assert.rejects(readFile(path.join(profile, 'auth.json')), /ENOENT/);
+    await assert.rejects(
+      readFile(path.join(home, 'profiles', role, 'config.yaml')),
+      /ENOENT/,
+    );
+    for (const tools of [
+      '✓ enabled skills',
+      '✓ enabled terminal\n✓ enabled file\n✓ enabled skills\n✓ enabled delegation',
+    ]) {
+      await assert.rejects(
+        provisionCloudProfile(role, {
+          personalCoding: true,
+          replace: true,
+          commandRunner: (args) =>
+            args.includes('tools') ? tools : commandRunner(args),
+        }),
+        /loaded route or toolsets/,
+      );
+    }
+    await assert.rejects(
+      provisionCloudProfile(role, {
+        personalCoding: true,
+        replace: true,
+        commandRunner: (args) =>
+          args.includes('prompt-size')
+            ? JSON.stringify({
+                toolsets_breakdown: [{ toolset: 'skills' }],
+                skills_breakdown: [],
+              })
+            : commandRunner(args),
+      }),
+      /loaded route or toolsets/,
+    );
+  });
+}
+
+test('Architect cannot opt into personal coding', async () => {
+  await assert.rejects(
+    provisionCloudProfile('architect', { personalCoding: true }),
+    /no personal coding mode/,
+  );
+});
 
 test('creates a profile at the path Hermes reports, without copying credentials', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'stellar-cloud-profile-'));

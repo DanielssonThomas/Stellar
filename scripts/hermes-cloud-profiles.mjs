@@ -46,9 +46,15 @@ function hermes(args) {
   return result.stdout.trim();
 }
 
-export function validateCloudConfig(role, config) {
+export function validateCloudConfig(
+  role,
+  config,
+  { personalCoding = false } = {},
+) {
   const selected = roles[role];
   if (!selected) throw new Error(`Unknown role: ${role}`);
+  if (personalCoding && role === 'architect')
+    throw new Error('Architect has no personal coding mode.');
   if (
     !new RegExp(
       `^  default: ${selected.model.replaceAll('.', '\\.')}\\r?$`,
@@ -65,8 +71,7 @@ export function validateCloudConfig(role, config) {
   )
     throw new Error(`${role}: auxiliary title inference must be disabled`);
   for (const toolset of [
-    'terminal',
-    'file',
+    ...(!personalCoding ? ['terminal', 'file'] : []),
     'code_execution',
     'browser',
     'connections',
@@ -75,19 +80,43 @@ export function validateCloudConfig(role, config) {
   ])
     if (!new RegExp(`^    - ${toolset}\\r?$`, 'm').test(config))
       throw new Error(`${role}: ${toolset} must be disabled`);
+  if (personalCoding) {
+    if (
+      /^    - (?:terminal|file)\r?$/m.test(config) ||
+      !/^  cli: \[terminal, file, skills\]\r?$/m.test(config) ||
+      !/^  max_turns: 24\r?$/m.test(config) ||
+      !/^  run_budget_seconds: 600\r?$/m.test(config) ||
+      !/^  backend: local\r?$/m.test(config) ||
+      !/^  mode: smart\r?$/m.test(config) ||
+      !['single_query_mode', 'unattended_mode', 'cron_mode'].every((key) =>
+        new RegExp(`^  ${key}: deny\\r?$`, 'm').test(config),
+      )
+    )
+      throw new Error(
+        `${role}: personal coding tools, budget or approvals differ`,
+      );
+  }
   if (/api[_-]?key|access_token|refresh_token/i.test(config))
     throw new Error(`${role}: config must contain no credential fields`);
 }
 
 export async function provisionCloudProfile(
   role,
-  { replace = false, commandRunner = hermes } = {},
+  { replace = false, personalCoding = false, commandRunner = hermes } = {},
 ) {
   const selected = roles[role];
   if (!selected) throw new Error(`Unknown role: ${role}`);
-  const source = path.join(root, 'config', 'hermes-cloud', role, 'config.yaml');
+  const source = path.join(
+    root,
+    'config',
+    'hermes-cloud',
+    role,
+    personalCoding ? 'personal-config.yaml' : 'config.yaml',
+  );
+  if (personalCoding && role === 'architect')
+    throw new Error('Architect has no personal coding mode.');
   const config = await readFile(source, 'utf8');
-  validateCloudConfig(role, config);
+  validateCloudConfig(role, config, { personalCoding });
   let details;
   try {
     details = commandRunner(['profile', 'show', selected.profile]);
@@ -146,12 +175,11 @@ export async function provisionCloudProfile(
   await installIdentityFile(
     path.join(
       root,
-      'tools',
-      'policy',
-      'engineering-org',
-      'templates',
+      ...(personalCoding
+        ? ['config', 'hermes-cloud']
+        : ['tools', 'policy', 'engineering-org', 'templates']),
       role,
-      'soul.md',
+      personalCoding ? 'personal-soul.md' : 'soul.md',
     ),
     path.join(destination, 'SOUL.md'),
     true,
@@ -192,14 +220,22 @@ export async function provisionCloudProfile(
   const prompt = JSON.parse(
     commandRunner(['-p', selected.profile, 'prompt-size', '--json']),
   );
+  const expectedToolsets = personalCoding
+    ? ['terminal', 'file', 'skills']
+    : ['skills'];
   if (
     loadedModel !== selected.model ||
     loadedProvider !== 'openai-codex' ||
     !loadedFallback.includes('No fallback providers configured.') ||
-    enabledToolsets.length !== 1 ||
-    enabledToolsets[0] !== 'skills' ||
+    enabledToolsets.length !== expectedToolsets.length ||
+    !expectedToolsets.every((toolset) => enabledToolsets.includes(toolset)) ||
     !Array.isArray(prompt.toolsets_breakdown) ||
-    prompt.toolsets_breakdown.some((entry) => entry?.toolset !== 'skills') ||
+    !expectedToolsets.every((toolset) =>
+      prompt.toolsets_breakdown.some((entry) => entry?.toolset === toolset),
+    ) ||
+    prompt.toolsets_breakdown.some(
+      (entry) => !expectedToolsets.includes(entry?.toolset),
+    ) ||
     !Array.isArray(prompt.skills_breakdown) ||
     !selected.skills.every((skill) =>
       prompt.skills_breakdown.some((entry) => entry?.name === skill),
@@ -212,6 +248,7 @@ export async function provisionCloudProfile(
     profile: selected.profile,
     provider: loadedProvider,
     model: loadedModel,
+    personalCoding,
     inferenceStarted: false,
   };
 }
@@ -222,6 +259,7 @@ if (
 ) {
   provisionCloudProfile(process.argv[2], {
     replace: process.argv.includes('--replace'),
+    personalCoding: process.argv.includes('--personal-coding'),
   })
     .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
     .catch((error) => {

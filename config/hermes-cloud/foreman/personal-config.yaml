@@ -1,0 +1,48 @@
+model:
+  default: gpt-6.1-sol
+  provider: openai-codex
+fallback_providers: []
+auxiliary:
+  title_generation:
+    enabled: false
+agent:
+  reasoning_effort: high
+  max_turns: 24
+  run_budget_seconds: 600
+  disabled_toolsets:
+    - browser-use
+    - browser
+    - clarify
+    - code_execution
+    - connections
+    - delegation
+    - image_gen
+    - cronjob
+    - computer_use
+    - memory
+    - session_search
+    - todo
+    - tts
+    - vision
+    - web
+platform_toolsets:
+  cli: [terminal, file, skills]
+tools:
+  tool_search:
+    enabled: 'off'
+terminal:
+  backend: local
+  timeout: 120
+approvals:
+  mode: smart
+  single_query_mode: deny
+  unattended_mode: deny
+  cron_mode: deny
+memory:
+  memory_enabled: false
+local_runtime:
+  enabled: false
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
