@@ -1006,6 +1006,7 @@ export class VoiceConversation {
       this.phase = null;
       this.failure =
         'Message was not sent. Check Ivy in the menu; it will not be resent.';
+      this.latency.finish('interrupted');
       this.publish();
     }
     return accepted;
@@ -1054,10 +1055,15 @@ export class VoiceConversation {
       if (transcript.utterance_id !== id) throw new Error();
       if (!text.trim()) {
         this.phase = null;
+        this.latency.finish('completed');
         this.publish();
         return;
       }
       await this.recognize(text, id, generation);
+      if (this.current(generation) && this.phase === null)
+        this.latency.finish(
+          this.failure || this.composition.error ? 'interrupted' : 'completed',
+        );
     } catch {
       if (this.current(generation))
         this.fail('Local recognition unavailable. Retry voice or use text.');
@@ -1078,6 +1084,7 @@ export class VoiceConversation {
     )
       this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
+      this.latency.finish('interrupted');
       this.voiceTurn = null;
       this.phase = null;
       this.failure =
@@ -1088,21 +1095,24 @@ export class VoiceConversation {
     }
     if (snapshot.turn !== 'completed') return;
     this.latency.point('model_completed');
-    this.latency.point('first_validated_text');
     const id = this.voiceTurn;
     this.voiceTurn = null;
     this.phase = null;
     const text = spokenResponse(snapshot.items);
+    if (text) this.latency.point('first_validated_text');
     if (
       !text ||
       this.muted ||
       !context.available ||
       !['capturing', 'turn-paused'].includes(context.audio.status)
-    )
+    ) {
+      this.latency.finish('completed');
       return;
+    }
     if (new TextEncoder().encode(text).length > 4000) {
       this.failure =
         'Reply is available as text; it exceeds the local voice limit.';
+      this.latency.finish('completed');
       return;
     }
     const generation = this.generation;

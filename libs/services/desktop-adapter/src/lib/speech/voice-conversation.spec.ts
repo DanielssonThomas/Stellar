@@ -133,6 +133,160 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('voice conversation ownership', () => {
+  it.each([
+    { label: 'empty reply', items: [], muted: false },
+    {
+      label: 'suppressed structured reply',
+      items: [{ kind: 'text' as const, text: '{"stellar_presentation":' }],
+      muted: false,
+    },
+    {
+      label: 'oversized reply',
+      items: [{ kind: 'text' as const, text: 'x'.repeat(4001) }],
+      muted: false,
+    },
+    {
+      label: 'muted reply',
+      items: [{ kind: 'text' as const, text: 'A completed reply' }],
+      muted: true,
+    },
+  ])(
+    'finishes latency immediately for a completed $label without playback',
+    async ({ items, muted }) => {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture();
+      if (muted) f.controller.setMuted(true);
+      f.utterance();
+      await flush();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(0);
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items,
+        },
+      });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe('completed');
+      expect(entries[0].detail.stages_ms.model_completed).toBeDefined();
+      expect(
+        entries[0].detail.durations_ms.tts_to_first_audio_observed,
+      ).toBeNull();
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      performance.clearMeasures('stellar.voice.latency');
+    },
+  );
+
+  it.each(['failed', 'cancelled', 'uncertain'] as const)(
+    'finishes latency immediately for a %s response',
+    async (turn) => {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture();
+      f.utterance();
+      await flush();
+      f.update({ assistant: { ...f.context().assistant, turn_id: id, turn } });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe('interrupted');
+      expect(entries[0].detail.durations_ms.validated_model_text).toBeNull();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      performance.clearMeasures('stellar.voice.latency');
+    },
+  );
+
+  it('finishes empty recognition and rejected admission latency without waiting for another turn', async () => {
+    for (const empty of [true, false]) {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture({ submit: async () => false });
+      if (empty)
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: '',
+        });
+      f.utterance();
+      await flush();
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe(
+        empty ? 'completed' : 'interrupted',
+      );
+      expect(entries[0].detail.durations_ms.validated_model_text).toBeNull();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+    }
+    performance.clearMeasures('stellar.voice.latency');
+  });
+
+  it('does not charge idle time or the next request to a text-only reply latency', async () => {
+    performance.clearMeasures('stellar.voice.latency');
+    let now = 10;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      now = 100;
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items: [{ kind: 'text', text: 'x'.repeat(4001) }],
+        },
+      });
+      const original = performance.getEntriesByName(
+        'stellar.voice.latency',
+      )[0] as PerformanceMeasure;
+      expect(original.duration).toBe(90);
+      expect(original.detail.outcome).toBe('completed');
+      now = 60100;
+      f.utterance();
+      await flush();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      expect(original.duration).toBe(90);
+      now = 60200;
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items: [],
+        },
+      });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(2);
+      expect(entries[1].duration).toBe(100);
+    } finally {
+      f.controller.dispose();
+      clock.mockRestore();
+      performance.clearMeasures('stellar.voice.latency');
+    }
+  });
+
   it('uses the current PCM-time onset snapshot even when the effect context is stale', async () => {
     let composition!: VoiceComposition;
     const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({

@@ -1354,7 +1354,7 @@
   },
   "llm_requests": 0,
   "safe_precompletion_speech": false,
-  "independent_review": "pending; no merge authorized",
+  "independent_review": "See PR #255 revision-bound review submissions; workflow status is not performance evidence.",
   "limitations": [
     "No matched live spoken-request-to-physical-audio or provider latency benchmark.",
     "Windows playback API exercised; no physical audibility, subjective quality, acoustic feedback or sample-level gap/click measurement.",
