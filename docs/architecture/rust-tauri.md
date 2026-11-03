@@ -58,6 +58,12 @@ Use the [Rust/Tauri workflow skill](../../.agents/skills/develop-rust-tauri/SKIL
 
 ## Machine-readable exception registry
 
+### WebView2 focus interop
+
+Issue #257 introduces one narrowly scoped unsafe block in `apps/stellar-desktop/src-tauri/src/media/browser_focus.rs` for WebView2’s `ICoreWebView2Controller::add_GotFocus`, `CoreWebView2` and `ICoreWebView2::add_SourceChanged`. Tauri does not expose child focus through its general webview events. Native source events cover fragment and SPA history changes. Native focus is required to keep actual webpage clicks and workspace selection synchronized without granting websites application IPC or trusting page messages. The desktop entry point denies unsafe code by default; only this private Windows module permits it. Other crates retain their existing default prohibition.
+
+Tauri supplies the live reference-counted controller on its owning UI thread. Registration receives valid stack token pointers; WebView2 retains the reference-counted handler until controller closure. The callback captures only application/event ownership and no COM controller or raw pointer. Setup awaits the registration result and closes the child on failure. The event selects only that controller's pane; it neither executes a tool nor grants remote capabilities. Independent review of this exact module, a real native focus/IPC probe, and reassessment when upgrading Tauri, Wry or WebView2 bindings are required before acceptance. This exception changes no Rust file-size ceiling or unsafe policy outside this module.
+
 The Rust-aware size gate reads this registry; no source exclusions or exceptions are currently approved.
 
 <!-- rust-size-exceptions:start -->

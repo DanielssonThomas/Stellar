@@ -53,10 +53,7 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
-        let text = format!(
-            "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
-            request.text
-        );
+        let text = super::workspace_context::prompt(request.text, self.record.workspace.is_some());
         let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();

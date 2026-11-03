@@ -78,12 +78,23 @@ def validate_operation(operation):
         'open': {'instance_id', 'surface', 'payload_json', 'prominence'},
         'update': {'instance_id', 'surface', 'payload_json'},
         'remove': {'instance_id'}, 'focus': {'instance_id'},
+        'minimize': {'instance_id'}, 'restore': {'instance_id'}, 'maximize': {'instance_id'},
+        'resize': {'instance_id', 'percent'}, 'swap': {'instance_id','other_id'},
+        'restore_layout': set(), 'inspect_content': {'instance_id'},
         'arrange': {'instance_ids'}, 'clear': set(), 'inspect': set(),
         'capture_window': set(),
     }
+    if kind == 'update' and 'expected_revision' in operation:
+        fields['update'] = fields['update'] | {'expected_revision'}
+        if type(operation['expected_revision']) is not int or not 0 <= operation['expected_revision'] <= 4294967295:
+            raise WorkspaceRefused()
     if kind not in fields or set(operation) != fields[kind] | {'kind'}:
         raise WorkspaceRefused()
     if 'instance_id' in operation and not _identity(operation['instance_id']):
+        raise WorkspaceRefused()
+    if kind == 'resize' and (type(operation['percent']) is not int or not 10 <= operation['percent'] <= 90):
+        raise WorkspaceRefused()
+    if kind == 'swap' and (not _identity(operation['other_id']) or operation['other_id'] == operation['instance_id']):
         raise WorkspaceRefused()
     if 'instance_ids' in operation:
         ids = operation['instance_ids']
@@ -107,6 +118,13 @@ def validate_outcome(outcome, operation):
         raise WorkspaceRefused()
     if kind in ('applied', 'rejected') and set(outcome) == {'kind'}:
         return outcome
+    if kind == 'content' and operation == 'inspect_content':
+        if (set(outcome) != {'kind','instance_id','surface','revision','payload_json'} or
+                not _identity(outcome['instance_id']) or outcome['surface'] not in SURFACES or
+                type(outcome['revision']) is not int or not 0 <= outcome['revision'] <= 4294967295):
+            raise WorkspaceRefused()
+        _payload(outcome['payload_json'], PAYLOAD_LIMITS[outcome['surface']])
+        return outcome
     if kind != 'inspection' or operation != 'inspect' or set(outcome) != {'kind', 'panes'}:
         raise WorkspaceRefused()
     panes = outcome['panes']
@@ -114,12 +132,26 @@ def validate_outcome(outcome, operation):
         raise WorkspaceRefused()
     ids = set()
     for pane in panes:
-        if (type(pane) is not dict or set(pane) != {'instance_id', 'surface', 'prominence', 'minimized'}
+        if (type(pane) is not dict or not {'instance_id', 'surface', 'prominence', 'minimized'} <= set(pane) or set(pane) - {'instance_id', 'surface', 'prominence', 'minimized', 'layout', 'operations'}
                 or not _identity(pane['instance_id']) or pane['instance_id'] in ids
                 or type(pane['surface']) is not str or pane['surface'] not in METADATA_SURFACES
                 or type(pane['prominence']) is not str or pane['prominence'] not in PROMINENCE
                 or type(pane['minimized']) is not bool):
             raise WorkspaceRefused()
+        operations = pane.get('operations', [])
+        allowed = {'focus','minimize','restore','close','arrange','swap','resize','maximize','restore_layout','update','inspect_content','gallery','browser_navigation','focus_agent'}
+        if type(operations) is not list or len(operations)>14 or any(type(op) is not str or op not in allowed for op in operations) or len(set(operations))!=len(operations):
+            raise WorkspaceRefused()
+        layout = pane.get('layout')
+        if layout is not None:
+            if (type(layout) is not dict or set(layout) != {'title','revision','selected','maximized','position','x','y','width','height'} or
+                    type(layout['title']) is not str or len(layout['title']) > 240 or
+                    type(layout['revision']) is not int or not 0 <= layout['revision'] <= 4294967295 or
+                    type(layout['selected']) is not bool or type(layout['maximized']) is not bool or
+                    type(layout['position']) is not int or not 0 <= layout['position'] < 4 or
+                    any(type(layout[k]) is not int or not 0 <= layout[k] <= 1000 for k in ('x','y','width','height')) or
+                    layout['x'] + layout['width'] > 1001 or layout['y'] + layout['height'] > 1001):
+                raise WorkspaceRefused()
         ids.add(pane['instance_id'])
     return outcome
 

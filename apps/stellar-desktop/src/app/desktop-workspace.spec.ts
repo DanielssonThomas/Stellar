@@ -21,7 +21,16 @@ function setup() {
   );
   const stage = {
     nextCommandId: () => registry.nextCommandId(),
-    inspectPresentations: () => registry.snapshot(),
+    inspectPresentations: () =>
+      registry.snapshot().map((p, index) => ({
+        ...p,
+        title: 'Pane',
+        selected: false,
+        maximized: false,
+        position: index,
+        rect: null,
+        viewport: { width: 1100, height: 760 },
+      })),
   } as Pick<StageOrganism, 'nextCommandId' | 'inspectPresentations'>;
   const isCurrent = vi.fn(() => true),
     available = vi.fn(() => true),
@@ -50,6 +59,38 @@ function setup() {
 }
 
 describe('native workspace composition', () => {
+  it('maps each assistant layout command to its exact Stage behavior', () => {
+    const { call, open, registry, present } = setup();
+    call(open);
+    call({ ...open, instance_id: 'reference', prominence: 'secondary' });
+    expect(call({ kind: 'minimize', instance_id: 'reference' })).toEqual({
+      kind: 'applied',
+    });
+    expect(
+      registry.snapshot().find((p) => p.instanceId === 'reference')?.minimized,
+    ).toBe(true);
+    expect(present).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action: 'minimize' }),
+    );
+    call({ kind: 'restore', instance_id: 'reference' });
+    expect(
+      registry.snapshot().find((p) => p.instanceId === 'reference')?.minimized,
+    ).toBe(false);
+    expect(present).toHaveBeenLastCalledWith(
+      expect.objectContaining({ action: 'restore' }),
+    );
+    call({ kind: 'maximize', instance_id: 'reference' });
+    expect(registry.layout().maximizedId).toBe('reference');
+    call({ kind: 'restore_layout' });
+    expect(registry.layout().maximizedId).toBeNull();
+    call({ kind: 'resize', instance_id: 'plan', percent: 65 });
+    expect(registry.layout().weights['plan']).toBe(0.65);
+    call({ kind: 'swap', instance_id: 'plan', other_id: 'reference' });
+    expect(registry.snapshot().map((p) => p.instanceId)).toEqual([
+      'reference',
+      'plan',
+    ]);
+  });
   it('uses the registered decoders and shared sequence for the complete pane lifecycle', () => {
     const { registry, call, open } = setup();
     expect(call(open)).toEqual({ kind: 'applied' });
@@ -72,7 +113,7 @@ describe('native workspace composition', () => {
       call({ kind: 'arrange', instance_ids: ['plan', 'reference'] }),
     ).toEqual({ kind: 'applied' });
     const inspected = call({ kind: 'inspect' });
-    expect(inspected).toEqual({
+    expect(inspected).toMatchObject({
       kind: 'inspection',
       panes: [
         {

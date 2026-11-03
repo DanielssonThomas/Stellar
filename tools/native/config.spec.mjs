@@ -134,8 +134,12 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-speech-snapshot',
     'core:event:allow-listen',
     'core:event:allow-unlisten',
+    'allow-workspace-browser',
+    'allow-workspace-image',
   ]);
   assert.equal(capability.remote, undefined);
+  assert.deepEqual(capability.webviews, ['main']);
+  assert.equal(capability.windows, undefined);
   assert.match(config.app.security.csp, /script-src 'self';/);
   assert.doesNotMatch(
     config.app.security.csp,

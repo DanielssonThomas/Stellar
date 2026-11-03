@@ -4,40 +4,144 @@
   <article class="presentation">
     <h2>{{ content.title }}</h2>
     @if (image(); as image) {
-      <figure class="media-frame m-0">
-        @if (pending()) {
-          <div class="image-status" role="status" aria-label="Loading image">
+      <nav class="media-controls" aria-label="Image controls">
+        @if (images().length > 1) {
+          <button
+            type="button"
+            aria-label="Previous image"
+            [disabled]="selected() === 0"
+            (click)="select(selected() - 1)"
+          >
+            ←
+          </button>
+          <span>{{ selected() + 1 }} / {{ images().length }}</span>
+          <button
+            type="button"
+            aria-label="Next image"
+            [disabled]="selected() === images().length - 1"
+            (click)="select(selected() + 1)"
+          >
+            →
+          </button>
+        }
+        <button
+          type="button"
+          aria-label="Zoom out"
+          [disabled]="zoom() === 1"
+          (click)="setZoom(zoom() - 0.5)"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          aria-label="Reset image view"
+          (click)="setZoom(1)"
+        >
+          {{ zoom() * 100 }}%
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          [disabled]="zoom() === 4"
+          (click)="setZoom(zoom() + 0.5)"
+        >
+          +
+        </button>
+      </nav>
+      @if (current(); as current) {
+        <figure class="media-frame m-0">
+          <div
+            class="image-viewport"
+            (pointerdown)="beginPan($event)"
+            (pointermove)="movePan($event)"
+            (pointerup)="endPan()"
+            (pointercancel)="endPan()"
+            (lostpointercapture)="endPan()"
+          >
+            @if (pending()) {
+              <div
+                class="image-status"
+                role="status"
+                aria-label="Loading image"
+              >
+                <stellar-skeleton-atom shape="text" />
+              </div>
+            }
+            @if (displaySrc(); as src) {
+              <img
+                class="media-image"
+                [src]="src"
+                [alt]="current.alt"
+                loading="lazy"
+                decoding="async"
+                referrerpolicy="no-referrer"
+                draggable="false"
+                [style.transform]="
+                  'translate(' +
+                  pan().x +
+                  'px,' +
+                  pan().y +
+                  'px) scale(' +
+                  zoom() +
+                  ')'
+                "
+                (load)="settle($event, false)"
+                (error)="settle($event, true)"
+                [hidden]="failed()"
+              />
+            }
+            @if (failed()) {
+              <p role="status" class="image-status muted">
+                Image unavailable. {{ current.alt }}
+              </p>
+            }
+          </div>
+          <figcaption class="mt-2 text-sm text-stellar-muted">
+            @if (current.caption) {
+              <span>{{ current.caption }}</span>
+            }
+            @if (current.source) {
+              <button type="button" (click)="external(current.source)">
+                Source
+              </button>
+            }
+          </figcaption>
+        </figure>
+      }
+    } @else if (content.kind === 'browser') {
+      <nav class="media-controls" aria-label="Browser controls">
+        @if (browserState()?.pending) {
+          <span role="status" class="text-stellar-muted">Loading…</span>
+        }
+        <button type="button" aria-label="Back" (click)="control('back')">
+          ←
+        </button>
+        <button type="button" aria-label="Forward" (click)="control('forward')">
+          →
+        </button>
+        <button type="button" aria-label="Reload" (click)="control('reload')">
+          ↻
+        </button>
+        <span class="browser-address">{{
+          browserState()?.url || content.url
+        }}</span>
+        <button
+          type="button"
+          (click)="external(browserState()?.url || content.url)"
+        >
+          Open externally
+        </button>
+      </nav>
+      <div #browserBody class="browser-body">
+        @if (browserState()?.pending) {
+          <div role="status" aria-label="Loading webpage">
             <stellar-skeleton-atom shape="text" />
           </div>
         }
-        <img
-          class="media-image"
-          [src]="image.src"
-          [alt]="image.alt"
-          (load)="settle($event, false)"
-          (error)="settle($event, true)"
-          [hidden]="currentResult()?.failed"
-        />
-        @if (currentResult()?.failed) {
-          <p role="status" class="image-status muted">
-            Image unavailable. {{ image.alt }}
-          </p>
+        @if (browserState()?.error; as error) {
+          <p role="status" class="muted">{{ error }}</p>
         }
-        @if (image.caption) {
-          <figcaption class="mt-4 text-sm text-stellar-muted">
-            {{ image.caption }}
-          </figcaption>
-        }
-      </figure>
-    } @else if (content.kind === 'browser') {
-      <p class="text-stellar-primary">{{ content.url }}</p>
-      <p>
-        Embedded browsing is unavailable in this desktop build. Open this
-        address in your browser.
-      </p>
-      <p class="muted">
-        This pane presents a web address. It does not automate the browser.
-      </p>
+      </div>
     }
   </article>
 }

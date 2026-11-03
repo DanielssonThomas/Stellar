@@ -1,6 +1,7 @@
-import { Component, input } from '@angular/core';
+import { Component, input, inject } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import type { PresentationTextPayload } from './presentation-model';
+import { PRESENTATION_EDIT } from './presentation-edit';
 
 @Component({
   selector: 'stellar-presentation-text-molecule',
@@ -13,4 +14,22 @@ import type { PresentationTextPayload } from './presentation-model';
 export class PresentationTextMolecule {
   readonly payload = input<PresentationTextPayload | null>(null);
   readonly loading = input(false);
+  private readonly edit = inject(PRESENTATION_EDIT);
+  toggle(blockIndex: number, itemIndex: number) {
+    const payload = this.payload();
+    if (!payload) return;
+    this.edit({
+      ...payload,
+      blocks: payload.blocks.map((block, index) =>
+        index === blockIndex && block.kind === 'checklist'
+          ? {
+              ...block,
+              items: block.items.map((item, i) =>
+                i === itemIndex ? { ...item, checked: !item.checked } : item,
+              ),
+            }
+          : block,
+      ),
+    });
+  }
 }

@@ -56,7 +56,7 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   expect(await request(1, 'untrusted-html')).toBe('rejected');
   await expect(page.locator('[data-instance-id]')).toHaveCount(0);
   expect(await request(2)).toBe('applied');
-  const panel = page.getByRole('region', { name: 'Assistant message' });
+  const panel = page.getByRole('region', { name: 'Explicit fixture request' });
   await expect(panel).toContainText('<img src=x> plain text');
   await expect(panel.locator('img')).toHaveCount(0);
   expect(await request(1)).toBe('rejected');
@@ -70,7 +70,7 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   await page.getByRole('button', { name: 'End activity', exact: true }).click();
   await expect(panel).toBeVisible();
   await controlPane(page, 'minimize');
-  await expect(panel).toHaveCount(0);
+  await expect(panel).toBeHidden();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('button', { name: 'Show content', exact: true }).click();
   await expect(panel).toBeVisible();

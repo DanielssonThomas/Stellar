@@ -36,12 +36,18 @@ type PayloadCommand<P extends object> = {
         readonly action: 'update';
         readonly surface: K;
         readonly payload: P[K];
+        readonly expectedRevision?: number;
       });
 }[Surface<P>];
 export type StageCommand<P extends object> =
   | PayloadCommand<P>
-  | (InstanceShared & { readonly action: 'focus' | 'minimize' | 'close' })
+  | (InstanceShared & {
+      readonly action: 'focus' | 'minimize' | 'restore' | 'maximize' | 'close';
+    })
+  | (InstanceShared & { readonly action: 'resize'; readonly percent: number })
+  | (InstanceShared & { readonly action: 'swap'; readonly otherId: string })
   | (Shared & { readonly action: 'clear' })
+  | (Shared & { readonly action: 'restore-layout' })
   | (Shared & {
       readonly action: 'arrange';
       readonly instanceIds: readonly string[];
@@ -53,6 +59,8 @@ export type StageInstance<P extends object> = {
     readonly payload: P[K];
     readonly prominence: Prominence;
     readonly minimized: boolean;
+    readonly revision: number;
+    readonly userEdited: boolean;
   };
 }[Surface<P>];
 export type StageResult = {
@@ -65,7 +73,12 @@ export type StageResult = {
     | 'minimize'
     | 'close'
     | 'clear'
-    | 'arrange';
+    | 'arrange'
+    | 'swap'
+    | 'resize'
+    | 'restore'
+    | 'maximize'
+    | 'restore-layout';
   readonly instanceId?: string;
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
@@ -213,7 +226,7 @@ export function decodeStageCommand<P extends object>(
       return null;
     const workspaceShared = { contractVersion: 1 as const, commandId };
     const workspaceKeys = ['contractVersion', 'commandId', 'action'];
-    if (action === 'clear')
+    if (action === 'clear' || action === 'restore-layout')
       return exactKeys(input, workspaceKeys)
         ? Object.freeze({ ...workspaceShared, action })
         : null;
@@ -242,18 +255,50 @@ export function decodeStageCommand<P extends object>(
       return null;
     const shared = { ...workspaceShared, instanceId };
     const keys = ['contractVersion', 'commandId', 'instanceId', 'action'];
-    if (action === 'focus' || action === 'minimize' || action === 'close')
+    if (
+      action === 'focus' ||
+      action === 'minimize' ||
+      action === 'close' ||
+      action === 'restore' ||
+      action === 'maximize'
+    )
       return exactKeys(input, keys)
         ? Object.freeze({ ...shared, action })
         : null;
+    if (action === 'resize')
+      return exactKeys(input, [...keys, 'percent']) &&
+        typeof input['percent'] === 'number' &&
+        Number.isFinite(input['percent']) &&
+        input['percent'] >= 10 &&
+        input['percent'] <= 90
+        ? { ...shared, action, percent: input['percent'] }
+        : null;
+    if (action === 'swap')
+      return exactKeys(input, [...keys, 'otherId']) &&
+        typeof input['otherId'] === 'string' &&
+        /^[a-zA-Z0-9_-]{1,64}$/.test(input['otherId']) &&
+        input['otherId'] !== instanceId
+        ? { ...shared, action, otherId: input['otherId'] }
+        : null;
     if (action !== 'open' && action !== 'update') return null;
     if (
-      !exactKeys(input, [
-        ...keys,
-        'surface',
-        'payload',
-        ...(action === 'open' ? ['prominence'] : []),
-      ])
+      !exactKeys(
+        input,
+        [
+          ...keys,
+          'surface',
+          'payload',
+          ...(action === 'open' ? ['prominence'] : []),
+        ],
+        action === 'update' ? ['expectedRevision'] : [],
+      )
+    )
+      return null;
+    if (
+      action === 'update' &&
+      Object.hasOwn(input, 'expectedRevision') &&
+      (!Number.isSafeInteger(input['expectedRevision']) ||
+        Number(input['expectedRevision']) < 0)
     )
       return null;
     if (
@@ -281,6 +326,9 @@ export function decodeStageCommand<P extends object>(
       action,
       surface: input['surface'],
       payload: detached,
+      ...(action === 'update' && Object.hasOwn(input, 'expectedRevision')
+        ? { expectedRevision: input['expectedRevision'] }
+        : {}),
       ...(action === 'open' ? { prominence: input['prominence'] } : {}),
     }) as StageCommand<P>;
   } catch {

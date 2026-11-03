@@ -21,6 +21,48 @@
   min-height: 0;
   object-fit: contain;
 }
+.image-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  display: grid;
+}
+.media-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+.media-controls button,
+figcaption button {
+  color: var(--stellar-color-primary);
+  background: transparent;
+  border: 1px solid var(--stellar-color-line);
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+.media-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.media-controls button:focus-visible {
+  outline: 1px solid var(--stellar-color-primary);
+}
+.browser-address {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--stellar-color-muted);
+}
+.browser-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
 .media-image[hidden] {
   display: none;
 }

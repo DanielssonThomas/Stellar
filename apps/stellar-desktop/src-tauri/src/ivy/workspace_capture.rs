@@ -86,9 +86,7 @@ mod platform {
     }
 
     pub fn capture(app: &AppHandle) -> CaptureResult {
-        let main = app
-            .get_webview_window("main")
-            .ok_or(IvyErrorCode::Unavailable)?;
+        let main = app.get_window("main").ok_or(IvyErrorCode::Unavailable)?;
         let hwnd = main.hwnd().map_err(|_| IvyErrorCode::Unavailable)?;
         let window = Window::from_raw_hwnd(hwnd.0.cast());
         if !window.is_valid()
@@ -124,7 +122,7 @@ mod platform {
         control.stop().map_err(|_| IvyErrorCode::Unavailable)?;
         let image = result??;
         let current = app
-            .get_webview_window("main")
+            .get_window("main")
             .ok_or(IvyErrorCode::Unavailable)?
             .hwnd()
             .map_err(|_| IvyErrorCode::Unavailable)?;

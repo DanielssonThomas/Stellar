@@ -26,8 +26,23 @@ export type PresentationMediaPayload =
       readonly src: string;
       readonly alt: string;
       readonly caption?: string;
+      readonly source?: string;
+      readonly images?: readonly PresentationImage[];
+      readonly selected?: number;
+      readonly zoom?: number;
     }
-  | { readonly kind: 'browser'; readonly title: string; readonly url: string };
+  | {
+      readonly kind: 'browser';
+      readonly title: string;
+      readonly url: string;
+      readonly refresh?: number;
+    };
+export interface PresentationImage {
+  readonly src: string;
+  readonly alt: string;
+  readonly caption?: string;
+  readonly source?: string;
+}
 export interface PresentationDiagramPayload {
   readonly title: string;
   readonly nodes: readonly { readonly id: string; readonly label: string }[];
@@ -41,6 +56,7 @@ export interface PresentationTelemetryPayload {
   readonly kind: 'workflow' | 'session';
   readonly title: string;
   readonly project?: 'stellar' | 'stellar-design';
+  readonly agentId?: string;
 }
 export interface PresentationSourceView {
   readonly source: string;
