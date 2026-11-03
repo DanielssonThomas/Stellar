@@ -6,8 +6,10 @@ mod cleanup;
 mod commands;
 mod contracts;
 mod ivy;
+#[cfg(feature = "recognition-smoke")]
+mod recognition_smoke;
 mod shell;
-#[cfg(feature = "native-smoke")]
+#[cfg(all(feature = "native-smoke", not(feature = "recognition-smoke")))]
 mod smoke;
 mod speech;
 mod telemetry;
@@ -56,12 +58,19 @@ fn main() {
             }
             app.manage(ivy_host);
             let handle = app.handle().clone();
+            #[cfg(not(feature = "recognition-smoke"))]
+            let speech_directory = app.path().app_local_data_dir()?.join("speech");
+            #[cfg(feature = "recognition-smoke")]
+            let speech_directory = std::env::temp_dir()
+                .join(format!("stellar-recognition-smoke-{}", std::process::id()));
             app.manage(speech::SpeechHost::new(
-                app.path().app_local_data_dir()?.join("speech"),
+                speech_directory,
                 std::sync::Arc::new(move |snapshot| {
                     let _ = handle.emit_to("main", speech::contracts::SPEECH_EVENT, snapshot);
                 }),
             ));
+            #[cfg(feature = "recognition-smoke")]
+            recognition_smoke::create_window(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -81,8 +90,10 @@ fn main() {
                 let _ = host.shutdown();
             }
         });
-    #[cfg(feature = "native-smoke")]
+    #[cfg(all(feature = "native-smoke", not(feature = "recognition-smoke")))]
     let builder = smoke::configure(builder);
+    #[cfg(feature = "recognition-smoke")]
+    let builder = recognition_smoke::configure(builder);
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::shell_status,

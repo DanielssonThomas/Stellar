@@ -19,6 +19,7 @@ fn main() {
         telemetry_name::TELEMETRY_COMMAND,
         "smoke_hold_ivy",
         "smoke_capture_window",
+        "recognition_result",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],
         ivy_names::IVY_COMMANDS[2],

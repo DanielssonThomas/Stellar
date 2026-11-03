@@ -24,4 +24,5 @@ windows = { version = "=0.62.2", features = ["Win32_System_Threading"] }
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 native-smoke = []
+recognition-smoke = ["native-smoke"]
 contract-variant-fixture = []
