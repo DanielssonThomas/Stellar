@@ -1,0 +1,1365 @@
+{
+  "issue": 254,
+  "measured_date": "2026-11-03",
+  "machine": {
+    "logical_processors": 28,
+    "cpu": "Intel(R) Core(TM) i7-14700K",
+    "memory_gib": 31.7,
+    "os": "Microsoft Windows NT 10.0.26200.0"
+  },
+  "source_sha256": {
+    "apps/stellar-desktop/src-tauri/src/speech/speech_worker.py": "4ed4b9e76370ed69cb53eacc08a3a8a0f0f82fd072eeb8dfa72ced21488e8400",
+    "apps/stellar-desktop/src-tauri/src/speech/host.rs": "9cacd8a410b241c13140344831db95a2ee8cb2eb38f96300b70d5d9e3e630688",
+    "apps/stellar-desktop/src-tauri/src/speech/warm.rs": "c6b46678a4f63c3b5772ab24a632d5e80e2d20e17b9f0c39f1a40b7fa0cfe190"
+  },
+  "model_sha256": {
+    "kokoro-v1.0.onnx": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
+    "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+  },
+  "before_architecture_baseline": {
+    "revision": "f2a781ae42c02a29a6dcd9d4611c00b5a2e7f463",
+    "samples": 12,
+    "llm_requests": 0,
+    "playback": "stubbed; first_audio is validated complete WAV, not physical audibility",
+    "runs": [
+      {
+        "first_audio_ms": 2151.58,
+        "total_ms": 2151.62,
+        "process_total_ms": 2272.34
+      },
+      {
+        "first_audio_ms": 2198.68,
+        "total_ms": 2198.87,
+        "process_total_ms": 2306.55
+      },
+      {
+        "first_audio_ms": 2183.91,
+        "total_ms": 2183.94,
+        "process_total_ms": 2291.54
+      },
+      {
+        "first_audio_ms": 2155.83,
+        "total_ms": 2155.86,
+        "process_total_ms": 2259.71
+      },
+      {
+        "first_audio_ms": 2180.14,
+        "total_ms": 2180.17,
+        "process_total_ms": 2286.58
+      },
+      {
+        "first_audio_ms": 2400.41,
+        "total_ms": 2400.56,
+        "process_total_ms": 2517.54
+      },
+      {
+        "first_audio_ms": 2545.56,
+        "total_ms": 2545.62,
+        "process_total_ms": 2706.63
+      },
+      {
+        "first_audio_ms": 2315.35,
+        "total_ms": 2315.38,
+        "process_total_ms": 2460.1
+      },
+      {
+        "first_audio_ms": 2158.62,
+        "total_ms": 2158.65,
+        "process_total_ms": 2268.1
+      },
+      {
+        "first_audio_ms": 2268.49,
+        "total_ms": 2268.53,
+        "process_total_ms": 2391.01
+      },
+      {
+        "first_audio_ms": 2356.3,
+        "total_ms": 2356.34,
+        "process_total_ms": 2509.43
+      },
+      {
+        "first_audio_ms": 2284.01,
+        "total_ms": 2284.04,
+        "process_total_ms": 2400.14
+      }
+    ],
+    "p50_first_audio_ms": 2233.585,
+    "p95_first_audio_ms": 2545.56
+  },
+  "matched_comparison": {
+    "baseline_ref": "f2a781ae42c02a29a6dcd9d4611c00b5a2e7f463",
+    "baseline_sha256": "d7e6f69154e3d2b51c21f2248e41073cc5cb85bb69ce9dd9f3e913c0ab01b969",
+    "worker_sha256": "4ed4b9e76370ed69cb53eacc08a3a8a0f0f82fd072eeb8dfa72ced21488e8400",
+    "llm_requests": 0,
+    "microphone": false,
+    "playback": "stubbed; first playable WAV, not physical audibility",
+    "percentile": "nearest-rank; 12 samples are preliminary, not a population guarantee",
+    "baseline": {
+      "samples": 12,
+      "p50_first_playable_audio_ms": 2199.66,
+      "p95_first_playable_audio_ms": 2529.52,
+      "p50_working_set_bytes": 81100800.0,
+      "steady_idle_cpu_percent_one_core": null,
+      "max_idle_cpu_percent_one_core": 0.0,
+      "runs": [
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2411.91,
+          "complete_ms": 2411.93,
+          "working_set_bytes": 81498112,
+          "peak_working_set_bytes": 511660032,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2137.24,
+          "complete_ms": 2137.26,
+          "working_set_bytes": 81948672,
+          "peak_working_set_bytes": 510730240,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2174.94,
+          "complete_ms": 2174.96,
+          "working_set_bytes": 81141760,
+          "peak_working_set_bytes": 511258624,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2157.33,
+          "complete_ms": 2157.35,
+          "working_set_bytes": 82149376,
+          "peak_working_set_bytes": 511889408,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2121.78,
+          "complete_ms": 2121.81,
+          "working_set_bytes": 81059840,
+          "peak_working_set_bytes": 511389696,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2138.82,
+          "complete_ms": 2138.85,
+          "working_set_bytes": 80519168,
+          "peak_working_set_bytes": 511348736,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2155.73,
+          "complete_ms": 2155.76,
+          "working_set_bytes": 80420864,
+          "peak_working_set_bytes": 511418368,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2294.32,
+          "complete_ms": 2294.36,
+          "working_set_bytes": 80543744,
+          "peak_working_set_bytes": 512143360,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2529.52,
+          "complete_ms": 2529.54,
+          "working_set_bytes": 82751488,
+          "peak_working_set_bytes": 511705088,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2409.94,
+          "complete_ms": 2409.96,
+          "working_set_bytes": 81014784,
+          "peak_working_set_bytes": 511426560,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2224.38,
+          "complete_ms": 2224.41,
+          "working_set_bytes": 80986112,
+          "peak_working_set_bytes": 511033344,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [],
+          "first_playable_audio_ms": 2245.51,
+          "complete_ms": 2245.53,
+          "working_set_bytes": 81264640,
+          "peak_working_set_bytes": 511737856,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        }
+      ]
+    },
+    "cold": {
+      "samples": 12,
+      "p50_first_playable_audio_ms": 1791.785,
+      "p95_first_playable_audio_ms": 2961.82,
+      "p50_working_set_bytes": 474107904.0,
+      "steady_idle_cpu_percent_one_core": null,
+      "max_idle_cpu_percent_one_core": 6.243,
+      "runs": [
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1659
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1660
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2104
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2105
+            }
+          ],
+          "first_playable_audio_ms": 1762.97,
+          "complete_ms": 2208.08,
+          "working_set_bytes": 474603520,
+          "peak_working_set_bytes": 474701824,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1657
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1658
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2085
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2085
+            }
+          ],
+          "first_playable_audio_ms": 1743.75,
+          "complete_ms": 2170.79,
+          "working_set_bytes": 473845760,
+          "peak_working_set_bytes": 473944064,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1659
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1660
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2087
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2087
+            }
+          ],
+          "first_playable_audio_ms": 1756.4,
+          "complete_ms": 2183.69,
+          "working_set_bytes": 474255360,
+          "peak_working_set_bytes": 474353664,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1644
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1644
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2075
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2075
+            }
+          ],
+          "first_playable_audio_ms": 1729.16,
+          "complete_ms": 2160.19,
+          "working_set_bytes": 473985024,
+          "peak_working_set_bytes": 474079232,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1678
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1679
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2102
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2102
+            }
+          ],
+          "first_playable_audio_ms": 1764.39,
+          "complete_ms": 2187.9,
+          "working_set_bytes": 474042368,
+          "peak_working_set_bytes": 474140672,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1669
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1670
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2091
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2091
+            }
+          ],
+          "first_playable_audio_ms": 1754.71,
+          "complete_ms": 2176.28,
+          "working_set_bytes": 473980928,
+          "peak_working_set_bytes": 474075136,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1823
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1824
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2309
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2310
+            }
+          ],
+          "first_playable_audio_ms": 1913.35,
+          "complete_ms": 2399.24,
+          "working_set_bytes": 474238976,
+          "peak_working_set_bytes": 474337280,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1726
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1726
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2175
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2176
+            }
+          ],
+          "first_playable_audio_ms": 1819.18,
+          "complete_ms": 2268.56,
+          "working_set_bytes": 474116096,
+          "peak_working_set_bytes": 474210304,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 2767
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 2767
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 3636
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 3637
+            }
+          ],
+          "first_playable_audio_ms": 2961.82,
+          "complete_ms": 3831.57,
+          "working_set_bytes": 474554368,
+          "peak_working_set_bytes": 474648576,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1764
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1765
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2200
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2201
+            }
+          ],
+          "first_playable_audio_ms": 1858.13,
+          "complete_ms": 2294.11,
+          "working_set_bytes": 473812992,
+          "peak_working_set_bytes": 473911296,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1888
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1889
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2338
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2339
+            }
+          ],
+          "first_playable_audio_ms": 1980.08,
+          "complete_ms": 2429.51,
+          "working_set_bytes": 474099712,
+          "peak_working_set_bytes": 474198016,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 1810
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 1811
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 2286
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 2286
+            }
+          ],
+          "first_playable_audio_ms": 1904.51,
+          "complete_ms": 2379.51,
+          "working_set_bytes": 474116096,
+          "peak_working_set_bytes": 474214400,
+          "idle_cpu_percent_one_core": 6.243,
+          "steady_idle_cpu_percent_one_core": null
+        }
+      ]
+    },
+    "warmup": {
+      "worker_timings": [
+        {
+          "stage": "synthesis_started",
+          "elapsed_ms": 0
+        },
+        {
+          "stage": "first_audio",
+          "elapsed_ms": 1740
+        },
+        {
+          "stage": "playback_dispatched",
+          "elapsed_ms": 1740
+        },
+        {
+          "stage": "synthesis_completed",
+          "elapsed_ms": 2214
+        },
+        {
+          "stage": "playback_completed",
+          "elapsed_ms": 2214
+        }
+      ],
+      "first_playable_audio_ms": 1838.22,
+      "complete_ms": 2312.01,
+      "working_set_bytes": 473817088,
+      "peak_working_set_bytes": 473915392,
+      "idle_cpu_percent_one_core": 0.0,
+      "steady_idle_cpu_percent_one_core": null
+    },
+    "warm": {
+      "samples": 12,
+      "p50_first_playable_audio_ms": 346.09000000000003,
+      "p95_first_playable_audio_ms": 489.82,
+      "p50_working_set_bytes": 522743808.0,
+      "steady_idle_cpu_percent_one_core": 0.0,
+      "max_idle_cpu_percent_one_core": 0.0,
+      "runs": [
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 301
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 301
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 906
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 907
+            }
+          ],
+          "first_playable_audio_ms": 302.05,
+          "complete_ms": 907.53,
+          "working_set_bytes": 522715136,
+          "peak_working_set_bytes": 522821632,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 415
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 416
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 1193
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 1194
+            }
+          ],
+          "first_playable_audio_ms": 416.4,
+          "complete_ms": 1194.83,
+          "working_set_bytes": 522719232,
+          "peak_working_set_bytes": 522825728,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 482
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 483
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 1187
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 1188
+            }
+          ],
+          "first_playable_audio_ms": 484.18,
+          "complete_ms": 1189.14,
+          "working_set_bytes": 522727424,
+          "peak_working_set_bytes": 522833920,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 488
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 489
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 1056
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 1056
+            }
+          ],
+          "first_playable_audio_ms": 489.82,
+          "complete_ms": 1057.22,
+          "working_set_bytes": 522731520,
+          "peak_working_set_bytes": 522838016,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 438
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 439
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 1085
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 1085
+            }
+          ],
+          "first_playable_audio_ms": 440.12,
+          "complete_ms": 1086.92,
+          "working_set_bytes": 522731520,
+          "peak_working_set_bytes": 522838016,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 433
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 434
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 1039
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 1040
+            }
+          ],
+          "first_playable_audio_ms": 434.56,
+          "complete_ms": 1040.68,
+          "working_set_bytes": 522743808,
+          "peak_working_set_bytes": 522846208,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 331
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 332
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 882
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 883
+            }
+          ],
+          "first_playable_audio_ms": 332.51,
+          "complete_ms": 883.61,
+          "working_set_bytes": 522743808,
+          "peak_working_set_bytes": 522850304,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 318
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 319
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 773
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 774
+            }
+          ],
+          "first_playable_audio_ms": 320.07,
+          "complete_ms": 774.66,
+          "working_set_bytes": 522747904,
+          "peak_working_set_bytes": 522850304,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 298
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 298
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 763
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 764
+            }
+          ],
+          "first_playable_audio_ms": 299.0,
+          "complete_ms": 764.73,
+          "working_set_bytes": 522752000,
+          "peak_working_set_bytes": 522854400,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 306
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 306
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 810
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 810
+            }
+          ],
+          "first_playable_audio_ms": 307.03,
+          "complete_ms": 811.37,
+          "working_set_bytes": 522760192,
+          "peak_working_set_bytes": 522866688,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 342
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 343
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 826
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 826
+            }
+          ],
+          "first_playable_audio_ms": 343.76,
+          "complete_ms": 827.4,
+          "working_set_bytes": 522760192,
+          "peak_working_set_bytes": 522866688,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": null
+        },
+        {
+          "worker_timings": [
+            {
+              "stage": "synthesis_started",
+              "elapsed_ms": 0
+            },
+            {
+              "stage": "first_audio",
+              "elapsed_ms": 346
+            },
+            {
+              "stage": "playback_dispatched",
+              "elapsed_ms": 347
+            },
+            {
+              "stage": "synthesis_completed",
+              "elapsed_ms": 822
+            },
+            {
+              "stage": "playback_completed",
+              "elapsed_ms": 823
+            }
+          ],
+          "first_playable_audio_ms": 348.42,
+          "complete_ms": 823.66,
+          "working_set_bytes": 522760192,
+          "peak_working_set_bytes": 522866688,
+          "idle_cpu_percent_one_core": 0.0,
+          "steady_idle_cpu_percent_one_core": 0.0
+        }
+      ]
+    }
+  },
+  "native_windows_host": {
+    "cancel_synthesis_and_playback": true,
+    "llm_requests": 0,
+    "microphone": false,
+    "physical_audibility_measured": false,
+    "recovered_pid": 62424,
+    "reused_pid": 2428,
+    "runs": [
+      {
+        "completed_ms": 14011,
+        "first_audio_observed_ms": 10143,
+        "playback_dispatched_observed_ms": 10153,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 9993,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 10003,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 10835,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 13858,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4133,
+        "first_audio_observed_ms": 365,
+        "playback_dispatched_observed_ms": 365,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 361,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 362,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 906,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4127,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4137,
+        "first_audio_observed_ms": 376,
+        "playback_dispatched_observed_ms": 376,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 370,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 371,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 830,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4132,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4073,
+        "first_audio_observed_ms": 310,
+        "playback_dispatched_observed_ms": 310,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 305,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 306,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 753,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4069,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4058,
+        "first_audio_observed_ms": 292,
+        "playback_dispatched_observed_ms": 292,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 287,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 288,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 737,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4056,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4157,
+        "first_audio_observed_ms": 394,
+        "playback_dispatched_observed_ms": 400,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 393,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 393,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 870,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4152,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4046,
+        "first_audio_observed_ms": 286,
+        "playback_dispatched_observed_ms": 286,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 284,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 284,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 742,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4041,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4043,
+        "first_audio_observed_ms": 273,
+        "playback_dispatched_observed_ms": 273,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 272,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 272,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 719,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4037,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4121,
+        "first_audio_observed_ms": 357,
+        "playback_dispatched_observed_ms": 362,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 355,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 356,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 901,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4116,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4056,
+        "first_audio_observed_ms": 298,
+        "playback_dispatched_observed_ms": 298,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 295,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 295,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 746,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4052,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4066,
+        "first_audio_observed_ms": 304,
+        "playback_dispatched_observed_ms": 304,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 298,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 299,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 751,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4062,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4079,
+        "first_audio_observed_ms": 306,
+        "playback_dispatched_observed_ms": 306,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 301,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 302,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 738,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4077,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "completed_ms": 4204,
+        "first_audio_observed_ms": 419,
+        "playback_dispatched_observed_ms": 419,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 416,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 417,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 1072,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4198,
+            "stage": "playback_completed"
+          }
+        ]
+      }
+    ],
+    "scratch_removed": true,
+    "windows_playback_api": true,
+    "summary": {
+      "warm_samples": 12,
+      "p50_first_audio_observed_ms": 308.0,
+      "p95_first_audio_observed_ms": 419,
+      "cold_first_audio_observed_ms": 10143
+    }
+  },
+  "llm_requests": 0,
+  "safe_precompletion_speech": false,
+  "independent_review": "pending; no merge authorized",
+  "limitations": [
+    "No matched live spoken-request-to-physical-audio or provider latency benchmark.",
+    "Windows playback API exercised; no physical audibility, subjective quality, acoustic feedback or sample-level gap/click measurement.",
+    "Native first cold sample overlapped native-smoke compilation; cause of cold outlier was not isolated.",
+    "Twelve warm samples and three seconds idle observation do not establish long-run percentiles, leak freedom or GPU frame-time behavior.",
+    "PR #248 microphone/wake integration remains to be checked after its separate integration."
+  ]
+}

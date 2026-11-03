@@ -163,7 +163,9 @@ Draft recognition uses repeated bounded snapshots of the cached local Whisper mo
 
 Generated `SpeechTranscribeRequest` carries mono 16 kHz signed PCM16, limited to 320,000 samples (20 seconds). The separate speech subprocess frame is limited to 3 MiB; responses are limited to 16 KiB with an eight-frame queue. `speech_transcribe` returns at most 8,192 UTF-8 bytes, including an empty result for no recognized speech. The installed faster-whisper base model runs on CPU/int8 with VAD and confidence filtering. Loading explicitly requires cached files; missing models produce a controlled error, with no installation, download, cloud provider or fallback. Input samples remain in memory and are not written to disk.
 
-`speech_speak` accepts at most 4,000 UTF-8 bytes and uses the existing fixed local Kokoro/af_heart engine and its dedicated interpreter. Longer replies remain available as text. Synthesis writes only to a native-owned temporary directory, with a maximum accepted WAV of 8 MiB and 90 seconds. The host removes complete and partial WAV output after stopping and reaping the owned process. `speech_stop`, window destruction and application exit cancel owned speech work; they never stop the shared Ivy gateway. Transcription has a 60-second deadline, synthesis plus playback a 120-second deadline. Only one speech operation runs at a time. A failed cleanup retains the occupied operation until cleanup succeeds. Abrupt OS termination can leave a temporary output directory; graceful-stop guarantees do not imply crash-proof deletion.
+`speech_speak` accepts at most 4,000 UTF-8 bytes and uses the existing fixed local Kokoro/af_heart assets, speed and dedicated interpreter. Longer replies remain available as text. The native host lazily starts one reusable CPU-only worker; ONNX uses four intra-op threads, one inter-op thread and disabled spinning. The initialized model and voices survive normal speech completion. Per-turn persona validation freezes speed across that turn. Stop, cancellation, failure and shutdown reap the worker; subsequent speech can initialize a fresh worker without restarting Desktop. A blocking Windows parent-process watcher exits the worker if its native parent dies.
+
+Validated completed prose is segmented at conservative sentence boundaries, combining short fragments. A serial producer overlaps synthesis with synchronous Windows playback using two reusable WAV slots: one playing and at most one upcoming segment. There is one speaking transition and one terminal completion for the whole response. The renderer cannot submit incremental raw model deltas; malformed structured replies, code envelopes and internal reasoning tags remain visible as text without narration. Synthesis writes only to a native-owned temporary directory, with a maximum accepted WAV of 8 MiB and 90 seconds per segment. The host removes both slots and their partial files on completion or after stopping and reaping failed/cancelled work. `speech_stop`, window destruction and application exit never stop the shared Ivy gateway. Transcription has a 60-second deadline; the whole synthesis/playback operation retains its 120-second deadline. Only one speech operation runs at a time. Failed cleanup retains the occupied operation until cleanup succeeds. Abrupt OS termination can leave temporary output; graceful-stop guarantees do not imply crash-proof deletion.
 
 Playback uses Windows' standard-library [`winsound.PlaySound`](https://docs.python.org/3/library/winsound.html) synchronously in the owned speech process, with filename-only and no-default-sound flags. The installed voice interpreter is Python 3.12.15, where synchronous mode is the default and the later named `SND_SYNC` constant is absent. No playback package is installed and no fallback player or shell command is invoked. Stopping the owned process also terminates its playback; a normal completion explicitly clears the process's waveform playback.
 
@@ -186,6 +188,41 @@ python -I tools/native/qualify-speech.py --run-local-engines
 ```
 
 It requires the existing local models and documented generated sample, writes its receipt under `artifacts/native`, and is excluded from automatic CI tests. It does not download missing assets or send a conversation prompt.
+
+## Voice-response latency qualification
+
+Issue [#254](https://github.com/DanielssonThomas/Stellar/issues/254) starts from develop `f2a781a`. PR [#248](https://github.com/DanielssonThomas/Stellar/pull/248) owns wake invocation and continuous microphone gating; this work does not change recognition, VAD thresholds, microphone ownership or emblem design. After a confirmed same-model selection, the native request handler now returns the verified snapshot without queuing a rotation or invalidating workspace tools. Busy/uncertain turns, pending rotations, errors, forced resets and unverified/different models still use their existing paths; prompt submission still verifies the gateway session route.
+
+Ordinary voice turns retain at most 64 content-free `stellar.voice.latency` Performance entries, cleared in batches at capacity. Inspect them in native WebView developer tools:
+
+```javascript
+performance
+  .getEntriesByName('stellar.voice.latency')
+  .map((entry) => entry.detail);
+```
+
+Stages include observed activity end, utterance/VAD finalization, STT request/completion, Hermes submission/admission, first model-text availability, validated final text/model completion, TTS request/synthesis observation, first audio availability, playback observation and completion. They contain no utterance/session identifiers, text, audio or provider data. Activity end is detector-observed, not physical speech offset; capped utterances may have no end observation. Composed/draft and typed prompts are not ordinary-turn latency samples. Native speech snapshots independently carry bounded worker timings for synthesis start, first audio, full synthesis completion and playback dispatch/completion. Worker times are relative to worker synthesis dispatch; frontend observations use the WebView clock. Do not subtract across those clocks. Synthesis span includes producer backpressure; it is not CPU-only compute time.
+
+The entry calculates observed STT, local prompt preparation, admission, model-text wait, TTS startup, time to first audio and playback spans. The model interval includes gateway scheduling, network and provider execution: these are not independently measured provider-only timings. Missing observations stay null. In particular `first_audible_ms` is null: `winsound` exposes dispatch and synchronous return, without a physical speaker-onset callback. The speaking state comes from the playback boundary, never model initialization or synthesis; it stays continuous between segments. This is not full-duplex barge-in and no sample-level gap/click or physical microphone feedback measurement is claimed.
+
+The installed Hermes checkout inspected at `bf0203a794a07aac3ff764972ab9087baa4e4f4e` publishes `message.delta` from managed-worker delta frames (`gateway/session_managed_worker.py`) and dispatches them before final reconciliation (`hermes_cli/gateway_agent.py`). Deltas have no irrevocably user-facing/committed-prose marker. Stellar's final response may instead be a structured presentation envelope, and gateway finalization may reconcile/replace visible text. Thus safe pre-completion narration is **not supported by this implementation**. The bridge projects only a first-text **availability flag**, flushing prior activity in order; native session/admission/generation/replay fences validate it. Raw deltas, reasoning and tool data never become speech. Actual narration uses only the completed response's validated text, then overlaps local synthesis/playback. No extra inference or context shortening is introduced. A future streaming path requires an upstream committed-text contract and structured-response handling, not reconstruction from internal events.
+
+The [qualification receipt](../../tools/native/evidence/response-latency-qualification.json) records a 12-run baseline collected before architectural changes, a repeat comparison against the original source, and actual native speech-host results. Reproduce the synthetic comparison with the installed voice interpreter:
+
+```powershell
+& D:/Hermes/profiles/ivy/voice/.venv/Scripts/python.exe tools/native/measure-response-latency.py --baseline-ref f2a781ae42c02a29a6dcd9d4611c00b5a2e7f463
+```
+
+| Fixed synthetic text, 12 samples each              | p50 first playable audio | p95, nearest rank |
+| -------------------------------------------------- | -----------------------: | ----------------: |
+| Original single-request worker, matched comparison |                 2,200 ms |          2,530 ms |
+| New worker, cold                                   |                 1,792 ms |          2,962 ms |
+| New worker, warm                                   |                   346 ms |            490 ms |
+| Actual native host, warm, Windows playback API     |                   308 ms |            419 ms |
+
+Synthetic playback is stubbed; actual native qualification exercises the Windows playback API without microphone input or LLM calls. Twelve samples give preliminary percentiles, not a population guarantee. The initial native cold sample took 10,143 ms during concurrent native-smoke compilation; its cause was not isolated. Warm retained working set was about 499 MiB; a three-second idle observation after a one-second settling period measured 0.0% of one CPU core. This does not establish long-term memory behavior or GPU/frame-time performance. CPU-only execution does not reserve a CUDA device. The native run verified one worker across 13 requests, synthesis/playback cancellation, cleanup and same-host recovery; the browser voice case checks animation frames during synthesis/playback and existing microphone suppression.
+
+Remaining user-perceived delays include unchanged utterance settlement (about 1.4 seconds for ordinary turns), STT startup/processing, cold model initialization and the full provider response. No additional live model requests were made for benchmarks, so a matched spoken-request-to-physical-audio baseline, provider p50/p95, physical audio quality/gap checks and final integration with PR #248 remain unqualified. Use the new passive observations on normal user turns to locate those costs; do not present the local TTS improvement as a proven end-to-end conversational improvement.
 
 ## Local finalized-prompt cleanup
 

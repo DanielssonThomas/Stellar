@@ -10,9 +10,10 @@ fn run(mode: &str, values: Vec<Value>) -> Result<String, SpeechError> {
     collect(
         &AtomicBool::new(false),
         mode,
-        frames,
+        &frames,
         Instant::now() + Duration::from_millis(30),
         || Ok(()),
+        |_| Ok(()),
     )
 }
 
@@ -75,9 +76,10 @@ fn deadline_and_cancel_do_not_accept_late_transcripts() {
         collect(
             &AtomicBool::new(false),
             "transcribe",
-            frames,
+            &frames,
             Instant::now(),
-            || Ok(())
+            || Ok(()),
+            |_| Ok(())
         ),
         Err(SpeechError::Timeout)
     ));
@@ -87,10 +89,41 @@ fn deadline_and_cancel_do_not_accept_late_transcripts() {
         collect(
             &AtomicBool::new(true),
             "transcribe",
-            frames,
+            &frames,
             Instant::now() + Duration::from_secs(1),
-            || Ok(())
+            || Ok(()),
+            |_| Ok(())
         ),
         Err(SpeechError::Cancelled)
     ));
+}
+
+#[test]
+fn timing_frames_are_bounded_typed_unique_and_never_carry_content() {
+    for timing in [
+        json!({"stage":"private","elapsed_ms":0}),
+        json!({"stage":"first_audio","elapsed_ms":120001}),
+        json!({"stage":"first_audio","elapsed_ms":-1}),
+        json!({"stage":"first_audio","elapsed_ms":1,"text":"private"}),
+    ] {
+        assert_eq!(
+            run(
+                "speak",
+                vec![json!({"state":"synthesizing"}), json!({"timing":timing})]
+            ),
+            Err(SpeechError::Protocol)
+        );
+    }
+    let duplicate = json!({"timing":{"stage":"first_audio","elapsed_ms":5}});
+    assert_eq!(
+        run(
+            "speak",
+            vec![
+                json!({"state":"synthesizing"}),
+                duplicate.clone(),
+                duplicate
+            ]
+        ),
+        Err(SpeechError::Protocol)
+    );
 }

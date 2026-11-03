@@ -21,6 +21,7 @@ pub(super) struct View {
     pub(super) epoch: u64,
 }
 pub(super) struct Inner {
+    pub(super) voice: super::warm::WarmVoice,
     pub(super) view: Mutex<View>,
     pub(super) publish: Publisher,
     pub(super) scratch: PathBuf,

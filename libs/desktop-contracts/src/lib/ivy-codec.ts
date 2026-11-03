@@ -168,21 +168,30 @@ function activity(value: unknown): IvyActivity[] {
 }
 
 export function decodeIvySnapshot(value: unknown): IvySnapshot {
-  const data = record(value, [
-    'version',
-    'revision',
-    'turn_id',
-    'model',
-    'verified_model',
-    'workspace_tools',
-    'workspace_epoch',
-    'connection',
-    'turn',
-    'items',
-    'activity',
-    'reset_id',
-    'error',
-  ]);
+  const data = record(
+    value,
+    [
+      'version',
+      'revision',
+      'turn_id',
+      'model',
+      'verified_model',
+      'workspace_tools',
+      'workspace_epoch',
+      'connection',
+      'turn',
+      'items',
+      'activity',
+      'reset_id',
+      'error',
+    ],
+    ['first_text_observed'],
+  );
+  if (
+    Object.hasOwn(data, 'first_text_observed') &&
+    data['first_text_observed'] !== true
+  )
+    throw new DesktopContractError('malformed');
   const items = data['items'];
   if (!Array.isArray(items) || items.length > 2)
     throw new DesktopContractError('malformed');
@@ -192,6 +201,9 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   if (decoded.filter((item) => item.kind !== 'text').length > 1)
     throw new DesktopContractError('malformed');
   const snapshot: IvySnapshot = {
+    ...(data['first_text_observed'] === true
+      ? { first_text_observed: true }
+      : {}),
     version: version(data['version']),
     revision: sequence(data['revision']),
     turn_id: data['turn_id'] === null ? null : identifier(data['turn_id']),

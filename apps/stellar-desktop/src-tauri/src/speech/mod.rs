@@ -5,6 +5,7 @@ mod process;
 mod scratch;
 mod state;
 mod validation;
+mod warm;
 use contracts::*;
 pub use host::SpeechHost;
 

@@ -340,6 +340,14 @@ impl Session {
             return Ok(());
         }
         match params.get("type").and_then(Value::as_str) {
+            Some("stellar.first_text") => {
+                if params.get("payload") != Some(&json!({"available":true})) {
+                    return Err(IvyErrorCode::Protocol);
+                }
+                self.shared
+                    .update(self.epoch, |view| view.first_text_observed = Some(true));
+                Ok(())
+            }
             Some("stellar.activity") => self.activity(params),
             Some("message.complete") => self.complete(
                 params

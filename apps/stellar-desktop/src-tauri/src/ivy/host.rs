@@ -26,6 +26,10 @@ mod requests;
 #[path = "host_startup.rs"]
 mod startup;
 
+#[cfg(test)]
+#[path = "route_tests.rs"]
+mod route_tests;
+
 pub enum Action {
     Connect,
     Submit(IvySubmitRequest),
