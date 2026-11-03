@@ -232,9 +232,7 @@
       "english-ivy": {
         "fixtures": 16,
         "negativeControls": 10,
-        "negativeWakeMatches": [
-          "similar"
-        ]
+        "negativeWakeMatches": ["similar"]
       }
     },
     "selectedMode": "english",
