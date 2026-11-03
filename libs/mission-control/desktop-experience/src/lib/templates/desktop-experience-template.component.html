@@ -153,7 +153,7 @@
       <button
         type="button"
         [disabled]="assistantBusy() && !assistantUncertain()"
-        (click)="retryIvy.emit()"
+        (click)="retryIvy.emit(); menu.close()"
       >
         Connect Ivy
       </button>

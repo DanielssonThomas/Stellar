@@ -14,20 +14,19 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
-  it('uncovers newly opened faults while allowing their settings to be reopened', async () => {
+  it('closes controls on Connect Ivy so its result cannot be covered by the menu', async () => {
     const menu = fixture.componentInstance.menu;
+    const retry = vi.spyOn(fixture.componentInstance.retryIvy, 'emit');
     menu.toggle();
     await fixture.whenStable();
-    fixture.componentRef.setInput('faultVisible', true);
-    await fixture.whenStable();
-    expect(menu.open()).toBe(false);
-    fixture.componentInstance.openFaultControls();
-    await fixture.whenStable();
-    expect(menu.open()).toBe(true);
-    fixture.componentRef.setInput('faultVisible', false);
-    await fixture.whenStable();
-    fixture.componentRef.setInput('faultVisible', true);
-    await fixture.whenStable();
+    const connect = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === 'Connect Ivy');
+    expect(connect).toBeDefined();
+    connect?.click();
+    expect(retry).toHaveBeenCalledOnce();
     expect(menu.open()).toBe(false);
   });
 
@@ -229,9 +228,16 @@ describe('DesktopExperienceTemplate', () => {
     expect(submit?.disabled).toBe(true);
     connect?.click();
     expect(retry).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.menu.open()).toBe(false);
     fixture.componentRef.setInput('assistantUncertain', false);
+    fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
-    expect(connect?.disabled).toBe(true);
+    const updatedConnect = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === 'Connect Ivy');
+    expect(updatedConnect?.disabled).toBe(true);
   });
 
   it('renders explicit input choices and the already normalized real level independently of detection', async () => {

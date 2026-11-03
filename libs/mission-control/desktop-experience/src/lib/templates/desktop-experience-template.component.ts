@@ -1,13 +1,11 @@
 import {
   Component,
   computed,
-  effect,
   ElementRef,
   inject,
   input,
   output,
   signal,
-  untracked,
   viewChild,
 } from '@angular/core';
 import { DesktopMenu } from './desktop-menu';
@@ -200,12 +198,6 @@ export class DesktopExperienceTemplate {
   readonly controlsClass = computed(() =>
     clsx('controls', { 'active-controls': this.state().manualActive }),
   );
-
-  constructor() {
-    effect(() => {
-      if (this.faultVisible()) untracked(() => this.menu.close());
-    });
-  }
 
   dispatch(command: unknown) {
     return this.stage().dispatch(command);
