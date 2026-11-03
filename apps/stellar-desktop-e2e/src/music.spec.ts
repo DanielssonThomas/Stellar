@@ -90,7 +90,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
   await expect
     .poll(
       async () =>
-        (await floats()).filter((value) => value !== undefined).length,
+        (await floats()).filter((value) => typeof value === 'number').length,
     )
     .toBe(81);
   const initial = await floats();
