@@ -69,6 +69,54 @@ describe('local music visualizer', () => {
     expect(invoke).toHaveBeenLastCalledWith({ version: 1, enabled: false });
   });
 
+  it.each([
+    {
+      events: [frame('12', 'unavailable', 0)],
+      reply: frame('10', 'starting', 0),
+      enabled: false,
+      level: 0,
+      status: 'unavailable',
+    },
+    {
+      events: [frame('12', 'capturing', 0.8), frame('11', 'capturing', 0.2)],
+      reply: frame('10', 'starting', 0),
+      enabled: true,
+      level: 0.8,
+      status: 'Listening',
+    },
+    {
+      events: [frame('9', 'unavailable', 0)],
+      reply: frame('10', 'capturing', 0.3),
+      enabled: true,
+      level: 0.3,
+      status: 'Listening',
+    },
+  ])(
+    'reconciles early startup events with the reply by sequence: $status/$level',
+    async ({ events, reply, enabled, level, status }) => {
+      let resolve!: (value: unknown) => void;
+      invoke.mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+      service.setEnabled(true);
+      await flush();
+      for (const event of events) callback(event);
+      resolve(reply);
+      await flush();
+      expect(service.enabled()).toBe(enabled);
+      expect(service.levels().level).toBe(level);
+      expect(service.tone()).toBe(level > 0 ? 69 : null);
+      expect(service.status()).toContain(status);
+      if (enabled) {
+        callback(frame('13', 'capturing', 0.6));
+        expect(service.levels().level).toBe(0.6);
+      }
+    },
+  );
+
   it('serializes a stop behind a pending start and cannot resurrect stale levels', async () => {
     let resolve!: (value: unknown) => void;
     invoke.mockImplementationOnce(
@@ -79,10 +127,12 @@ describe('local music visualizer', () => {
     );
     service.setEnabled(true);
     await flush();
+    callback(frame('50', 'capturing', 1));
     service.setEnabled(false);
     service.setEnabled(true);
     resolve(frame('1', 'starting'));
     await flush();
+    expect(service.levels().level).toBe(0);
     expect(invoke.mock.calls.map((call) => call[0].enabled)).toEqual([
       true,
       false,

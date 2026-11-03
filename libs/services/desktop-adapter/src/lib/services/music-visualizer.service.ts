@@ -79,6 +79,10 @@ export class MusicVisualizerService {
   private generation = 0;
   private highest = -1n;
   private accepting = false;
+  private pendingStart: {
+    readonly generation: number;
+    latest?: MusicSnapshot;
+  } | null = null;
   private tail: Promise<void> = Promise.resolve();
   private subscription?: Promise<() => void>;
   private staleTimer?: ReturnType<typeof setTimeout>;
@@ -120,6 +124,7 @@ export class MusicVisualizerService {
     const generation = ++this.generation;
     this.enabled.set(enabled);
     this.accepting = false;
+    this.pendingStart = null;
     clearTimeout(this.staleTimer);
     this.snapshot.update((current) => ({
       ...current,
@@ -132,9 +137,19 @@ export class MusicVisualizerService {
         if (enabled) {
           this.subscription ??= this.transport
             .listen((payload) => {
-              if (!this.accepting || !this.enabled() || this.disposed) return;
+              if (!this.enabled() || this.disposed) return;
+              const pending = this.pendingStart;
+              if (!this.accepting && pending?.generation !== this.generation)
+                return;
               try {
-                this.accept(decodeMusicSnapshot(payload));
+                const snapshot = decodeMusicSnapshot(payload);
+                if (this.accepting) this.accept(snapshot);
+                else if (
+                  pending &&
+                  (!pending.latest ||
+                    BigInt(snapshot.sequence) > BigInt(pending.latest.sequence))
+                )
+                  pending.latest = snapshot;
               } catch {
                 this.setEnabled(false);
               }
@@ -146,14 +161,19 @@ export class MusicVisualizerService {
           await this.subscription;
           if (generation !== this.generation || this.disposed) return;
         }
+        if (enabled) this.pendingStart = { generation };
         const snapshot = decodeMusicSnapshot(
           await this.transport.setEnabled({ version: 1, enabled }),
         );
         if (generation !== this.generation || this.disposed) return;
+        const early = this.pendingStart?.latest;
+        this.pendingStart = null;
         this.accept(snapshot);
-        this.accepting = enabled;
+        if (early) this.accept(early);
+        this.accepting = enabled && this.enabled();
       } catch {
         if (generation !== this.generation || this.disposed) return;
+        this.pendingStart = null;
         this.enabled.set(false);
         this.snapshot.update((current) => ({
           ...current,
