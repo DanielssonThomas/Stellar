@@ -31,7 +31,7 @@
       "desktopRustPassed": 114,
       "desktopRustIgnored": 4,
       "sizeTestsPassed": 7,
-      "dependencyFreePythonPassed": 48,
+      "dependencyFreePythonPassed": 50,
       "notes": "Clippy uses -D warnings. ts-rs emits existing serde-attribute parser notices. Parallel Angular rebuild and native compilation is invalid because Tauri embeds generated dist assets; final checks ran sequentially."
     },
     "mcp": {
