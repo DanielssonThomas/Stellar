@@ -190,7 +190,11 @@ const entry = (item, z, extension) => ({
   ...(item.id === 'outer-frame'
     ? { spin: 'clockwise' }
     : item.id.startsWith('inner-circle')
-      ? { spin: 'counter-clockwise' }
+      ? {
+          spin: /^inner-circle-(2|4)-arc-/.test(item.id)
+            ? 'clockwise'
+            : 'counter-clockwise',
+        }
       : {}),
 });
 const manifest = {

@@ -91,27 +91,36 @@
               [class.spin-counter]="layer.spin === 'counter-clockwise'"
               [style.transform-origin]="layer.origin"
             >
-              <img
-                #emblemImage
-                decoding="async"
-                [attr.sizes]="layer.srcset ? imageSizes() : null"
-                [attr.srcset]="layer.srcset"
-                [src]="layer.src"
-                [style.filter]="
-                  fault()
-                    ? 'url(#' +
-                      (layer.file.includes('violet')
-                        ? faultFilterId
-                        : faultLightFilterId) +
-                      ')'
-                    : null
-                "
-                [style.clip-path]="layer.clipPath"
-                alt=""
-                draggable="false"
-                (error)="assetFailed()"
-                (load)="prepareImages()"
-              />
+              <div #musicPiece class="music-piece">
+                <img
+                  #emblemImage
+                  decoding="async"
+                  [attr.sizes]="layer.srcset ? imageSizes() : null"
+                  [attr.srcset]="layer.srcset"
+                  [src]="layer.src"
+                  [style.filter]="
+                    fault()
+                      ? 'url(#' +
+                        (layer.file.includes('violet')
+                          ? faultFilterId
+                          : faultLightFilterId) +
+                        ')'
+                      : null
+                  "
+                  [style.clip-path]="layer.clipPath"
+                  alt=""
+                  draggable="false"
+                  (error)="assetFailed()"
+                  (load)="prepareLightRegions($event)"
+                />
+                @for (mask of layer.lightMasks; track $index) {
+                  <div
+                    class="light-region"
+                    [style.mask-image]="mask"
+                    [style.clip-path]="layer.clipPath"
+                  ></div>
+                }
+              </div>
             </div>
           </div>
         }

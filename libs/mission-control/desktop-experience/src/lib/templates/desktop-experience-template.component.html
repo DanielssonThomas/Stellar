@@ -48,6 +48,9 @@
         assistantActive() && assistantWaiting() && !assistantNarrating()
       "
       [audioLevel]="level()"
+      [musicLevels]="musicLevels()"
+      [musicMode]="musicMode()"
+      [musicTone]="musicTone()"
       [reducedMotion]="state().reducedMotion"
       [loading]="loading()"
       [error]="assetError()"
@@ -81,6 +84,17 @@
       [loading]="loading()"
     />
   </stellar-stage-organism>
+  <stellar-audio-visualizer-molecule
+    [enabled]="musicEnabled()"
+    [status]="musicStatus()"
+    [levels]="musicLevels()"
+    [sensitivity]="musicSensitivity()"
+    [mode]="musicMode()"
+    (modeChange)="musicMode.set($event)"
+    [loading]="loading()"
+    (listeningChange)="toggleMusic.emit($event)"
+    (sensitivityChange)="musicSensitivityChange.emit($event)"
+  />
 
   @if (
     voiceInputText() &&
@@ -115,6 +129,9 @@
     >
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      <button type="button" aria-keyshortcuts="P" (click)="openMusicControls()">
+        Music visualizer · P
+      </button>
       @if (faultEntries().length) {
         <button type="button" (click)="showFaults.emit(); menu.close()">
           Recent errors
@@ -136,7 +153,7 @@
       <button
         type="button"
         [disabled]="assistantBusy() && !assistantUncertain()"
-        (click)="retryIvy.emit()"
+        (click)="retryIvy.emit(); menu.close()"
       >
         Connect Ivy
       </button>

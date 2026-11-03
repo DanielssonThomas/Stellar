@@ -14,6 +14,45 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
+  it('closes controls on Connect Ivy so its result cannot be covered by the menu', async () => {
+    const menu = fixture.componentInstance.menu;
+    const retry = vi.spyOn(fixture.componentInstance.retryIvy, 'emit');
+    menu.toggle();
+    await fixture.whenStable();
+    const connect = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === 'Connect Ivy');
+    expect(connect).toBeDefined();
+    connect?.click();
+    expect(retry).toHaveBeenCalledOnce();
+    expect(menu.open()).toBe(false);
+  });
+
+  it('opens music controls with P but leaves typing, shortcuts and repeats alone', async () => {
+    const open = vi
+      .spyOn(fixture.componentInstance.musicControls(), 'open')
+      .mockImplementation(() => undefined);
+    const key = (options: KeyboardEventInit = {}) =>
+      new KeyboardEvent('keydown', {
+        key: 'p',
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      });
+    fixture.nativeElement.dispatchEvent(key());
+    expect(open).toHaveBeenCalledOnce();
+    fixture.nativeElement.dispatchEvent(key({ repeat: true }));
+    fixture.nativeElement.dispatchEvent(key({ ctrlKey: true }));
+    fixture.componentInstance.menu.toggle();
+    await fixture.whenStable();
+    fixture.nativeElement.querySelector('textarea').dispatchEvent(key());
+    expect(open).toHaveBeenCalledOnce();
+    fixture.nativeElement.dispatchEvent(key({ key: 'P', shiftKey: true }));
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('shows only available Whisper input and hides it throughout prompt mode and suspension', async () => {
     const panel = () =>
       fixture.nativeElement.querySelector('stellar-voice-transcript-molecule');
@@ -147,8 +186,9 @@ describe('DesktopExperienceTemplate', () => {
     expect(action).toHaveBeenCalledWith({ type: 'dismiss' });
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
-    const input: HTMLInputElement =
-      fixture.nativeElement.querySelector('input');
+    const input: HTMLInputElement = fixture.nativeElement.querySelector(
+      '.motion-toggle input',
+    );
     input.checked = true;
     input.dispatchEvent(new Event('change'));
     expect(action).toHaveBeenCalledWith({
@@ -188,9 +228,16 @@ describe('DesktopExperienceTemplate', () => {
     expect(submit?.disabled).toBe(true);
     connect?.click();
     expect(retry).toHaveBeenCalledOnce();
+    expect(fixture.componentInstance.menu.open()).toBe(false);
     fixture.componentRef.setInput('assistantUncertain', false);
+    fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
-    expect(connect?.disabled).toBe(true);
+    const updatedConnect = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find((button) => button.textContent?.trim() === 'Connect Ivy');
+    expect(updatedConnect?.disabled).toBe(true);
   });
 
   it('renders explicit input choices and the already normalized real level independently of detection', async () => {
@@ -211,9 +258,9 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentRef.setInput('activityStatus', 'Quiet');
     await fixture.whenStable();
     expect(fixture.componentInstance.inputMeter()).toBe(33);
-    expect(fixture.nativeElement.querySelector('meter').value).toBeGreaterThan(
-      0,
-    );
+    expect(
+      fixture.nativeElement.querySelector('[data-desktop-menu] meter').value,
+    ).toBeGreaterThan(0);
     expect(fixture.nativeElement.textContent).toContain('Quiet');
     const select: HTMLSelectElement =
       fixture.nativeElement.querySelector('select');

@@ -73,6 +73,7 @@ if (action === 'smoke') {
             identifier: 'desktop-smoke',
             webviews: ['main'],
             permissions: [
+              'allow-music-set-enabled',
               'allow-shell-status',
               'allow-workspace-browser',
               'allow-workspace-image',

@@ -2,6 +2,7 @@
   "identifier": "desktop-main",
   "description": "The local desktop shell may read its versioned readiness contract.",
   "permissions": [
+    "allow-music-set-enabled",
     "allow-shell-status",
     "allow-cleanup-refine",
     "allow-app-info",

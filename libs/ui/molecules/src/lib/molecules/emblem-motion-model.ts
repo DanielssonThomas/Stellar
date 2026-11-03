@@ -125,12 +125,12 @@ export function isExplodedPhase(phase: Phase): boolean {
   );
 }
 
-export function layerTransform(
+export function layerPlacement(
   layer: EmblemLayer,
   manifest: EmblemManifest,
   phase: Phase,
   reducedMotion: boolean,
-): string {
+) {
   const pose = isExplodedPhase(phase) ? layer.exploded : layer.assembled;
   const layers = Array.isArray(manifest?.layers) ? manifest.layers : [];
   const zs = layers.map((item) => item?.z).filter(Number.isFinite);
@@ -180,10 +180,25 @@ export function layerTransform(
   const x = Number.isFinite(width) && width !== 0 ? (offsetX / width) * 100 : 0;
   const y =
     Number.isFinite(height) && height !== 0 ? (offsetY / height) * 100 : 0;
-  const depthTransform =
-    pose.depth === undefined && !stacked
-      ? `translateZ(${depth}px)`
-      : `translateZ(${(depth / width) * 100}cqw)`;
+  return { x, y, depth, containerDepth: pose.depth !== undefined || stacked };
+}
+
+export function layerTransform(
+  layer: EmblemLayer,
+  manifest: EmblemManifest,
+  phase: Phase,
+  reducedMotion: boolean,
+): string {
+  const { x, y, depth, containerDepth } = layerPlacement(
+    layer,
+    manifest,
+    phase,
+    reducedMotion,
+  );
+  const pose = isExplodedPhase(phase) ? layer.exploded : layer.assembled;
+  const depthTransform = containerDepth
+    ? `translateZ(${(depth / manifest.viewBox[2]) * 100}cqw)`
+    : `translateZ(${depth}px)`;
   return `translate(${x}% , ${y}%) ${depthTransform} rotate(${pose.rotation}deg)`;
 }
 

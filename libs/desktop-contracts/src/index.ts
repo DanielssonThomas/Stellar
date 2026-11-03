@@ -1,4 +1,13 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
+export type {
+  MusicRequest,
+  MusicLevels,
+  MusicStatus,
+  MusicSnapshot,
+  MusicError,
+} from './generated';
+export { musicSetEnabledCommand, musicEvent } from './generated';
+export { decodeMusicSnapshot } from './lib/music-codec';
 export { decodeShellReply } from './lib/decode-shell-reply';
 export type {
   AppCapability,

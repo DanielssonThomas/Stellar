@@ -7,6 +7,7 @@ mod commands;
 mod contracts;
 mod ivy;
 mod media;
+mod music;
 #[cfg(feature = "recognition-smoke")]
 mod recognition_smoke;
 mod shell;
@@ -34,6 +35,12 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
+            let music_handle = app.handle().clone();
+            app.manage(music::MusicHost::new(std::sync::Arc::new(
+                move |snapshot| {
+                    let _ = music_handle.emit_to("main", music::MUSIC_EVENT, snapshot);
+                },
+            )));
             app.manage(cleanup::CleanupHost::default());
             app.manage(media::MediaHost::default());
             let handle = app.handle().clone();
@@ -79,6 +86,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if (matches!(event, tauri::WindowEvent::Destroyed)
+                || (matches!(event, tauri::WindowEvent::Resized(_))
+                    && window.is_minimized().unwrap_or(false)))
+                && let Some(host) = window.try_state::<music::MusicHost>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<ivy::IvyHost>()
             {
@@ -102,6 +116,7 @@ fn main() {
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::shell_status,
+        music::music_set_enabled,
         media::workspace_browser,
         media::workspace_image,
         app_info::app_info,
@@ -129,6 +144,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<music::MusicHost>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<ivy::IvyHost>()
             {

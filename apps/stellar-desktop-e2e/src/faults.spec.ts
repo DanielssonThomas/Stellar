@@ -76,6 +76,7 @@ async function install(
 test('failed Connect opens sanitized fault history and recovery clears the local fault', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 900, height: 600 });
   await install(page);
   const menu = page.getByRole('button', {
     name: 'Experience menu',
@@ -95,6 +96,7 @@ test('failed Connect opens sanitized fault history and recovery clears the local
     page.getByRole('img', { name: 'Stellar emblem — error state' }),
   ).toBeVisible();
   await expect(log).toContainText('Active');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: 'Try recovery' }).click();
   await expect(log).toContainText('Resolved');
   await expect(

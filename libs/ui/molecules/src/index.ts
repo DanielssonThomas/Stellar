@@ -29,6 +29,11 @@ export * from './lib/molecules/prompt-composer-molecule.component';
 export * from './lib/molecules/fault-log-molecule.component';
 export * from './lib/molecules/voice-transcript-molecule.component';
 export * from './lib/molecules/ivy-activity-molecule.component';
+export * from './lib/molecules/audio-visualizer-molecule.component';
+export type {
+  EmblemMusicLevels,
+  EmblemMusicMode,
+} from './lib/molecules/emblem-music-motion';
 export {
   PRESENTATION_EDIT,
   PRESENTATION_SELECT,

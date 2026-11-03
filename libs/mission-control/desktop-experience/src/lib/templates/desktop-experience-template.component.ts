@@ -16,6 +16,9 @@ import {
 } from '@stellar/desktop-interaction';
 import {
   EmblemMotionMolecule,
+  AudioVisualizerMolecule,
+  type EmblemMusicLevels,
+  type EmblemMusicMode,
   IvyActivityMolecule,
   type IvyActivityItem,
   PromptComposerMolecule,
@@ -40,6 +43,7 @@ export interface MicrophoneOption {
   imports: [
     StageOrganism,
     EmblemMotionMolecule,
+    AudioVisualizerMolecule,
     IvyActivityMolecule,
     PromptComposerMolecule,
     FaultLogMolecule,
@@ -53,6 +57,7 @@ export interface MicrophoneOption {
     '(keydown.escape)': 'dismiss($event)',
     '(document:pointerdown)': 'menu.outside($event)',
     '(document:focusin)': 'menu.outside($event)',
+    '(document:keydown)': 'musicShortcut($event)',
   },
 })
 export class DesktopExperienceTemplate {
@@ -143,6 +148,28 @@ export class DesktopExperienceTemplate {
   readonly assetError = input<string | null>(null);
   readonly assetUnavailable = output<void>();
   readonly level = input(0);
+  readonly musicLevels = input<EmblemMusicLevels>({
+    level: 0,
+    bass: 0,
+    mid: 0,
+    treble: 0,
+  });
+  readonly musicSensitivity = input<EmblemMusicLevels>({
+    level: 1,
+    bass: 1,
+    mid: 1,
+    treble: 1,
+  });
+  readonly musicEnabled = input(false);
+  readonly musicStatus = input('Music visualizer off');
+  readonly toggleMusic = output<boolean>();
+  readonly musicSensitivityChange = output<{
+    band: keyof EmblemMusicLevels;
+    value: number;
+  }>();
+  readonly musicControls = viewChild.required(AudioVisualizerMolecule);
+  readonly musicMode = signal<EmblemMusicMode>('dynamic');
+  readonly musicTone = input<number | null>(null);
   readonly statusText = input('Ready');
   readonly inputs = input<readonly MicrophoneOption[]>([]);
   readonly inputsVisible = input(false);
@@ -182,6 +209,8 @@ export class DesktopExperienceTemplate {
     return this.promptComposer().presentFinalized(text, signal);
   }
   dismiss(event: Event) {
+    if (event.target instanceof Element && event.target.closest('dialog[open]'))
+      return;
     if (this.menu.open()) {
       this.menu.keydown(event as KeyboardEvent);
       return;
@@ -189,6 +218,32 @@ export class DesktopExperienceTemplate {
     if (this.state().phase === 'idle') return;
     event.preventDefault();
     this.dismissExperience();
+  }
+  musicShortcut(event: KeyboardEvent) {
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      event.isComposing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.key.toLowerCase() !== 'p'
+    )
+      return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+      )
+    )
+      return;
+    if (['suspended', 'shutdown'].includes(this.state().phase)) return;
+    event.preventDefault();
+    this.openMusicControls();
+  }
+  openMusicControls() {
+    this.menu.close();
+    this.musicControls().open();
   }
   dismissExperience() {
     this.stage().closePresentations();

@@ -69,6 +69,34 @@ describe('EmblemMotionMolecule', () => {
     vi.restoreAllMocks();
   });
 
+  it('adds music without restarting individual floats, and neutralizes it during activity or reduced motion', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: [{ ...manifest.layers[0], spin: undefined }],
+    });
+    await fixture.whenStable();
+    const before = animate.mock.calls.length;
+    fixture.componentRef.setInput('musicLevels', {
+      level: 0.7,
+      bass: 0.8,
+      mid: 0.4,
+      treble: 0.2,
+    });
+    await fixture.whenStable();
+    const music = fixture.nativeElement.querySelector(
+      '.music-piece',
+    ) as HTMLElement;
+    expect(music.style.transform).not.toBe('none');
+    expect(animate.mock.calls).toHaveLength(before);
+    fixture.componentRef.setInput('phase', 'focusing');
+    await fixture.whenStable();
+    expect(music.style.transform).toBe('none');
+    fixture.componentRef.setInput('phase', 'idle');
+    fixture.componentRef.setInput('reducedMotion', true);
+    await fixture.whenStable();
+    expect(music.style.transform).toBe('none');
+  });
+
   it('explodes a fault without changing canonical layers and restores the selected pose after recovery', async () => {
     fixture.componentRef.setInput('phase', 'listening');
     fixture.componentRef.setInput('solActive', true);

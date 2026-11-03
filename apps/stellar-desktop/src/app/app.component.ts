@@ -15,6 +15,7 @@ import {
   DesktopAdapterService,
   IvyAdapterService,
   WorkspaceToolsService,
+  MusicVisualizerService,
   createNativeMediaWorkspace,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
@@ -34,6 +35,7 @@ import { DesktopFaults } from './desktop-faults';
     DesktopAssistant,
     DesktopVoice,
     DesktopFaults,
+    MusicVisualizerService,
     { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
     {
       provide: PRESENTATION_WORKSPACE,
@@ -62,6 +64,7 @@ export class AppComponent {
   readonly assistant = inject(DesktopAssistant);
   readonly voice = inject(DesktopVoice);
   readonly faults = inject(DesktopFaults);
+  readonly music = inject(MusicVisualizerService);
   readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
