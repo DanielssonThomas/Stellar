@@ -44,7 +44,6 @@ export interface VoiceView {
 }
 
 export interface VoicePorts {
-  readonly now?: () => number;
   readonly onForegroundEnd?: () => void;
   readonly transcribe: (
     pcm: Int16Array,
@@ -68,6 +67,7 @@ export interface VoicePorts {
 
 export class VoiceConversation {
   private readonly invocation = new VoiceInvocation();
+  private provisionalInvocation = false;
   private promptOpen = false;
   private readonly assembler = createUtteranceAssembler();
   private context?: VoiceContext;
@@ -159,7 +159,12 @@ export class VoiceConversation {
     ) {
       this.invocation.reset();
       this.invalidate();
-    } else if (!assistantWasBusy && assistantIsBusy && this.phase === null) {
+    } else if (
+      !assistantWasBusy &&
+      assistantIsBusy &&
+      this.phase === null &&
+      !this.typedLease
+    ) {
       this.invalidate();
     } else if (
       this.phase === 'speaking' &&
@@ -168,7 +173,7 @@ export class VoiceConversation {
       BigInt(context.speech.revision) >= this.playbackRevision
     ) {
       this.phase = null;
-      this.invocation.activate(this.now());
+      this.invocation.activate();
       this.awaitingQuiet = true;
       this.assembler.reset();
     } else if (
@@ -235,8 +240,6 @@ export class VoiceConversation {
           this.assembler.reset();
           return;
         }
-        if (context.audio.activity.active && this.invocation.active(this.now()))
-          this.invocation.activate(this.now());
         const pcm = this.assembler.push(event.chunk, {
           ...context.audio.activity,
           draft:
@@ -245,7 +248,8 @@ export class VoiceConversation {
         });
         if (this.draftRecognition) {
           this.previewSamples =
-            this.composition.status === 'composing'
+            this.composition.status === 'composing' ||
+            (!this.invocation.active() && context.audio.activity.active)
               ? this.previewSamples + event.chunk.samples.length
               : 0;
           if (pcm) {
@@ -260,7 +264,8 @@ export class VoiceConversation {
               commandAllowed,
             );
           } else if (
-            this.composition.status === 'composing' &&
+            (this.composition.status === 'composing' ||
+              (!this.invocation.active() && context.audio.activity.active)) &&
             this.previewSamples >= 16000 &&
             this.draftRecognition.canPreview()
           ) {
@@ -339,7 +344,7 @@ export class VoiceConversation {
       preparing(this.composition.status)
     )
       return;
-    this.invocation.activate(this.now());
+    this.invocation.activate();
     this.promptOpen = true;
     if (raw !== this.composition.raw) {
       this.dispatchUncertain = false;
@@ -451,8 +456,7 @@ export class VoiceConversation {
       )
         return false;
       const accepted = await action();
-      if (accepted && this.current(generation))
-        this.invocation.activate(this.now());
+      if (accepted && this.current(generation)) this.invocation.activate();
       return accepted;
     } catch {
       return false;
@@ -475,6 +479,21 @@ export class VoiceConversation {
     commandAllowed: boolean,
   ) {
     if (this.disposed) return;
+    if (!final && !this.promptOpen && !this.invocation.active()) {
+      if (this.invocation.accept(text, false)) {
+        this.provisionalInvocation = true;
+        this.publish();
+      }
+      return;
+    }
+    if (final && this.provisionalInvocation) {
+      this.provisionalInvocation = false;
+      if (!this.invocation.accept(text, false)?.invoked) {
+        this.invocation.reset();
+        this.publish();
+        return;
+      }
+    }
     if (final && this.promptOpen && cancelsPrompt(text)) {
       this.cancelPrompt();
       return;
@@ -488,15 +507,11 @@ export class VoiceConversation {
     // A capped continuation cannot introduce a new utterance-prefix wake word.
     if (
       !commandAllowed &&
-      !this.invocation.active(this.now()) &&
+      !this.invocation.active() &&
       this.composition.status === 'idle'
     )
       return;
-    const invocation = this.invocation.accept(
-      text,
-      this.now(),
-      this.promptOpen,
-    );
+    const invocation = this.invocation.accept(text, this.promptOpen);
     if (!invocation) {
       this.publish();
       return;
@@ -682,7 +697,7 @@ export class VoiceConversation {
       this.cancelPrompt();
       return;
     }
-    const invocation = this.invocation.accept(text, this.now(), composing);
+    const invocation = this.invocation.accept(text, composing);
     if (!invocation) {
       this.phase = null;
       this.publish();
@@ -844,10 +859,6 @@ export class VoiceConversation {
     });
     this.ports.onForegroundEnd?.();
     this.publish();
-  }
-
-  private now() {
-    return this.ports.now?.() ?? Date.now();
   }
 
   private async finalize(id: string, generation: number) {
@@ -1016,6 +1027,7 @@ export class VoiceConversation {
       context.available &&
       context.audio.status === 'capturing' &&
       !this.phase &&
+      !this.typedLease &&
       !this.stopping &&
       !this.sessionPending &&
       !this.dispatchPending &&
@@ -1081,7 +1093,7 @@ export class VoiceConversation {
       return;
     }
     if (snapshot.turn !== 'completed') return;
-    this.invocation.activate(this.now());
+    this.invocation.activate();
     const id = this.voiceTurn;
     this.voiceTurn = null;
     this.phase = null;
@@ -1124,7 +1136,7 @@ export class VoiceConversation {
             BigInt(observed.revision) >= this.playbackRevision)
         ) {
           this.phase = null;
-          this.invocation.activate(this.now());
+          this.invocation.activate();
           this.awaitingQuiet = true;
           this.assembler.reset();
           this.publish();
@@ -1139,6 +1151,8 @@ export class VoiceConversation {
   }
 
   private invalidate() {
+    if (this.provisionalInvocation) this.invocation.reset();
+    this.provisionalInvocation = false;
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();
@@ -1221,7 +1235,7 @@ export class VoiceConversation {
     }
     const context = this.context;
     this.ports.onChange({
-      foregroundActive: this.promptOpen || this.invocation.active(this.now()),
+      foregroundActive: this.promptOpen || this.invocation.active(),
       muted: this.muted,
       error: !!this.failure || this.routeUncertain,
       busy:
@@ -1241,8 +1255,7 @@ export class VoiceConversation {
             : this.phase === 'speaking'
               ? 'Speaking locally'
               : context?.audio.status === 'capturing'
-                ? this.invocation.active(this.now()) ||
-                  this.composition.status !== 'idle'
+                ? this.invocation.active() || this.composition.status !== 'idle'
                   ? 'Local voice listening'
                   : 'Listening for Ivy'
                 : 'Local voice idle'),

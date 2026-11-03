@@ -1,34 +1,31 @@
-export const VOICE_FOLLOW_UP_MS = 60_000;
-
 /** An exact utterance-prefix gate; never interpret wake words inside dictation. */
 export class VoiceInvocation {
-  private expires = 0;
+  private invoked = false;
 
-  active(now: number): boolean {
-    return now < this.expires;
+  active(): boolean {
+    return this.invoked;
   }
 
-  activate(now: number): void {
-    this.expires = now + VOICE_FOLLOW_UP_MS;
+  activate(): void {
+    this.invoked = true;
   }
 
   reset(): void {
-    this.expires = 0;
+    this.invoked = false;
   }
 
   accept(
     text: string,
-    now: number,
     composing: boolean,
   ): { text: string; invoked: boolean } | null {
     const wake =
       !composing && /^\s*ivy(?=$|[\s,.:;!?])(?:[\s,.:;!?]*)/iu.exec(text);
     if (wake) {
-      this.activate(now);
+      this.activate();
       return { text: text.slice(wake[0].length), invoked: true };
     }
-    if (!this.active(now) && !composing) return null;
-    this.activate(now);
+    if (!this.active() && !composing) return null;
+    this.activate();
     return { text, invoked: false };
   }
 }

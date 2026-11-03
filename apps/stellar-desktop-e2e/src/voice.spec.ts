@@ -252,9 +252,9 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);
   expect(result.transcribeActive).toBe(1);
-  expect(result.speakActive).toBe(0);
-  expect(result.submitActive).toBe(0);
-  await expect.poll(async () => (await fixture()).acquisitions).toBe(2);
+  expect(result.speakActive).toBe(1);
+  expect(result.submitActive).toBe(1);
+  await expect.poll(async () => (await fixture()).acquisitions).toBe(1);
   await expect.poll(async () => (await fixture()).activeTracks).toBe(1);
   expect(result.sampleCount).toBeGreaterThan(24000);
   expect(result.sampleCount).toBeLessThanOrEqual(320000);

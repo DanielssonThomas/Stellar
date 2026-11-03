@@ -17,7 +17,6 @@ import { decodeEmblemManifest } from '@stellar/ui-molecules';
 import type { StageResult } from '@stellar/ui-organisms';
 import { DesktopSession } from './desktop-session';
 import { MicrophoneInputs } from './microphone-inputs';
-import { VoiceCaptureGate } from './voice-capture-gate';
 
 @Injectable()
 export class DesktopExperience {
@@ -31,22 +30,6 @@ export class DesktopExperience {
         ? 'Activity detected'
         : 'Quiet';
   });
-  private readonly capturePaused = signal(false);
-  private readonly voiceCapture = new VoiceCaptureGate(
-    () => ({
-      requestId: this.state().microphone.requestId,
-      deviceId: this.inputs.selectedId(),
-      available:
-        !this.document.hidden &&
-        !['suspended', 'shutdown'].includes(this.state().phase),
-      status: this.audio.state().status,
-    }),
-    () => this.audio.pauseForTurn(),
-    (deviceId) => this.audio.startMicrophone(deviceId),
-    () => {
-      void this.audio.reportUnavailable();
-    },
-  );
   readonly state = signal(initialState);
   readonly manifest = signal(decodeEmblemManifest(emblemManifest));
   readonly loading = signal(false);
@@ -59,6 +42,7 @@ export class DesktopExperience {
   private commandSequence: (() => number | null) | undefined;
   readonly session = new DesktopSession({
     automaticSummary: false,
+    voiceDriven: true,
     audio: {
       startMicrophone: () =>
         this.audio.startMicrophone(this.inputs.selectedId() || undefined),
@@ -92,8 +76,6 @@ export class DesktopExperience {
       return 'Microphone paused during voice turn';
     if (audio.status === 'requesting')
       return 'Waiting for microphone permission';
-    if (this.capturePaused())
-      return 'Microphone paused when the window lost focus. Enable microphone to resume.';
     if (audio.status === 'capturing' && audio.activity.calibrating)
       return 'Calibrating microphone';
     if (state.phase === 'presenting') return 'Activity ready';
@@ -105,20 +87,14 @@ export class DesktopExperience {
   });
 
   constructor() {
+    this.audio.setContinuousCapture(true);
     effect(() => {
       this.session.updateAudio(this.audio.state());
-      this.voiceCapture.refresh();
     });
-    const visibility = () =>
-      this.session.dispatch({
-        type: this.document.hidden ? 'hidden' : 'resume',
-      });
-    const pagehide = () => this.session.dispatch({ type: 'hidden' });
-    const blur = () => {
-      if (this.state().microphone.requestId !== null)
-        this.capturePaused.set(true);
-      this.session.dispatch({ type: 'minimized' });
+    const visibility = () => {
+      if (!this.document.hidden) this.session.dispatch({ type: 'resume' });
     };
+    const pagehide = () => this.session.dispatch({ type: 'shutdown' });
     const focus = () => this.session.dispatch({ type: 'resume' });
     const preference = () =>
       this.session.dispatch({
@@ -128,15 +104,12 @@ export class DesktopExperience {
     preference();
     this.document.addEventListener('visibilitychange', visibility);
     this.document.defaultView?.addEventListener('pagehide', pagehide);
-    this.document.defaultView?.addEventListener('blur', blur);
     this.document.defaultView?.addEventListener('focus', focus);
     this.media?.addEventListener('change', preference);
     inject(DestroyRef).onDestroy(() => {
-      this.voiceCapture.dispose();
       this.inputs.dispose();
       this.document.removeEventListener('visibilitychange', visibility);
       this.document.defaultView?.removeEventListener('pagehide', pagehide);
-      this.document.defaultView?.removeEventListener('blur', blur);
       this.document.defaultView?.removeEventListener('focus', focus);
       this.media?.removeEventListener('change', preference);
       this.session.dispose();
@@ -160,12 +133,6 @@ export class DesktopExperience {
   }
 
   dispatch(event: InteractionEvent) {
-    if (
-      event.type === 'capture-request' ||
-      event.type === 'manual-start' ||
-      event.type === 'dismiss'
-    )
-      this.capturePaused.set(false);
     this.session.dispatch(
       event.type === 'reduced-motion'
         ? { ...event, enabled: event.enabled || (this.media?.matches ?? false) }
@@ -173,12 +140,8 @@ export class DesktopExperience {
     );
   }
 
-  waitForVoiceCaptureRelease(): Promise<void> {
-    return this.voiceCapture.waitForRelease();
-  }
-
-  setVoiceCapturePaused(paused: boolean) {
-    this.voiceCapture.setPaused(paused);
+  startListening() {
+    this.dispatch({ type: 'capture-request' });
   }
 
   selectInput(deviceId: string) {

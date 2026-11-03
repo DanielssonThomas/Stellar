@@ -7,7 +7,7 @@ import {
 import { DesktopSession } from './desktop-session';
 import { motionDurations } from '@stellar/desktop-interaction';
 
-function setup(automaticSummary = true) {
+function setup(automaticSummary = true, voiceDriven = false) {
   vi.useFakeTimers();
   const audio = {
     startMicrophone: vi.fn(async () => undefined),
@@ -19,6 +19,7 @@ function setup(automaticSummary = true) {
   const commands = vi.fn((command) => registry.dispatch(command));
   const session = new DesktopSession({
     automaticSummary,
+    voiceDriven,
     audio,
     now: () => Date.now(),
     onState: vi.fn(),
@@ -50,6 +51,25 @@ const audioState = (
 
 describe('desktop composition session', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('keeps voice-driven passive capture independent from amplitude, pane closure and dismissal', () => {
+    const { session, audio } = setup(false, true);
+    session.dispatch({ type: 'capture-request' });
+    session.updateAudio(audioState('capturing', true));
+    const requestId = session.state.microphone.requestId;
+    expect(session.state.phase).toBe('idle');
+    expect(session.state.audioActive).toBe(false);
+    session.dispatch({ type: 'presentation-change', visible: true });
+    vi.runAllTimers();
+    session.dispatch({ type: 'presentation-change', visible: false });
+    session.dispatch({ type: 'dismiss' });
+    vi.runAllTimers();
+    expect(session.state.microphone.requestId).toBe(requestId);
+    expect(audio.stop).not.toHaveBeenCalled();
+    session.stopMicrophone();
+    expect(audio.stop).toHaveBeenCalledOnce();
+    session.dispose();
+  });
 
   it('returns ambient without automatic content and keeps explicit presentation through continued activity', () => {
     const { session, registry, commands } = setup(false);

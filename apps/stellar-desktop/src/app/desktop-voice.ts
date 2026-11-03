@@ -96,9 +96,6 @@ export class DesktopVoice {
     readSession: () => this.readSession(),
     id: () => crypto.randomUUID(),
     onChange: (view) => this.zone.run(() => this.current.set(view)),
-    onCapturePauseChange: (paused) =>
-      this.experience.setVoiceCapturePaused(paused),
-    waitForCapturePause: () => this.experience.waitForVoiceCaptureRelease(),
     onComposition: (value) =>
       this.zone.run(() => {
         this.compositionState.set(value);
@@ -130,6 +127,15 @@ export class DesktopVoice {
 
   setMuted(muted: boolean) {
     this.conversation.setMuted(muted);
+  }
+
+  async startListening(): Promise<void> {
+    try {
+      await this.speech.initialize();
+      this.experience.startListening();
+    } catch {
+      // An unavailable local speech boundary cannot admit voice interactions.
+    }
   }
 
   submitText(text: string): Promise<boolean> {

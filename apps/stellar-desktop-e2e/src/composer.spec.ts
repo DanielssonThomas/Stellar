@@ -4,7 +4,6 @@ import { openPane } from './stage-driver';
 
 type ComposerApp = {
   experience: {
-    waitForVoiceCaptureRelease(): Promise<void>;
     state(): { microphone: { requestId: number | null } };
   };
   voice: {
@@ -40,9 +39,9 @@ type ComposerFixture = {
 const raw = 'Um, Set up the next Stellar sprint.';
 const refined = 'Set up the next Stellar sprint.';
 
-async function install(page: Page, hold = true) {
+async function install(page: Page, hold = true, autoStart = false) {
   await page.addInitScript(
-    ({ hold, refined }) => {
+    ({ hold, refined, autoStart }) => {
       let revision = 0;
       let model: 'terra' | 'sol' = 'terra';
       const fixture: ComposerFixture = {
@@ -105,7 +104,7 @@ async function install(page: Page, hold = true) {
                   version: 1,
                   sequence: request['sequence'],
                   application: 'stellar-desktop',
-                  capabilities: [],
+                  capabilities: autoStart ? [{ kind: 'native_window' }] : [],
                   build_revision: null,
                 };
               if (command === 'ivy_connect' || command === 'ivy_snapshot')
@@ -174,7 +173,7 @@ async function install(page: Page, hold = true) {
         },
       });
     },
-    { hold, refined },
+    { hold, refined, autoStart },
   );
   await page.goto('/');
   await expect(page.locator('stellar-root')).toHaveAttribute(
@@ -254,7 +253,7 @@ async function wakeCapture(page: Page) {
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
-  return async (text: string) => {
+  const say = async (text: string) => {
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -290,7 +289,27 @@ async function wakeCapture(page: Page) {
       )
       .toBeGreaterThan(before);
   };
+  return Object.assign(say, { feed });
 }
+
+test('native startup requests the microphone automatically without assembling the passive emblem', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      value: () => {
+        document.documentElement.dataset['automaticCaptureRequested'] = 'true';
+        return new Promise<MediaStream>(() => undefined);
+      },
+    });
+  });
+  await install(page, false, true);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-automatic-capture-requested',
+    'true',
+  );
+  await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
+});
 
 test('wake-only foreground flow routes Terra, composes Sol, cancels without cleanup, and requires re-invocation', async ({
   page,
@@ -324,12 +343,48 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     await say(ambient);
   expect((await observed()).sessions).toEqual([]);
   expect((await observed()).submissions).toEqual([]);
-  await say('Ivy, tell me the plan');
+  await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
+  await page.evaluate(() => {
+    (
+      window as unknown as { __composerFixture: ComposerFixture }
+    ).__composerFixture.transcript = 'Ivy, tell me the plan';
+  });
+  await say.feed(true, 32);
+  await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion/);
+  expect((await observed()).submissions).toEqual([]);
+  await page.evaluate(() => {
+    const observed = window as unknown as {
+      __foregroundDropped?: boolean;
+      __watchForeground?: boolean;
+    };
+    observed.__watchForeground = true;
+    const watch = () => {
+      if (!observed.__watchForeground) return;
+      if (document.querySelector('.emblem')?.classList.contains('idle-motion'))
+        observed.__foregroundDropped = true;
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  });
+  await say.feed(true, 20);
+  await say.feed(false, 60);
   await expect
     .poll(async () => (await observed()).submissions)
     .toEqual([{ text: 'tell me the plan', dissolved: false }]);
   expect((await observed()).sessions).toEqual(['terra']);
-  await say('clear');
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __foregroundDropped?: boolean })
+          .__foregroundDropped ?? false,
+    ),
+  ).toBe(false);
+  await page.evaluate(() => {
+    (window as unknown as { __watchForeground?: boolean }).__watchForeground =
+      false;
+  });
+  await say("I'm done");
+  await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
   await say('another ambient request');
   expect((await observed()).submissions).toHaveLength(1);
   await say('Ivy, prompt');
@@ -429,22 +484,11 @@ const state = (page: Page) =>
     };
   });
 
-test('typed submit waits for capture release and keeps the message in the form', async ({
+test('typed submit preserves the form and keeps continuous capture active', async ({
   page,
 }) => {
   await install(page, false);
-  await page.evaluate(() => {
-    const debug = window as unknown as {
-      ng: { getComponent(element: Element): ComposerApp };
-      __finishCaptureRelease?: () => void;
-    };
-    const root = document.querySelector('stellar-root');
-    if (!root) throw Error('Root missing');
-    debug.ng.getComponent(root).experience.waitForVoiceCaptureRelease = () =>
-      new Promise<void>((resolve) => {
-        debug.__finishCaptureRelease = resolve;
-      });
-  });
+  await wakeCapture(page);
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
@@ -452,63 +496,13 @@ test('typed submit waits for capture release and keeps the message in the form',
   await input.fill('A typed message');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          typeof (window as unknown as { __finishCaptureRelease?: () => void })
-            .__finishCaptureRelease,
-      ),
-    )
-    .toBe('function');
-  expect((await state(page)).submissions).toEqual([]);
-  await expect(input).toHaveValue('A typed message');
-  await page.evaluate(() =>
-    (
-      window as unknown as { __finishCaptureRelease: () => void }
-    ).__finishCaptureRelease(),
-  );
-  await expect
     .poll(async () => (await state(page)).submissions)
     .toEqual([{ text: 'A typed message', dissolved: false }]);
   await expect(input).toHaveValue('A typed message');
+  await expect(
+    page.getByRole('button', { name: 'Stop microphone', exact: true }),
+  ).toBeVisible();
 });
-
-test('typed release failure preserves the message and does not submit', async ({
-  page,
-}) => {
-  await install(page, false);
-  await page.evaluate(() => {
-    const debug = window as unknown as {
-      ng: { getComponent(element: Element): ComposerApp };
-      __releaseRejected?: boolean;
-    };
-    const root = document.querySelector('stellar-root');
-    if (!root) throw Error('Root missing');
-    debug.ng.getComponent(root).experience.waitForVoiceCaptureRelease =
-      async () => {
-        debug.__releaseRejected = true;
-        throw Error('Synthetic release failure');
-      };
-  });
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
-  const input = page.getByLabel('Message Ivy');
-  await input.fill('Keep this message');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as unknown as { __releaseRejected?: boolean })
-            .__releaseRejected,
-      ),
-    )
-    .toBe(true);
-  expect((await state(page)).submissions).toEqual([]);
-  await expect(input).toHaveValue('Keep this message');
-});
-
 test('synthetic voice preview, stable sentence and cleanup reach one finalized submission', async ({
   page,
 }) => {

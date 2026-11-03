@@ -133,6 +133,83 @@ function fixture(extra: Partial<VoicePorts> = {}) {
 }
 
 describe('wake-word session lifecycle', () => {
+  it('rejects a provisional Ivy prefix when the finalized utterance corrects it to unrelated speech', async () => {
+    const states: VoiceView[] = [];
+    const collect = vi
+      .fn(async (_pcm: Int16Array, utterance_id: string) => ({
+        version: 1,
+        utterance_id,
+        text: 'Ivory is a color',
+      }))
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'Ivy' });
+    const f = fixture({ collect, onChange: (state) => states.push(state) });
+    f.feed(true, 30);
+    for (let i = 0; i < 3; i++) await flush();
+    expect(states.at(-1)?.foregroundActive).toBe(true);
+    f.feed(false, 35);
+    for (let i = 0; i < 3; i++) await flush();
+    expect(states.at(-1)?.foregroundActive).toBe(false);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+  });
+
+  it('activates from an in-progress Ivy prefix and stays active across recognition, thinking and playback', async () => {
+    const states: VoiceView[] = [];
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'Ivy, a normal request',
+    }));
+    const clearConversation = vi.fn(async () => true);
+    const f = fixture({
+      collect,
+      clearConversation,
+      onChange: (state) => states.push(state),
+    });
+    f.feed(true, 30);
+    for (let i = 0; i < 3; i++) await flush();
+    expect(states.at(-1)?.foregroundActive).toBe(true);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    const activeFrom = states.length - 1;
+    f.feed(true, 15);
+    f.feed(false, 35);
+    for (let i = 0; i < 3; i++) await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'a normal request',
+      id,
+    );
+    const recognized = collect.mock.calls.length;
+    f.update({
+      assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
+    });
+    f.feed(true, 50);
+    expect(collect).toHaveBeenCalledTimes(recognized);
+    f.completed();
+    await flush();
+    f.update({
+      speech: { ...initialSpeechSnapshot(), state: 'speaking', revision: '2' },
+    });
+    f.feed(true, 50);
+    expect(collect).toHaveBeenCalledTimes(recognized);
+    f.update({
+      speech: { ...initialSpeechSnapshot(), state: 'idle', revision: '3' },
+    });
+    f.feed(false, 35);
+    expect(
+      states.slice(activeFrom).every((state) => state.foregroundActive),
+    ).toBe(true);
+    expect(f.context().audio.status).toBe('capturing');
+    collect.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: "I'm done",
+    });
+    f.utterance();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(clearConversation).toHaveBeenCalledOnce();
+    expect(states.at(-1)?.foregroundActive).toBe(false);
+    expect(f.context().audio.status).toBe('capturing');
+  });
+
   function setup(extra: Partial<VoicePorts> = {}) {
     let composition: VoiceComposition | undefined;
     const selectSession = vi.fn(async () => true);
@@ -235,20 +312,26 @@ describe('wake-word session lifecycle', () => {
     },
   );
 
-  it('expires ordinary follow-ups, but not ongoing prompt dictation', async () => {
-    let now = 1;
-    const f = setup({ now: () => now });
+  it('retains foreground invocation across long pauses until explicit completion', async () => {
+    vi.useFakeTimers();
+    const f = setup();
     await f.say('Ivy');
-    now += 60_001;
-    await f.say('ambient');
-    expect(f.ports.submit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(600_000);
+    expect(f.view().foregroundActive).toBe(true);
+    await f.say('follow-up after a long pause');
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'follow-up after a long pause',
+      id,
+    );
+    f.settle();
     await f.say('Ivy, prompt first clause');
-    now += 120_000;
+    vi.advanceTimersByTime(600_000);
     await f.say('Ivy is part of this draft');
     expect(f.composition()?.raw).toBe(
       'first clause\nIvy is part of this draft',
     );
-    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   it.each([

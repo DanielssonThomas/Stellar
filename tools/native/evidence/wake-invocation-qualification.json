@@ -1,57 +1,120 @@
 {
   "issue": 247,
-  "synthetic": true,
-  "physicalMicrophone": false,
-  "method": "Synthesized Kokoro speech fed through Web Audio in an isolated actual Tauri WebView; real local Whisper, cleanup, Ivy and speech playback boundaries.",
-  "build": "Angular development diagnostic embedded in native executable; production build and IPC smoke verified separately.",
-  "executableSha256": "bc49255cc7315d214cedfee9c14e46576311b9ebbd5416f71eafd47d3a0630c8",
-  "privateReceiptSha256": {
-    "first": "6c148f1114f763efd2fd39eeda4470dabb76dd9dc6a57afada6a83049dee541e",
-    "final": "4f60c93176d97d9c1ec25f74061a2ad8d590142c0eba9d221d0e00d4e91a0d3c"
+  "currentQualification": {
+    "purpose": "Continuous microphone capture and wake-driven emblem presence; supersedes prior turn-release and idle-timeout behavior.",
+    "physicalStartup": "Actual native application automatically acquired one live physical microphone track; foreground remained inactive and emblem exploded. Final clean production app also showed Microphone on and Listening for Ivy.",
+    "syntheticSpeech": true,
+    "method": "Kokoro WAV fixtures fed through Web Audio in the actual native WebView with real local Whisper, Ivy/Terra and native speech playback. RAF sampled foreground/emblem presence; wrappers observed capture ownership and submission boundaries.",
+    "diagnosticExecutableSha256": "500aecf3f1e2c2058ca55c2872a28ee3d2849f70f829399f26cd8a1003ba4597",
+    "cleanProductionExecutableSha256": "ee451f21a3428e05940709b93006979d823398715d7b34dea6ee0cf4fbc20b5f",
+    "privateReceiptSha256": "bca98bc9db5edcd8522257b793bb1450a712d34ebdb0b4de46e2b6fb1efd5149",
+    "sourceSha256": {
+      "apps/stellar-desktop/src/app/app.component.ts": "8a658a75289d69e28091f96274ca9cf3551dedbfc8b354470fded3437b37d855",
+      "apps/stellar-desktop/src/app/desktop-experience.ts": "54c71c3f10eb44ab97e2991910285522f7d0c056a4738e6e52fd63231e6dc0d2",
+      "apps/stellar-desktop/src/app/desktop-session.ts": "e09331890c0ef560643231104d7a12b0faf3b74db02ea01576b2c9765cd86c60",
+      "apps/stellar-desktop/src/app/desktop-voice.ts": "4c87a812a3338b28ae6ee37aebd025675dfb8422f6be8aa42ed3933927c9b920",
+      "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "9041ab39fa5da6b62d50034f3f2a539b560ec2f4fcb93f311ca8a1e2c329c442",
+      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "b502d01fb9f8962c26d261be0d9636a0b039cca2d028397cc7256693ceab9e90",
+      "libs/services/audio-activity/src/lib/audio-activity-controller.ts": "b47af2efb7b7ee3c52a7fd37c983c7efee6661ea01c10c14db42fdb8aec88ff0"
+    },
+    "observations": {
+      "ambientAndIvoryKeptForegroundInactiveAndEmblemExploded": true,
+      "exactIvyPreviewActivatedBeforeDispatch": true,
+      "approximatePreviewToDispatchMs": 3146,
+      "firstSentenceThinkingAndPlaybackExplodedDropouts": 0,
+      "totalPresenceSamples": 68949,
+      "foregroundRetainedAcrossSeveralMinutesOfQuiet": true,
+      "microphoneTracksAtTerraSelectionSubmissionAndNativeSpeechStart": 1,
+      "trackStopEventsDuringControlledFlow": 0,
+      "spokenImDoneReturnedToPassiveOnSameStream": true,
+      "ambientAfterDoneDidNotSubmit": true,
+      "ivyPromptOpenedSol": true,
+      "sentenceSuffixPromptCancelDiscardedRawRefinedAndPreview": true,
+      "cancellationAddedCleanupPasses": 0,
+      "cancellationAddedSubmissions": 0,
+      "cancellationReturnedToPassiveOnSameStream": true,
+      "finalCleanAppRunningWithRealMicrophone": true
+    },
+    "automatedVerification": {
+      "unitTests": {
+        "adapter": 192,
+        "desktop": 52,
+        "audio": 56,
+        "interaction": 24,
+        "templates": 14,
+        "molecules": 107,
+        "organisms": 64,
+        "total": 509
+      },
+      "lintTestBuild": "Nx run-many passed for the eight affected projects and dependencies.",
+      "desktopBrowserTests": "29/29 passed in final full run.",
+      "nativeSmoke": "Production embedded WebView shell, computed styles and versioned IPC passed. Initial attempt failed WebView initialization while a diagnostic instance shared the profile with different browser flags; passed after closing that owned instance and rerunning.",
+      "documentation": "Documentation validator passed."
+    },
+    "limitations": [
+      "Physical capture startup is verified; speech fixtures are synthetic. No physical speech-accuracy, speaker-audibility or acoustic false-accept-rate claim.",
+      "Wake presence starts when an exact leading Ivy transcript is detected. An early I.V. preview was correctly rejected; the later valid preview activated before dispatch but after this fixture ended. No subsecond or before-utterance-end native guarantee.",
+      "Recognition input remains gated during thinking and Ivy playback even though the physical microphone stream remains open; this is not barge-in.",
+      "Private fixtures and detailed receipts stay in ignored artifacts; no user audio is included."
+    ]
   },
-  "sourceSha256": {
-    "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "93cf1f0731b25b41c604650d970c8591a1592d791432e8b29b2dd140591e061a",
-    "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "a20ae5024e01048d732d97a60348f06ce0f31c8ae18511a1666c3201b7580cff"
-  },
-  "observations": {
-    "ambientAndSimilarWordsLeftForegroundInactive": true,
-    "ivyPromptOpenedSolCompositionWithCaptureActive": true,
-    "bufferedDraftBeforeCancellation": true,
-    "priorLiveCleanupCount": 1,
-    "cancellationAddedCleanupPasses": 0,
-    "cancellationAbortedPendingCleanupResult": true,
-    "cancelledDraftSubmissions": 0,
-    "cancelledRawRefinedAndPreviewDiscarded": true,
-    "ambientAfterCancellationDidNotInvoke": true,
-    "freshIvyRequestSelectedVerifiedTerra": true,
-    "microphoneTracksAtSelectionSubmissionAndSpeechStart": 0,
-    "speechSettledAndCaptureReacquired": true,
-    "spokenClearSucceededAfterInvocation": true,
-    "ambientAfterClearLeftForegroundInactive": true,
-    "standaloneIvyRecognized": true,
-    "ordinaryClearWhileAlreadyPassiveIgnored": true
-  },
-  "localRecognitionDurationMs": {
-    "minimum": 1905,
-    "maximum": 2084,
-    "firstRunColdObservation": 5899,
-    "note": "Single synthetic observations; excludes utterance settlement, not latency percentiles."
-  },
-  "automatedVerification": {
-    "adapterTests": 189,
-    "desktopTests": 73,
-    "moleculeTests": 107,
-    "organismTests": 64,
-    "desktopBrowserTests": 29,
-    "browserResult": "Full run passed before final refinements; final rerun passed 28/29 with all voice tests passing. Unrelated exact serialized camera-matrix comparison differed in tiny perspective decimals and passed its isolated retry.",
-    "lintAndBuild": "Affected desktop, adapter, molecule and organism checks passed; desktop E2E lint passed without warnings.",
-    "nativeSmoke": "Actual embedded WebView, styles and versioned IPC passed."
-  },
-  "limitations": [
-    "No physical microphone, Windows indicator, speaker audibility or acoustic false-accept-rate claim.",
-    "Wake detection waits for local utterance transcription; no dedicated acoustic detector or subsecond wake guarantee.",
-    "Cleanup admitted before cancellation cannot be undone; cancellation aborts its frontend result and never adds final cleanup or dispatch.",
-    "Native spoken suffix cancellation was exercised in the first run; buffered standalone cancellation and Terra gating were repeated on the final build.",
-    "Private fixtures and detailed synthetic receipts remain under ignored artifacts; no user audio is included."
-  ]
+  "historicalQualification": {
+    "sourceCommit": "c2cb415089cdd2e1f8fb4e282a7352d46696bc30",
+    "note": "Historical pre-clarification evidence. Its physical turn-release, reacquisition and final E2E retry results describe the earlier implementation only.",
+    "issue": 247,
+    "synthetic": true,
+    "physicalMicrophone": false,
+    "method": "Synthesized Kokoro speech fed through Web Audio in an isolated actual Tauri WebView; real local Whisper, cleanup, Ivy and speech playback boundaries.",
+    "build": "Angular development diagnostic embedded in native executable; production build and IPC smoke verified separately.",
+    "executableSha256": "bc49255cc7315d214cedfee9c14e46576311b9ebbd5416f71eafd47d3a0630c8",
+    "privateReceiptSha256": {
+      "first": "6c148f1114f763efd2fd39eeda4470dabb76dd9dc6a57afada6a83049dee541e",
+      "final": "4f60c93176d97d9c1ec25f74061a2ad8d590142c0eba9d221d0e00d4e91a0d3c"
+    },
+    "sourceSha256": {
+      "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "93cf1f0731b25b41c604650d970c8591a1592d791432e8b29b2dd140591e061a",
+      "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "a20ae5024e01048d732d97a60348f06ce0f31c8ae18511a1666c3201b7580cff"
+    },
+    "observations": {
+      "ambientAndSimilarWordsLeftForegroundInactive": true,
+      "ivyPromptOpenedSolCompositionWithCaptureActive": true,
+      "bufferedDraftBeforeCancellation": true,
+      "priorLiveCleanupCount": 1,
+      "cancellationAddedCleanupPasses": 0,
+      "cancellationAbortedPendingCleanupResult": true,
+      "cancelledDraftSubmissions": 0,
+      "cancelledRawRefinedAndPreviewDiscarded": true,
+      "ambientAfterCancellationDidNotInvoke": true,
+      "freshIvyRequestSelectedVerifiedTerra": true,
+      "microphoneTracksAtSelectionSubmissionAndSpeechStart": 0,
+      "speechSettledAndCaptureReacquired": true,
+      "spokenClearSucceededAfterInvocation": true,
+      "ambientAfterClearLeftForegroundInactive": true,
+      "standaloneIvyRecognized": true,
+      "ordinaryClearWhileAlreadyPassiveIgnored": true
+    },
+    "localRecognitionDurationMs": {
+      "minimum": 1905,
+      "maximum": 2084,
+      "firstRunColdObservation": 5899,
+      "note": "Single synthetic observations; excludes utterance settlement, not latency percentiles."
+    },
+    "automatedVerification": {
+      "adapterTests": 189,
+      "desktopTests": 73,
+      "moleculeTests": 107,
+      "organismTests": 64,
+      "desktopBrowserTests": 29,
+      "browserResult": "Full run passed before final refinements; final rerun passed 28/29 with all voice tests passing. Unrelated exact serialized camera-matrix comparison differed in tiny perspective decimals and passed its isolated retry.",
+      "lintAndBuild": "Affected desktop, adapter, molecule and organism checks passed; desktop E2E lint passed without warnings.",
+      "nativeSmoke": "Actual embedded WebView, styles and versioned IPC passed."
+    },
+    "limitations": [
+      "No physical microphone, Windows indicator, speaker audibility or acoustic false-accept-rate claim.",
+      "Wake detection waits for local utterance transcription; no dedicated acoustic detector or subsecond wake guarantee.",
+      "Cleanup admitted before cancellation cannot be undone; cancellation aborts its frontend result and never adds final cleanup or dispatch.",
+      "Native spoken suffix cancellation was exercised in the first run; buffered standalone cancellation and Terra gating were repeated on the final build.",
+      "Private fixtures and detailed synthetic receipts remain under ignored artifacts; no user audio is included."
+    ]
+  }
 }
