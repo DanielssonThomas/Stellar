@@ -30,7 +30,6 @@ import {
   type EmblemManifest,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
-import clsx from 'clsx';
 
 export interface MicrophoneOption {
   readonly deviceId: string;
@@ -55,17 +54,19 @@ export interface MicrophoneOption {
     '[attr.aria-busy]': 'loading()',
     '[attr.data-phase]': 'state().phase',
     '(keydown.escape)': 'dismiss($event)',
-    '(document:pointerdown)': 'menu.outside($event)',
-    '(document:focusin)': 'menu.outside($event)',
-    '(document:keydown)': 'musicShortcut($event)',
+    '(keydown)': 'menu.keydown($event)',
+    tabindex: '-1',
+    'aria-keyshortcuts': 'M',
+    '(document:keydown)': 'controlsShortcut($event)',
   },
 })
 export class DesktopExperienceTemplate {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  readonly menu = new DesktopMenu(this.host.nativeElement, () =>
-    this.host.nativeElement.querySelector<HTMLButtonElement>(
-      '[data-menu-trigger]',
-    ),
+  readonly controlsDialog =
+    viewChild.required<ElementRef<HTMLDialogElement>>('controlsDialog');
+  readonly menu = new DesktopMenu(
+    this.host.nativeElement,
+    () => this.controlsDialog().nativeElement,
   );
   readonly ivyActivity = input<readonly IvyActivityItem[]>([]);
   readonly ivyTurnId = input<string | null>(null);
@@ -195,14 +196,13 @@ export class DesktopExperienceTemplate {
   readonly stopMicrophone = output<void>();
   readonly restoreSummary = output<void>();
   readonly stage = viewChild.required(StageOrganism);
-  readonly controlsClass = computed(() =>
-    clsx('controls', { 'active-controls': this.state().manualActive }),
-  );
+  readonly focusFallback = this.host.nativeElement;
 
   dispatch(command: unknown) {
     return this.stage().dispatch(command);
   }
   openFaultControls() {
+    this.musicControls().close();
     if (!this.menu.open()) this.menu.toggle();
   }
   presentFinalizedPrompt(text: ComposerFinalizedText, signal: AbortSignal) {
@@ -211,15 +211,11 @@ export class DesktopExperienceTemplate {
   dismiss(event: Event) {
     if (event.target instanceof Element && event.target.closest('dialog[open]'))
       return;
-    if (this.menu.open()) {
-      this.menu.keydown(event as KeyboardEvent);
-      return;
-    }
     if (this.state().phase === 'idle') return;
     event.preventDefault();
     this.dismissExperience();
   }
-  musicShortcut(event: KeyboardEvent) {
+  controlsShortcut(event: KeyboardEvent) {
     if (
       event.defaultPrevented ||
       event.repeat ||
@@ -227,7 +223,7 @@ export class DesktopExperienceTemplate {
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      event.key.toLowerCase() !== 'p'
+      !['m', 'p'].includes(event.key.toLowerCase())
     )
       return;
     if (
@@ -239,7 +235,11 @@ export class DesktopExperienceTemplate {
       return;
     if (['suspended', 'shutdown'].includes(this.state().phase)) return;
     event.preventDefault();
-    this.openMusicControls();
+    if (event.key.toLowerCase() === 'p') this.openMusicControls();
+    else {
+      this.musicControls().close();
+      this.menu.toggle();
+    }
   }
   openMusicControls() {
     this.menu.close();

@@ -1,12 +1,14 @@
-import { signal } from '@angular/core';
-
 export class DesktopMenu {
-  readonly open = signal(false);
+  private origin: HTMLElement | null = null;
 
   constructor(
     private readonly host: HTMLElement,
-    private readonly trigger: () => HTMLButtonElement | null,
+    private readonly dialog: () => HTMLDialogElement,
   ) {}
+
+  open(): boolean {
+    return this.dialog().open;
+  }
 
   toggle(): void {
     if (this.open()) {
@@ -14,43 +16,59 @@ export class DesktopMenu {
       return;
     }
 
-    this.open.set(true);
-    queueMicrotask(() => {
-      if (!this.open()) return;
-
-      this.host
-        .querySelector<HTMLElement>('[data-desktop-menu]')
-        ?.querySelector<HTMLElement>('button, input, select, textarea')
-        ?.focus();
-    });
+    const active = this.host.ownerDocument.activeElement;
+    this.origin =
+      active instanceof HTMLElement && active !== document.body
+        ? active
+        : this.host;
+    this.dialog().showModal();
   }
 
-  close(restoreFocus = true): void {
+  close(): void {
     if (!this.open()) return;
 
-    this.open.set(false);
-    if (restoreFocus) this.trigger()?.focus();
+    this.dialog().close();
+    this.restoreFocus();
   }
 
-  keydown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape' || !this.open()) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    this.close();
+  keydown(event: Event): void {
+    if (
+      !(event instanceof KeyboardEvent) ||
+      event.key !== 'Tab' ||
+      !this.open()
+    )
+      return;
+    const dialog = this.dialog();
+    const controls = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, input, select, textarea, a[href], [tabindex]',
+      ),
+    ).filter(
+      (element) =>
+        element.tabIndex >= 0 &&
+        !element.matches(':disabled') &&
+        element.getClientRects().length > 0,
+    );
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    const active = dialog.ownerDocument.activeElement;
+    if (event.shiftKey && active === first && last) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last && first) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
-  outside(event: Event): void {
-    if (!this.open()) return;
-
-    const target = event.target;
-    const targetNode = target instanceof Node ? target : null;
-    if (!targetNode) return;
-
-    const menu = this.host.querySelector('[data-desktop-menu]');
-    const trigger = this.trigger();
-    if (menu?.contains(targetNode) || trigger?.contains(targetNode)) return;
-
-    this.close(false);
+  restoreFocus(): void {
+    // A queued close event may arrive after the dialog has been reopened.
+    if (this.open()) return;
+    const origin = this.origin;
+    this.origin = null;
+    if (!origin) return;
+    if (origin.isConnected && !origin.closest('dialog:not([open])'))
+      origin.focus();
+    else this.host.focus();
   }
 }

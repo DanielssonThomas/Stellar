@@ -78,11 +78,11 @@ test('failed Connect opens sanitized fault history and recovery clears the local
 }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   await install(page);
-  const menu = page.getByRole('button', {
-    name: 'Experience menu',
+  const menu = page.getByRole('dialog', {
+    name: 'Experience controls',
     exact: true,
   });
-  await menu.click();
+  await page.keyboard.press('m');
   await expect(page.getByText('Ivy connected', { exact: true })).toBeVisible();
   await page.evaluate(() => {
     (
@@ -96,15 +96,15 @@ test('failed Connect opens sanitized fault history and recovery clears the local
     page.getByRole('img', { name: 'Stellar emblem — error state' }),
   ).toBeVisible();
   await expect(log).toContainText('Active');
-  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeHidden();
   await page.getByRole('button', { name: 'Try recovery' }).click();
   await expect(log).toContainText('Resolved');
   await expect(
     page.getByRole('img', { name: 'Stellar emblem — error state' }),
   ).toHaveCount(0);
   await expect(log).toHaveCount(0, { timeout: 6000 });
-  await expect(menu).toHaveAttribute('aria-expanded', 'false');
-  await menu.click();
+  await expect(menu).toBeHidden();
+  await page.keyboard.press('m');
   await expect(
     page.getByText('Local voice idle', { exact: true }),
   ).toBeVisible();
@@ -128,9 +128,7 @@ test('failed check of a retained uncertain turn stays visible without resubmissi
   await install(page, true);
   const log = page.getByRole('region', { name: 'Recent errors' });
   await expect(log).toContainText('uncertain');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Check response', exact: true })
     .click();

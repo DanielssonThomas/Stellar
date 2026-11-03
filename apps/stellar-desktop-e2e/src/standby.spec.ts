@@ -77,7 +77,9 @@ for (const { reducedMotion, className, animated, model, turn } of [
     await page.goto('/');
     const emblem = page.locator('.emblem');
     await expect(emblem).toBeVisible();
-    await expect(page.locator('[data-desktop-menu]')).toHaveCount(0);
+    await expect(
+      page.getByRole('dialog', { name: 'Experience controls' }),
+    ).toBeHidden();
     await expect(page.locator('.waiting-ring')).toHaveCount(0);
     for (const size of [
       { width: 1100, height: 760 },
