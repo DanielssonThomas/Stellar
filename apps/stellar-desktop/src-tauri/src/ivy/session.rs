@@ -20,7 +20,7 @@ pub struct Session {
 impl Session {
     pub fn restore_admission_state(&self) {
         self.shared.update(self.epoch, |view| {
-            if self.record.unsettled {
+            if self.record.unsettled || self.record.pending_reset.is_some() {
                 view.turn = IvyTurnState::Uncertain;
             } else if matches!(
                 view.turn,
@@ -29,6 +29,7 @@ impl Session {
             {
                 view.turn = IvyTurnState::Idle;
                 view.items.clear();
+                view.activity.clear();
             }
             view.turn_id = self.record.input_id.clone();
         });
@@ -48,9 +49,53 @@ impl Session {
         if self.record.input_id.as_deref() == Some(&request.input_id) {
             return Ok(());
         }
-        if self.record.unsettled {
+        if self.record.unsettled || self.record.pending_reset.is_some() {
             return Err(IvyErrorCode::Uncertain);
         }
+        let sid = self.ensure_session(&request.input_id)?;
+        let text = format!(
+            "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
+            request.text
+        );
+        let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
+        super::process::request_line(u64::MAX, "prompt.submit", &params)?;
+        let previous = self.record.clone();
+        let next = Record {
+            session_id: Some(sid.clone()),
+            input_id: Some(request.input_id.clone()),
+            admission_id: None,
+            generation: None,
+            unsettled: true,
+            model: self.record.model,
+            route_verified: true,
+            workspace: self.record.workspace.clone(),
+            pending_reset: None,
+        };
+        self.journal.save(&next)?;
+        self.record = next;
+        self.replay = None;
+        if !self.shared.current(self.epoch) {
+            self.record = previous;
+            self.journal.save(&self.record)?;
+            return Err(IvyErrorCode::Unavailable);
+        }
+        let receipt = self
+            .broker
+            .as_mut()
+            .ok_or(IvyErrorCode::Unavailable)?
+            .call("prompt.submit", params, &mut self.buffered)?;
+        self.accept_receipt(&receipt)?;
+        self.shared.update(self.epoch, |snapshot| {
+            snapshot.verified_model = self.record.route_verified.then_some(self.record.model);
+            snapshot.turn = IvyTurnState::Admitted;
+            snapshot.turn_id = self.record.input_id.clone();
+            snapshot.error = None;
+            snapshot.activity.clear();
+        });
+        self.drain()
+    }
+
+    pub(super) fn ensure_session(&mut self, request_id: &str) -> Result<String, IvyErrorCode> {
         if self.record.session_id.is_none() && self.record.workspace.is_none() {
             let created = self.call(
                 "workspace.setup",
@@ -88,7 +133,7 @@ impl Session {
         } else {
             let created = self.call(
                 "session.create",
-                json!({"request_id":request.input_id, "model": model_route(self.record.model)}),
+                json!({"request_id":request_id, "model": model_route(self.record.model)}),
             )?;
             let sid = bounded_id(created.get("session_id"))?;
             if created.get("model").and_then(Value::as_str) != Some(model_route(self.record.model))
@@ -97,44 +142,7 @@ impl Session {
             }
             sid
         };
-        let text = format!(
-            "Stellar presentation contract: reply normally with plain text. Only when the user asks to show content, you may return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"component\":\"assistant_message\",\"title\":\"title\",\"body\":\"complete plain text\"}}}}. Include all requested information; presentation content has no application length limit. Only when the user asks to close or dismiss the current activity/content, return exact JSON {{\"text\":\"reply\",\"stellar_presentation\":{{\"action\":\"close_activity\"}}}}. Never request HTML or executable UI. User message follows:\n{}",
-            request.text
-        );
-        let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
-        super::process::request_line(u64::MAX, "prompt.submit", &params)?;
-        let previous = self.record.clone();
-        let next = Record {
-            session_id: Some(sid.clone()),
-            input_id: Some(request.input_id.clone()),
-            admission_id: None,
-            generation: None,
-            unsettled: true,
-            model: self.record.model,
-            route_verified: true,
-            workspace: self.record.workspace.clone(),
-        };
-        self.journal.save(&next)?;
-        self.record = next;
-        self.replay = None;
-        if !self.shared.current(self.epoch) {
-            self.record = previous;
-            self.journal.save(&self.record)?;
-            return Err(IvyErrorCode::Unavailable);
-        }
-        let receipt = self
-            .broker
-            .as_mut()
-            .ok_or(IvyErrorCode::Unavailable)?
-            .call("prompt.submit", params, &mut self.buffered)?;
-        self.accept_receipt(&receipt)?;
-        self.shared.update(self.epoch, |snapshot| {
-            snapshot.verified_model = self.record.route_verified.then_some(self.record.model);
-            snapshot.turn = IvyTurnState::Admitted;
-            snapshot.turn_id = self.record.input_id.clone();
-            snapshot.error = None;
-        });
-        self.drain()
+        Ok(sid)
     }
 
     fn accept_receipt(&mut self, value: &Value) -> Result<(), IvyErrorCode> {
@@ -163,7 +171,7 @@ impl Session {
     }
 
     pub fn rotate(&mut self, model: IvyModel, force: bool) -> Result<(), IvyErrorCode> {
-        if self.record.unsettled {
+        if self.record.unsettled || self.record.pending_reset.is_some() {
             return Err(IvyErrorCode::Uncertain);
         }
         if !force && self.record.model == model {
@@ -183,11 +191,13 @@ impl Session {
         self.replay = None;
         self.shared.update_current(|view| {
             view.model = model;
+            view.reset_id = None;
             view.verified_model = None;
             view.workspace_tools = WorkspaceToolsState::Unavailable;
             view.turn = IvyTurnState::Idle;
             view.turn_id = None;
             view.items.clear();
+            view.activity.clear();
             view.error = None;
         });
         if had_workspace && self.broker.is_some() {
@@ -212,6 +222,9 @@ impl Session {
     }
 
     pub fn reconcile(&mut self) -> Result<(), IvyErrorCode> {
+        if self.record.pending_reset.is_some() {
+            return self.new_session();
+        }
         let Some(sid) = self.record.session_id.clone() else {
             self.restore_admission_state();
             return Ok(());
@@ -323,7 +336,11 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         self.record.generation = Some(generation);
+        if !self.record.unsettled {
+            return Ok(());
+        }
         match params.get("type").and_then(Value::as_str) {
+            Some("stellar.activity") => self.activity(params),
             Some("message.complete") => self.complete(
                 params
                     .pointer("/payload/outcome")
@@ -360,6 +377,7 @@ impl Session {
         self.record.unsettled = false;
         self.journal.save(&self.record)?;
         self.shared.update(self.epoch, |view| {
+            view.activity.clear();
             view.turn = turn;
             view.turn_id = self.record.input_id.clone();
             view.items = items;

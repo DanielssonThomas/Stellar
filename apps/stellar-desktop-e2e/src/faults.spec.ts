@@ -17,6 +17,8 @@ async function install(
       verified_model: null,
       workspace_tools: 'unavailable',
       workspace_epoch: '0',
+      reset_id: null,
+      activity: [],
       connection: 'ready',
       turn: uncertain ? 'uncertain' : 'idle',
       items: [],

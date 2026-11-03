@@ -13,6 +13,14 @@ pub struct WorkspaceDescriptor {
     pub credential_ref: String,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PendingReset {
+    pub request_id: String,
+    pub revision: u64,
+    pub generation: u64,
+}
+
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
@@ -27,6 +35,8 @@ pub struct Record {
     pub route_verified: bool,
     #[serde(default)]
     pub workspace: Option<WorkspaceDescriptor>,
+    #[serde(default)]
+    pub pending_reset: Option<PendingReset>,
 }
 
 pub struct Journal {

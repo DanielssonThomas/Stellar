@@ -12,7 +12,6 @@ const PENDING: u8 = 0;
 const STARTED: u8 = 1;
 const CANCELLED: u8 = 2;
 const FINISHED: u8 = 3;
-const WAIT: Duration = Duration::from_secs(2);
 pub type Ticket = Arc<AtomicU8>;
 pub type Pending = Arc<Mutex<Option<Ticket>>>;
 
@@ -46,12 +45,13 @@ pub fn cancel(pending: &Pending, ticket: &Ticket) -> bool {
     }
     cancelled
 }
-pub fn wait<T>(
+pub fn wait_for<T>(
     rx: mpsc::Receiver<Result<T, IvyErrorCode>>,
     pending: Pending,
     ticket: Ticket,
+    timeout: Duration,
 ) -> Result<T, IvyErrorCode> {
-    match rx.recv_timeout(WAIT) {
+    match rx.recv_timeout(timeout) {
         Ok(result) => result,
         Err(mpsc::RecvTimeoutError::Disconnected) => {
             if cancel(&pending, &ticket) || ticket.load(Ordering::Acquire) == CANCELLED {

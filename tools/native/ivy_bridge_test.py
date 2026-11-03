@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -12,6 +13,11 @@ SOURCE = Path(__file__).resolve().parents[2] / 'apps/stellar-desktop/src-tauri/s
 spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
+for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py')]:
+    module_spec = importlib.util.spec_from_file_location(name, SOURCE.with_name(filename))
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    sys.modules[name] = module
 
 
 class Pipe:
@@ -172,6 +178,132 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             await bridge.pump(conn)
         self.assertEqual(conn.calls, [('approval.respond', {'session_id': 'session',
             'execution_generation': 7, 'prompt_id': 'prompt', 'choice': 'deny'})])
+
+
+class ActivityTests(unittest.IsolatedAsyncioTestCase):
+    def event(self, seq, kind='tool.start', name='terminal', args=None, result=None):
+        return {'type': kind, 'session_id': 's', 'admission_id': 'a', 'execution_generation': 3,
+                'replay_epoch': 'e', 'seq': seq, 'payload': {'tool_id': str(seq), 'name': name,
+                'args': args or {'command': 'SECRET'}, 'result': result}}
+
+    def test_bounded_redaction_and_confirmed_special_operations(self):
+        activity = sys.modules['stellar_ivy_activity'].Activity()
+        for i in range(1000):
+            activity.offer(self.event(i))
+        batch = activity.flush()
+        self.assertEqual(len(batch['payload']['actions']), 12)
+        self.assertNotIn('SECRET', json.dumps(batch))
+        self.assertEqual(batch['seq'], 999)
+        self.assertIsNone(activity.flush())
+        activity.offer(self.event(1000, name='skill_manage', args={'action': 'create', 'content': 'SECRET'}))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['kind'], 'skill_create')
+        activity.offer(self.event(1001, 'tool.complete', 'memory', {'action': 'add'}, {'success': True, 'staged': True, 'memory': 'SECRET'}))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['state'], 'finished')
+        activity.offer(self.event(1002, 'tool.complete', 'memory', {'action': 'add'}, {'success': True, 'memory': 'SECRET'}))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['state'], 'completed')
+        activity.offer(self.event(1003, 'tool.complete', 'memory', {'action': 'add'}, {'exit_code': 0}))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['state'], 'finished')
+        activity.offer(self.event(1004, 'tool.complete', result={'exit_code': 1}))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['state'], 'failed')
+        activity.offer(self.event(1005, 'tool.complete', result='looks successful but unstructured'))
+        self.assertEqual(activity.flush()['payload']['actions'][-1]['state'], 'finished')
+
+    def test_no_prompt_guessing_and_new_execution_replaces_old_rows(self):
+        activity = sys.modules['stellar_ivy_activity'].Activity()
+        activity.offer(self.event(1, name='terminal', args={'command': 'create skill and update memory'}))
+        self.assertEqual(activity.flush()['payload']['actions'][0]['kind'], 'shell')
+        event = self.event(2, name='memory', args={'action': 'read'})
+        event['admission_id'] = 'new'
+        activity.offer(event)
+        batch = activity.flush()
+        self.assertEqual(len(batch['payload']['actions']), 1)
+        self.assertEqual(batch['payload']['actions'][0]['kind'], 'tool')
+        event['seq'] = 1
+        activity.offer(event)
+        self.assertIsNone(activity.flush())
+
+    async def test_bursts_are_coalesced_without_losing_terminal_message(self):
+        conn = Connection()
+        for i in range(300):
+            await conn.events.put({'params': self.event(i)})
+        await conn.events.put({'params': {'type': 'message.complete', 'session_id': 's', 'admission_id': 'a',
+            'execution_generation': 3, 'replay_epoch': 'e', 'seq': 301, 'payload': {'outcome': 'completed', 'text': 'done'}}})
+        await conn.events.put(RuntimeError())
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        frames = [json.loads(line) for line in output.buffer.getvalue().splitlines()]
+        self.assertLessEqual(len(frames), 4)
+        self.assertEqual(frames[-1]['data']['params']['type'], 'message.complete')
+        self.assertNotIn('SECRET', output.buffer.getvalue().decode())
+
+
+class ControlTests(unittest.IsolatedAsyncioTestCase):
+    def connection(self, fresh=True, reload=None):
+        conn = Connection()
+        conn.sessions.add('s')
+        conn.lease.acquire = lambda: None
+        conn.lease.record = type('Record', (), {'exists': lambda _: False})()
+        async def rpc(method, **params):
+            conn.calls.append((method, params))
+            if method == 'session.mutate':
+                return {'operation': 'reset', 'session_id': 's', 'target_session_id': 'fresh',
+                        'previous_target_session_id': 'old', 'execution_generation': 5}
+            if method == 'reload.mcp':
+                return reload or {'status': 'reloaded', 'session': 'unchanged'}
+            return {'session_id': 's', 'messages': [] if fresh else [{'role': 'user', 'content': 'SECRET'}],
+                    'message_count': 0 if fresh else 1, 'pending': [], 'running': False, 'execution_generation': 5}
+        conn.rpc = rpc
+        return conn
+
+    async def test_reset_uses_native_fences_and_verifies_empty_backend_context(self):
+        control = sys.modules['stellar_ivy_controls'].control
+        conn = self.connection()
+        reply = await control(conn, 'session.new', {'session_id': 's', 'request_id': 'r', 'revision': 7, 'generation': 4})
+        self.assertEqual(reply, {'status': 'fresh', 'execution_generation': 5})
+        self.assertEqual(conn.calls[0], ('session.mutate', {'session_id': 's', 'request_id': 'r',
+            'expected_revision': 7, 'expected_generation': 4, 'operation': 'reset', 'payload': {}}))
+        self.assertEqual([c[0] for c in conn.calls], ['session.mutate', 'session.resume'])
+        self.assertEqual(conn.lease.released, [False])
+        with self.assertRaises(sys.modules['stellar_ivy_controls'].Refused):
+            await control(self.connection(fresh=False), 'session.new', {'session_id': 's', 'request_id': 'r', 'revision': 7, 'generation': 4})
+
+    async def test_stale_writer_record_is_removed_only_after_matching_terminal_receipt(self):
+        module = sys.modules['stellar_ivy_controls']
+        for terminal in (False, True):
+            with tempfile.TemporaryDirectory() as directory:
+                conn = self.connection()
+                conn.lease.record = Path(directory) / 'active.json'
+                conn.lease.record.write_text(json.dumps({'session_id': 'old', 'admission_id': 'admission'}))
+                original = conn.rpc
+                async def rpc(method, **params):
+                    if method == 'prompt.receipt':
+                        return {'status': 'terminal' if terminal else 'running', 'ref': {'session_id': 'old'}, 'admission_id': 'admission'}
+                    return await original(method, **params)
+                conn.rpc = rpc
+                if terminal:
+                    self.assertEqual(await module.control(conn, 'integrations.reload', {'session_id': 's'}), {'status': 'reloaded'})
+                    self.assertFalse(conn.lease.record.exists())
+                else:
+                    with self.assertRaises(module.Refused):
+                        await module.control(conn, 'integrations.reload', {'session_id': 's'})
+                    self.assertTrue(conn.lease.record.exists())
+                    self.assertNotIn('reload.mcp', [call[0] for call in conn.calls])
+
+    async def test_reload_is_explicit_and_partial_or_busy_is_not_success(self):
+        module = sys.modules['stellar_ivy_controls']
+        conn = self.connection()
+        self.assertEqual(await module.control(conn, 'integrations.reload', {'session_id': 's'}), {'status': 'reloaded'})
+        self.assertEqual(conn.calls[-1], ('reload.mcp', {'session_id': 's', 'confirm': True}))
+        for result in [{'status': 'confirm_required'}, {'status': 'reloaded', 'session': 'busy'},
+                       {'status': 'reloaded', 'unavailable': ['SECRET']}]:
+            with self.assertRaises(module.Refused):
+                await module.control(self.connection(reload=result), 'integrations.reload', {'session_id': 's'})
+        conn = self.connection()
+        conn.active = {'admission_id': 'running'}
+        with self.assertRaises(module.Refused):
+            await module.control(conn, 'integrations.reload', {'session_id': 's'})
+        self.assertEqual(conn.calls, [])
 
 
 if __name__ == '__main__':

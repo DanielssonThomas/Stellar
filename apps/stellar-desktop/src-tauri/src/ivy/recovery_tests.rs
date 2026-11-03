@@ -32,6 +32,7 @@ fn fixture(receipt: &str) -> (Session, std::path::PathBuf) {
         model: IvyModel::Terra,
         route_verified: true,
         workspace: None,
+        pending_reset: None,
     };
     journal.save(&record).unwrap();
     let shared = Shared {

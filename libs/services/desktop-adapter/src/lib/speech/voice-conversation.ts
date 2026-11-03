@@ -31,6 +31,8 @@ export interface VoiceContext {
 }
 
 export interface VoiceView {
+  readonly passive?: boolean;
+  readonly notice?: string;
   readonly status: string;
   readonly muted: boolean;
   readonly error: boolean;
@@ -38,6 +40,9 @@ export interface VoiceView {
 }
 
 export interface VoicePorts {
+  readonly newSession?: () => Promise<boolean>;
+  readonly reloadMcp?: () => Promise<boolean>;
+  readonly onNewSession?: () => void;
   readonly transcribe: (
     pcm: Int16Array,
     id: string,
@@ -90,6 +95,10 @@ export class VoiceConversation {
   private dispatchPending = false;
   private routeUncertain = false;
   private sessionPending = false;
+  private awaitingWake = false;
+  private controlNotice = '';
+  private newSessionRequested = false;
+  private lastResetId: string | null = null;
   private readonly draftRecognition?: DraftRecognition;
   private previewSamples = 0;
   private draftSequence: number | null = null;
@@ -142,6 +151,13 @@ export class VoiceConversation {
       context.assistant.turn,
     );
     this.context = context;
+    if (
+      context.assistant.reset_id &&
+      context.assistant.reset_id !== this.lastResetId
+    ) {
+      this.lastResetId = context.assistant.reset_id;
+      this.finishNewSession();
+    }
     if (
       !context.available ||
       (hadCapture &&
@@ -429,7 +445,12 @@ export class VoiceConversation {
         this.typedLease !== controller
       )
         return false;
-      return await action();
+      const accepted = await action();
+      if (accepted) {
+        this.awaitingWake = false;
+        this.controlNotice = '';
+      }
+      return accepted;
     } catch {
       return false;
     } finally {
@@ -463,7 +484,9 @@ export class VoiceConversation {
       command === 'send prompt' ||
       command === 'send' ||
       command === 'clear' ||
-      command === 'done'
+      command === 'done' ||
+      command === 'new session' ||
+      command === 'reload mcp'
     ) {
       this.draftRecognition?.clearPending();
       this.assembler.reset();
@@ -602,6 +625,27 @@ export class VoiceConversation {
     commandAllowed = true,
   ) {
     const command = commandAllowed ? voiceCommand(text) : null;
+    if (this.sessionPending) return;
+    if (command === 'new session' || command === 'reload mcp') {
+      await this.lifecycleCommand(command, generation);
+      return;
+    }
+    if (this.awaitingWake) {
+      const wake = /^\s*ivy\b[\s,.!?;:-]*(.*)$/iu.exec(text);
+      this.phase = null;
+      if (!wake) {
+        this.publish();
+        return;
+      }
+      this.awaitingWake = false;
+      this.controlNotice = '';
+      text = wake[1].trim();
+      this.publish();
+      if (!text) return;
+      await this.recognize(text, id, generation, commandAllowed);
+      return;
+    }
+    this.controlNotice = '';
     if (command === 'prompt') {
       this.phase = null;
       this.setComposition({
@@ -677,6 +721,94 @@ export class VoiceConversation {
           'Could not select the conversation. Your text is retained.',
         );
     }
+  }
+
+  private async lifecycleCommand(
+    command: 'new session' | 'reload mcp',
+    generation: number,
+  ) {
+    const context = this.context;
+    if (
+      !context ||
+      ['submitting', 'admitted', 'uncertain'].includes(
+        context.assistant.turn,
+      ) ||
+      this.dispatchPending ||
+      this.dispatchUncertain
+    ) {
+      this.phase = null;
+      this.controlNotice =
+        'Ivy is busy. Try the command after this turn finishes.';
+      this.publish();
+      return;
+    }
+    this.sessionPending = true;
+    this.controlNotice =
+      command === 'new session'
+        ? 'Starting a fresh session'
+        : 'Reloading MCP integrations';
+    if (command === 'new session') this.newSessionRequested = true;
+    this.publish();
+    try {
+      const operation =
+        command === 'new session'
+          ? this.ports.newSession
+          : this.ports.reloadMcp;
+      const accepted = operation ? await operation() : false;
+      if (command === 'new session' && !this.newSessionRequested) return;
+      if (
+        this.disposed ||
+        (!this.current(generation) && !(accepted && command === 'new session'))
+      )
+        return;
+      this.phase = null;
+      if (!accepted) {
+        this.controlNotice =
+          command === 'new session'
+            ? 'New session was not confirmed. Check Ivy before continuing.'
+            : 'MCP reload unavailable or busy. Conversation preserved.';
+      } else if (command === 'new session') {
+        if (this.newSessionRequested) this.finishNewSession();
+      } else this.controlNotice = 'MCP integrations reloaded.';
+    } catch {
+      if (
+        this.current(generation) &&
+        (command !== 'new session' || this.newSessionRequested)
+      ) {
+        this.phase = null;
+        this.controlNotice =
+          command === 'new session'
+            ? 'New session was not confirmed. Check Ivy before continuing.'
+            : 'MCP reload failed or is unsupported. Conversation preserved.';
+      }
+    } finally {
+      this.sessionPending = false;
+      if (!this.disposed) this.publish();
+    }
+  }
+
+  private finishNewSession() {
+    this.newSessionRequested = false;
+    this.cancelDraftCleanup();
+    this.refinement?.abort();
+    this.draftRecognition?.clearPending();
+    this.dispatchUncertain = false;
+    this.routeUncertain = false;
+    this.voiceTurn = null;
+    this.settledTurn = null;
+    this.phase = null;
+    this.awaitingWake = true;
+    this.setComposition({
+      raw: '',
+      refined: null,
+      lastSubmittedRaw: '',
+      model: this.composition.model,
+      status: 'idle',
+      error: '',
+    });
+    this.controlNotice = 'New session. Say Ivy.';
+    this.publish();
+    this.ports.onNewSession?.();
   }
 
   private async clearConversation(generation: number): Promise<boolean> {
@@ -1064,6 +1196,7 @@ export class VoiceConversation {
       this.stopping ||
       this.unconfirmedStop ||
       this.dispatchPending ||
+      this.sessionPending ||
       this.dispatchUncertain ||
       this.blocked ||
       this.routeUncertain ||
@@ -1076,6 +1209,8 @@ export class VoiceConversation {
     }
     const context = this.context;
     this.ports.onChange({
+      passive: this.awaitingWake,
+      notice: this.controlNotice,
       muted: this.muted,
       error: !!this.failure || this.routeUncertain,
       busy:
@@ -1085,6 +1220,7 @@ export class VoiceConversation {
         this.phase === 'speaking',
       status:
         this.failure ||
+        this.controlNotice ||
         (this.routeUncertain
           ? 'Conversation state is uncertain. Refresh it in the menu before voice resumes.'
           : '') ||

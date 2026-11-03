@@ -1,7 +1,13 @@
+mod activity;
+#[cfg(test)]
+mod activity_tests;
 mod connection;
 pub mod contracts;
 mod host;
 mod journal;
+mod lifecycle;
+#[cfg(test)]
+mod lifecycle_tests;
 pub mod presentation;
 mod presentation_decode;
 mod process;
@@ -124,6 +130,28 @@ pub async fn ivy_clear_conversation(
         .map_err(|_| IvyErrorCode::Unavailable)?
 }
 
+#[tauri::command]
+pub async fn ivy_new_session(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    validate(request)?;
+    let pending = host.lifecycle(lifecycle::Control::NewSession)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
+}
+#[tauri::command]
+pub async fn ivy_reload_mcp(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    validate(request)?;
+    let pending = host.lifecycle(lifecycle::Control::ReloadMcp)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
+}
 #[tauri::command]
 pub fn workspace_tool_reply(
     host: tauri::State<'_, IvyHost>,

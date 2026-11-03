@@ -178,3 +178,17 @@ describe('DesktopExperienceTemplate', () => {
     expect(selected).toHaveBeenCalledExactlyOnceWith('');
   });
 });
+
+it('keeps passive reset exploded during recognition and still respects suspension', async () => {
+  const f = TestBed.createComponent(DesktopExperienceTemplate);
+  f.componentRef.setInput('passiveListening', true);
+  f.componentRef.setInput('assistantWaiting', true);
+  f.componentRef.setInput('conversationActive', true);
+  await f.whenStable();
+  expect(f.componentInstance.emblemPhase()).toBe('idle');
+  expect(f.componentInstance.assistantActive()).toBe(false);
+  f.componentRef.setInput('state', { ...initialState, phase: 'suspended' });
+  await f.whenStable();
+  expect(f.componentInstance.emblemPhase()).toBe('suspended');
+  f.destroy();
+});

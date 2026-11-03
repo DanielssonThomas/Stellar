@@ -61,7 +61,7 @@ export class DesktopVoice {
   private modelRevision = 0;
   private sessionRequest = 0;
   private readonly sessionKnown = signal(false);
-  private foregroundCleared?: () => void;
+  private foregroundCleared?: (reason: 'clear' | 'new_session') => void;
   readonly waiting = computed(
     () =>
       !['suspended', 'shutdown'].includes(this.experience.state().phase) &&
@@ -85,16 +85,23 @@ export class DesktopVoice {
       const cleared = await this.ivy.clearConversation();
       if (cleared) {
         try {
-          this.foregroundCleared?.();
+          this.foregroundCleared?.('clear');
         } catch {
           /* The native reset already succeeded. */
         }
       }
       return cleared;
     },
+    newSession: () => this.ivy.newSession(),
+    onNewSession: () => this.foregroundCleared?.('new_session'),
+    reloadMcp: () => this.ivy.reloadMcp(),
     readSession: () => this.readSession(),
     id: () => crypto.randomUUID(),
-    onChange: (view) => this.zone.run(() => this.current.set(view)),
+    onChange: (view) =>
+      this.zone.run(() => {
+        this.current.set(view);
+        this.experience.setPassiveListening(view.passive ?? false);
+      }),
     onCapturePauseChange: (paused) =>
       this.experience.setVoiceCapturePaused(paused),
     waitForCapturePause: () => this.experience.waitForVoiceCaptureRelease(),
@@ -165,7 +172,7 @@ export class DesktopVoice {
     return this.conversation.bindPromptPresentation(callback);
   }
 
-  bindForegroundClear(callback: () => void) {
+  bindForegroundClear(callback: (reason: 'clear' | 'new_session') => void) {
     this.foregroundCleared = callback;
   }
 

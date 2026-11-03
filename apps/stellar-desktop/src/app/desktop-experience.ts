@@ -104,6 +104,10 @@ export class DesktopExperience {
     return audio.status === 'capturing' ? 'Microphone on' : 'Ready';
   });
 
+  setPassiveListening(passive: boolean) {
+    this.session.setPassiveListening(passive);
+  }
+
   constructor() {
     effect(() => {
       this.session.updateAudio(this.audio.state());

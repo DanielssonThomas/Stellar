@@ -2,6 +2,26 @@
   class="experience bg-stellar-canvas text-stellar-foreground"
   aria-label="Stellar experience"
 >
+  @if (voiceNotice()) {
+    <p class="voice-notice" role="status">{{ voiceNotice() }}</p>
+  }
+  <stellar-ivy-activity-molecule
+    [preparing]="ivyPreparing()"
+    [active]="ivyWorking()"
+    [turnId]="ivyTurnId()"
+    [actions]="ivyActivity()"
+    [emblem]="stage.layout().emblem"
+    [loading]="loading()"
+    [reducedMotion]="state().reducedMotion"
+    [suppressed]="
+      stage.layout().surfaces.length > 0 ||
+      state().phase === 'docking' ||
+      state().phase === 'returning' ||
+      composing() ||
+      faultVisible() ||
+      ['suspended', 'shutdown'].includes(state().phase)
+    "
+  />
   <stellar-stage-organism
     #stage
     class="stage"

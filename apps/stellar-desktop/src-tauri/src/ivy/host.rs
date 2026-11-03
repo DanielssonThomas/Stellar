@@ -21,6 +21,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_requests.rs"]
+mod requests;
 #[path = "host_startup.rs"]
 mod startup;
 
@@ -29,6 +31,11 @@ pub enum Action {
     Submit(IvySubmitRequest),
     Cancel,
     Reconcile,
+    Lifecycle(
+        super::lifecycle::Control,
+        Ticket,
+        mpsc::SyncSender<Result<IvySnapshot, IvyErrorCode>>,
+    ),
     Disconnect,
     Rotate(
         IvyModel,
@@ -57,10 +64,11 @@ pub struct RotationReply {
     rx: mpsc::Receiver<Result<IvySnapshot, IvyErrorCode>>,
     pending: Pending,
     ticket: Ticket,
+    timeout: Duration,
 }
 impl RotationReply {
     pub fn wait(self) -> Result<IvySnapshot, IvyErrorCode> {
-        rotation::wait(self.rx, self.pending, self.ticket)
+        rotation::wait_for(self.rx, self.pending, self.ticket, self.timeout)
     }
 }
 
@@ -89,7 +97,7 @@ impl IvyHost {
                 snapshot.turn_id = record.input_id.clone();
                 snapshot.model = record.model;
                 snapshot.verified_model = None;
-                if record.unsettled {
+                if record.unsettled || record.pending_reset.is_some() {
                     snapshot.turn = IvyTurnState::Uncertain;
                 }
             }
@@ -136,7 +144,9 @@ impl IvyHost {
                 match incoming {
                     Ok(work) => {
                         if !state.current(work.epoch) {
-                            if let Action::Rotate(_, _, ticket, reply) = work.action {
+                            if let Action::Rotate(_, _, ticket, reply)
+                            | Action::Lifecycle(_, ticket, reply) = work.action
+                            {
                                 rotation::finish(&rotations, &ticket);
                                 let _ = reply.send(Err(IvyErrorCode::Unavailable));
                             }
@@ -168,6 +178,14 @@ impl IvyHost {
                                             .map(|view| view.snapshot.clone())
                                             .map_err(|_| IvyErrorCode::Unavailable)
                                     });
+                                    rotation::finish(&rotations, &ticket);
+                                    let _ = reply.send(result);
+                                }
+                                Ok(())
+                            }
+                            Action::Lifecycle(control, ticket, reply) => {
+                                if rotation::start(&ticket) {
+                                    let result = session.control(control);
                                     rotation::finish(&rotations, &ticket);
                                     let _ = reply.send(result);
                                 }
@@ -255,190 +273,6 @@ impl IvyHost {
             .map(|view| view.snapshot.clone())
             .map_err(|_| IvyErrorCode::Unavailable)
     }
-
-    pub fn rotate(&self, model: IvyModel, force: bool) -> Result<RotationReply, IvyErrorCode> {
-        let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
-        let mut view = self
-            .shared
-            .view
-            .lock()
-            .map_err(|_| IvyErrorCode::Unavailable)?;
-        if matches!(
-            view.snapshot.turn,
-            IvyTurnState::Submitting | IvyTurnState::Admitted | IvyTurnState::Uncertain
-        ) {
-            return Err(IvyErrorCode::Busy);
-        }
-        let mut slot = self
-            .pending_rotation
-            .lock()
-            .map_err(|_| IvyErrorCode::Unavailable)?;
-        if slot.is_some() {
-            return Err(IvyErrorCode::Busy);
-        }
-        let workspace_epoch = view
-            .snapshot
-            .workspace_epoch
-            .parse::<u64>()
-            .map_err(|_| IvyErrorCode::Protocol)?
-            .checked_add(1)
-            .ok_or(IvyErrorCode::Unavailable)?;
-        let ticket = rotation::ticket();
-        *slot = Some(ticket.clone());
-        let (tx, rx) = mpsc::sync_channel(1);
-        if self
-            .sender
-            .try_send(Work {
-                epoch: view.epoch,
-                workspace_epoch,
-                action: Action::Rotate(model, force, ticket.clone(), tx),
-            })
-            .is_err()
-        {
-            *slot = None;
-            return Err(IvyErrorCode::Busy);
-        }
-        view.snapshot.workspace_epoch = workspace_epoch.to_string();
-        let epoch = view.epoch;
-        drop(slot);
-        drop(view);
-        self.workspace.disarm();
-        self.shared.update(epoch, |_| {});
-        Ok(RotationReply {
-            rx,
-            pending: self.pending_rotation.clone(),
-            ticket,
-        })
-    }
-    pub fn request(&self, action: Action) -> Result<IvySnapshot, IvyErrorCode> {
-        let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
-        let mut view = self
-            .shared
-            .view
-            .lock()
-            .map_err(|_| IvyErrorCode::Unavailable)?;
-        let action = if matches!(action, Action::Connect)
-            && view.snapshot.connection == IvyConnectionState::Ready
-            && view.snapshot.turn == IvyTurnState::Uncertain
-        {
-            Action::Reconcile
-        } else {
-            action
-        };
-        match &action {
-            Action::Connect
-                if matches!(
-                    view.snapshot.connection,
-                    IvyConnectionState::Connecting | IvyConnectionState::Ready
-                ) =>
-            {
-                return Ok(view.snapshot.clone());
-            }
-            Action::Submit(request) => {
-                if self
-                    .pending_rotation
-                    .lock()
-                    .map_err(|_| IvyErrorCode::Unavailable)?
-                    .is_some()
-                {
-                    return Err(IvyErrorCode::Busy);
-                }
-                validate_submit(request)?;
-                if view.snapshot.turn_id.as_deref() == Some(&request.input_id) {
-                    return Ok(view.snapshot.clone());
-                }
-                if view.snapshot.connection != IvyConnectionState::Ready {
-                    return Err(IvyErrorCode::Unavailable);
-                }
-                if matches!(
-                    view.snapshot.turn,
-                    IvyTurnState::Submitting | IvyTurnState::Admitted | IvyTurnState::Uncertain
-                ) {
-                    return Err(IvyErrorCode::Busy);
-                }
-            }
-            _ => {}
-        }
-        let epoch = if matches!(action, Action::Connect | Action::Disconnect) {
-            view.epoch.checked_add(1).ok_or(IvyErrorCode::Unavailable)?
-        } else {
-            view.epoch
-        };
-        let previous_workspace_epoch = view
-            .snapshot
-            .workspace_epoch
-            .parse::<u64>()
-            .map_err(|_| IvyErrorCode::Protocol)?;
-        let workspace_epoch = if matches!(
-            action,
-            Action::Connect | Action::Disconnect | Action::Cancel | Action::Submit(_)
-        ) {
-            previous_workspace_epoch
-                .checked_add(1)
-                .ok_or(IvyErrorCode::Unavailable)?
-        } else {
-            previous_workspace_epoch
-        };
-        let disconnect = matches!(action, Action::Disconnect);
-        let cancel = matches!(action, Action::Cancel);
-        if disconnect {
-            let ticket = self
-                .pending_rotation
-                .lock()
-                .map_err(|_| IvyErrorCode::Unavailable)?
-                .clone();
-            if let Some(ticket) = ticket {
-                rotation::cancel(&self.pending_rotation, &ticket);
-            }
-        }
-        let (connection, turn_id) = match &action {
-            Action::Connect => (Some(IvyConnectionState::Connecting), None),
-            Action::Submit(request) => (None, Some(request.input_id.clone())),
-            Action::Disconnect => (Some(IvyConnectionState::Disconnected), None),
-            _ => (None, None),
-        };
-        self.sender
-            .try_send(Work {
-                epoch,
-                workspace_epoch,
-                action,
-            })
-            .map_err(|_| IvyErrorCode::Busy)?;
-        view.epoch = epoch;
-        view.snapshot.workspace_epoch = workspace_epoch.to_string();
-        if let Some(connection) = connection {
-            view.snapshot.connection = connection;
-        }
-        if let Some(id) = turn_id {
-            view.snapshot.turn = IvyTurnState::Submitting;
-            view.snapshot.turn_id = Some(id);
-            view.snapshot.items.clear();
-        }
-        if disconnect {
-            view.snapshot.verified_model = None;
-            view.snapshot.workspace_tools = WorkspaceToolsState::Unavailable;
-        }
-        if disconnect
-            && matches!(
-                view.snapshot.turn,
-                IvyTurnState::Submitting | IvyTurnState::Admitted
-            )
-        {
-            view.snapshot.turn = IvyTurnState::Uncertain;
-        }
-        view.snapshot.error = None;
-        let snapshot = view.snapshot.clone();
-        drop(view);
-        if disconnect || cancel {
-            self.workspace.disarm();
-        }
-        if disconnect {
-            process::stop(&self.child);
-            self.workspace.set_input(None);
-        }
-        self.shared.update(epoch, |_| {});
-        Ok(snapshot)
-    }
 }
 
 impl Drop for IvyHost {
@@ -478,3 +312,7 @@ mod tests;
 #[cfg(test)]
 #[path = "host_recovery_tests.rs"]
 mod recovery_tests;
+
+#[cfg(test)]
+#[path = "host_lifecycle_tests.rs"]
+mod lifecycle_tests;

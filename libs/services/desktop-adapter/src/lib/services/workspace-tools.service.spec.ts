@@ -24,6 +24,8 @@ function fixture() {
   const state = signal({
     ...initialIvySnapshot(),
     workspace_epoch: '2',
+    reset_id: null,
+    activity: [],
     connection: 'ready' as const,
     turn: 'submitting' as const,
     turn_id: turn,

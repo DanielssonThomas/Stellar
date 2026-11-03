@@ -43,6 +43,7 @@ export type InteractionEvent =
         | 'manual-start'
         | 'manual-end'
         | 'dismiss'
+        | 'conversation-reset'
         | 'hidden'
         | 'minimized'
         | 'resume'

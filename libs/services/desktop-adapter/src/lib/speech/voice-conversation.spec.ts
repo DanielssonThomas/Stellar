@@ -1667,3 +1667,176 @@ describe('spoken prompt composition', () => {
     expect(f.ports.submit).not.toHaveBeenCalled();
   });
 });
+
+describe('native voice lifecycle commands', () => {
+  it('matches only standalone commands', () => {
+    expect(voiceCommand('Reload MCP!')).toBe('reload mcp');
+    expect(voiceCommand('New session.')).toBe('new session');
+    expect(voiceCommand('please reload mcp')).toBeNull();
+    expect(voiceCommand('describe the new session')).toBeNull();
+  });
+  it('uses native reset, retains model preferences and then requires a leading Ivy wake word', async () => {
+    const newSession = vi.fn(async () => true);
+    let composition!: VoiceComposition;
+    const f = fixture({
+      newSession,
+      onComposition: (value) => (composition = value),
+    });
+    f.controller.initializeSession('sol');
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'new session',
+    });
+    f.utterance();
+    await flush();
+    expect(newSession).toHaveBeenCalledOnce();
+    expect(f.view().passive).toBe(true);
+    expect(composition).toMatchObject({
+      raw: '',
+      status: 'idle',
+      model: 'sol',
+    });
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'ambient conversation',
+    });
+    f.utterance();
+    await flush();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'Ivy',
+    });
+    f.utterance();
+    await flush();
+    expect(f.view().passive).toBe(false);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('serializes reload, keeps the draft and never submits a control as a prompt', async () => {
+    const pending = deferred<boolean>();
+    const reloadMcp = vi.fn(() => pending.promise);
+    let composition!: VoiceComposition;
+    const f = fixture({
+      reloadMcp,
+      onComposition: (value) => (composition = value),
+    });
+    f.controller.setDraft('retained draft');
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'reload mcp',
+    });
+    f.utterance();
+    await flush();
+    expect(reloadMcp).toHaveBeenCalledOnce();
+    f.utterance();
+    await flush();
+    expect(reloadMcp).toHaveBeenCalledOnce();
+    pending.resolve(true);
+    await flush();
+    expect(composition.raw).toBe('retained draft');
+    expect(f.view().status).toBe('MCP integrations reloaded.');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('does not clear drafts or claim success after unsupported or failed controls', async () => {
+    const f = fixture({
+      newSession: async () => false,
+      reloadMcp: async () => {
+        throw new Error();
+      },
+    });
+    f.controller.setDraft('keep this');
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'new session',
+    });
+    f.utterance();
+    await flush();
+    expect(f.view().passive).toBe(false);
+    expect(f.view().status).toContain('not confirmed');
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'reload mcp',
+    });
+    f.utterance();
+    await flush();
+    expect(f.view().status).toContain('failed or is unsupported');
+    f.controller.dispose();
+  });
+});
+
+it('applies a reset confirmed through explicit reconciliation after its initial reply was lost', async () => {
+  const pending = deferred<boolean>();
+  const closed = vi.fn();
+  const f = fixture({
+    newSession: () => pending.promise,
+    onNewSession: closed,
+  });
+  f.controller.setDraft('old draft');
+  f.ports.transcribe.mockResolvedValue({
+    version: 1,
+    utterance_id: id,
+    text: 'new session',
+  });
+  f.utterance();
+  await flush();
+  f.update({
+    assistant: {
+      ...initialIvySnapshot(),
+      connection: 'ready',
+      turn: 'uncertain',
+      turn_id: id,
+    },
+  });
+  pending.resolve(false);
+  await flush();
+  expect(closed).not.toHaveBeenCalled();
+  f.update({
+    assistant: {
+      ...initialIvySnapshot(),
+      connection: 'ready',
+      turn: 'idle',
+      turn_id: null,
+      reset_id: 'stellar-new-confirmed',
+    },
+  });
+  expect(closed).toHaveBeenCalledOnce();
+  expect(f.view().passive).toBe(true);
+  f.controller.dispose();
+});
+
+it('keeps a confirmed native reset authoritative when the command reply is lost afterward', async () => {
+  const pending = deferred<boolean>();
+  const closed = vi.fn();
+  const f = fixture({
+    newSession: () => pending.promise,
+    onNewSession: closed,
+  });
+  f.ports.transcribe.mockResolvedValue({
+    version: 1,
+    utterance_id: id,
+    text: 'new session',
+  });
+  f.utterance();
+  await flush();
+  f.update({
+    assistant: {
+      ...initialIvySnapshot(),
+      connection: 'ready',
+      reset_id: 'stellar-new-confirmed',
+    },
+  });
+  expect(closed).toHaveBeenCalledOnce();
+  pending.resolve(false);
+  await flush();
+  expect(f.view().status).toBe('New session. Say Ivy.');
+  expect(closed).toHaveBeenCalledOnce();
+  f.controller.dispose();
+});
