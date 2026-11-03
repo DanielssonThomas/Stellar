@@ -383,7 +383,7 @@
       "z": 30,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -145, "y": -70, "rotation": -28 },
+      "exploded": { "x": -145, "y": -70, "rotation": -28, "depth": 560 },
       "planeIndex": 12,
       "assembly": { "file": "layers/gold-body.png", "index": 0, "count": 11 },
       "centroid": { "x": 948.95, "y": 468.24 }
@@ -394,7 +394,7 @@
       "z": 31,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -56, "y": -17, "rotation": -11 },
+      "exploded": { "x": -56, "y": -17, "rotation": -11, "depth": 710 },
       "planeIndex": 49,
       "assembly": { "file": "layers/gold-body.png", "index": 1, "count": 11 },
       "centroid": { "x": 897.97, "y": 544.66 }
@@ -405,7 +405,7 @@
       "z": 32,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 33, "y": 36, "rotation": 6 },
+      "exploded": { "x": 33, "y": 36, "rotation": 6, "depth": 620 },
       "planeIndex": 14,
       "assembly": { "file": "layers/gold-body.png", "index": 2, "count": 11 },
       "centroid": { "x": 950.53, "y": 579.48 }
@@ -416,7 +416,7 @@
       "z": 33,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 122, "y": -51, "rotation": 23 },
+      "exploded": { "x": 122, "y": -51, "rotation": 23, "depth": 770 },
       "planeIndex": 51,
       "assembly": { "file": "layers/gold-body.png", "index": 3, "count": 11 },
       "centroid": { "x": 844.07, "y": 621.22 }
@@ -427,7 +427,7 @@
       "z": 34,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -79, "y": 2, "rotation": -16 },
+      "exploded": { "x": -79, "y": 2, "rotation": -16, "depth": 530 },
       "planeIndex": 11,
       "assembly": { "file": "layers/gold-body.png", "index": 4, "count": 11 },
       "centroid": { "x": 898.8, "y": 654.06 }
@@ -438,7 +438,7 @@
       "z": 35,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 10, "y": 55, "rotation": 1 },
+      "exploded": { "x": 10, "y": 55, "rotation": 1, "depth": 830 },
       "planeIndex": 53,
       "assembly": { "file": "layers/gold-body.png", "index": 5, "count": 11 },
       "centroid": { "x": 819.54, "y": 733.4 }
@@ -449,7 +449,7 @@
       "z": 36,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 99, "y": -32, "rotation": 18 },
+      "exploded": { "x": 99, "y": -32, "rotation": 18, "depth": 680 },
       "planeIndex": 48,
       "assembly": { "file": "layers/gold-body.png", "index": 6, "count": 11 },
       "centroid": { "x": 714.13, "y": 772.02 }
@@ -460,7 +460,7 @@
       "z": 37,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -102, "y": 21, "rotation": -21 },
+      "exploded": { "x": -102, "y": 21, "rotation": -21, "depth": 800 },
       "planeIndex": 52,
       "assembly": { "file": "layers/gold-body.png", "index": 7, "count": 11 },
       "centroid": { "x": 744.02, "y": 817.28 }
@@ -471,7 +471,7 @@
       "z": 38,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -13, "y": -66, "rotation": -4 },
+      "exploded": { "x": -13, "y": -66, "rotation": -4, "depth": 590 },
       "planeIndex": 13,
       "assembly": { "file": "layers/gold-body.png", "index": 8, "count": 11 },
       "centroid": { "x": 838.69, "y": 866.1 }
@@ -482,7 +482,7 @@
       "z": 39,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 76, "y": -13, "rotation": 13 },
+      "exploded": { "x": 76, "y": -13, "rotation": 13, "depth": 740 },
       "planeIndex": 50,
       "assembly": { "file": "layers/gold-body.png", "index": 9, "count": 11 },
       "centroid": { "x": 703.52, "y": 928.04 }
@@ -493,7 +493,7 @@
       "z": 40,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -125, "y": 40, "rotation": -26 },
+      "exploded": { "x": -125, "y": 40, "rotation": -26, "depth": 650 },
       "planeIndex": 47,
       "assembly": { "file": "layers/gold-body.png", "index": 10, "count": 11 },
       "centroid": { "x": 916.86, "y": 919.32 }

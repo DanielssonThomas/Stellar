@@ -175,9 +175,14 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded:
-    item.scatter ??
-    (item.depth !== undefined ? { ...zero, depth: item.depth } : zero),
+  exploded: item.id.startsWith('gold-body-')
+    ? {
+        ...item.scatter,
+        depth:
+          530 + bodyOrder.indexOf(Number(item.id.split('-').at(-1)) - 1) * 30,
+      }
+    : (item.scatter ??
+      (item.depth !== undefined ? { ...zero, depth: item.depth } : zero)),
   planeIndex: planeOrder.indexOf(item.id),
   ...(item.clip ? { clip: item.clip } : {}),
   ...(item.assembly ? { assembly: item.assembly } : {}),

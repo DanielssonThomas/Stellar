@@ -247,7 +247,7 @@
     }
   ],
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 6492302,
+  "runtimeBytes": 6492456,
   "budgetBytes": 8388608,
   "activeSvgContent": false,
   "fragmentAssemblyPixelIdentical": false,

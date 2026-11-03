@@ -1,5 +1,69 @@
 import { expect, test } from '@playwright/test';
 
+test('all gold fragments stay on the gold side and all violet fragments stay on the violet side', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const manifest = await (
+    await page.request.get('/emblem/manifest.json')
+  ).json();
+  const camera = page.locator('.camera');
+  await expect(page.locator('.plane')).toHaveCount(81);
+  await expect
+    .poll(() => camera.evaluate((element) => element.clientWidth))
+    .toBe(480);
+  const fragments = await camera.evaluate((element, layers) => {
+    const cameraStyle = getComputedStyle(element);
+    const cameraOrigin = cameraStyle.transformOrigin.split(' ').map(parseFloat);
+    const view = new DOMMatrix(cameraStyle.transform);
+    return Array.from(element.querySelectorAll<HTMLElement>('.plane')).flatMap(
+      (plane, index) => {
+        const layer = layers[index];
+        if (!layer.centroid || !/^layers\/(gold|violet)-/.test(layer.file))
+          return [];
+        const style = getComputedStyle(plane);
+        const origin = style.transformOrigin.split(' ').map(parseFloat);
+        const transform = new DOMMatrix(style.transform);
+        const point = transform.transformPoint(
+          new DOMPoint(
+            (layer.centroid.x * plane.clientWidth) / 1280 - origin[0],
+            (layer.centroid.y * plane.clientHeight) / 1280 - origin[1],
+          ),
+        );
+        const projected = view.transformPoint(
+          new DOMPoint(
+            point.x + origin[0] - cameraOrigin[0],
+            point.y + origin[1] - cameraOrigin[1],
+            point.z,
+          ),
+        );
+        return [
+          {
+            id: layer.id,
+            gold: layer.file.startsWith('layers/gold-'),
+            depth: transform.m43,
+            x: projected.x / projected.w,
+          },
+        ];
+      },
+    );
+  }, manifest.layers);
+  expect(fragments).toHaveLength(68);
+  const gold = fragments.filter((fragment) => fragment.gold);
+  const violet = fragments.filter((fragment) => !fragment.gold);
+  expect(gold).toHaveLength(38);
+  expect(violet).toHaveLength(30);
+  for (const fragment of gold) {
+    expect(fragment.depth, fragment.id).toBeGreaterThan(0);
+    expect(fragment.x, fragment.id).toBeLessThan(0);
+  }
+  for (const fragment of violet) {
+    expect(fragment.depth, fragment.id).toBeLessThan(0);
+    expect(fragment.x, fragment.id).toBeGreaterThan(0);
+  }
+});
+
 test('body fragments contain only small portions of the visible avatar silhouette', async ({
   page,
 }) => {
@@ -380,13 +444,48 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
       ),
     );
   const depths = planeDepths
-    .filter((_, index) => !manifest.layers[index].spin)
+    .filter((_, index) =>
+      manifest.layers[index].file.startsWith('layers/violet-'),
+    )
     .sort((a, b) => a - b);
   const interval = depths[1] - depths[0];
   expect(interval).toBeGreaterThan(4);
   const gaps = depths.slice(1).map((depth, index) => depth - depths[index]);
-  for (let index = 1; index < 33; index++)
-    expect(gaps[index]).toBeGreaterThan(gaps[index - 1]);
+  const violetPlanes = manifest.layers
+    .map((layer: { planeIndex: number; file: string }, index: number) => ({
+      ...layer,
+      depth: planeDepths[index],
+    }))
+    .filter((layer: { file: string }) =>
+      layer.file.startsWith('layers/violet-'),
+    )
+    .sort(
+      (a: { planeIndex: number }, b: { planeIndex: number }) =>
+        a.planeIndex - b.planeIndex,
+    );
+  const intervals = violetPlanes
+    .slice(1)
+    .map((current: { planeIndex: number; depth: number }, index: number) => ({
+      stride: current.planeIndex - violetPlanes[index].planeIndex,
+      gap: current.depth - violetPlanes[index].depth,
+    }));
+  const adjacent = intervals
+    .slice(1)
+    .map((current: { stride: number; gap: number }, index: number) => ({
+      current,
+      previous: intervals[index],
+    }))
+    .filter(
+      ({
+        current,
+        previous,
+      }: {
+        current: { stride: number };
+        previous: { stride: number };
+      }) => current.stride === 1 && previous.stride === 1,
+    );
+  for (const { current, previous } of adjacent)
+    expect(current.gap).toBeGreaterThan(previous.gap);
   const ringDepths = planeDepths
     .filter((_, index) => manifest.layers[index].spin)
     .sort((a, b) => a - b);
@@ -408,8 +507,7 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
         (layer: { assembly: { file: string } }) => layer.assembly.file === file,
       ),
     ).toHaveLength(3);
-  expect(gaps[Math.floor(gaps.length / 2)]).toBeGreaterThan(interval * 3);
-  expect(depths[0] + (depths.at(-1) ?? 0)).toBeCloseTo(0, 2);
+  expect(gaps.at(-1)).toBeGreaterThan(interval * 3);
   const outer = await page.request.get('/emblem/layers/outer-frame.svg');
   expect((await outer.text()).match(/<g transform="translate\(/g)).toHaveLength(
     4,
