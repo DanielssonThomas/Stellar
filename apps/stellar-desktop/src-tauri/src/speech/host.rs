@@ -18,6 +18,7 @@ impl SpeechHost {
     pub fn new(scratch: PathBuf, publish: Publisher) -> Self {
         Self {
             inner: Arc::new(Inner {
+                voice: super::warm::WarmVoice::default(),
                 view: Mutex::new(View {
                     snapshot: SpeechSnapshot::default(),
                     active: None,
@@ -74,7 +75,11 @@ impl SpeechHost {
             };
             let operation = Arc::new(Operation {
                 serial: view.serial,
-                child: Arc::new(Mutex::new(None)),
+                child: if scratch.is_some() {
+                    self.inner.voice.child.clone()
+                } else {
+                    Arc::new(Mutex::new(None))
+                },
                 cancelled: AtomicBool::new(false),
                 scratch,
             });
@@ -82,6 +87,7 @@ impl SpeechHost {
             view.snapshot.operation_id = Some(id);
             view.snapshot.state = state;
             view.snapshot.error = None;
+            view.snapshot.timings = None;
             (operation, advance(&mut view))
         };
         (self.inner.publish)(snapshot);
@@ -155,6 +161,15 @@ impl SpeechHost {
         timeout: Duration,
     ) -> Result<String, SpeechError> {
         let deadline = Instant::now() + timeout;
+        if mode == "speak" {
+            return self.inner.voice.run(
+                operation,
+                payload,
+                deadline,
+                || self.speaking(operation),
+                |timing| self.timing(operation, timing),
+            );
+        }
         let frames = {
             let view = self
                 .inner
@@ -166,9 +181,33 @@ impl SpeechHost {
             }
             process::launch(mode, &operation.child, payload)?
         };
-        super::frames::collect(&operation.cancelled, mode, frames, deadline, || {
-            self.speaking(operation)
-        })
+        super::frames::collect(
+            &operation.cancelled,
+            mode,
+            &frames,
+            deadline,
+            || self.speaking(operation),
+            |_| Ok(()),
+        )
+    }
+    fn timing(&self, operation: &Operation, timing: SpeechTiming) -> Result<(), SpeechError> {
+        let snapshot = {
+            let mut view = self
+                .inner
+                .view
+                .lock()
+                .map_err(|_| SpeechError::Unavailable)?;
+            if !current(&view, operation) || operation.cancelled.load(Ordering::SeqCst) {
+                return Err(SpeechError::Cancelled);
+            }
+            view.snapshot
+                .timings
+                .get_or_insert_with(Vec::new)
+                .push(timing);
+            advance(&mut view)
+        };
+        (self.inner.publish)(snapshot);
+        Ok(())
     }
     fn speaking(&self, operation: &Operation) -> Result<(), SpeechError> {
         let snapshot = {
@@ -191,10 +230,27 @@ impl SpeechHost {
         operation: &Operation,
         mut result: Result<String, SpeechError>,
     ) -> Result<String, SpeechError> {
-        let cleanup = process::stop(&operation.child).and_then(|_| match &operation.scratch {
+        let view = self
+            .inner
+            .view
+            .lock()
+            .map_err(|_| SpeechError::Unavailable)?;
+        if !current(&view, operation) {
+            return Err(SpeechError::Cancelled);
+        }
+        let keep_warm = result.is_ok()
+            && operation.scratch.is_some()
+            && !operation.cancelled.load(Ordering::SeqCst);
+        let cleanup = (if keep_warm {
+            Ok(())
+        } else {
+            process::stop(&operation.child)
+        })
+        .and_then(|_| match &operation.scratch {
             Some(scratch) => scratch.clean(),
             None => Ok(()),
         });
+        drop(view);
         if let Err(error) = &cleanup {
             result = Err(error.clone());
         }
@@ -260,6 +316,13 @@ impl SpeechHost {
                 view.snapshot.state = SpeechState::Idle;
                 view.snapshot.error = None;
             }
+            if view
+                .active
+                .as_ref()
+                .is_none_or(|operation| operation.scratch.is_none())
+            {
+                process::stop(&self.inner.voice.child)?;
+            }
             (view.active.clone(), advance(&mut view))
         };
         if let Some(operation) = active {
@@ -281,3 +344,7 @@ mod tests;
 #[cfg(test)]
 #[path = "epoch_tests.rs"]
 mod epoch_tests;
+
+#[cfg(all(test, windows))]
+#[path = "installed_tests.rs"]
+mod installed_tests;

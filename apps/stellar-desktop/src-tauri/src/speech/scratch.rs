@@ -18,7 +18,12 @@ impl Scratch {
         self.directory.join("reply.wav")
     }
     pub fn clean(&self) -> Result<(), SpeechError> {
-        for name in ["reply.wav", "reply.tmp.wav"] {
+        for name in [
+            "reply.wav",
+            "reply.tmp.wav",
+            "reply-next.wav",
+            "reply-next.tmp.wav",
+        ] {
             match fs::remove_file(self.directory.join(name)) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
