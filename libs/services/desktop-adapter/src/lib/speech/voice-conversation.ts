@@ -99,6 +99,7 @@ export class VoiceConversation {
   private inputText = '';
   private readonly invocation = new VoiceInvocation();
   private promptOpen = false;
+  private solSessionStarted = false;
   private readonly latency = new VoiceLatency();
   private context?: VoiceContext;
   private generation = 0;
@@ -226,6 +227,8 @@ export class VoiceConversation {
       context.assistant.turn,
     );
     this.context = context;
+    if (context.assistant.model === 'sol' && context.assistant.turn_id)
+      this.solSessionStarted = true;
     if (
       context.assistant.reset_id &&
       context.assistant.reset_id !== this.lastResetId
@@ -586,8 +589,10 @@ export class VoiceConversation {
       !this.disposed &&
       !this.sessionPending &&
       !preparing(this.composition.status)
-    )
+    ) {
+      if (model === 'sol') this.solSessionStarted = true;
       this.setComposition({ ...this.composition, model });
+    }
   }
 
   async resetConversation(): Promise<boolean> {
@@ -885,6 +890,7 @@ export class VoiceConversation {
     )
       return false;
     this.routeUncertain = false;
+    if (model === 'sol') this.solSessionStarted = true;
     this.setComposition({
       ...this.composition,
       model,
@@ -1142,6 +1148,7 @@ export class VoiceConversation {
   }
 
   private finishNewSession() {
+    this.solSessionStarted = false;
     this.fastCommands?.reset();
     this.assembler.reset();
     this.resetSpeechActivity();
@@ -1185,6 +1192,7 @@ export class VoiceConversation {
     this.dispatchUncertain = false;
     this.routeUncertain = false;
     this.invocation.reset();
+    this.solSessionStarted = false;
     this.promptOpen = false;
     this.phase = null;
     this.setComposition({
@@ -1200,8 +1208,10 @@ export class VoiceConversation {
   }
 
   private cancelPrompt() {
+    const resumeTerra = !this.solSessionStarted;
     this.promptOpen = false;
-    this.invocation.reset();
+    if (resumeTerra) this.invocation.activate();
+    else this.invocation.reset();
     this.invalidate();
     this.dispatchUncertain = false;
     this.failure = '';
@@ -1213,7 +1223,7 @@ export class VoiceConversation {
       status: 'idle',
       error: '',
     });
-    this.ports.onForegroundEnd?.();
+    if (!resumeTerra) this.ports.onForegroundEnd?.();
     this.publish();
   }
 
@@ -1321,6 +1331,7 @@ export class VoiceConversation {
     id: string,
     generation: number,
   ) {
+    if (model === 'sol') this.solSessionStarted = true;
     this.dispatchUncertain = true;
     this.dispatchPending = true;
     let accepted = false;

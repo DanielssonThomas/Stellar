@@ -347,7 +347,7 @@ test('native startup requests the microphone automatically without assembling th
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
 });
 
-test('wake-only foreground flow routes Terra, composes Sol, cancels without cleanup, and requires re-invocation', async ({
+test('wake-only foreground flow resumes active Terra after cancelling the first Sol prompt', async ({
   page,
 }) => {
   await install(page, false);
@@ -442,11 +442,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     (window as unknown as { __watchForeground?: boolean }).__watchForeground =
       false;
   });
-  await say("Alright, I'm done!");
-  await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
-  await say('another ambient request', { recognize: false });
-  expect((await observed()).submissions).toHaveLength(1);
-  await say('prompt', { wake: true });
+  await say('prompt');
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
@@ -459,25 +455,39 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   expect((await observed()).composition).toMatchObject({
     raw: '',
     refined: null,
+    model: 'terra',
     status: 'idle',
   });
   expect((await observed()).cleanups).toEqual([]);
   await expect(transcript).toHaveCount(0);
   expect((await observed()).submissions).toHaveLength(1);
-  await say('prompt', { recognize: false });
-  await say('unrelated background speech', { recognize: false });
-  expect((await observed()).composition.status).toBe('idle');
-  expect((await observed()).submissions).toHaveLength(1);
-  await say('prompt new draft', { wake: true });
+  await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion|sol/);
+  expect((await observed()).sessions).toEqual(['terra']);
+  await say('prompt');
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
+  await say('new draft');
   expect((await observed()).composition.raw).toBe('new draft');
   await say('prompt cancel');
   await expect(page.getByRole('region', { name: 'Spoken prompt' })).toHaveCount(
     0,
   );
   expect((await observed()).composition.raw).toBe('');
+  await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion|sol/);
+  expect((await observed()).submissions).toHaveLength(1);
+  expect((await observed()).sessions).toEqual(['terra']);
+  await say('continue the Terra plan');
+  await expect
+    .poll(async () => (await observed()).submissions)
+    .toEqual([
+      { text: 'tell me the plan', dissolved: false },
+      { text: 'continue the Terra plan', dissolved: false },
+    ]);
+  await say("Alright, I'm done!");
+  await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
+  await say('another ambient request', { recognize: false });
+  expect((await observed()).submissions).toHaveLength(2);
 });
 
 async function draft(page: Page, text = raw, finishOpening = true) {
