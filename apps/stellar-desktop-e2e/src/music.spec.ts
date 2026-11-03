@@ -141,7 +141,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     .evaluateAll((elements) => ({
       rings: elements.filter(
         (element) =>
-          element.parentElement?.classList.contains('spin-counter') &&
+          element.parentElement?.matches('.spin-counter, .spin-clockwise') &&
           element
             .getAnimations()
             .some((animation) =>
@@ -164,6 +164,15 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     }));
   expect(pulseCounts.rings).toBe(12);
   expect(pulseCounts.blinks).toBeGreaterThan(10);
+  expect(
+    await page
+      .locator('.music-piece')
+      .evaluateAll((elements) =>
+        elements.every(
+          (element) => (element as HTMLElement).style.opacity === '0.62',
+        ),
+      ),
+  ).toBe(true);
   await expect(dialog.locator('p[role="status"]')).toHaveText(
     'Listening to desktop audio',
   );
@@ -179,6 +188,15 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     dialog.getByRole('button', { name: 'Calm', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
   await expect(dialog.locator('output[for="music-bass"]')).toHaveText('200%');
+  expect(
+    await page
+      .locator('.music-piece')
+      .evaluateAll((elements) =>
+        elements.every(
+          (element) => (element as HTMLElement).style.opacity === '1',
+        ),
+      ),
+  ).toBe(true);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await pulse(0.8);

@@ -10,7 +10,7 @@ Copy integrity was checked against source files on this checkout. SHA-256 hashes
 
 | Runtime file                                     | SHA-256                                                          |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
-| manifest.json                                    | a73865063d94542bac04afbd1e73985af3ce07667706108cbaa317f924288626 |
+| manifest.json                                    | b418e533cfcc4fea8e37b959fc2546c77e17fbdd0c4139523180309b3872a13e |
 | layers/violet-body-1.png                         | 704433353b3e00d6246fdeacbaabafb609ca8b6dd6cf211c6ff510dcab81cba0 |
 | layers/violet-body.png                           | 2d26d670fbaab0630cd7d243e55ba75de39b8662d34507fd3ceefef482868730 |
 | layers/violet-body-2.png                         | d705f4333a57d91a10b24ce0d7238bb6e8f5a8bc4c308d9656e7bcabf64557d5 |

@@ -590,7 +590,9 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
   const scene = page.locator('.camera');
-  const ring = page.locator('.spin-clockwise');
+  const ring = page
+    .locator('.artwork')
+    .filter({ has: page.locator('img[src$="/layers/outer-frame.svg"]') });
   await expect(page.locator('.plane img')).toHaveCount(81);
   const manifestResponse = await page.request.get('/emblem/manifest.json');
   const manifest = await manifestResponse.json();
@@ -610,6 +612,21 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
       layer.id.startsWith('inner-circle') && layer.exploded.x !== 0,
   );
   expect(scatteredRings).toHaveLength(0);
+  for (const [file, spin] of [
+    ['inner-circle', 'counter-clockwise'],
+    ['inner-circle-2', 'clockwise'],
+    ['inner-circle-3', 'counter-clockwise'],
+    ['inner-circle-4', 'clockwise'],
+  ]) {
+    expect(
+      manifest.layers
+        .filter(
+          (layer: { assembly?: { file: string } }) =>
+            layer.assembly?.file === `layers/${file}.svg`,
+        )
+        .map((layer: { spin: string }) => layer.spin),
+    ).toEqual([spin, spin, spin]);
+  }
   expect(
     manifest.layers
       .filter((layer: { spin?: string }) => layer.spin)

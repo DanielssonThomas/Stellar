@@ -68,7 +68,7 @@ describe('music transients', () => {
     expect(state.elements[1].animate).not.toHaveBeenCalled();
     expect(state.elements[2].animate).not.toHaveBeenCalled();
     expect(state.elements[0].animate).toHaveBeenCalledWith(
-      expect.arrayContaining([{ transform: 'none', offset: 1 }]),
+      expect.arrayContaining([{ transform: 'none', opacity: 1, offset: 1 }]),
       expect.objectContaining({ duration: 440 }),
     );
     state.advance(1000);
@@ -100,8 +100,14 @@ describe('music transients', () => {
   it('blinks selected individual fragments only in Flashy and smoothly settles on activity', () => {
     const state = setup();
     state.pulses.update(state.targets, loud, 'flashy', true, false);
+    expect(
+      state.elements.every((element) => element.style.opacity === '0.62'),
+    ).toBe(true);
     expect(state.elements[2].animate).toHaveBeenCalledWith(
-      expect.arrayContaining([{ opacity: 1, offset: 1 }]),
+      expect.arrayContaining([
+        { opacity: 0.62, offset: 1 },
+        { opacity: 1, offset: 0.22 },
+      ]),
       expect.any(Object),
     );
     state.pulses.update(
@@ -116,6 +122,9 @@ describe('music transients', () => {
       expect.objectContaining({ duration: 160 }),
     );
     expect(state.elements[0].style.transform).toBe('none');
+    expect(
+      state.elements.every((element) => element.style.opacity === '1'),
+    ).toBe(true);
     state.style.mockClear();
     state.pulses.update(state.targets, silentEmblemMusic, 'calm', false, true);
     expect(state.style).not.toHaveBeenCalled();

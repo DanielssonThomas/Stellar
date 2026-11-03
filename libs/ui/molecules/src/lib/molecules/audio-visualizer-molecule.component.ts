@@ -41,7 +41,7 @@ export class AudioVisualizerMolecule {
     {
       value: 'flashy',
       label: 'Flashy',
-      detail: 'Bolder movement · staggered blinks',
+      detail: 'Dimmed pieces · glittering sound pulses',
     },
   ];
   readonly sensitivityChange = output<{

@@ -94,13 +94,16 @@ export function createEmblemMusicPulses(
         lastBeat = -Infinity;
       }
       lastMode = mode;
-      for (const { element, layer, order } of targets)
+      const dim = active && mode === 'flashy' ? 0.62 : 1;
+      for (const { element, layer, order } of targets) {
+        element.style.opacity = String(dim);
         element.style.transform = musicTransform(
           layer,
           order,
           active ? levels : silentEmblemMusic,
           mode,
         );
+      }
       if (!active || paused) return;
       const values = [levels.bass, levels.mid, levels.treble].map((value) =>
         Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0,
@@ -135,9 +138,9 @@ export function createEmblemMusicPulses(
           animate(
             element,
             [
-              { transform: from, offset: 0 },
-              { transform: kick, offset: 0.18 },
-              { transform: 'none', offset: 1 },
+              { transform: from, opacity: dim, offset: 0 },
+              { transform: kick, opacity: 1, offset: 0.18 },
+              { transform: 'none', opacity: dim, offset: 1 },
             ],
             mode === 'calm' ? 560 : 440,
             'transform',
@@ -146,9 +149,9 @@ export function createEmblemMusicPulses(
           animate(
             element,
             [
-              { opacity: 1, offset: 0 },
-              { opacity: 0.32 + (order % 4) * 0.08, offset: 0.22 },
-              { opacity: 1, offset: 1 },
+              { opacity: dim, offset: 0 },
+              { opacity: 1, offset: 0.22 },
+              { opacity: dim, offset: 1 },
             ],
             310,
             'opacity',
