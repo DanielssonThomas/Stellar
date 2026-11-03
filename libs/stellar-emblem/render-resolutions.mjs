@@ -127,7 +127,7 @@ if (
     validation.responsiveImages = responsiveImages;
     fs.writeFileSync(
       validationPath,
-      JSON.stringify(validation, null, 2) + '\n',
+      await format(JSON.stringify(validation), { parser: 'json' }),
     );
     console.log(JSON.stringify(responsiveImages, null, 2));
   } finally {

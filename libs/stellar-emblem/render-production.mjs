@@ -631,7 +631,7 @@ try {
   };
   fs.writeFileSync(
     path.join(root, 'previews', 'validation.json'),
-    JSON.stringify(validation, null, 2) + '\n',
+    await format(JSON.stringify(validation), { parser: 'json' }),
   );
   console.log(JSON.stringify(validation, null, 2));
 } finally {
