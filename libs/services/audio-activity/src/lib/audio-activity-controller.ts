@@ -18,6 +18,7 @@ export class AudioActivityController {
   private source: AudioSource | undefined;
   private generation = 0;
   private disposed = false;
+  private continuousCapture = false;
   private lastPublished: number | undefined;
   private readonly bindings = new Set<() => void>();
   private current: AudioActivityState;
@@ -33,6 +34,10 @@ export class AudioActivityController {
 
   snapshot(): AudioActivityState {
     return this.current;
+  }
+
+  setContinuousCapture(enabled: boolean): void {
+    this.continuousCapture = enabled;
   }
 
   subscribePcm(listener: (event: PcmEvent) => void): () => void {
@@ -153,7 +158,7 @@ export class AudioActivityController {
   bindLifecycle(document: Document, window: Window): () => void {
     if (this.disposed) return () => undefined;
     const hidden = () => {
-      if (document.hidden) void this.suspend();
+      if (document.hidden && !this.continuousCapture) void this.suspend();
     };
     const pagehide = () => void this.suspend();
     document.addEventListener('visibilitychange', hidden);

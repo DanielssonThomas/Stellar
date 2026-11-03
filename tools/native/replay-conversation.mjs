@@ -52,7 +52,10 @@ await build({
           name: 'frozen-pr-head',
           setup(build) {
             build.onLoad(
-              { filter: /(?:voice-conversation|fast-commands)\.ts$/ },
+              {
+                filter:
+                  /(?:voice-conversation|fast-commands|voice-composition|draft-recognition)\.ts$/,
+              },
               (args) => ({
                 contents: execFileSync(
                   'git',

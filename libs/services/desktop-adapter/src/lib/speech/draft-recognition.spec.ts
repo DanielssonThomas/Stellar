@@ -49,9 +49,64 @@ describe('draft recognition scheduling', () => {
       'final',
       true,
       true,
+      true,
     );
     expect(collect).toHaveBeenCalledTimes(2);
     expect(stop).not.toHaveBeenCalled();
+    expect([...preview, ...final]).toEqual([0, 0]);
+  });
+
+  it('keeps initial wake eligibility separate from capped command eligibility', async () => {
+    const completed = vi.fn();
+    const queue = new DraftRecognition(
+      async (_pcm, utterance_id) => ({
+        version: 1,
+        utterance_id,
+        text: 'Ivy, explain the plan',
+      }),
+      async () => undefined,
+      completed,
+      vi.fn(),
+    );
+    queue.offer(new Int16Array([1]), 'initial-cap', true, false, 'draft', true);
+    await flush();
+    expect(completed).toHaveBeenCalledExactlyOnceWith(
+      'Ivy, explain the plan',
+      'initial-cap',
+      true,
+      false,
+      true,
+    );
+  });
+
+  it('finishes an in-flight wake preview before the queued final without preemption', async () => {
+    const first = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const collect = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: 'final',
+        text: 'a request',
+      });
+    const completed = vi.fn();
+    const stop = vi.fn(async () => undefined);
+    const queue = new DraftRecognition(collect, stop, completed, vi.fn());
+    const preview = new Int16Array([1]);
+    const final = new Int16Array([2]);
+    queue.offer(preview, 'wake', false, true, 'wake');
+    queue.offer(final, 'final', true);
+    expect(stop).not.toHaveBeenCalled();
+    first.resolve({ version: 1, utterance_id: 'wake', text: 'Ivy' });
+    await flush();
+    expect(completed.mock.calls).toEqual([
+      ['Ivy', 'wake', false, true, true],
+      ['a request', 'final', true, true, true],
+    ]);
     expect([...preview, ...final]).toEqual([0, 0]);
   });
   it('does not publish an older partial once a newer partial is queued', async () => {
@@ -85,6 +140,7 @@ describe('draft recognition scheduling', () => {
       'new',
       false,
       true,
+      true,
     );
     expect(queue.canPreview()).toBe(true);
   });
@@ -115,8 +171,8 @@ describe('draft recognition scheduling', () => {
     first.resolve({ version: 1, utterance_id: 'one', text: 'first' });
     await flush();
     expect(completed.mock.calls).toEqual([
-      ['first', 'one', true, true],
-      ['second', 'two', true, true],
+      ['first', 'one', true, true, true],
+      ['second', 'two', true, true, true],
     ]);
     expect(collect).toHaveBeenCalledTimes(2);
   });
@@ -170,6 +226,7 @@ describe('draft recognition scheduling', () => {
     expect(completed).toHaveBeenCalledExactlyOnceWith(
       'complete',
       'final',
+      true,
       true,
       true,
     );

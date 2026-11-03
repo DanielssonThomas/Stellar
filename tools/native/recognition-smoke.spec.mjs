@@ -11,7 +11,13 @@ const source = await readFile(
   ),
   'utf8',
 );
-async function exercise({ cancel = true, stale = true, hidden = false } = {}) {
+async function exercise({
+  cancel = true,
+  stale = true,
+  hidden = false,
+  microphone = false,
+  guard = true,
+} = {}) {
   let epoch = '0',
     pending,
     transcriptions = 0,
@@ -57,7 +63,10 @@ async function exercise({ cancel = true, stale = true, hidden = false } = {}) {
       JSON.stringify({ wake: [1], long: [1, 2] }),
     ),
     {
-      window: { __TAURI__: { core: { invoke } } },
+      window: {
+        __TAURI__: { core: { invoke } },
+        __STELLAR_SPEECH_GUARD__: { installed: guard, attempted: microphone },
+      },
       crypto: { randomUUID },
       document: {
         hidden,
@@ -92,6 +101,45 @@ test('restricted native probe validates IDs, observes cancellation and cleans up
   ]);
 });
 test('a completed cancellation, stale-epoch acceptance or hidden renderer cannot qualify', async () => {
-  for (const options of [{ cancel: false }, { stale: false }, { hidden: true }])
+  for (const options of [
+    { cancel: false },
+    { stale: false },
+    { hidden: true },
+    { microphone: true },
+    { guard: false },
+  ])
     assert.equal((await exercise(options)).report.success, false);
+});
+
+test('pre-start guard rejects capture without calling the physical media implementation', async () => {
+  const guardSource = await readFile(
+    new URL(
+      '../../apps/stellar-desktop/src-tauri/src/recognition_guard.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  let physicalCalls = 0;
+  const mediaDevices = {
+    getUserMedia: async () => {
+      physicalCalls++;
+    },
+  };
+  const window = {};
+  runInNewContext(guardSource, {
+    window,
+    navigator: { mediaDevices },
+    DOMException,
+  });
+  assert.equal(window.__STELLAR_SPEECH_GUARD__.installed, true);
+  await assert.rejects(mediaDevices.getUserMedia({ audio: true }), {
+    name: 'NotAllowedError',
+  });
+  assert.equal(physicalCalls, 0);
+  assert.equal(window.__STELLAR_SPEECH_GUARD__.attempted, true);
+  assert.throws(() =>
+    Object.defineProperty(mediaDevices, 'getUserMedia', {
+      value: () => undefined,
+    }),
+  );
 });

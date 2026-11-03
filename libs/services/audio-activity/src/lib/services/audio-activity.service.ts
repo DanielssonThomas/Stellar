@@ -31,6 +31,10 @@ export class AudioActivityService {
     return this.start(new WebAudioSource(), deviceId);
   }
 
+  setContinuousCapture(enabled: boolean): void {
+    this.controller.setContinuousCapture(enabled);
+  }
+
   listInputs() {
     return listAudioInputs();
   }

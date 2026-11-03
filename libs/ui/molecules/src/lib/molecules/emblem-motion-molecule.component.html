@@ -1,4 +1,4 @@
-@if (loading()) {
+@if (loading() || (!unavailable() && awaitingSize())) {
   <div
     class="flex h-full w-full items-center justify-center"
     role="status"
@@ -61,6 +61,20 @@
       <div class="ambience" aria-hidden="true"></div>
     }
     <div class="emblem-presence">
+      @for (source of assemblySources(); track source.src) {
+        <img
+          #emblemImage
+          class="hidden"
+          decoding="async"
+          [attr.sizes]="source.srcset ? imageSizes() : null"
+          [attr.srcset]="source.srcset"
+          [src]="source.src"
+          alt=""
+          aria-hidden="true"
+          (error)="assetFailed()"
+          (load)="prepareImages()"
+        />
+      }
       <div #camera class="camera">
         @for (layer of layers(); track layer.id) {
           <div
@@ -78,6 +92,10 @@
               [style.transform-origin]="layer.origin"
             >
               <img
+                #emblemImage
+                decoding="async"
+                [attr.sizes]="layer.srcset ? imageSizes() : null"
+                [attr.srcset]="layer.srcset"
                 [src]="layer.src"
                 [style.filter]="
                   fault()
@@ -92,6 +110,7 @@
                 alt=""
                 draggable="false"
                 (error)="assetFailed()"
+                (load)="prepareImages()"
               />
             </div>
           </div>

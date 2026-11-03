@@ -7,6 +7,8 @@ type Work = {
   generation: number;
   revision: number;
   commandAllowed: boolean;
+  wakeAllowed: boolean;
+  purpose: 'draft' | 'wake';
 };
 
 /** Owns bounded speech snapshots until they are settled or erased. */
@@ -29,6 +31,7 @@ export class DraftRecognition {
       id: string,
       final: boolean,
       commandAllowed: boolean,
+      wakeAllowed: boolean,
     ) => void | Promise<void>,
     private readonly failed: () => void,
     private readonly interruptPreviews = true,
@@ -54,12 +57,16 @@ export class DraftRecognition {
     id: string,
     final: boolean,
     commandAllowed = true,
+    purpose: 'draft' | 'wake' = 'draft',
+    wakeAllowed = commandAllowed,
   ): void {
     const work = {
       pcm,
       id,
       final,
       commandAllowed,
+      wakeAllowed,
+      purpose,
       generation: this.generation,
       revision: ++this.previewRevision,
     };
@@ -73,7 +80,13 @@ export class DraftRecognition {
       this.finals.push(work);
       this.preview?.pcm.fill(0);
       this.preview = undefined;
-      if (this.interruptPreviews && this.running && !this.running.final)
+      // Let the first wake hit activate presence even when settlement queues a final.
+      if (
+        this.interruptPreviews &&
+        this.running &&
+        !this.running.final &&
+        this.running.purpose !== 'wake'
+      )
         this.interrupt();
     } else {
       this.preview?.pcm.fill(0);
@@ -121,6 +134,7 @@ export class DraftRecognition {
           work.generation === this.generation &&
           result.utterance_id === work.id &&
           (work.final ||
+            work.purpose === 'wake' ||
             (this.finals.length === 0 &&
               work.revision === this.previewRevision))
         )
@@ -129,6 +143,7 @@ export class DraftRecognition {
             work.id,
             work.final,
             work.commandAllowed,
+            work.wakeAllowed,
           );
       })
       .catch(() => {

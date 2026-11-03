@@ -63,6 +63,10 @@ export class SpeechAdapterService {
     return this.transcribeWith(pcm, utteranceId, false);
   }
 
+  initialize(): Promise<void> {
+    return this.run(() => this.prepare());
+  }
+
   collect(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
     return this.transcribeWith(pcm, utteranceId, true);
   }

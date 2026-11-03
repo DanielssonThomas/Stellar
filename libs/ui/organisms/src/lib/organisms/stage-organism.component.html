@@ -17,16 +17,19 @@
   >
     <ng-content select="[stage-emblem]" />
   </div>
-  <div
-    class="composer-slot"
-    [style.display]="layout().composer ? null : 'none'"
-    [style.left.px]="layout().composer?.x"
-    [style.top.px]="layout().composer?.y"
-    [style.width.px]="layout().composer?.width"
-    [style.height.px]="layout().composer?.height"
-  >
-    <ng-content select="[stage-composer]" />
-  </div>
+  @if (layout().composer) {
+    <div
+      class="composer-slot"
+      animate.leave="composer-slot-leaving"
+      [style.animation-duration]="reducedMotion() ? '1ms' : null"
+      [style.left.px]="layout().composer?.x"
+      [style.top.px]="layout().composer?.y"
+      [style.width.px]="layout().composer?.width"
+      [style.height.px]="layout().composer?.height"
+    >
+      <ng-content select="[stage-composer]" />
+    </div>
+  }
   @for (surface of surfaces(); track surface.instanceId) {
     <section
       #panel

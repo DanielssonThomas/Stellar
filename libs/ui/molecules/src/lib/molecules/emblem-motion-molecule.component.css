@@ -132,10 +132,18 @@ img {
   }
 }
 
+.camera {
+  transform-style: preserve-3d;
+}
+
+.render-active .camera,
+.render-active .plane {
+  will-change: transform;
+}
+
 .camera,
 .plane,
 .artwork {
-  transform-style: preserve-3d;
   pointer-events: none;
 }
 

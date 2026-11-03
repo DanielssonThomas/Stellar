@@ -123,17 +123,17 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
                     ? { command: 'ivy', end_sample: 0 }
                     : null,
               };
-            if (command === 'speech_transcribe') {
+            if (command === 'speech_collect') {
               results.transcribeActive = results.activeTracks;
               results.speechId = String(request['utterance_id']);
               results.sampleCount = (request['pcm'] as number[]).length;
-              emit('speech-state', speech('transcribing', results.speechId));
+              emit('speech-state', speech('collecting', results.speechId));
               await new Promise((done) => setTimeout(done, 20));
               emit('speech-state', speech('idle', results.speechId));
               return {
                 version: 1,
                 utterance_id: results.speechId,
-                text: 'Show the requested fixture content',
+                text: 'Ivy, Show the requested fixture content',
               };
             }
             if (command === 'ivy_submit') {
@@ -278,10 +278,10 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   expect((await fixture()).synthesisFrames).toBeGreaterThan(0);
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);
-  expect(result.transcribeActive).toBe(0);
-  expect(result.speakActive).toBe(0);
-  expect(result.submitActive).toBe(0);
-  await expect.poll(async () => (await fixture()).acquisitions).toBe(2);
+  expect(result.transcribeActive).toBe(1);
+  expect(result.speakActive).toBe(1);
+  expect(result.submitActive).toBe(1);
+  await expect.poll(async () => (await fixture()).acquisitions).toBe(1);
   await expect.poll(async () => (await fixture()).activeTracks).toBe(1);
   expect(result.sampleCount).toBeGreaterThan(24000);
   expect(result.sampleCount).toBeLessThanOrEqual(320000);

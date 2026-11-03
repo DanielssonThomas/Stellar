@@ -40,11 +40,21 @@ export function createEmblemAmbientMotion(
     ) {
       if (disposed) return;
       const elements = new Set(targets.map(({ element }) => element));
+      const changes = targets.flatMap((target) => {
+        if (running.get(target.element)?.idle === idle && !paused) return [];
+        return [
+          {
+            ...target,
+            from:
+              !paused && view
+                ? view.getComputedStyle(target.element).transform
+                : 'none',
+          },
+        ];
+      });
       for (const element of running.keys())
         if (!elements.has(element)) cancel(element);
-      for (const { element, spin, order } of targets) {
-        if (running.get(element)?.idle === idle && !paused) continue;
-        const from = view?.getComputedStyle(element).transform ?? 'none';
+      for (const { element, spin, order, from } of changes) {
         cancel(element);
         element.style.transform = 'none';
         if (paused || !view || typeof element.animate !== 'function') continue;

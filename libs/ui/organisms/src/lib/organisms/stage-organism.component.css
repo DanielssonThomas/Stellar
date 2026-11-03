@@ -89,6 +89,20 @@
   z-index: 3;
   min-height: 0;
 }
+:host .composer-slot-leaving {
+  pointer-events: none;
+  animation: composer-retire 240ms ease-in both;
+}
+@keyframes composer-retire {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :host .composer-slot-leaving {
+    animation-duration: 1ms;
+  }
+}
 
 :host .composition-concealed {
   visibility: hidden;

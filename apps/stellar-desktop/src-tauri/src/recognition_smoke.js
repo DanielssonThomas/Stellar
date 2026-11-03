@@ -5,6 +5,10 @@
   const report = {
     success: false,
     visible: !document.hidden,
+    microphone_guard_installed:
+      window.__STELLAR_SPEECH_GUARD__?.installed === true,
+    microphone_attempted: window.__STELLAR_SPEECH_GUARD__?.attempted !== false,
+    failure: null,
     wake: false,
     cancelled: false,
     stale_epoch_rejected: false,
@@ -65,6 +69,8 @@
       throw new Error();
     if (
       document.hidden ||
+      !report.microphone_guard_installed ||
+      report.microphone_attempted ||
       document.body.textContent.includes('Stop microphone')
     )
       throw new Error();
@@ -140,8 +146,18 @@
       report.cancelled &&
       report.stale_epoch_rejected &&
       report.recovered;
-  } catch {
+  } catch (error) {
     report.success = false;
+    report.failure = [
+      'cancelled',
+      'busy',
+      'unavailable',
+      'protocol',
+      'timeout',
+      'invalid_request',
+    ].includes(error)
+      ? error
+      : 'assertion';
   } finally {
     if (epoch !== undefined)
       try {
@@ -149,6 +165,10 @@
       } catch {
         report.success = false;
       }
+    report.microphone_attempted =
+      window.__STELLAR_SPEECH_GUARD__?.attempted !== false;
+    report.success &&=
+      report.microphone_guard_installed && !report.microphone_attempted;
     input.wake.fill(0);
     input.long.fill(0);
     await invoke('recognition_result', { report });

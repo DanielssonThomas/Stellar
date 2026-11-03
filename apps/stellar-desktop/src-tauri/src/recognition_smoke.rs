@@ -40,11 +40,43 @@ struct Fixture {
 struct Report {
     success: bool,
     visible: bool,
+    microphone_guard_installed: bool,
+    microphone_attempted: bool,
+    failure: Option<Failure>,
     wake: bool,
     cancelled: bool,
     stale_epoch_rejected: bool,
     recovered: bool,
     measurements: Vec<Measurement>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Failure {
+    Cancelled,
+    Busy,
+    Unavailable,
+    Protocol,
+    Timeout,
+    InvalidRequest,
+    Assertion,
+}
+
+#[tauri::command]
+fn app_info(
+    app: tauri::AppHandle,
+    request: Option<serde_json::Value>,
+) -> Result<crate::app_info::contracts::AppInfoReply, crate::app_info::contracts::AppInfoError> {
+    let mut reply = crate::app_info::app_info(app, request)?;
+    // Production native-window capability starts continuous listening at startup.
+    // This diagnostic must render the app without enabling its microphone lifecycle.
+    reply.capabilities.retain(|capability| {
+        !matches!(
+            capability,
+            crate::app_info::contracts::AppCapability::NativeWindow {}
+        )
+    });
+    Ok(reply)
 }
 
 #[tauri::command]
@@ -65,7 +97,17 @@ fn recognition_result(app: tauri::AppHandle, report: Report) {
     if bounded && let Ok(json) = serde_json::to_string(&report) {
         println!("STELLAR_RECOGNITION_SMOKE {json}");
     }
-    app.exit(if bounded && report.success { 0 } else { 1 });
+    app.exit(
+        if bounded
+            && report.success
+            && report.microphone_guard_installed
+            && !report.microphone_attempted
+        {
+            0
+        } else {
+            1
+        },
+    );
 }
 
 fn check_page(window: Webview) {
@@ -99,7 +141,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
-            crate::app_info::app_info,
+            app_info,
             crate::telemetry::telemetry_snapshot,
             crate::speech::speech_snapshot,
             crate::speech::speech_keywords,
@@ -131,6 +173,7 @@ pub fn create_window(app: &tauri::App) -> tauri::Result<()> {
     // Use the explicit builder so test and ordinary WebViews cannot share a browser.
     tauri::WebviewWindowBuilder::from_config(app, config)?
         .data_directory(profile)
+        .initialization_script(include_str!("recognition_guard.js"))
         .build()?;
     Ok(())
 }

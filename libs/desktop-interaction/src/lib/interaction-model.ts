@@ -35,6 +35,7 @@ export type InteractionState = Readonly<{
   reducedMotion: boolean;
   hangoverMs: number;
   automaticSummary?: boolean;
+  persistentCapture?: boolean;
   presentationRequested?: boolean;
 }>;
 export type InteractionEvent =

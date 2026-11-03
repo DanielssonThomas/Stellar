@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('microphone frames drive activity without panels and release on dismissal', async ({
+test('passive microphone frames leave the emblem exploded and explicit stop releases capture', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -85,7 +85,7 @@ test('microphone frames drive activity without panels and release on dismissal',
     'data-capture-constraints',
     /"exact":"built-in"/,
   );
-  await expect(experience).toHaveAttribute('data-phase', 'listening');
+  await expect(experience).toHaveAttribute('data-phase', 'idle');
   await expect
     .poll(async () =>
       page

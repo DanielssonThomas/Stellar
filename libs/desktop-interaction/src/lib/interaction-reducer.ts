@@ -277,7 +277,7 @@ export function reduceInteraction(
     case 'dismiss':
       cancelHangover();
       closeSurface();
-      stopCapture();
+      if (!s.persistentCapture) stopCapture();
       update({
         manualActive: false,
         audioActive: false,
@@ -290,7 +290,7 @@ export function reduceInteraction(
       update({ presentationRequested: event.visible });
       if (event.visible) move('docked');
       else {
-        stopCapture();
+        if (!s.persistentCapture) stopCapture();
         update({ manualActive: false, audioActive: false });
         move('center');
       }

@@ -134,12 +134,26 @@ class SpeechWorkerTests(unittest.TestCase):
             with self.assertRaises(worker.Failure):
                 worker.validate_stt_config(candidate)
 
+    def test_desktop_accepts_english_or_unspecified_profile_language_only(self):
+        for language in [None, '', 'auto', 'en']:
+            candidate = config()
+            candidate['stt']['language'] = language
+            candidate['stt']['local']['language'] = language
+            self.assertEqual(worker.validate_stt_config(candidate)['local']['language'], language)
+        for section in ['stt', 'local']:
+            candidate = config()
+            target = candidate['stt'] if section == 'stt' else candidate['stt']['local']
+            target['language'] = 'de'
+            with self.assertRaises(worker.Failure):
+                worker.validate_stt_config(candidate)
+
     def test_malformed_and_oversized_pcm_never_loads_a_model(self):
         with patch.object(worker, 'load_stt_config', side_effect=AssertionError('model path reached')):
             for request in [{'pcm': [True], 'sample_rate_hz': 16000},
                             {'pcm': [32768], 'sample_rate_hz': 16000},
                             {'pcm': [0], 'sample_rate_hz': 48000},
                             {'pcm': [0] * 320001, 'sample_rate_hz': 16000},
+                            {'pcm': [0], 'sample_rate_hz': 16000, 'language': 'de'},
                             {'pcm': [0], 'sample_rate_hz': 16000, 'provider': 'cloud'}]:
                 with self.assertRaises(worker.Failure):
                     worker.transcribe(request, io.BytesIO())
@@ -161,6 +175,7 @@ class SpeechWorkerTests(unittest.TestCase):
 
     def test_local_constructor_has_no_download_retry_and_silence_stays_empty(self):
         calls = []
+        decoding = []
         class Array:
             def __truediv__(self, divisor):
                 self.divisor = divisor
@@ -169,13 +184,16 @@ class SpeechWorkerTests(unittest.TestCase):
             def __init__(self, *args, **kwargs):
                 calls.append((args, kwargs))
             def transcribe(self, audio, **kwargs):
-                self.kwargs = kwargs
+                decoding.append(kwargs)
                 return iter([]), None
+        expected = {'vad_filter': True, 'condition_on_previous_text': False,
+                    'beam_size': 5, 'no_speech_threshold': 0.6, 'log_prob_threshold': -1.0,
+                    'vad_parameters': {'min_silence_duration_ms': 500}}
         modules = {
             'numpy': types.SimpleNamespace(asarray=lambda *args, **kwargs: Array(), float32=float),
             'faster_whisper': types.SimpleNamespace(WhisperModel=Model),
             'tools.transcription_tools': types.SimpleNamespace(
-                build_local_transcribe_kwargs=lambda cfg: {'vad_filter': True, 'condition_on_previous_text': False},
+                build_local_transcribe_kwargs=lambda cfg: dict(expected, language='de'),
                 _join_confident_segments=lambda segments, cfg: ' '.join(segments)),
         }
         with patch.dict(sys.modules, modules), patch.object(worker, 'load_stt_config', return_value=config()['stt']), \
@@ -186,6 +204,22 @@ class SpeechWorkerTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0], (('base',), {'device': 'cpu', 'compute_type': 'int8',
                                              'local_files_only': True, 'cpu_threads': 4}))
+        self.assertEqual(decoding, [dict(expected, language='en')])
+        self.assertNotIn('initial_prompt', decoding[0])
+        self.assertNotIn('hotwords', decoding[0])
+
+    def test_desktop_still_requires_vad_before_loading_the_model(self):
+        modules = {
+            'numpy': types.SimpleNamespace(),
+            'faster_whisper': types.SimpleNamespace(WhisperModel=lambda *args, **kwargs: self.fail('model loaded')),
+            'tools.transcription_tools': types.SimpleNamespace(
+                build_local_transcribe_kwargs=lambda cfg: {'vad_filter': False},
+                _join_confident_segments=lambda *args: self.fail('decoded')),
+        }
+        with patch.dict(sys.modules, modules), patch.object(worker, 'load_stt_config', return_value=config()['stt']), \
+             patch.object(Path, 'is_dir', return_value=True), patch.object(sys, 'path', list(sys.path)):
+            with self.assertRaises(worker.Failure):
+                worker.transcribe({'pcm': [0], 'sample_rate_hz': 16000}, io.BytesIO())
 
     def test_missing_cache_never_retries_or_calls_cloud(self):
         class LocalEntryNotFoundError(Exception):

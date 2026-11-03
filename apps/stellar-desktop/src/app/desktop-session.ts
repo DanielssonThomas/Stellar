@@ -14,6 +14,7 @@ type WithoutSequence<T> = T extends unknown
 type PendingCommand = WithoutSequence<StageCommand<ProductionPayloadMap>>;
 
 export interface DesktopSessionOptions {
+  readonly voiceDriven?: boolean;
   readonly automaticSummary?: boolean;
   readonly clock: InteractionClock;
   readonly now: () => number;
@@ -33,7 +34,11 @@ export class DesktopSession {
 
   constructor(private readonly options: DesktopSessionOptions) {
     this.controller = createInteractionController({
-      state: { ...initialState, automaticSummary: options.automaticSummary },
+      state: {
+        ...initialState,
+        automaticSummary: options.automaticSummary,
+        persistentCapture: options.voiceDriven,
+      },
       clock: options.clock,
       onChange: (state) => {
         if (state.phase === 'presenting' && state.surface)
@@ -91,7 +96,10 @@ export class DesktopSession {
       this.dispatch({
         type: 'audio-activity',
         requestId,
-        active: !this.passiveListening && audio.activity.active,
+        active:
+          !this.options.voiceDriven &&
+          !this.passiveListening &&
+          audio.activity.active,
       });
       return;
     }

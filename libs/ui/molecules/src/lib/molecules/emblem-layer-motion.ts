@@ -25,30 +25,43 @@ export function createEmblemLayerMotion(
     update(targets: readonly EmblemLayerTarget[], durationMs: number) {
       if (disposed) return;
       const elements = new Set(targets.map(({ element }) => element));
+      // Snapshot every interrupted pose before any cancellation or style write.
+      const changes = targets.flatMap(({ element, transform }) => {
+        const previous = transforms.get(element);
+        if (
+          previous === transform &&
+          (durationMs > 0 || !animations.has(element))
+        )
+          return [];
+        const animate = Boolean(
+          previous &&
+            durationMs > 0 &&
+            view &&
+            typeof element.animate === 'function',
+        );
+        return [
+          {
+            element,
+            transform,
+            animate,
+            from:
+              animate && view
+                ? view.getComputedStyle(element).transform
+                : 'none',
+          },
+        ];
+      });
       for (const element of transforms.keys()) {
         if (!elements.has(element)) {
           cancel(element);
           transforms.delete(element);
         }
       }
-      for (const { element, transform } of targets) {
-        const previous = transforms.get(element);
-        if (
-          previous === transform &&
-          (durationMs > 0 || !animations.has(element))
-        )
-          continue;
-        const from = view?.getComputedStyle(element).transform ?? 'none';
+      for (const { element, transform, animate, from } of changes) {
         cancel(element);
         transforms.set(element, transform);
         element.style.transform = transform;
-        if (
-          !previous ||
-          durationMs <= 0 ||
-          !view ||
-          typeof element.animate !== 'function'
-        )
-          continue;
+        if (!animate) continue;
         const animation = element.animate(
           [{ transform: from }, { transform }],
           { duration: durationMs, easing: 'cubic-bezier(.2,.75,.25,1)' },
