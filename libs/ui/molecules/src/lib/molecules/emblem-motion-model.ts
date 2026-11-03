@@ -1,5 +1,9 @@
 import type { Phase } from '@stellar/desktop-interaction';
-import { planeDepth } from './emblem-stack';
+import {
+  MAX_EMBLEM_PLANES,
+  planeDepth,
+  type EmblemSpacingProfile,
+} from './emblem-stack';
 import {
   completeClipFiles,
   validEmblemClip,
@@ -30,6 +34,7 @@ export interface EmblemManifest {
   readonly viewBox: readonly [number, number, number, number];
   readonly layers: readonly EmblemLayer[];
   readonly planeSpacing?: number;
+  readonly spacingProfile?: EmblemSpacingProfile;
 }
 
 export function consolidatedClipFiles(
@@ -91,7 +96,12 @@ export function layerTransform(
   const stacked = planeIndex !== undefined && isExplodedPhase(phase);
   const depth =
     (stacked
-      ? planeDepth(planeIndex, layers.length, manifest.planeSpacing)
+      ? planeDepth(
+          planeIndex,
+          layers.length,
+          manifest.planeSpacing,
+          manifest.spacingProfile,
+        )
       : pose.depth) ??
     (reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
       ? 0
@@ -143,9 +153,19 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       return 'Invalid emblem manifest viewBox.';
     }
     const layers = manifest.layers;
-    if (!Array.isArray(layers) || layers.length === 0 || layers.length > 32) {
-      return 'Emblem manifest must contain between 1 and 32 layers.';
+    if (
+      !Array.isArray(layers) ||
+      layers.length === 0 ||
+      layers.length > MAX_EMBLEM_PLANES
+    ) {
+      return `Emblem manifest must contain between 1 and ${MAX_EMBLEM_PLANES} layers.`;
     }
+    if (
+      manifest.spacingProfile !== undefined &&
+      manifest.spacingProfile !== 'uniform' &&
+      manifest.spacingProfile !== 'outer-dense'
+    )
+      return 'Invalid emblem spacing profile.';
     const ids = new Set<string>();
     const planeIndices = new Set<number>();
     for (const candidate of layers as readonly unknown[]) {
@@ -163,7 +183,12 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       if (!validEmblemClip(layer.clip, manifest.viewBox))
         return 'Invalid emblem clip.';
       if (layer.planeIndex !== undefined) {
-        planeDepth(layer.planeIndex, layers.length, manifest.planeSpacing);
+        planeDepth(
+          layer.planeIndex,
+          layers.length,
+          manifest.planeSpacing,
+          manifest.spacingProfile,
+        );
         if (planeIndices.has(layer.planeIndex))
           return 'Emblem plane indices must be unique.';
         planeIndices.add(layer.planeIndex);
@@ -196,7 +221,9 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
         return 'Emblem layer has invalid spin.';
     }
     if (
-      (planeIndices.size || manifest.planeSpacing !== undefined) &&
+      (planeIndices.size ||
+        manifest.planeSpacing !== undefined ||
+        manifest.spacingProfile !== undefined) &&
       planeIndices.size !== layers.length
     )
       return 'Every spaced emblem plane requires an index.';

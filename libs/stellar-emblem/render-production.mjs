@@ -72,14 +72,37 @@ const characterLayers = registration.layers.flatMap((item) =>
         id: item.id + '-' + part,
         clip,
       }))
-    : [item],
+    : (item.id.endsWith('-hair')
+        ? [0, 260, 330, 400, 470, 540, 610, 680, 750, 820, 900, 1000, size]
+        : [0, 360, 390, 420, 450, 480, size]
+      )
+        .slice(0, -1)
+        .map((top, index, tops) => {
+          const next = tops[index + 1] ?? size;
+          const direction = item.id.startsWith('violet') ? -1 : 1;
+          return {
+            ...item,
+            sourceId: item.id,
+            id: `${item.id}-${index + 1}`,
+            clip: [0, top, size, next - top],
+            scatter: {
+              x: direction * (((index * 73) % 230) - 115),
+              y: ((index * 47) % 110) - 55,
+              rotation: direction * (((index * 13) % 46) - 23),
+            },
+          };
+        }),
 );
+const hairOrder = [5, 0, 9, 2, 7, 11, 4, 1, 10, 6, 3, 8];
+const ornamentOrder = [2, 5, 0, 4, 1, 3];
+const fragments = (character, kind, order) =>
+  order.map((index) => `${character}-${kind}-${index + 1}`);
 const planeOrder = [
   'violet-body-upper',
   'violet-body-middle',
   'violet-body-lower',
-  'violet-hair',
-  'violet-ornament',
+  ...fragments('violet', 'hair', hairOrder),
+  ...fragments('violet', 'ornament', ornamentOrder),
   'inner-circle',
   'inner-circle-2',
   'outer-frame',
@@ -88,24 +111,27 @@ const planeOrder = [
   'gold-body-lower',
   'gold-body-upper',
   'gold-body-middle',
-  'gold-hair',
-  'gold-ornament',
+  ...fragments('gold', 'hair', hairOrder),
+  ...fragments('gold', 'ornament', ornamentOrder),
 ];
 for (const character of ['violet', 'gold']) {
+  const hairIndices = fragments(character, 'hair', hairOrder).map((id) =>
+    planeOrder.indexOf(id),
+  );
+  const ornamentIndices = fragments(character, 'ornament', ornamentOrder).map(
+    (id) => planeOrder.indexOf(id),
+  );
   if (
     bodyClips.some(
       ([part]) =>
         planeOrder.indexOf(`${character}-body-${part}`) >=
-        planeOrder.indexOf(`${character}-hair`),
+        Math.min(...hairIndices),
     )
   )
     throw new Error(
       'Body fragments must remain behind their hair throughout assembly',
     );
-  if (
-    planeOrder.indexOf(`${character}-ornament`) <=
-    planeOrder.indexOf(`${character}-hair`)
-  )
+  if (Math.min(...ornamentIndices) <= Math.max(...hairIndices))
     throw new Error(
       'Hair ornaments must remain in front of their hair throughout assembly',
     );
@@ -117,7 +143,13 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded: zero,
+  exploded:
+    item.scatter ??
+    (item.id === 'inner-circle-2'
+      ? { x: -180, y: -115, rotation: -18 }
+      : item.id === 'inner-circle-3'
+        ? { x: 165, y: 125, rotation: 16 }
+        : zero),
   planeIndex: planeOrder.indexOf(item.id),
   ...(item.clip ? { clip: item.clip } : {}),
   ...(item.id === 'outer-frame'
@@ -130,7 +162,8 @@ const manifest = {
   version: 1,
   status: 'production-candidate',
   viewBox: [0, 0, size, size],
-  planeSpacing: 240,
+  planeSpacing: 100,
+  spacingProfile: 'outer-dense',
   layers: [
     ...characterLayers.map((item, z) => entry(item, z, 'png')),
     ...geometries.map((item, z) =>
@@ -394,6 +427,19 @@ try {
         };
       };
       const canonical = render(size, false);
+      for (const { layer, img } of images) {
+        if (!layer.clip) continue;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const pixels = ctx.getImageData(...layer.clip).data;
+        let visible = 0;
+        for (let i = 3; i < pixels.length; i += 4)
+          if (pixels[i] >= 24) visible++;
+        if (visible < 32)
+          throw new Error(`Empty or negligible fragment: ${layer.id}`);
+      }
       const duplicate = render(size, false, true);
       const original = render(size, false, false, true);
       if (!canonical.pixels.every((byte, i) => byte === original.pixels[i]))
@@ -446,7 +492,7 @@ try {
     rasterLayers: alpha,
     svgLayers: geometries.length,
     zeroPose:
-      'All manifest poses are zero; canonical pixels are a deterministic composition of these exact registered files.',
+      'All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.',
     runtimeBytes: bytes,
     budgetBytes: budget,
     activeSvgContent: false,

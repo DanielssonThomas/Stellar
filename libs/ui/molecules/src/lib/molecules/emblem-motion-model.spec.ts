@@ -25,6 +25,38 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('accepts dense fragment packs and rejects unbounded or unknown spacing profiles', () => {
+    const dense: EmblemManifest = {
+      ...manifest,
+      planeSpacing: 100,
+      spacingProfile: 'outer-dense',
+      layers: Array.from({ length: 47 }, (_, index) => ({
+        ...layer,
+        id: `fragment-${index}`,
+        planeIndex: index,
+      })),
+    };
+    expect(decodeEmblemManifest(dense)).toEqual(dense);
+    expect(layerTransform(dense.layers[23], dense, 'idle', true)).toContain(
+      'translateZ(0cqw)',
+    );
+    expect(
+      decodeEmblemManifest({ ...dense, spacingProfile: 'random' }),
+    ).toBeNull();
+    expect(
+      decodeEmblemManifest({ ...manifest, spacingProfile: 'outer-dense' }),
+    ).toBeNull();
+    expect(
+      decodeEmblemManifest({
+        ...dense,
+        layers: Array.from({ length: 65 }, (_, index) => ({
+          ...layer,
+          id: `fragment-${index}`,
+          planeIndex: index,
+        })),
+      }),
+    ).toBeNull();
+  });
   it('consolidates only registered zero-pose clips without interleaved paint', () => {
     const fragments: EmblemManifest = {
       ...manifest,

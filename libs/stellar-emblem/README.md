@@ -1,6 +1,6 @@
 # Stellar emblem assets
 
-The current hybrid artwork is in [`production-v1`](production-v1/README.md). Its canonical assembly is the registered twelve-layer pack, with 512 px, exploded and dock previews. Final acceptance requires Codex and an independent image-capable reviewer to inspect these artifacts.
+The current hybrid artwork is in [`production-v1`](production-v1/README.md). Its experimental manifest partitions the registered hybrid artwork into 47 planes, with 512 px, exploded and dock previews. Final acceptance requires Codex and an independent image-capable reviewer to inspect these artifacts.
 
 The earlier `assets/` and `fixtures/` pack below is a preserved **unapproved study**. Its text-only source and provenance remain available as capability evidence and must not be confused with the hybrid candidate.
 

@@ -1,6 +1,12 @@
 # Stellar hybrid emblem v1
 
-This production candidate follows the approved hybrid route for [#176](https://github.com/DanielssonThomas/Stellar/issues/176). Fifteen logical planes reference eleven unique registered image files in `layers/`; manifest paint order defines the canonical emblem. `previews/canonical.png` is their transparent 1280 × 1280 assembly. The earlier study and original concept sheet remain in `../assets/`; they are provenance, not runtime dependencies.
+This production candidate follows the approved hybrid route for [#176](https://github.com/DanielssonThomas/Stellar/issues/176). The experimental [#251](https://github.com/DanielssonThomas/Stellar/issues/251) manifest uses 47 logical planes referencing the same eleven registered image files in `layers/`; manifest paint order defines the canonical emblem. `previews/canonical.png` is their transparent 1280 × 1280 assembly. The earlier study and original concept sheet remain in `../assets/`; they are provenance, not runtime dependencies.
+
+## Experimental fragmentation (#251)
+
+Each hair image is partitioned into twelve disjoint horizontal regions and each botanical/gemstone ornament into six. The six existing body fragments remain. Every image partition covers its entire registered canvas; the exporter rejects negligible fragments and verifies full-resolution assembly against the original unclipped stack. Raster files and assembled previews remain unchanged. Settlement consolidates all six raster partitions, avoiding seams at dock sizes.
+
+Fragments use a scrambled depth order within their own hair or ornament group, lateral offsets and small rotations in the exploded pose. All body fragments remain behind their hair and all ornaments in front. Two secondary circles scatter away from the center; the complete starred outer frame remains centered at depth zero. The optional `outer-dense` profile uses 100-source-unit nominal spacing with continuously smaller gaps toward both ends. The camera, one-second transitions, in-plane ring motion and reduced-motion behavior remain. This is an experimental alternative to the historical uniformly spaced fifteen-plane presentation described below, pending user design review. Browser evidence does not qualify native performance.
 
 ## Artwork and registration
 
@@ -10,7 +16,7 @@ The darker violet profile faces left behind the gold profile facing right. Each 
 
 This registered assembly is a deliberate new canonical reconstruction, not a pixel-identical segmentation of the guide. Faces sit slightly lower, hair waves and pins differ, and the geometry is cleaner than the guide. The gold/violet identity and opposite profiles remain. The smaller full circle is geometrically complete even where hair overlaps it in the foreground. SVG source is editable; raster source cutouts and registration are retained for reproducible exports. Future local strand edits would require an image-editing source tool, rather than claiming these PNGs are vector paths.
 
-All exported layers share `viewBox: [0, 0, 1280, 1280]`, dimensions, origin and registration. Every assembled translation and rotation is zero. Paint-order `z` is metadata; the consumer adds no depth in the assembled pose. Explosion gives all fifteen independent units equal centered depth intervals using explicit planeIndex metadata; body, hair and pin planes no longer form tight groups. The application owns the emblem's container position and size separately.
+All exported layers share `viewBox: [0, 0, 1280, 1280]`, dimensions, origin and registration. Every assembled translation and rotation is zero. Paint-order `z` is metadata; the consumer adds no depth in the assembled pose. Explicit `planeIndex` metadata defines independent depth order. The application owns the emblem's container position and size separately.
 
 ## Reproduction and validation
 

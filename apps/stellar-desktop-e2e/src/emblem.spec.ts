@@ -23,23 +23,24 @@ test('purple hair stays in front of every body fragment before settlement', asyn
       animation.currentTime = 900;
     }
     const planes = Array.from(element.querySelectorAll<HTMLElement>('.plane'));
-    const hair = planes.find((plane) =>
+    const hairs = planes.filter((plane) =>
       plane.querySelector('img')?.src.endsWith('/violet-hair.png'),
     );
     const bodies = planes.filter((plane) =>
       plane.querySelector('img')?.src.endsWith('/violet-body.png'),
     );
-    if (!hair || bodies.length !== 3)
+    if (hairs.length !== 12 || bodies.length !== 3)
       throw Error('Missing purple artwork planes');
     const depth = (plane: HTMLElement) =>
       new DOMMatrix(getComputedStyle(plane).transform).m43;
-    const result = { hair: depth(hair), bodies: bodies.map(depth) };
+    const result = { hairs: hairs.map(depth), bodies: bodies.map(depth) };
     for (const animation of animations) animation.play();
     return result;
   });
-  expect(ordering.hair).toBeLessThan(0);
-  for (const body of ordering.bodies)
-    expect(ordering.hair).toBeGreaterThan(body);
+  for (const hair of ordering.hairs) {
+    expect(hair).toBeLessThan(0);
+    for (const body of ordering.bodies) expect(hair).toBeGreaterThan(body);
+  }
   await menu.click();
 });
 
@@ -84,7 +85,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
           .locator('.plane')
           .evaluateAll(
             (planes) =>
-              planes.length === 15 &&
+              planes.length === 47 &&
               planes.every(
                 (plane) =>
                   new DOMMatrix(getComputedStyle(plane).transform).isIdentity,
@@ -97,7 +98,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         camera.locator('img').evaluateAll((images) => {
           const seen = new Set<string>();
           return (
-            images.length === 15 &&
+            images.length === 47 &&
             images.every((image) => {
               const first = !seen.has((image as HTMLImageElement).src);
               seen.add((image as HTMLImageElement).src);
@@ -173,14 +174,25 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     .click();
   const scene = page.locator('.camera');
   const ring = page.locator('.spin-clockwise');
-  await expect(page.locator('.plane img')).toHaveCount(15);
+  await expect(page.locator('.plane img')).toHaveCount(47);
   const manifestResponse = await page.request.get('/emblem/manifest.json');
   const manifest = await manifestResponse.json();
   expect(
     manifest.layers
       .map((layer: { planeIndex: number }) => layer.planeIndex)
       .sort((a: number, b: number) => a - b),
-  ).toEqual(Array.from({ length: 15 }, (_, index) => index));
+  ).toEqual(Array.from({ length: 47 }, (_, index) => index));
+  expect(manifest.spacingProfile).toBe('outer-dense');
+  const mainRing = manifest.layers.find(
+    (layer: { id: string }) => layer.id === 'outer-frame',
+  );
+  expect(mainRing.exploded).toEqual({ x: 0, y: 0, rotation: 0 });
+  expect(mainRing.planeIndex).toBe(23);
+  const scatteredRings = manifest.layers.filter(
+    (layer: { id: string; exploded: { x: number } }) =>
+      layer.id.startsWith('inner-circle') && layer.exploded.x !== 0,
+  );
+  expect(scatteredRings).toHaveLength(2);
   for (const color of ['gold', 'violet']) {
     const bodies = manifest.layers.filter(
       (layer: { file: string }) =>
@@ -216,12 +228,11 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
         .sort((a, b) => a - b),
     );
   const interval = depths[1] - depths[0];
-  expect(interval).toBeGreaterThan(70);
-  depths
-    .slice(1)
-    .forEach((depth, index) =>
-      expect(depth - depths[index]).toBeCloseTo(interval, 2),
-    );
+  expect(interval).toBeGreaterThan(9);
+  const gaps = depths.slice(1).map((depth, index) => depth - depths[index]);
+  for (let index = 1; index < gaps.length / 2; index++)
+    expect(gaps[index]).toBeGreaterThan(gaps[index - 1]);
+  expect(gaps[Math.floor(gaps.length / 2)]).toBeGreaterThan(interval * 3);
   expect(depths[0] + (depths.at(-1) ?? 0)).toBeCloseTo(0, 2);
   const outer = await page.request.get('/emblem/layers/outer-frame.svg');
   expect((await outer.text()).match(/<g transform="translate\(/g)).toHaveLength(
