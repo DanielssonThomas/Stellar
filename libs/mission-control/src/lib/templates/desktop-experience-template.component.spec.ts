@@ -14,6 +14,23 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
+  it('uncovers newly opened faults while allowing their settings to be reopened', async () => {
+    const menu = fixture.componentInstance.menu;
+    menu.toggle();
+    await fixture.whenStable();
+    fixture.componentRef.setInput('faultVisible', true);
+    await fixture.whenStable();
+    expect(menu.open()).toBe(false);
+    fixture.componentInstance.openFaultControls();
+    await fixture.whenStable();
+    expect(menu.open()).toBe(true);
+    fixture.componentRef.setInput('faultVisible', false);
+    await fixture.whenStable();
+    fixture.componentRef.setInput('faultVisible', true);
+    await fixture.whenStable();
+    expect(menu.open()).toBe(false);
+  });
+
   it('opens music controls with P but leaves typing, shortcuts and repeats alone', async () => {
     const open = vi
       .spyOn(fixture.componentInstance.musicControls(), 'open')
