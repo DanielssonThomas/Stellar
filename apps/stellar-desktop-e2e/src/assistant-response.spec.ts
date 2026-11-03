@@ -93,11 +93,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
       'Conversation state unavailable. Refresh before voice resumes.',
     ),
   ).toHaveCount(0);
-  const menu = page.getByRole('button', {
-    name: 'Experience menu',
-    exact: true,
-  });
-  await menu.click();
+  await page.keyboard.press('m');
   await page.getByLabel('Reduce motion').check();
   await page
     .getByLabel('Message Ivy', { exact: true })
@@ -149,6 +145,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
       },
     ]);
   }, body);
+  await page.keyboard.press('Escape');
   const panel = page.getByRole('region', { name: 'Long requested content' });
   const content = panel.locator('.surface-content');
   await expect(panel).toBeVisible();
@@ -177,7 +174,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     'minimize',
     (await panel.getAttribute('data-instance-id')) ?? '',
   );
-  await menu.click();
+  await page.keyboard.press('m');
   await page
     .getByLabel('Message Ivy', { exact: true })
     .fill('Close this activity');

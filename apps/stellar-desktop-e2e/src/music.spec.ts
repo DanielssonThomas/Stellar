@@ -118,9 +118,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
           .__musicFixture.calls,
     );
   expect(await calls()).toEqual([]);
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .focus();
+  await page.locator('stellar-desktop-experience-template').focus();
   await page.keyboard.press('p');
   const dialog = page.getByRole('dialog', { name: 'Music visualizer' });
   await expect(dialog).toBeVisible();
@@ -281,9 +279,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
       piece.evaluate((element) => (element as HTMLElement).style.transform),
     )
     .not.toBe('none');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const draft = page.getByRole('textbox', { name: 'Message Ivy' });
   await draft.fill('p');
   await expect(dialog).toBeHidden();
@@ -307,9 +303,7 @@ test('browser preview offers a controlled unavailable state without microphone p
   page,
 }) => {
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .focus();
+  await page.locator('stellar-desktop-experience-template').focus();
   await page.keyboard.press('p');
   const dialog = page.getByRole('dialog', { name: 'Music visualizer' });
   await dialog.getByRole('button', { name: 'Listen to desktop audio' }).click();
