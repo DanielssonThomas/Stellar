@@ -29,3 +29,13 @@ export * from './lib/molecules/prompt-composer-molecule.component';
 export * from './lib/molecules/fault-log-molecule.component';
 export * from './lib/molecules/voice-transcript-molecule.component';
 export * from './lib/molecules/ivy-activity-molecule.component';
+export {
+  PRESENTATION_EDIT,
+  PRESENTATION_SELECT,
+} from './lib/molecules/presentation-edit';
+export { PRESENTATION_WORKSPACE } from './lib/molecules/presentation-workspace';
+export type {
+  PresentationWorkspace,
+  BrowserPane,
+  BrowserView,
+} from './lib/molecules/presentation-workspace';

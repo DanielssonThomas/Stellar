@@ -1,7 +1,6 @@
 {
   "identifier": "desktop-main",
   "description": "The local desktop shell may read its versioned readiness contract.",
-  "windows": ["main"],
   "permissions": [
     "allow-shell-status",
     "allow-cleanup-refine",
@@ -24,6 +23,9 @@
     "allow-speech-stop",
     "allow-speech-snapshot",
     "core:event:allow-listen",
-    "core:event:allow-unlisten"
-  ]
+    "core:event:allow-unlisten",
+    "allow-workspace-browser",
+    "allow-workspace-image"
+  ],
+  "webviews": ["main"]
 }

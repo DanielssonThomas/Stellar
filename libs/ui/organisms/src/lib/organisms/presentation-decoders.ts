@@ -127,17 +127,53 @@ export function decodePresentationText(
     : null;
 }
 
-export function decodePresentationImage(
-  value: unknown,
-): PresentationMediaPayload | null {
+export function publicHttps(value: unknown): string | null {
+  if (!text(value, 2048)) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      (url.port && url.port !== '443')
+    )
+      return null;
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (
+      !host.includes('.') ||
+      host.includes(':') ||
+      /(?:^|\.)(?:localhost|local|internal|home|lan)$/.test(host)
+    )
+      return null;
+    if (/^[0-9.]+$/.test(host)) {
+      const [a, b, c] = host.split('.').map(Number);
+      if (
+        [0, 10, 127].includes(a) ||
+        a >= 224 ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && [0, 168].includes(b)) ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 198 && [18, 19].includes(b)) ||
+        (a === 198 && b === 51 && c === 100) ||
+        (a === 203 && b === 0 && c === 113)
+      )
+        return null;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+function imageItem(value: unknown) {
   if (
     !plainRecord(value) ||
-    !exact(value, ['title', 'src', 'alt'], ['caption', 'kind']) ||
-    (Object.hasOwn(value, 'kind') && value['kind'] !== 'image') ||
-    !text(value['title'], 240) ||
+    !exact(value, ['src', 'alt'], ['caption', 'source']) ||
     !text(value['alt'], 1024) ||
     !text(value['src'], 512 * 1024) ||
-    (Object.hasOwn(value, 'caption') && !text(value['caption'], 4096))
+    (Object.hasOwn(value, 'caption') && !text(value['caption'], 4096)) ||
+    (Object.hasOwn(value, 'source') && !publicHttps(value['source']))
   )
     return null;
   const src = value['src'];
@@ -145,41 +181,95 @@ export function decodePresentationImage(
   const data =
     /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/u.test(src) &&
     src.slice(src.indexOf(',') + 1).length % 4 === 0;
-  if (!bundled && !data) return null;
+  if (!bundled && !data && !publicHttps(src)) return null;
   return {
-    kind: 'image',
-    title: value['title'],
-    alt: value['alt'],
     src,
+    alt: value['alt'],
     ...(typeof value['caption'] === 'string'
       ? { caption: value['caption'] }
       : {}),
+    ...(typeof value['source'] === 'string' ? { source: value['source'] } : {}),
   };
 }
-
+export function decodePresentationImage(
+  value: unknown,
+): PresentationMediaPayload | null {
+  if (
+    !plainRecord(value) ||
+    !exact(
+      value,
+      ['title', 'src', 'alt'],
+      ['kind', 'caption', 'source', 'images', 'selected', 'zoom'],
+    ) ||
+    !text(value['title'], 240) ||
+    (Object.hasOwn(value, 'kind') && value['kind'] !== 'image')
+  )
+    return null;
+  const first = imageItem(
+    Object.fromEntries(
+      Object.entries(value).filter(([key]) =>
+        ['src', 'alt', 'caption', 'source'].includes(key),
+      ),
+    ),
+  );
+  if (!first) return null;
+  const images = value['images'];
+  if (
+    images !== undefined &&
+    (!list(images, 12) || images.some((item) => !imageItem(item)))
+  )
+    return null;
+  const selected = value['selected'] ?? 0,
+    zoom = value['zoom'] ?? 1;
+  if (
+    typeof selected !== 'number' ||
+    !Number.isInteger(selected) ||
+    selected < 0 ||
+    selected >= (Array.isArray(images) ? images.length : 1) ||
+    typeof zoom !== 'number' ||
+    !Number.isFinite(zoom) ||
+    zoom < 1 ||
+    zoom > 4
+  )
+    return null;
+  const decodedImages = Array.isArray(images)
+    ? images.flatMap((item) => {
+        const decoded = imageItem(item);
+        return decoded ? [decoded] : [];
+      })
+    : undefined;
+  return {
+    kind: 'image',
+    title: value['title'],
+    ...first,
+    ...(decodedImages ? { images: decodedImages } : {}),
+    ...(value['selected'] !== undefined ? { selected } : {}),
+    ...(value['zoom'] !== undefined ? { zoom } : {}),
+  };
+}
 export function decodePresentationBrowser(
   value: unknown,
 ): PresentationMediaPayload | null {
   if (
     !plainRecord(value) ||
-    !exact(value, ['title', 'url'], ['kind']) ||
+    !exact(value, ['title', 'url'], ['kind', 'refresh']) ||
     (Object.hasOwn(value, 'kind') && value['kind'] !== 'browser') ||
     !text(value['title'], 240) ||
-    !text(value['url'], 2048)
+    (Object.hasOwn(value, 'refresh') &&
+      (!Number.isSafeInteger(value['refresh']) || Number(value['refresh']) < 0))
   )
     return null;
-  try {
-    const url = new URL(value['url']);
-    if (
-      !['https:', 'http:'].includes(url.protocol) ||
-      url.username ||
-      url.password
-    )
-      return null;
-    return { kind: 'browser', title: value['title'], url: url.href };
-  } catch {
-    return null;
-  }
+  const url = publicHttps(value['url']);
+  return url
+    ? {
+        kind: 'browser',
+        title: value['title'],
+        url,
+        ...(typeof value['refresh'] === 'number'
+          ? { refresh: value['refresh'] }
+          : {}),
+      }
+    : null;
 }
 
 export function decodePresentationDiagram(
@@ -235,9 +325,10 @@ const telemetry = (
     !exact(
       value,
       ['title'],
-      kind === 'workflow' ? ['project', 'kind'] : ['kind'],
+      kind === 'workflow' ? ['project', 'kind', 'agentId'] : ['kind'],
     ) ||
     (Object.hasOwn(value, 'kind') && value['kind'] !== kind) ||
+    (Object.hasOwn(value, 'agentId') && !text(value['agentId'], 128)) ||
     !text(value['title'], 240) ||
     (Object.hasOwn(value, 'project') &&
       value['project'] !== 'stellar' &&
@@ -247,6 +338,9 @@ const telemetry = (
   return {
     kind,
     title: value['title'],
+    ...(typeof value['agentId'] === 'string'
+      ? { agentId: value['agentId'] }
+      : {}),
     ...(value['project'] === 'stellar' || value['project'] === 'stellar-design'
       ? { project: value['project'] }
       : {}),

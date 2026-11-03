@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
@@ -6,6 +6,7 @@ mod cleanup;
 mod commands;
 mod contracts;
 mod ivy;
+mod media;
 mod shell;
 #[cfg(feature = "native-smoke")]
 mod smoke;
@@ -20,7 +21,10 @@ fn main() {
         "workspace_tool_reply"
     );
     let navigation = tauri::plugin::Builder::<tauri::Wry>::new("local-navigation")
-        .on_navigation(|_, url| {
+        .on_navigation(|view, url| {
+            if view.label().starts_with("workspace-browser-") {
+                return media::network::url(url.as_str()).is_ok();
+            }
             (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
                 || (url.scheme() == "http" && url.host_str() == Some("tauri.localhost"))
         })
@@ -29,6 +33,7 @@ fn main() {
         .plugin(navigation)
         .setup(|app| {
             app.manage(cleanup::CleanupHost::default());
+            app.manage(media::MediaHost::default());
             let handle = app.handle().clone();
             #[cfg(not(feature = "native-smoke"))]
             let directory = app.path().app_local_data_dir()?.join("ivy");
@@ -86,6 +91,8 @@ fn main() {
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::shell_status,
+        media::workspace_browser,
+        media::workspace_image,
         app_info::app_info,
         ivy::ivy_connect,
         ivy::ivy_snapshot,

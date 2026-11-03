@@ -65,7 +65,7 @@ describe('trusted presentation payloads', () => {
       decodePresentationText({ title: 'Invalid', blocks: new Array(2) }),
     ).toBeNull();
   });
-  it('confines images to bounded local raster sources and browser addresses to inert HTTP text', () => {
+  it('accepts safe raster sources and rejects private or executable media addresses', () => {
     const image = {
       title: 'Reference',
       alt: 'Reference image',
@@ -77,7 +77,7 @@ describe('trusted presentation payloads', () => {
     });
     expect(decodePresentationImage({ ...image, kind: 'image' })).not.toBeNull();
     for (const src of [
-      'https://example.com/tracker.png',
+      'https://127.0.0.1/tracker.png',
       '/emblem/layers/../../secret.png',
       'file:///private.png',
       'data:image/svg+xml;base64,AAAA',

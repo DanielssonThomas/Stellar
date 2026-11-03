@@ -13,6 +13,9 @@ mod command_name;
 mod contracts;
 #[path = "../ivy/wire.rs"]
 mod ivy;
+#[path = "../media/contracts.rs"]
+#[allow(dead_code)]
+mod media;
 #[path = "../speech/contracts.rs"]
 mod speech;
 #[path = "../speech/command_names.rs"]
@@ -40,6 +43,14 @@ fn main() {
     for definition in [
         cleanup::CleanupRequest::decl(&config),
         cleanup::CleanupReply::decl(&config),
+        media::BrowserBounds::decl(&config),
+        media::BrowserAction::decl(&config),
+        media::BrowserRequest::decl(&config),
+        media::BrowserLoadState::decl(&config),
+        media::BrowserEvent::decl(&config),
+        media::MediaError::decl(&config),
+        media::ImageRequest::decl(&config),
+        media::ImagePreview::decl(&config),
         ShellRequest::decl(&config),
         ShellReply::decl(&config),
         ShellError::decl(&config),
@@ -67,6 +78,8 @@ fn main() {
         WorkspaceToolOperation::decl(&config),
         WorkspaceToolRequest::decl(&config),
         WorkspacePaneMetadata::decl(&config),
+        WorkspacePaneOperation::decl(&config),
+        WorkspacePaneLayout::decl(&config),
         WorkspaceToolOutcome::decl(&config),
         WorkspaceToolReply::decl(&config),
         TelemetryProject::decl(&config),

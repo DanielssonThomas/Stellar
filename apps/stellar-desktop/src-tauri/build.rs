@@ -13,9 +13,12 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        "workspace_browser",
+        "workspace_image",
         cleanup_name::CLEANUP_COMMAND,
         command_name::APP_INFO_COMMAND,
         "smoke_result",
+        "smoke_media_probe",
         telemetry_name::TELEMETRY_COMMAND,
         "smoke_hold_ivy",
         "smoke_capture_window",

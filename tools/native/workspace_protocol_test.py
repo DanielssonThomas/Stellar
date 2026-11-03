@@ -103,5 +103,36 @@ class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
             await pending
 
 
+class InteractiveWorkspaceTests(unittest.TestCase):
+    def test_layout_operations_and_revision_are_strictly_typed(self):
+        valid = [{'kind': 'resize', 'instance_id': 'a', 'percent': 65},
+                 {'kind': 'swap', 'instance_id': 'a', 'other_id': 'b'},
+                 {'kind': 'restore_layout'}, {'kind': 'inspect_content', 'instance_id': 'a'},
+                 {'kind': 'update', 'instance_id': 'a', 'surface': 'rich-text', 'payload_json': '{}', 'expected_revision': 2}]
+        for operation in valid:
+            self.assertEqual(workspace.validate_operation(operation), operation)
+        for percent in [True, 9, 91, 50.5, '65']:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_operation({'kind': 'resize', 'instance_id': 'a', 'percent': percent})
+        for revision in [True, -1, 4294967296, '2']:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_operation({**valid[-1], 'expected_revision': revision})
+        with self.assertRaises(workspace.WorkspaceRefused):
+            workspace.validate_operation({'kind': 'swap', 'instance_id': 'a', 'other_id': 'a'})
+
+    def test_compact_layout_metadata_rejects_payload_and_invalid_geometry(self):
+        pane = {'instance_id': 'a', 'surface': 'image', 'prominence': 'primary', 'minimized': False,
+                'layout': {'title': 'Gallery', 'revision': 2, 'selected': True, 'maximized': False,
+                           'position': 0, 'x': 0, 'y': 0, 'width': 650, 'height': 1000}}
+        value = {'kind': 'inspection', 'panes': [pane]}
+        self.assertEqual(workspace.validate_outcome(value, 'inspect'), value)
+        with self.assertRaises(workspace.WorkspaceRefused):
+            workspace.validate_outcome({'kind': 'inspection', 'panes': [{**pane, 'layout': {**pane['layout'], 'width': 1001}}]}, 'inspect')
+        content = {'kind': 'content', 'instance_id': 'a', 'surface': 'image', 'revision': 2, 'payload_json': '{}'}
+        self.assertEqual(workspace.validate_outcome(content, 'inspect_content'), content)
+        with self.assertRaises(workspace.WorkspaceRefused):
+            workspace.validate_outcome(content, 'inspect')
+
+
 if __name__ == '__main__':
     unittest.main()

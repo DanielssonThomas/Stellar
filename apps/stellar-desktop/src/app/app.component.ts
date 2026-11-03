@@ -15,9 +15,14 @@ import {
   DesktopAdapterService,
   IvyAdapterService,
   WorkspaceToolsService,
+  createNativeMediaWorkspace,
+  type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
-import { PRESENTATION_DATA } from '@stellar/ui-molecules';
+import {
+  PRESENTATION_DATA,
+  PRESENTATION_WORKSPACE,
+} from '@stellar/ui-molecules';
 import { desktopPresentationData } from './desktop-presentation-data';
 import { desktopWorkspace } from './desktop-workspace';
 import { DesktopFaults } from './desktop-faults';
@@ -30,6 +35,17 @@ import { DesktopFaults } from './desktop-faults';
     DesktopVoice,
     DesktopFaults,
     { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
+    {
+      provide: PRESENTATION_WORKSPACE,
+      useFactory: () => {
+        const api = (
+          globalThis as typeof globalThis & { __TAURI__?: MediaNativeApi }
+        ).__TAURI__;
+        return api
+          ? createNativeMediaWorkspace(api)
+          : inject(PRESENTATION_WORKSPACE, { skipSelf: true });
+      },
+    },
   ],
   selector: 'stellar-root',
   templateUrl: './app.component.html',

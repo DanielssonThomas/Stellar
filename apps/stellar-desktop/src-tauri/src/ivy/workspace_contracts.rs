@@ -34,11 +34,34 @@ pub enum WorkspaceToolOperation {
         instance_id: String,
         surface: WorkspaceSurface,
         payload_json: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expected_revision: Option<u32>,
     },
     Remove {
         instance_id: String,
     },
     Focus {
+        instance_id: String,
+    },
+    Minimize {
+        instance_id: String,
+    },
+    Restore {
+        instance_id: String,
+    },
+    Maximize {
+        instance_id: String,
+    },
+    Resize {
+        instance_id: String,
+        percent: u8,
+    },
+    Swap {
+        instance_id: String,
+        other_id: String,
+    },
+    RestoreLayout,
+    InspectContent {
         instance_id: String,
     },
     Arrange {
@@ -67,6 +90,44 @@ pub struct WorkspacePaneMetadata {
     pub surface: WorkspaceSurface,
     pub prominence: WorkspaceProminence,
     pub minimized: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<WorkspacePaneLayout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operations: Vec<WorkspacePaneOperation>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspacePaneOperation {
+    Focus,
+    Minimize,
+    Restore,
+    Close,
+    Arrange,
+    Swap,
+    Resize,
+    Maximize,
+    RestoreLayout,
+    Update,
+    InspectContent,
+    Gallery,
+    BrowserNavigation,
+    FocusAgent,
+}
+
+/// Coordinates are normalized to thousandths of the viewport, including hidden panes (zero area).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspacePaneLayout {
+    pub title: String,
+    pub revision: u32,
+    pub selected: bool,
+    pub maximized: bool,
+    pub position: u8,
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -74,7 +135,15 @@ pub struct WorkspacePaneMetadata {
 pub enum WorkspaceToolOutcome {
     Applied,
     Rejected,
-    Inspection { panes: Vec<WorkspacePaneMetadata> },
+    Inspection {
+        panes: Vec<WorkspacePaneMetadata>,
+    },
+    Content {
+        instance_id: String,
+        surface: WorkspaceSurface,
+        revision: u32,
+        payload_json: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]

@@ -1,5 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivitySummaryMolecule } from '@stellar/ui-molecules';
+import {
+  ActivitySummaryMolecule,
+  PRESENTATION_EDIT,
+} from '@stellar/ui-molecules';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StageOrganism } from './stage-organism.component';
 import { STAGE_CATALOGUE } from './stage-catalogue';
@@ -14,6 +17,25 @@ describe('StageOrganism', () => {
   let opener: HTMLButtonElement;
   let disconnect: ReturnType<typeof vi.fn>;
   let bounds: { width: number; height: number };
+  it('fences callbacks from a closed pane when its identifier is reused during retirement', async () => {
+    fixture.componentInstance.dispatch(open());
+    await fixture.whenStable();
+    const oldEdit = fixture.componentInstance
+      .surfaces()[0]
+      .injector.get(PRESENTATION_EDIT);
+    fixture.componentInstance.control('close', 'summary');
+    fixture.componentInstance.dispatch({
+      ...open(2),
+      payload: { durationMs: 10, peakLevel: 0.2 },
+    });
+    await fixture.whenStable();
+    oldEdit({ durationMs: 9000, peakLevel: 0.9 });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.surfaces()[0].inputs.payload).toEqual({
+      durationMs: 10,
+      peakLevel: 0.2,
+    });
+  });
   const open = (
     commandId = 1,
     instanceId = 'summary',
@@ -216,7 +238,7 @@ describe('StageOrganism', () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
-  it('supports a second test-only trusted kind and disposes it on minimize/close', async () => {
+  it('supports a second test-only trusted kind and retains it on minimize and disposes it on close', async () => {
     fixture.componentInstance.dispatch(open());
     fixture.componentInstance.dispatch(open(2, 'fixture', 'fixture'));
     await fixture.whenStable();
@@ -226,8 +248,12 @@ describe('StageOrganism', () => {
     );
     fixture.componentInstance.dispatch(control(3, 'minimize', 'fixture'));
     await fixture.whenStable();
-    expect(fixtureLifecycle.destroyed).toBe(1);
-    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(1);
+    expect(fixtureLifecycle.destroyed).toBe(0);
+    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);
+    expect(
+      fixture.nativeElement.querySelector('[data-instance-id=fixture]').style
+        .display,
+    ).toBe('none');
     fixture.componentInstance.dispatch(control(4, 'focus', 'fixture'));
     await fixture.whenStable();
     expect(document.activeElement?.getAttribute('data-instance-id')).toBe(
@@ -235,7 +261,7 @@ describe('StageOrganism', () => {
     );
     fixture.componentInstance.dispatch(control(5, 'close', 'fixture'));
     await fixture.whenStable();
-    expect(fixtureLifecycle.destroyed).toBe(2);
+    expect(fixtureLifecycle.destroyed).toBe(1);
   });
 
   it('responds to resize and disposes observer/components on destruction', async () => {
@@ -271,7 +297,7 @@ describe('StageOrganism', () => {
     await fixture.whenStable();
     fixture.componentInstance.restorePresentation();
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(1);
+    expect(fixture.componentInstance.layout().surfaces).toHaveLength(1);
     fixture.componentInstance.restorePresentation();
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelectorAll('section')).toHaveLength(2);

@@ -51,6 +51,8 @@ fn reply_requires_correlated_request_and_metadata_only_outcome() {
                 surface: WorkspaceSurface::Image,
                 prominence: WorkspaceProminence::Primary,
                 minimized: false,
+                layout: None,
+                operations: vec![],
             }],
         },
     };

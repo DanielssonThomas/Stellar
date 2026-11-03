@@ -17,7 +17,7 @@ describe('PresentationMediaMolecule', () => {
     fixture.componentRef.setInput('payload', {
       kind: 'image',
       title: 'Reference',
-      src: '/missing.png',
+      src: '/emblem/layers/missing.png',
       alt: 'Source image',
     });
     await fixture.whenStable();
@@ -29,7 +29,7 @@ describe('PresentationMediaMolecule', () => {
     fixture.componentRef.setInput('payload', {
       kind: 'image',
       title: 'Next',
-      src: '/next.png',
+      src: '/emblem/layers/next.png',
       alt: 'Next image',
     });
     await fixture.whenStable();
@@ -48,7 +48,7 @@ describe('PresentationMediaMolecule', () => {
     });
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain(
-      'Embedded browsing is unavailable',
+      'Embedded browsing requires the native desktop',
     );
     expect(fixture.nativeElement.querySelector('iframe')).toBeNull();
     expect(fixture.nativeElement.querySelector('a')).toBeNull();

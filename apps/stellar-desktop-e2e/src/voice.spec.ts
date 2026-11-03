@@ -246,7 +246,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Enable microphone', exact: true })
     .click();
-  const panel = page.getByRole('region', { name: 'Assistant message' });
+  const panel = page.getByRole('region', { name: 'Requested voice content' });
   await expect(panel).toContainText('Requested voice content', {
     timeout: 15000,
   });

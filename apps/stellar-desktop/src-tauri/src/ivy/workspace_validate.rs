@@ -76,13 +76,26 @@ pub fn request(value: &WorkspaceToolRequest) -> bool {
             ..
         } => identifier(instance_id) && payload(payload_json, surface),
         WorkspaceToolOperation::Remove { instance_id }
-        | WorkspaceToolOperation::Focus { instance_id } => identifier(instance_id),
+        | WorkspaceToolOperation::Focus { instance_id }
+        | WorkspaceToolOperation::Minimize { instance_id }
+        | WorkspaceToolOperation::Restore { instance_id }
+        | WorkspaceToolOperation::Maximize { instance_id }
+        | WorkspaceToolOperation::InspectContent { instance_id } => identifier(instance_id),
+        WorkspaceToolOperation::Resize {
+            instance_id,
+            percent,
+        } => identifier(instance_id) && (10..=90).contains(percent),
+        WorkspaceToolOperation::Swap {
+            instance_id,
+            other_id,
+        } => identifier(instance_id) && identifier(other_id) && instance_id != other_id,
         WorkspaceToolOperation::Arrange { instance_ids } => {
             instance_ids.len() <= MAX_PANES
                 && instance_ids.iter().all(|id| identifier(id))
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
         WorkspaceToolOperation::Clear
+        | WorkspaceToolOperation::RestoreLayout
         | WorkspaceToolOperation::Inspect
         | WorkspaceToolOperation::CaptureWindow => true,
     }
@@ -102,7 +115,21 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
         (_, WorkspaceToolOutcome::Rejected) => true,
         (WorkspaceToolOperation::Inspect, WorkspaceToolOutcome::Inspection { panes }) => {
             panes.len() <= MAX_PANES
-                && panes.iter().all(|pane| identifier(&pane.instance_id))
+                && panes.iter().all(|pane| {
+                    identifier(&pane.instance_id)
+                        && pane.operations.len() <= 14
+                        && pane.operations.iter().collect::<HashSet<_>>().len()
+                            == pane.operations.len()
+                        && pane.layout.as_ref().is_none_or(|layout| {
+                            layout.title.chars().count() <= 240
+                                && layout.position < 4
+                                && [layout.x, layout.y, layout.width, layout.height]
+                                    .iter()
+                                    .all(|n| *n <= 1000)
+                                && layout.x + layout.width <= 1001
+                                && layout.y + layout.height <= 1001
+                        })
+                })
                 && panes
                     .iter()
                     .map(|pane| &pane.instance_id)
@@ -111,6 +138,18 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
                     == panes.len()
         }
         (WorkspaceToolOperation::Inspect, _) => false,
+        (
+            WorkspaceToolOperation::InspectContent {
+                instance_id: requested,
+            },
+            WorkspaceToolOutcome::Content {
+                instance_id,
+                surface,
+                payload_json,
+                ..
+            },
+        ) => requested == instance_id && payload(payload_json, surface),
+        (WorkspaceToolOperation::InspectContent { .. }, _) => false,
         (_, WorkspaceToolOutcome::Applied) => true,
         _ => false,
     }

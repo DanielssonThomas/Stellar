@@ -17,7 +17,7 @@
   --stellar-presentation-body: clamp(1rem, 1.3vw, 1.3rem);
   overflow: hidden;
   overscroll-behavior: contain;
-  padding: clamp(1.5rem, 3.6vw, 3.75rem);
+  padding: 2.75rem clamp(0.75rem, 1.5vw, 1.5rem) 1rem;
   background: var(--stellar-color-canvas);
 }
 .surface-content {
@@ -43,6 +43,60 @@
 }
 .emblem-reserve {
   padding-bottom: var(--emblem-clearance);
+}
+.pane-controls {
+  position: absolute;
+  z-index: 2;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.surface:hover .pane-controls,
+.surface:focus-within .pane-controls {
+  opacity: 1;
+}
+.pane-controls button,
+.minimized-panes button {
+  color: var(--stellar-color-primary);
+  background: var(--stellar-color-canvas);
+  border: 1px solid var(--stellar-color-line);
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.pane-controls button:focus-visible,
+.minimized-panes button:focus-visible {
+  outline: 1px solid var(--stellar-color-primary);
+}
+.selected-surface {
+  outline: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
+  outline-offset: -1px;
+}
+.pane-divider {
+  position: absolute;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+}
+.pane-divider:hover,
+.pane-divider:focus-visible {
+  background: var(--stellar-color-line);
+  outline: none;
+}
+.horizontal-divider {
+  cursor: row-resize;
+}
+.minimized-panes {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.5rem;
+  max-width: 80%;
+  flex-wrap: wrap;
 }
 .emblem-slot {
   z-index: 2;
