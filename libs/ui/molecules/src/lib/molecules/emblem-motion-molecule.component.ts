@@ -25,6 +25,10 @@ import {
   type EmblemMusicMode,
 } from './emblem-music-motion';
 import { createEmblemMusicPulses } from './emblem-music-pulses';
+import {
+  emblemMusicDirections,
+  type EmblemMusicDirection,
+} from './emblem-music-directions';
 import { emblemClipPath } from './emblem-clip';
 import { emblemImageSource } from './emblem-image-sources';
 import { createEmblemImagePreparation } from './emblem-image-preparation';
@@ -70,6 +74,12 @@ export class EmblemMotionMolecule {
   readonly audioLevel = input(0);
   readonly musicLevels = input<EmblemMusicLevels>(silentEmblemMusic);
   readonly musicMode = input<EmblemMusicMode>('dynamic');
+  private readonly musicDirections = computed(() => {
+    const manifest = this.manifest();
+    return manifest
+      ? emblemMusicDirections(manifest)
+      : new Map<string, EmblemMusicDirection>();
+  });
   readonly waiting = input(false);
   readonly solActive = input(false);
   readonly reducedMotion = input(false);
@@ -337,7 +347,14 @@ export class EmblemMotionMolecule {
       this.musicPulses.update(
         this.musicPieces().flatMap((piece, order) =>
           layers[order]
-            ? [{ element: piece.nativeElement, layer: layers[order], order }]
+            ? [
+                {
+                  element: piece.nativeElement,
+                  layer: layers[order],
+                  order,
+                  direction: this.musicDirections().get(layers[order].id),
+                },
+              ]
             : [],
         ),
         active ? this.musicLevels() : silentEmblemMusic,

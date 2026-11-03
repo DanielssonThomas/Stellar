@@ -42,7 +42,7 @@ function setup() {
     () =>
       ({
         transform: 'matrix(1,0,0,1,10,0)',
-        opacity: '0.5',
+        filter: 'brightness(1.6)',
       }) as CSSStyleDeclaration,
   );
   const pulses = createEmblemMusicPulses(
@@ -68,7 +68,7 @@ describe('music transients', () => {
     expect(state.elements[1].animate).not.toHaveBeenCalled();
     expect(state.elements[2].animate).not.toHaveBeenCalled();
     expect(state.elements[0].animate).toHaveBeenCalledWith(
-      expect.arrayContaining([{ transform: 'none', opacity: 1, offset: 1 }]),
+      expect.arrayContaining([{ transform: 'none', offset: 1 }]),
       expect.objectContaining({ duration: 440 }),
     );
     state.advance(1000);
@@ -101,12 +101,16 @@ describe('music transients', () => {
     const state = setup();
     state.pulses.update(state.targets, loud, 'flashy', true, false);
     expect(
-      state.elements.every((element) => element.style.opacity === '0.62'),
+      state.elements.every(
+        (element) =>
+          element.style.opacity === '1' &&
+          element.style.filter === 'brightness(0.72)',
+      ),
     ).toBe(true);
     expect(state.elements[2].animate).toHaveBeenCalledWith(
       expect.arrayContaining([
-        { opacity: 0.62, offset: 1 },
-        { opacity: 1, offset: 0.22 },
+        { filter: 'brightness(0.72)', offset: 1 },
+        { filter: 'brightness(3)', offset: 0.22 },
       ]),
       expect.any(Object),
     );
@@ -118,7 +122,7 @@ describe('music transients', () => {
       false,
     );
     expect(state.elements[2].animate).toHaveBeenLastCalledWith(
-      [{ opacity: '0.5' }, { opacity: '1' }],
+      [{ filter: 'brightness(1.6)' }, { filter: 'none' }],
       expect.objectContaining({ duration: 160 }),
     );
     expect(state.elements[0].style.transform).toBe('none');
@@ -128,6 +132,70 @@ describe('music transients', () => {
     state.style.mockClear();
     state.pulses.update(state.targets, silentEmblemMusic, 'calm', false, true);
     expect(state.style).not.toHaveBeenCalled();
+    state.pulses.dispose();
+  });
+
+  it('gives the closest ring on each side an independent bass-only linear size release', () => {
+    const state = setup();
+    const near = [
+      {
+        element: state.elements[0],
+        layer: {
+          ...ring,
+          id: 'near-left',
+          exploded: { ...ring.exploded, depth: -170 },
+        },
+        order: 0,
+      },
+      {
+        element: state.elements[1],
+        layer: {
+          ...ring,
+          id: 'near-right',
+          assembly: { ...ring.assembly!, file: 'right.svg' },
+          exploded: { ...ring.exploded, depth: 150 },
+        },
+        order: 1,
+      },
+      {
+        element: state.elements[2],
+        layer: { ...ring, id: 'middle', assembly: undefined },
+        order: 2,
+      },
+    ];
+    state.pulses.update(
+      near,
+      { ...silentEmblemMusic, treble: 1 },
+      'dynamic',
+      true,
+      false,
+    );
+    expect(
+      state.elements.every(
+        (element) => vi.mocked(element.animate).mock.calls.length === 0,
+      ),
+    ).toBe(true);
+    state.advance(20);
+    state.pulses.update(near, loud, 'dynamic', true, false);
+    for (const element of state.elements.slice(0, 2)) {
+      expect(element.animate).toHaveBeenCalledWith(
+        [{ transform: 'scale(1.108)' }, { transform: 'none' }],
+        expect.objectContaining({ easing: 'linear' }),
+      );
+      const options = vi.mocked(element.animate).mock
+        .calls[0][1] as KeyframeAnimationOptions;
+      expect(options.duration).toBeCloseTo(675);
+    }
+    expect(state.elements[2].animate).not.toHaveBeenCalled();
+    state.advance(1000);
+    state.pulses.update(near, loud, 'dynamic', true, false);
+    expect(state.elements[0].animate).toHaveBeenCalledOnce();
+    state.pulses.update(near, silentEmblemMusic, 'dynamic', false, true);
+    expect(
+      state.animations.every(
+        (animation) => animation.cancel.mock.calls.length === 1,
+      ),
+    ).toBe(true);
     state.pulses.dispose();
   });
 });

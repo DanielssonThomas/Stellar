@@ -1,4 +1,11 @@
 import type { EmblemLayer } from './emblem-motion-model';
+import type { EmblemMusicDirection } from './emblem-music-directions';
+import {
+  bassScaleReleasePerSecond,
+  bassSizePush,
+  closestBassRings,
+  type BassSizePulse,
+} from './emblem-bass-response';
 import {
   musicTransform,
   ringKick,
@@ -11,8 +18,11 @@ interface MusicTarget {
   readonly element: HTMLElement;
   readonly layer: EmblemLayer;
   readonly order: number;
+  readonly direction?: EmblemMusicDirection;
 }
-type PulseProperty = 'transform' | 'opacity';
+type PulseProperty = 'transform' | 'filter';
+const glitterRest = 'brightness(0.72)';
+const glitterPeak = 'brightness(3)';
 
 export function createEmblemMusicPulses(
   view: Pick<Window, 'getComputedStyle'> | null,
@@ -20,12 +30,14 @@ export function createEmblemMusicPulses(
 ) {
   const running = new Map<
     HTMLElement,
-    { animation: Animation; property: PulseProperty }
+    { animation: Animation; properties: readonly PulseProperty[] }
   >();
   let previous = silentEmblemMusic;
   let lastBeat = -Infinity;
   let lastMode: EmblemMusicMode | undefined;
+  let bassPulse: BassSizePulse | null = null;
   let disposed = false;
+
   const cancel = (element: HTMLElement) => {
     const entry = running.get(element);
     if (!entry) return;
@@ -37,45 +49,49 @@ export function createEmblemMusicPulses(
     element: HTMLElement,
     frames: Keyframe[],
     duration: number,
-    property: PulseProperty,
+    properties: readonly PulseProperty[],
     delay = 0,
+    easing = 'ease-out',
   ) => {
     cancel(element);
     if (!view || typeof element.animate !== 'function') return;
-    const animation = element.animate(frames, {
-      duration,
-      delay,
-      easing: 'ease-out',
-    });
-    running.set(element, { animation, property });
+    const animation = element.animate(frames, { duration, delay, easing });
+    running.set(element, { animation, properties });
     animation.onfinish = () => {
       if (running.get(element)?.animation === animation)
         running.delete(element);
     };
   };
   const settle = (immediate: boolean) => {
-    const poses = [...running].map(([element, entry]) => ({
-      element,
-      property: entry.property,
-      from:
-        !immediate && view
-          ? view.getComputedStyle(element)[entry.property]
+    const poses = [...running].map(([element, entry]) => {
+      const style = !immediate && view ? view.getComputedStyle(element) : null;
+      return {
+        element,
+        properties: entry.properties,
+        from: style
+          ? Object.fromEntries(
+              entry.properties.map((property) => [property, style[property]]),
+            )
           : null,
-    }));
-    for (const { element, property, from } of poses) {
+      };
+    });
+    for (const { element, properties, from } of poses) {
       cancel(element);
-      if (from !== null)
+      if (from)
         animate(
           element,
           [
-            { [property]: from },
-            { [property]: property === 'opacity' ? '1' : 'none' },
+            from,
+            Object.fromEntries(
+              properties.map((property) => [property, 'none']),
+            ),
           ],
           160,
-          property,
+          properties,
         );
     }
   };
+
   return {
     update(
       targets: readonly MusicTarget[],
@@ -92,22 +108,58 @@ export function createEmblemMusicPulses(
         settle(paused);
         previous = silentEmblemMusic;
         lastBeat = -Infinity;
+        bassPulse = null;
       }
       lastMode = mode;
-      const dim = active && mode === 'flashy' ? 0.62 : 1;
-      for (const { element, layer, order } of targets) {
-        element.style.opacity = String(dim);
+      const baseFilter = active && mode === 'flashy' ? glitterRest : 'none';
+      for (const { element, layer, order, direction } of targets) {
+        element.style.opacity = '1';
+        element.style.filter = baseFilter;
         element.style.transform = musicTransform(
           layer,
           order,
           active ? levels : silentEmblemMusic,
           mode,
+          direction,
         );
       }
       if (!active || paused) return;
       const values = [levels.bass, levels.mid, levels.treble].map((value) =>
         Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0,
       );
+      const time = now();
+      const nearRings = closestBassRings(targets.map((target) => target.layer));
+      const pushed = bassSizePush(
+        bassPulse,
+        values[0],
+        previous.bass,
+        time,
+        mode,
+      );
+      if (pushed) {
+        bassPulse = pushed;
+        for (const { element, layer } of targets) {
+          if (!nearRings.has(layer.id)) continue;
+          const filterFrames = mode === 'flashy' ? { filter: glitterPeak } : {};
+          animate(
+            element,
+            [
+              {
+                transform: 'scale(' + (1 + pushed.extra) + ')',
+                ...filterFrames,
+              },
+              {
+                transform: 'none',
+                ...(mode === 'flashy' ? { filter: baseFilter } : {}),
+              },
+            ],
+            (pushed.extra / bassScaleReleasePerSecond) * 1000,
+            mode === 'flashy' ? ['transform', 'filter'] : ['transform'],
+            0,
+            'linear',
+          );
+        }
+      }
       const old = [previous.bass, previous.mid, previous.treble];
       const attack = Math.max(
         ...values.map((value, index) => value - old[index]),
@@ -118,7 +170,6 @@ export function createEmblemMusicPulses(
         mid: values[1],
         treble: values[2],
       };
-      const time = now();
       const cooldown = mode === 'calm' ? 750 : mode === 'dynamic' ? 480 : 360;
       if (
         attack < (mode === 'calm' ? 0.15 : 0.065) ||
@@ -128,37 +179,62 @@ export function createEmblemMusicPulses(
         return;
       lastBeat = time;
       const dominant = values.indexOf(Math.max(...values));
-      for (const { element, layer, order } of targets) {
-        const kick = ringKick(layer, Math.max(...values), mode);
-        if (kick) {
-          const from =
-            running.has(element) && view
-              ? view.getComputedStyle(element).transform
-              : 'none';
+      const kicks = targets.flatMap((target) => {
+        const kick = nearRings.has(target.layer.id)
+          ? null
+          : ringKick(target.layer, Math.max(...values), mode);
+        return kick
+          ? [
+              {
+                ...target,
+                kick,
+                from:
+                  running.has(target.element) && view
+                    ? view.getComputedStyle(target.element).transform
+                    : 'none',
+              },
+            ]
+          : [];
+      });
+      for (const { element, kick, from } of kicks) {
+        animate(
+          element,
+          [
+            {
+              transform: from,
+              ...(mode === 'flashy' ? { filter: baseFilter } : {}),
+              offset: 0,
+            },
+            {
+              transform: kick,
+              ...(mode === 'flashy' ? { filter: glitterPeak } : {}),
+              offset: 0.18,
+            },
+            {
+              transform: 'none',
+              ...(mode === 'flashy' ? { filter: baseFilter } : {}),
+              offset: 1,
+            },
+          ],
+          mode === 'calm' ? 560 : 440,
+          mode === 'flashy' ? ['transform', 'filter'] : ['transform'],
+        );
+      }
+      if (mode === 'flashy')
+        for (const { element, layer, order } of targets) {
+          if (layer.spin || order % 3 !== dominant) continue;
           animate(
             element,
             [
-              { transform: from, opacity: dim, offset: 0 },
-              { transform: kick, opacity: 1, offset: 0.18 },
-              { transform: 'none', opacity: dim, offset: 1 },
+              { filter: baseFilter, offset: 0 },
+              { filter: glitterPeak, offset: 0.22 },
+              { filter: baseFilter, offset: 1 },
             ],
-            mode === 'calm' ? 560 : 440,
-            'transform',
-          );
-        } else if (!layer.spin && mode === 'flashy' && order % 3 === dominant) {
-          animate(
-            element,
-            [
-              { opacity: dim, offset: 0 },
-              { opacity: 1, offset: 0.22 },
-              { opacity: dim, offset: 1 },
-            ],
-            310,
-            'opacity',
+            250,
+            ['filter'],
             (order % 5) * 18,
           );
         }
-      }
     },
     dispose() {
       disposed = true;

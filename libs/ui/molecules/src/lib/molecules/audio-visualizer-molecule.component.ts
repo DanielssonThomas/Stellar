@@ -36,12 +36,12 @@ export class AudioVisualizerMolecule {
     {
       value: 'dynamic',
       label: 'Dynamic',
-      detail: 'Directional fragments · ring kicks',
+      detail: 'Outward pieces · bass ring pulses',
     },
     {
       value: 'flashy',
       label: 'Flashy',
-      detail: 'Dimmed pieces · glittering sound pulses',
+      detail: 'Solid pieces · brighter glitter pulses',
     },
   ];
   readonly sensitivityChange = output<{

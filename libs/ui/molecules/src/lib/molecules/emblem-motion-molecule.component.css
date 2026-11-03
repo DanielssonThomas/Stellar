@@ -26,7 +26,7 @@ img {
   transform-style: preserve-3d;
   transition:
     transform 140ms ease-out,
-    opacity 220ms ease-out;
+    filter 220ms ease-out;
 }
 .motion-reduced .music-piece,
 .motion-paused .music-piece {

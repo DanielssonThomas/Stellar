@@ -152,27 +152,60 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
                 ),
             ),
       ).length,
+      bassRings: elements.filter((element) =>
+        element
+          .getAnimations()
+          .some((animation) =>
+            animation.effect
+              ?.getKeyframes()
+              .some((frame) => String(frame.transform).startsWith('scale(')),
+          ),
+      ).length,
       blinks: elements.filter((element) =>
         element
           .getAnimations()
           .some((animation) =>
             animation.effect
               ?.getKeyframes()
-              .some((frame) => frame.opacity !== undefined),
+              .some((frame) => frame.filter === 'brightness(3)'),
           ),
       ).length,
     }));
-  expect(pulseCounts.rings).toBe(12);
+  expect(pulseCounts.rings).toBe(6);
+  expect(pulseCounts.bassRings).toBe(6);
   expect(pulseCounts.blinks).toBeGreaterThan(10);
   expect(
     await page
       .locator('.music-piece')
       .evaluateAll((elements) =>
         elements.every(
-          (element) => (element as HTMLElement).style.opacity === '0.62',
+          (element) =>
+            (element as HTMLElement).style.opacity === '1' &&
+            (element as HTMLElement).style.filter === 'brightness(0.72)',
         ),
       ),
   ).toBe(true);
+  const sizeDecay = await page
+    .locator('.music-piece')
+    .filter({ has: page.locator('img[src$="/inner-circle-2-arc-1.png"]') })
+    .evaluate((element) => {
+      const animation = element
+        .getAnimations()
+        .find((animation) =>
+          animation.effect
+            ?.getKeyframes()
+            .some((frame) => String(frame.transform).startsWith('scale(')),
+        );
+      if (!animation) throw new Error('Missing bass size pulse');
+      animation.pause();
+      animation.currentTime = 100;
+      const early = new DOMMatrix(getComputedStyle(element).transform).m11;
+      animation.currentTime = 200;
+      const late = new DOMMatrix(getComputedStyle(element).transform).m11;
+      animation.play();
+      return early - late;
+    });
+  expect(sizeDecay).toBeCloseTo(0.016, 3);
   await expect(dialog.locator('p[role="status"]')).toHaveText(
     'Listening to desktop audio',
   );

@@ -1,4 +1,5 @@
 import type { EmblemLayer } from './emblem-motion-model';
+import type { EmblemMusicDirection } from './emblem-music-directions';
 
 export interface EmblemMusicLevels {
   readonly level: number;
@@ -19,6 +20,7 @@ export function musicTransform(
   index: number,
   levels: EmblemMusicLevels,
   mode: EmblemMusicMode = 'calm',
+  direction?: EmblemMusicDirection,
 ): string {
   // Ring kicks are transient animations; the underlying pose always stays exact.
   if (layer.spin) return 'none';
@@ -27,14 +29,11 @@ export function musicTransform(
   const band = bound([levels.bass, levels.mid, levels.treble][index % 3]);
   const strength = band * 0.8 + bound(levels.level) * 0.2;
   if (strength === 0) return 'none';
-  const detail = mode === 'calm' ? 0 : mode === 'dynamic' ? 1 : 1.7;
-  const angle =
-    index * 2.399963 +
-    detail * (bound(levels.mid) - bound(levels.treble)) * 1.4;
-  const side = layer.file.includes('violet') ? -1 : 1;
-  const travel = 1.6 + detail * 1.8;
-  const twist = detail * strength * Math.cos(index * 1.7) * 7;
-  return `translate3d(${(Math.cos(angle) * strength * travel).toFixed(3)}%, ${(Math.sin(angle) * strength * travel).toFixed(3)}%, ${(side * strength * (2.8 + detail)).toFixed(3)}cqw) rotateX(${twist.toFixed(3)}deg) rotateY(${(-twist * 0.6).toFixed(3)}deg) rotate(${(Math.sin(angle) * strength * (2 + detail * 4)).toFixed(3)}deg)`;
+  const pull = (Math.max(0, strength - 0.65) / 0.35) ** 2;
+  const outward =
+    direction?.outward ?? (layer.file.includes('violet') ? -1 : 1);
+  const travel = mode === 'calm' ? 2.8 : mode === 'dynamic' ? 4.2 : 6;
+  return `translate3d(${((direction?.inwardX ?? 0) * pull).toFixed(3)}%, ${((direction?.inwardY ?? 0) * pull).toFixed(3)}%, ${(outward * strength * travel).toFixed(3)}cqw)`;
 }
 
 export function ringKick(
