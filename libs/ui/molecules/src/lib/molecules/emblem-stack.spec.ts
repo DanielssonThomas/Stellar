@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { planeDepth } from './emblem-stack';
 
 describe('equal emblem stack', () => {
+  it('retains the old five-ring core while compressing only the outer fragments', () => {
+    const core = { count: 5, spacing: 240 };
+    const depths = Array.from({ length: 47 }, (_, index) =>
+      planeDepth(index, 47, 80, 'outer-dense', core),
+    );
+    expect(depths.slice(21, 26)).toEqual([-480, -240, 0, 240, 480]);
+    const gaps = depths
+      .slice(1, 22)
+      .map((depth, index) => depth - depths[index]);
+    gaps
+      .slice(1)
+      .forEach((gap, index) => expect(gap).toBeGreaterThan(gaps[index]));
+    expect(gaps.at(-1)).toBeLessThan(80);
+    for (const invalid of [
+      { count: 4, spacing: 240 },
+      { count: 49, spacing: 240 },
+      { count: 5, spacing: 0 },
+    ])
+      expect(() => planeDepth(0, 47, 80, 'outer-dense', invalid)).toThrow();
+  });
   it.each([1, 2, 11, 32])('centers every interval for %i planes', (count) => {
     const depths = Array.from({ length: count }, (_, index) =>
       planeDepth(index, count),

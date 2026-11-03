@@ -61,6 +61,15 @@
       <div class="ambience" aria-hidden="true"></div>
     }
     <div class="emblem-presence">
+      @for (source of assemblySources(); track source) {
+        <img
+          class="hidden"
+          [src]="source"
+          alt=""
+          aria-hidden="true"
+          (error)="assetFailed()"
+        />
+      }
       <div #camera class="camera">
         @for (layer of layers(); track layer.id) {
           <div

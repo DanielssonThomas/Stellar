@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { exportStrands } from './render-strands.mjs';
 
 const { chromium } = createRequire(import.meta.url)('@playwright/test');
 const { format } = createRequire(import.meta.url)('prettier');
@@ -72,26 +73,34 @@ const characterLayers = registration.layers.flatMap((item) =>
         id: item.id + '-' + part,
         clip,
       }))
-    : (item.id.endsWith('-hair')
-        ? [0, 260, 330, 400, 470, 540, 610, 680, 750, 820, 900, 1000, size]
-        : [0, 360, 390, 420, 450, 480, size]
-      )
-        .slice(0, -1)
-        .map((top, index, tops) => {
-          const next = tops[index + 1] ?? size;
-          const direction = item.id.startsWith('violet') ? -1 : 1;
-          return {
-            ...item,
-            sourceId: item.id,
-            id: `${item.id}-${index + 1}`,
-            clip: [0, top, size, next - top],
-            scatter: {
-              x: direction * (((index * 73) % 230) - 115),
-              y: ((index * 47) % 110) - 55,
-              rotation: direction * (((index * 13) % 46) - 23),
-            },
-          };
-        }),
+    : item.id.endsWith('-hair')
+      ? Array.from({ length: 12 }, (_, index) => ({
+          ...item,
+          id: `${item.id}-${index + 1}`,
+          assembly: { file: `layers/${item.id}.png`, index, count: 12 },
+          scatter: {
+            x: ((index * 73) % 230) - 115,
+            y: ((index * 47) % 110) - 55,
+            rotation: ((index * 13) % 46) - 23,
+          },
+        }))
+      : [0, 360, 390, 420, 450, 480, size]
+          .slice(0, -1)
+          .map((top, index, tops) => {
+            const next = tops[index + 1] ?? size;
+            const direction = item.id.startsWith('violet') ? -1 : 1;
+            return {
+              ...item,
+              sourceId: item.id,
+              id: `${item.id}-${index + 1}`,
+              clip: [0, top, size, next - top],
+              scatter: {
+                x: direction * (((index * 73) % 230) - 115),
+                y: ((index * 47) % 110) - 55,
+                rotation: direction * (((index * 13) % 46) - 23),
+              },
+            };
+          }),
 );
 const hairOrder = [5, 0, 9, 2, 7, 11, 4, 1, 10, 6, 3, 8];
 const ornamentOrder = [2, 5, 0, 4, 1, 3];
@@ -152,6 +161,7 @@ const entry = (item, z, extension) => ({
         : zero),
   planeIndex: planeOrder.indexOf(item.id),
   ...(item.clip ? { clip: item.clip } : {}),
+  ...(item.assembly ? { assembly: item.assembly } : {}),
   ...(item.id === 'outer-frame'
     ? { spin: 'clockwise' }
     : item.id.startsWith('inner-circle')
@@ -162,8 +172,9 @@ const manifest = {
   version: 1,
   status: 'production-candidate',
   viewBox: [0, 0, size, size],
-  planeSpacing: 100,
+  planeSpacing: 80,
   spacingProfile: 'outer-dense',
+  planeCore: { count: 5, spacing: 240 },
   layers: [
     ...characterLayers.map((item, z) => entry(item, z, 'png')),
     ...geometries.map((item, z) =>
@@ -349,6 +360,7 @@ try {
       visibleRadius: result.visibleRadius,
     });
   }
+  const strands = await exportStrands(page, root, size);
   fs.writeFileSync(
     path.join(root, 'manifest.json'),
     await format(JSON.stringify(manifest), { parser: 'json' }),
@@ -376,6 +388,15 @@ try {
     return {
       ...layer,
       src: `data:image/${layer.file.endsWith('.svg') ? 'svg+xml' : 'png'};base64,${data.toString('base64')}`,
+      ...(layer.assembly
+        ? {
+            originalSrc:
+              'data:image/png;base64,' +
+              fs
+                .readFileSync(path.join(root, layer.assembly.file))
+                .toString('base64'),
+          }
+        : {}),
     };
   });
   const renders = await page.evaluate(
@@ -385,7 +406,10 @@ try {
           const img = new Image();
           img.src = layer.src;
           await img.decode();
-          return { layer, img };
+          const originalImg = new Image();
+          originalImg.src = layer.originalSrc ?? layer.src;
+          await originalImg.decode();
+          return { layer, img, originalImg };
         }),
       );
       const render = (
@@ -402,9 +426,12 @@ try {
         ctx.scale(scale, scale);
         ctx.translate(margin, margin);
         const drawn = new Set();
-        for (const { layer, img } of images) {
-          if (original && drawn.has(layer.file)) continue;
-          drawn.add(layer.file);
+        for (const { layer, img, originalImg } of images) {
+          const file = original
+            ? (layer.assembly?.file ?? layer.file)
+            : layer.file;
+          if (original && drawn.has(file)) continue;
+          drawn.add(file);
           ctx.save();
           if (exploded || applyAssembled) {
             const p = exploded ? layer.exploded : layer.assembled,
@@ -418,7 +445,7 @@ try {
             ctx.rect(...layer.clip);
             ctx.clip();
           }
-          ctx.drawImage(img, 0, 0, size, size);
+          ctx.drawImage(original ? originalImg : img, 0, 0, size, size);
           ctx.restore();
         }
         return {
@@ -480,16 +507,21 @@ try {
   });
   const bytes =
     fs.statSync(path.join(root, 'manifest.json')).size +
-    [...new Set(manifest.layers.map((layer) => layer.file))].reduce(
-      (sum, file) => sum + fs.statSync(path.join(root, file)).size,
-      0,
-    );
-  const budget = 4 * 1024 * 1024;
+    [
+      ...new Set(
+        manifest.layers.flatMap((layer) => [
+          layer.file,
+          ...(layer.assembly ? [layer.assembly.file] : []),
+        ]),
+      ),
+    ].reduce((sum, file) => sum + fs.statSync(path.join(root, file)).size, 0);
+  const budget = 6 * 1024 * 1024;
   if (bytes > budget) throw new Error(`Runtime byte budget exceeded: ${bytes}`);
   const validation = {
     canvas: size,
     layers: layers.length,
     rasterLayers: alpha,
+    strands,
     svgLayers: geometries.length,
     zeroPose:
       'All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.',

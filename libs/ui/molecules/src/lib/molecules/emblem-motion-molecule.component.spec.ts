@@ -183,6 +183,52 @@ describe('EmblemMotionMolecule', () => {
     ).toEqual(['inset(0% 0% 50% 0%)', 'inset(50% 0% 0% 0%)']);
   });
 
+  it('preloads strand originals and swaps only at settlement, restoring pieces on return', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: manifest.layers.map((layer, index) => ({
+        ...layer,
+        file: `layers/strand-${index}.png`,
+        assembly: { file: 'layers/hair.png', index, count: 2 },
+      })),
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.assemblySources()).toEqual([
+      '/assets/emblem/layers/hair.png',
+    ]);
+    fixture.componentRef.setInput('phase', 'focusing');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.src),
+    ).toEqual([
+      '/assets/emblem/layers/strand-0.png',
+      '/assets/emblem/layers/strand-1.png',
+    ]);
+    for (const animation of animations) animation.onfinish?.();
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance
+        .layers()
+        .map((layer) => [layer.src, layer.clipPath]),
+    ).toEqual([
+      ['/assets/emblem/layers/hair.png', 'none'],
+      ['/assets/emblem/layers/hair.png', 'inset(100%)'],
+    ]);
+    fixture.componentRef.setInput('phase', 'returning');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.src),
+    ).toEqual([
+      '/assets/emblem/layers/strand-0.png',
+      '/assets/emblem/layers/strand-1.png',
+    ]);
+    fixture.nativeElement
+      .querySelector('.emblem-presence > img')
+      .dispatchEvent(new Event('error'));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.unavailable()).toBe(true);
+  });
+
   it('renders independent inert SVG images, accessible label and supplied origins', () => {
     const images: HTMLImageElement[] = Array.from(
       fixture.nativeElement.querySelectorAll('img'),

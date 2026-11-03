@@ -2,8 +2,9 @@
   "version": 1,
   "status": "production-candidate",
   "viewBox": [0, 0, 1280, 1280],
-  "planeSpacing": 100,
+  "planeSpacing": 80,
   "spacingProfile": "outer-dense",
+  "planeCore": { "count": 5, "spacing": 240 },
   "layers": [
     {
       "id": "violet-body-upper",
@@ -37,123 +38,123 @@
     },
     {
       "id": "violet-hair-1",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-1.png",
       "z": 3,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 115, "y": -55, "rotation": 23 },
+      "exploded": { "x": -115, "y": -55, "rotation": -23 },
       "planeIndex": 4,
-      "clip": [0, 0, 1280, 260]
+      "assembly": { "file": "layers/violet-hair.png", "index": 0, "count": 12 }
     },
     {
       "id": "violet-hair-2",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-2.png",
       "z": 4,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 42, "y": -8, "rotation": 10 },
+      "exploded": { "x": -42, "y": -8, "rotation": -10 },
       "planeIndex": 10,
-      "clip": [0, 260, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 1, "count": 12 }
     },
     {
       "id": "violet-hair-3",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-3.png",
       "z": 5,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -31, "y": 39, "rotation": -3 },
+      "exploded": { "x": 31, "y": 39, "rotation": 3 },
       "planeIndex": 6,
-      "clip": [0, 330, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 2, "count": 12 }
     },
     {
       "id": "violet-hair-4",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-4.png",
       "z": 6,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -104, "y": -24, "rotation": -16 },
+      "exploded": { "x": 104, "y": -24, "rotation": 16 },
       "planeIndex": 13,
-      "clip": [0, 400, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 3, "count": 12 }
     },
     {
       "id": "violet-hair-5",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-5.png",
       "z": 7,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 53, "y": 23, "rotation": 17 },
+      "exploded": { "x": -53, "y": 23, "rotation": -17 },
       "planeIndex": 9,
-      "clip": [0, 470, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 4, "count": 12 }
     },
     {
       "id": "violet-hair-6",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-6.png",
       "z": 8,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -20, "y": -40, "rotation": 4 },
+      "exploded": { "x": 20, "y": -40, "rotation": -4 },
       "planeIndex": 3,
-      "clip": [0, 540, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 5, "count": 12 }
     },
     {
       "id": "violet-hair-7",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-7.png",
       "z": 9,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -93, "y": 7, "rotation": -9 },
+      "exploded": { "x": 93, "y": 7, "rotation": 9 },
       "planeIndex": 12,
-      "clip": [0, 610, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 6, "count": 12 }
     },
     {
       "id": "violet-hair-8",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-8.png",
       "z": 10,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 64, "y": 54, "rotation": -22 },
+      "exploded": { "x": -64, "y": 54, "rotation": 22 },
       "planeIndex": 7,
-      "clip": [0, 680, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 7, "count": 12 }
     },
     {
       "id": "violet-hair-9",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-9.png",
       "z": 11,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -9, "y": -9, "rotation": 11 },
+      "exploded": { "x": 9, "y": -9, "rotation": -11 },
       "planeIndex": 14,
-      "clip": [0, 750, 1280, 70]
+      "assembly": { "file": "layers/violet-hair.png", "index": 8, "count": 12 }
     },
     {
       "id": "violet-hair-10",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-10.png",
       "z": 12,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": -82, "y": 38, "rotation": -2 },
+      "exploded": { "x": 82, "y": 38, "rotation": 2 },
       "planeIndex": 5,
-      "clip": [0, 820, 1280, 80]
+      "assembly": { "file": "layers/violet-hair.png", "index": 9, "count": 12 }
     },
     {
       "id": "violet-hair-11",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-11.png",
       "z": 13,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 75, "y": -25, "rotation": -15 },
+      "exploded": { "x": -75, "y": -25, "rotation": 15 },
       "planeIndex": 11,
-      "clip": [0, 900, 1280, 100]
+      "assembly": { "file": "layers/violet-hair.png", "index": 10, "count": 12 }
     },
     {
       "id": "violet-hair-12",
-      "file": "layers/violet-hair.png",
+      "file": "layers/violet-hair-12.png",
       "z": 14,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 2, "y": 22, "rotation": 18 },
+      "exploded": { "x": -2, "y": 22, "rotation": -18 },
       "planeIndex": 8,
-      "clip": [0, 1000, 1280, 280]
+      "assembly": { "file": "layers/violet-hair.png", "index": 11, "count": 12 }
     },
     {
       "id": "violet-ornament-1",
@@ -247,123 +248,123 @@
     },
     {
       "id": "gold-hair-1",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-1.png",
       "z": 24,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -115, "y": -55, "rotation": -23 },
       "planeIndex": 30,
-      "clip": [0, 0, 1280, 260]
+      "assembly": { "file": "layers/gold-hair.png", "index": 0, "count": 12 }
     },
     {
       "id": "gold-hair-2",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-2.png",
       "z": 25,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -42, "y": -8, "rotation": -10 },
       "planeIndex": 36,
-      "clip": [0, 260, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 1, "count": 12 }
     },
     {
       "id": "gold-hair-3",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-3.png",
       "z": 26,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 31, "y": 39, "rotation": 3 },
       "planeIndex": 32,
-      "clip": [0, 330, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 2, "count": 12 }
     },
     {
       "id": "gold-hair-4",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-4.png",
       "z": 27,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 104, "y": -24, "rotation": 16 },
       "planeIndex": 39,
-      "clip": [0, 400, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 3, "count": 12 }
     },
     {
       "id": "gold-hair-5",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-5.png",
       "z": 28,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -53, "y": 23, "rotation": -17 },
       "planeIndex": 35,
-      "clip": [0, 470, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 4, "count": 12 }
     },
     {
       "id": "gold-hair-6",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-6.png",
       "z": 29,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 20, "y": -40, "rotation": -4 },
       "planeIndex": 29,
-      "clip": [0, 540, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 5, "count": 12 }
     },
     {
       "id": "gold-hair-7",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-7.png",
       "z": 30,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 93, "y": 7, "rotation": 9 },
       "planeIndex": 38,
-      "clip": [0, 610, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 6, "count": 12 }
     },
     {
       "id": "gold-hair-8",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-8.png",
       "z": 31,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -64, "y": 54, "rotation": 22 },
       "planeIndex": 33,
-      "clip": [0, 680, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 7, "count": 12 }
     },
     {
       "id": "gold-hair-9",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-9.png",
       "z": 32,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 9, "y": -9, "rotation": -11 },
       "planeIndex": 40,
-      "clip": [0, 750, 1280, 70]
+      "assembly": { "file": "layers/gold-hair.png", "index": 8, "count": 12 }
     },
     {
       "id": "gold-hair-10",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-10.png",
       "z": 33,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 82, "y": 38, "rotation": 2 },
       "planeIndex": 31,
-      "clip": [0, 820, 1280, 80]
+      "assembly": { "file": "layers/gold-hair.png", "index": 9, "count": 12 }
     },
     {
       "id": "gold-hair-11",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-11.png",
       "z": 34,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -75, "y": -25, "rotation": 15 },
       "planeIndex": 37,
-      "clip": [0, 900, 1280, 100]
+      "assembly": { "file": "layers/gold-hair.png", "index": 10, "count": 12 }
     },
     {
       "id": "gold-hair-12",
-      "file": "layers/gold-hair.png",
+      "file": "layers/gold-hair-12.png",
       "z": 35,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -2, "y": 22, "rotation": -18 },
       "planeIndex": 34,
-      "clip": [0, 1000, 1280, 280]
+      "assembly": { "file": "layers/gold-hair.png", "index": 11, "count": 12 }
     },
     {
       "id": "gold-ornament-1",

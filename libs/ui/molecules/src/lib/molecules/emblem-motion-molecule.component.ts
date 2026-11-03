@@ -27,6 +27,7 @@ import {
   manifestError,
   isExplodedPhase,
   consolidatedClipFiles,
+  consolidatedFragmentFiles,
 } from './emblem-motion-model';
 
 let nextEmblemIdentity = 0;
@@ -162,22 +163,42 @@ export class EmblemMotionMolecule {
     const completeFiles = unified
       ? consolidatedClipFiles(manifest)
       : new Set<string>();
+    const fragmentFiles = unified
+      ? consolidatedFragmentFiles(manifest)
+      : new Set<string>();
     return manifest.layers.map((layer) => {
+      let file = layer.file;
       let clipPath = emblemClipPath(layer.clip, manifest.viewBox);
       // A single original avoids fractional clip-edge seams after assembly settles.
       if (unified && layer.clip && completeFiles.has(layer.file)) {
         clipPath = drawn.has(layer.file) ? 'inset(100%)' : 'none';
         drawn.add(layer.file);
       }
+      if (layer.assembly && fragmentFiles.has(layer.assembly.file)) {
+        file = layer.assembly.file;
+        clipPath = drawn.has(file) ? 'inset(100%)' : 'none';
+        drawn.add(file);
+      }
       return {
         ...layer,
-        src: base
-          ? `${base}${base.endsWith('/') ? '' : '/'}${layer.file}`
-          : layer.file,
+        src: base ? `${base}${base.endsWith('/') ? '' : '/'}${file}` : file,
         origin: layerOrigin(layer, manifest),
         clipPath,
       };
     });
+  });
+  readonly assemblySources = computed(() => {
+    if (this.unavailable() || this.loading()) return [];
+    const base = this.assetBasePath();
+    return [
+      ...new Set(
+        this.manifest()?.layers.flatMap((layer) =>
+          layer.assembly ? [layer.assembly.file] : [],
+        ) ?? [],
+      ),
+    ].map((file) =>
+      base ? `${base}${base.endsWith('/') ? '' : '/'}${file}` : file,
+    );
   });
 
   constructor() {

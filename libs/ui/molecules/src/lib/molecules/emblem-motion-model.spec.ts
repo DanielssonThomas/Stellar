@@ -8,6 +8,7 @@ import {
   layerTransform,
   manifestError,
   consolidatedClipFiles,
+  consolidatedFragmentFiles,
 } from './emblem-motion-model';
 
 const layer = {
@@ -25,6 +26,48 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('validates complete strand groups and consolidates only registered contiguous paint', () => {
+    const group: EmblemManifest = {
+      ...manifest,
+      layers: [0, 1].map((index) => ({
+        ...layer,
+        id: `strand-${index}`,
+        file: `layers/strand-${index}.png`,
+        z: index,
+        assembly: { file: 'layers/hair.png', index, count: 2 },
+        assembled: { x: 0, y: 0, rotation: 0 },
+      })),
+    };
+    expect(decodeEmblemManifest(group)).toEqual(group);
+    expect([...consolidatedFragmentFiles(group)]).toEqual(['layers/hair.png']);
+    expect(
+      consolidatedFragmentFiles({
+        ...group,
+        layers: [
+          group.layers[0],
+          { ...group.layers[1], assembled: { x: 1, y: 0, rotation: 0 } },
+        ],
+      }).size,
+    ).toBe(0);
+    expect(
+      consolidatedFragmentFiles({
+        ...group,
+        layers: [group.layers[0], { ...layer, z: 0.5 }, group.layers[1]],
+      }).size,
+    ).toBe(0);
+    for (const assembly of [
+      null,
+      { file: '../hair.png', index: 1, count: 2 },
+      { file: 'layers/hair.png', index: 0, count: 2 },
+      { file: 'layers/hair.png', index: 1, count: 3 },
+    ])
+      expect(
+        decodeEmblemManifest({
+          ...group,
+          layers: [group.layers[0], { ...group.layers[1], assembly }],
+        }),
+      ).toBeNull();
+  });
   it('accepts dense fragment packs and rejects unbounded or unknown spacing profiles', () => {
     const dense: EmblemManifest = {
       ...manifest,

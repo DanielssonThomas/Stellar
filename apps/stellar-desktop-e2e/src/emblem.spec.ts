@@ -24,7 +24,7 @@ test('purple hair stays in front of every body fragment before settlement', asyn
     }
     const planes = Array.from(element.querySelectorAll<HTMLElement>('.plane'));
     const hairs = planes.filter((plane) =>
-      plane.querySelector('img')?.src.endsWith('/violet-hair.png'),
+      /\/violet-hair-\d+\.png$/.test(plane.querySelector('img')?.src ?? ''),
     );
     const bodies = planes.filter((plane) =>
       plane.querySelector('img')?.src.endsWith('/violet-body.png'),
@@ -228,10 +228,11 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
         .sort((a, b) => a - b),
     );
   const interval = depths[1] - depths[0];
-  expect(interval).toBeGreaterThan(9);
+  expect(interval).toBeGreaterThan(7);
   const gaps = depths.slice(1).map((depth, index) => depth - depths[index]);
-  for (let index = 1; index < gaps.length / 2; index++)
+  for (let index = 1; index < 21; index++)
     expect(gaps[index]).toBeGreaterThan(gaps[index - 1]);
+  expect(depths.slice(21, 26)).toEqual([-180, -90, 0, 90, 180]);
   expect(gaps[Math.floor(gaps.length / 2)]).toBeGreaterThan(interval * 3);
   expect(depths[0] + (depths.at(-1) ?? 0)).toBeCloseTo(0, 2);
   const outer = await page.request.get('/emblem/layers/outer-frame.svg');
