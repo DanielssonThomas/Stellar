@@ -2140,5 +2140,6 @@
     "Long-duration/varied-utterance memory stability",
     "Independent critical review",
     "Distribution installer/attribution packaging"
-  ]
+  ],
+  "followUpEvidence": "recognition-reliability.json (coordinator reliability and approved restricted native qualification; historical measurements here retained)"
 }
