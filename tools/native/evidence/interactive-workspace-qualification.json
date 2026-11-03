@@ -1,0 +1,82 @@
+{
+  "issue": 257,
+  "date": "2026-11-03",
+  "sourceCommit": "600e319010ec1c163a737fb0278cc63439bf0c01",
+  "developBase": "ccdefd9ac8990b5f53003123df25a805acdfffe7",
+  "platform": "Windows, Tauri 2.12.5, installed WebView2; debug native smoke with production Angular assets",
+  "verification": {
+    "frontend": {
+      "command": "corepack pnpm exec nx run-many -t lint test -p ui-organisms ui-molecules ui-templates service-desktop-adapter desktop-contracts stellar-desktop util-desktop-interaction service-audio-activity",
+      "projects": 8,
+      "vitestPassed": 681,
+      "result": "passed"
+    },
+    "productionBuild": "corepack pnpm exec nx build stellar-desktop passed; initial bundle 543.66 kB exceeds the 500 kB warning threshold, within the error budget",
+    "playwright": {
+      "command": "STELLAR_DESKTOP_E2E_PORT=4317 corepack pnpm exec nx e2e stellar-desktop-e2e -- --workers=1",
+      "passed": 52,
+      "method": "Quiet full Chromium suite after native smoke exited; deterministic Web Audio, recognition, model and playback fixtures",
+      "layoutMeasurement": {
+        "operations": 90,
+        "commandP95Ms": 1.0,
+        "frameP95Ms": 22.9,
+        "maxCommandMs": 1.4,
+        "usedJsHeapBytes": 13400000,
+        "limits": "Development build on one machine; frame intervals include rendering and test overhead, not a universal frame-rate guarantee. Heap excludes native browser resources."
+      }
+    },
+    "native": {
+      "commands": "node tools/native/cargo.mjs fmt; clippy; contract-check; size; test (separate invocations, RUST_TEST_THREADS=1)",
+      "result": "passed",
+      "desktopRustPassed": 114,
+      "desktopRustIgnored": 4,
+      "sizeTestsPassed": 7,
+      "dependencyFreePythonPassed": 48,
+      "notes": "Clippy uses -D warnings. ts-rs emits existing serde-attribute parser notices. Parallel Angular rebuild and native compilation is invalid because Tauri embeds generated dist assets; final checks ran sequentially."
+    },
+    "mcp": {
+      "command": "python -I tools/native/workspace_mcp_test.py using the installed Hermes environment with its real MCP SDK",
+      "passed": 10
+    },
+    "nativeJavascript": {
+      "command": "node --test tools/native/ci.spec.mjs tools/native/config.spec.mjs tools/native/smoke-result.spec.mjs tools/native/voice-qualification-core.spec.mjs tools/native/voice-qualification-browser.spec.mjs",
+      "passed": 22
+    }
+  },
+  "liveNativeSmoke": {
+    "command": "STELLAR_WORKSPACE_SMOKE_LIVE=1 node tools/native/cargo.mjs smoke",
+    "checksPassed": 20,
+    "observed": [
+      "Actual public webpage, native focus and source-change events, fragment navigation, Back, Forward and Reload",
+      "Page state retained across four bounds changes",
+      "Third-party Tauri command rejected; fixed HTTPS loopback fetch never reached the owned test listener",
+      "Public W3C raster fetched, decoded and displayed through the bounded native preview pipeline",
+      "Owned-window screenshot succeeds while a child WebView exists"
+    ],
+    "creationThroughPageReadyMs": 703.3,
+    "boundsRoundTripsMs": [9.9, 12.1, 18.7, 10.0],
+    "sampleScope": "One warm public-network debug run, four IPC bounds operations; not startup percentiles or frame measurements",
+    "browserMemory": {
+      "method": "Win32_Process snapshots match the public-browser-v1 profile and descendants; exact native smoke executable measured separately. No unrelated WebView2 processes or main renderer included.",
+      "browserProcessCount": 6,
+      "browserSamples": 3,
+      "summedWorkingSetBytes": [345231360, 346189824, 368877568],
+      "summedPrivateBytes": [170422272, 176996352, 189210624],
+      "mainWorkingSetBytesDuringBrowserSamples": [49254400, 77484032, 79138816],
+      "limits": "Summed working sets count shared pages. Brief observations of one pane establish process scope and overhead, not leak freedom, sustained resource ceilings or two-pane performance. Native admission caps browser panes at two."
+    }
+  },
+  "independentReview": {
+    "reviewedCommit": "600e319010ec1c163a737fb0278cc63439bf0c01",
+    "reviewedFileManifestSha256": "745e484e3aa7ab72ef4e6d3c9f8f743b72fa4636272850ab5f24aade14734fc0",
+    "result": "No remaining actionable source findings; Windows WebView2 interop exception reviewed",
+    "authority": "User-authorized independent source review; not a paid review check or merge authorization"
+  },
+  "limitations": [
+    "Physical microphone and actual spoken visual requests were not qualified. Browser voice/model tests use deterministic fixtures; existing acoustic acceptance remains separate, including issue 184.",
+    "No additional inference was requested for state refresh or benchmarks. Tool descriptions supply durable Stellar guidance because the installed Hermes does not promote MCP initialize instructions to model context.",
+    "Existing cached ACP sessions require explicit idle Reload MCP once to discover the expanded catalogue; no automatic conversation reset.",
+    "Arbitrary website compatibility, long-duration memory/VRAM behavior and physical voice performance remain unqualified.",
+    "Source implementation is isolated from unfinished recognition PR 256 and music PR 262. No merge is authorized."
+  ]
+}
