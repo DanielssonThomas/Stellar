@@ -12,7 +12,6 @@
 }
 
 .camera,
-.drift,
 .emblem-presence,
 .plane,
 .artwork,
@@ -133,13 +132,16 @@ img {
   }
 }
 
-.camera,
-.drift {
+.camera {
   transform-style: preserve-3d;
 }
 
+.render-active .camera,
+.render-active .plane {
+  will-change: transform;
+}
+
 .camera,
-.drift,
 .plane,
 .artwork {
   pointer-events: none;

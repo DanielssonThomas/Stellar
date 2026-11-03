@@ -1,6 +1,75 @@
 import { expect, test } from '@playwright/test';
 
-test('81 independent assembly planes share one idle drift and thirteen ring rotations', async ({
+test('prepares selected fragments and assembled sources before interaction and refreshes after resize', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.addInitScript(() => {
+    const state = window as typeof window & { emblemDecodes: string[] };
+    state.emblemDecodes = [];
+    const decode = HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode = function () {
+      return decode.call(this).then(() => {
+        if (this.currentSrc.includes('/emblem/'))
+          state.emblemDecodes.push(this.currentSrc);
+      });
+    };
+  });
+  await page.goto('/');
+  const decoded = () =>
+    page.evaluate(() => [
+      ...new Set(
+        (window as typeof window & { emblemDecodes: string[] }).emblemDecodes,
+      ),
+    ]);
+  await expect.poll(async () => (await decoded()).length).toBe(91);
+  const sources = await decoded();
+  expect(
+    sources.filter((url) => url.includes('/resolutions/512/')),
+  ).toHaveLength(86);
+  expect(
+    sources.filter((url) =>
+      /\/(gold|violet)-(body|hair|ornament)\.png$/.test(url),
+    ),
+  ).toHaveLength(6);
+  await expect(
+    page.locator('stellar-desktop-experience-template'),
+  ).toHaveAttribute('data-phase', 'idle');
+  const plane = page.locator('.plane').first();
+  expect(
+    await plane.evaluate((element) => getComputedStyle(element).willChange),
+  ).toBe('transform');
+  const animationIds = await page
+    .locator('.artwork')
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAnimations()[0]?.startTime),
+    );
+  await page.locator('stellar-emblem-motion-molecule').evaluate((element) => {
+    (element as HTMLElement).style.width = '700px';
+  });
+  await expect
+    .poll(
+      async () =>
+        (await decoded()).filter((url) => url.includes('/resolutions/768/'))
+          .length,
+    )
+    .toBe(86);
+  expect(
+    await page
+      .locator('.artwork')
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAnimations()[0]?.startTime),
+      ),
+  ).toEqual(animationIds);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect
+    .poll(() =>
+      plane.evaluate((element) => getComputedStyle(element).willChange),
+    )
+    .toBe('auto');
+});
+
+test('81 pieces retain individual idle floats and thirteen independent ring rotations', async ({
   page,
 }) => {
   await page.goto('/');
@@ -18,14 +87,7 @@ test('81 independent assembly planes share one idle drift and thirteen ring rota
             ).length,
       ),
     )
-    .toBe(14);
-  await expect
-    .poll(() =>
-      page
-        .locator('.drift')
-        .evaluate((element) => element.getAnimations().length),
-    )
-    .toBe(1);
+    .toBe(81);
   await expect
     .poll(() =>
       page
@@ -37,7 +99,7 @@ test('81 independent assembly planes share one idle drift and thirteen ring rota
           ),
         ),
     )
-    .toBe(0);
+    .toBe(68);
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
@@ -52,13 +114,6 @@ test('81 independent assembly planes share one idle drift and thirteen ring rota
     )
     .toBe(0);
   await expect(page.locator('.plane')).toHaveCount(81);
-  await expect
-    .poll(() =>
-      page
-        .locator('.drift')
-        .evaluate((element) => getComputedStyle(element).transform),
-    )
-    .toBe('none');
   await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect
     .poll(() =>
@@ -72,7 +127,7 @@ test('81 independent assembly planes share one idle drift and thirteen ring rota
             ).length,
       ),
     )
-    .toBe(14);
+    .toBe(81);
 });
 
 for (const [density, resolution, prefix] of [

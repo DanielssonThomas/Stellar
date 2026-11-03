@@ -269,7 +269,7 @@ describe('EmblemMotionMolecule', () => {
     expect(animate).toHaveBeenCalledTimes(animationCount);
   });
 
-  it('shares one drift animation across non-ring fragments while retaining independent ring spin', async () => {
+  it('keeps independent floats for every non-ring fragment and retains existing ring spin', async () => {
     fixture.componentRef.setInput('manifest', {
       ...manifest,
       layers: [
@@ -287,10 +287,9 @@ describe('EmblemMotionMolecule', () => {
     const infinite = animate.mock.calls.filter(
       (call) => call[1]?.iterations === Infinity,
     );
-    // Existing drift and ring animations survive; new fragments add no animations.
-    expect(infinite).toHaveLength(0);
+    expect(infinite).toHaveLength(20);
     expect(
-      fixture.nativeElement.querySelectorAll('.drift .plane'),
+      fixture.nativeElement.querySelectorAll('.camera .plane'),
     ).toHaveLength(22);
     expect(
       fixture.nativeElement.querySelectorAll('.spin-clockwise,.spin-counter'),

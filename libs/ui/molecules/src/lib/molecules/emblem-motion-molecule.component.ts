@@ -21,6 +21,7 @@ import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
 import { emblemClipPath } from './emblem-clip';
 import { emblemImageSource } from './emblem-image-sources';
+import { createEmblemImagePreparation } from './emblem-image-preparation';
 import {
   clampAudioLevel,
   EmblemManifest,
@@ -89,8 +90,12 @@ export class EmblemMotionMolecule {
   } | null>(null);
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
   private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
-  private readonly drift = viewChild<ElementRef<HTMLElement>>('drift');
   private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
+  private readonly images =
+    viewChildren<ElementRef<HTMLImageElement>>('emblemImage');
+  private readonly preparation = createEmblemImagePreparation(
+    this.document.defaultView,
+  );
   private readonly settledPhase = signal<Phase | null>(null);
   private readonly motion = createEmblemLayerMotion(
     this.document.defaultView,
@@ -150,6 +155,7 @@ export class EmblemMotionMolecule {
     clsx('emblem relative block h-full w-full', {
       'motion-paused': this.paused(),
       'motion-reduced': this.motionReduced(),
+      'render-active': !this.paused(),
       'waiting-response': this.showWaiting(),
       'sol-identity': this.solActive(),
       'with-environment': this.environment(),
@@ -239,6 +245,7 @@ export class EmblemMotionMolecule {
       this.media?.removeEventListener('change', preferenceChanged);
       this.motion.dispose();
       this.ambient.dispose();
+      this.preparation.dispose();
     });
     afterRenderEffect(() => {
       const manifest = this.manifest();
@@ -248,7 +255,6 @@ export class EmblemMotionMolecule {
       const paused = this.paused();
       const planes = this.planes();
       const camera = this.camera();
-      const drift = this.drift();
       this.motion.update(
         manifest
           ? [
@@ -288,25 +294,45 @@ export class EmblemMotionMolecule {
       );
       this.settledPhase.set(this.motion.settled() ? phase : null);
       this.ambient.update(
-        [
-          ...(drift ? [{ element: drift.nativeElement, order: 0 }] : []),
-          ...this.artwork().flatMap((artwork, index) => {
-            const layer = layers[index];
-            return layer?.spin
-              ? [
-                  {
-                    element: artwork.nativeElement,
-                    spin: layer.spin,
-                    order: index,
-                  },
-                ]
-              : [];
-          }),
-        ],
+        this.artwork().flatMap((artwork, index) => {
+          const layer = layers[index];
+          return layer
+            ? [
+                {
+                  element: artwork.nativeElement,
+                  spin: layer.spin,
+                  order: index,
+                },
+              ]
+            : [];
+        }),
         !this.fault() && idleMotionEnabled(phase, paused),
         paused,
       );
     });
+    afterRenderEffect(() => {
+      this.layers();
+      this.assemblySources();
+      this.imageSizes();
+      this.prepareImages();
+    });
+  }
+
+  prepareImages() {
+    if (
+      this.loading() ||
+      this.unavailable() ||
+      !this.active() ||
+      !this.visible() ||
+      this.posePhase() === 'suspended' ||
+      this.posePhase() === 'shutdown'
+    ) {
+      this.preparation.cancel();
+      return;
+    }
+    this.preparation.schedule(
+      this.images().map((image) => image.nativeElement),
+    );
   }
 
   assetFailed() {
