@@ -118,8 +118,8 @@ describe('dedicated command recognition integration', () => {
     f.utterance();
     await settle();
     expect(f.composition()).toMatchObject({ raw: '', status: 'idle' });
-    expect(f.view().foregroundActive).toBe(false);
-    expect(ended).toHaveBeenCalledOnce();
+    expect(f.view().foregroundActive).toBe(true);
+    expect(ended).not.toHaveBeenCalled();
     f.controller.dispose();
   });
   it('routes quiet speech through fallback even when visual activity stays below its threshold', async () => {
@@ -163,7 +163,7 @@ describe('dedicated command recognition integration', () => {
     f.utterance();
     await settle();
     expect(f.composition()).toMatchObject({ raw: '', status: 'idle' });
-    expect(f.view().passive).toBe(true);
+    expect(f.view().passive).toBe(false);
     expect(refine).not.toHaveBeenCalled();
     expect(f.ports.submit).not.toHaveBeenCalled();
     f.controller.dispose();
@@ -371,30 +371,36 @@ describe('dedicated command recognition integration', () => {
       f.controller.dispose();
     },
   );
-  it('cancels composition without cleanup, transcription, or submission and requires a fresh wake', async () => {
-    const refine = vi.fn(async (raw: string) => raw);
-    const f = fixture({
-      keywords: async (_pcm, _stream, sequence) => ({
-        sequence,
-        detection: { command: 'prompt cancel', end_sample: 640 },
-      }),
-      refinePrompt: refine,
-    });
-    f.controller.setDraft('Keep this only until cancelled');
-    f.feed(true, 1);
-    f.feed(false, 25);
-    await settle();
-    expect(f.composition()).toMatchObject({
-      raw: '',
-      refined: null,
-      status: 'idle',
-    });
-    expect(f.view().passive).toBe(true);
-    expect(refine).not.toHaveBeenCalled();
-    expect(f.ports.transcribe).not.toHaveBeenCalled();
-    expect(f.ports.submit).not.toHaveBeenCalled();
-    f.controller.dispose();
-  });
+  it.each([false, true])(
+    'cancels composition through KWS with established Sol = %s',
+    async (establishedSol) => {
+      const refine = vi.fn(async (raw: string) => raw);
+      const f = fixture({
+        keywords: async (_pcm, _stream, sequence) => ({
+          sequence,
+          detection: { command: 'prompt cancel', end_sample: 640 },
+        }),
+        refinePrompt: refine,
+      });
+      if (establishedSol) f.controller.initializeSession('sol');
+      f.controller.setModel('sol');
+      f.controller.setDraft('Keep this only until cancelled');
+      f.feed(true, 1);
+      f.feed(false, 25);
+      await settle();
+      expect(f.composition()).toMatchObject({
+        raw: '',
+        refined: null,
+        status: 'idle',
+      });
+      expect(f.view().passive).toBe(establishedSol);
+      expect(f.composition().model).toBe('terra');
+      expect(refine).not.toHaveBeenCalled();
+      expect(f.ports.transcribe).not.toHaveBeenCalled();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      f.controller.dispose();
+    },
+  );
   it('retains the awake state and draft when acoustic clear is refused', async () => {
     const f = fixture({
       keywords: async (_pcm, _stream, sequence) => ({
@@ -598,9 +604,9 @@ describe('wake-word session lifecycle', () => {
     expect(f.view().inputText).toBe('');
     expect(f.ports.submit).not.toHaveBeenCalled();
     f.feed(false, 1);
-    await f.say('the next ambient sentence');
-    expect(f.view().inputText).toBe('the next ambient sentence');
-    expect(f.view().foregroundActive).toBe(false);
+    await f.say('the next Terra sentence');
+    expect(f.view().inputText).toBe('the next Terra sentence');
+    expect(f.view().foregroundActive).toBe(true);
   });
 
   it('trusts the first Ivy hit without requiring a repeated wake in the final transcript', async () => {
@@ -822,7 +828,7 @@ describe('wake-word session lifecycle', () => {
     expect(f.ports.submit).toHaveBeenLastCalledWith('start again', id);
   });
 
-  it('routes dotted I.V. to Terra and Sol, retaining the raw transcript and resetting after cancellation', async () => {
+  it('routes dotted I.V. to Terra and resumes it after cancelling the first Sol draft', async () => {
     const f = setup();
     await f.say('I.V, explain the plan');
     expect(f.view().inputText).toBe('I.V, explain the plan');
@@ -842,10 +848,10 @@ describe('wake-word session lifecycle', () => {
       raw: 'new draft',
     });
     await f.say('prompt cancel');
-    expect(f.view().foregroundActive).toBe(false);
+    expect(f.view().foregroundActive).toBe(true);
     f.feed(false, 1);
     await f.say('prompt');
-    expect(f.composition()?.status).toBe('idle');
+    expect(f.composition()?.status).toBe('composing');
     expect(f.ports.submit).toHaveBeenCalledOnce();
   });
 
@@ -915,13 +921,74 @@ describe('wake-word session lifecycle', () => {
       expect(f.refinePrompt).not.toHaveBeenCalled();
       expect(f.selectSession).not.toHaveBeenCalled();
       expect(f.ports.submit).not.toHaveBeenCalled();
-      expect(f.onForegroundEnd).toHaveBeenCalledOnce();
+      expect(f.onForegroundEnd).not.toHaveBeenCalled();
+      expect(f.view()).toMatchObject({
+        foregroundActive: true,
+        passive: false,
+      });
       f.feed(false, 1);
       await f.say('prompt');
-      await f.say('ambient request');
+      await f.say('another first draft');
       expect(f.ports.submit).not.toHaveBeenCalled();
-      await f.say('Ivy, prompt new draft');
-      expect(f.composition()?.raw).toBe('new draft');
+      await f.say('prompt cancel');
+      f.feed(false, 1);
+      expect(f.composition()).toMatchObject({
+        raw: '',
+        model: 'terra',
+        status: 'idle',
+      });
+      await f.say('continue the Terra conversation');
+      expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+        'continue the Terra conversation',
+        id,
+      );
+      expect(f.selectSession).toHaveBeenCalledExactlyOnceWith('terra');
+    },
+  );
+
+  it.each(['submitted', 'restored'] as const)(
+    'retains passive cancellation after an established %s Sol session',
+    async (source) => {
+      const f = setup();
+      if (source === 'restored') f.controller.initializeSession('sol');
+      else {
+        await f.say('Ivy, prompt first Sol request');
+        await f.say('send prompt');
+        expect(f.ports.submit).toHaveBeenCalledOnce();
+        f.settle();
+      }
+      await f.say('Ivy, prompt discard this');
+      const submissions = f.ports.submit.mock.calls.length;
+      await f.say('prompt cancel');
+      expect(f.view()).toMatchObject({
+        foregroundActive: false,
+        passive: true,
+      });
+      expect(f.onForegroundEnd).toHaveBeenCalledOnce();
+      expect(f.ports.submit).toHaveBeenCalledTimes(submissions);
+    },
+  );
+
+  it.each(['clear', 'new session'] as const)(
+    'resets first-prompt cancellation after confirmed %s',
+    async (command) => {
+      const f = setup({ newSession: async () => true });
+      f.controller.initializeSession('sol');
+      await f.say('Ivy');
+      await f.say(command);
+      f.feed(false, 1);
+      await f.say('Ivy, prompt new first draft');
+      await f.say('prompt cancel');
+      expect(f.view()).toMatchObject({
+        foregroundActive: true,
+        passive: false,
+      });
+      expect(f.composition()).toMatchObject({
+        model: 'terra',
+        raw: '',
+        status: 'idle',
+      });
+      expect(f.ports.submit).not.toHaveBeenCalled();
     },
   );
 
