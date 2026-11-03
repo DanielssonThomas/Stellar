@@ -47,6 +47,11 @@ fn check_page(window: Webview) {
                 catch (error) { malformedRejected = error.code === 'malformed_request'; }
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
+                let lifecycleRejected = 0;
+                for (const name of ['ivy_new_session', 'ivy_reload_mcp']) {
+                    try { await invoke(name, { request: { version: 2 } }); }
+                    catch (error) { if (error === 'malformed_request') lifecycleRejected++; }
+                }
                 const selected = await invoke('ivy_select_session', { request: { version: 1, model: 'sol' } });
                 const cleared = await invoke('ivy_clear_conversation', { request: { version: 1 } });
                 const sessionsOk = selected.model === 'sol' && selected.verified_model === null &&
@@ -88,7 +93,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { success: lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -115,6 +120,8 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::telemetry::telemetry_snapshot,
             crate::ivy::ivy_select_session,
             crate::ivy::ivy_clear_conversation,
+            crate::ivy::ivy_new_session,
+            crate::ivy::ivy_reload_mcp,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
             smoke_hold_ivy,

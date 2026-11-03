@@ -58,6 +58,8 @@ pub fn stop(child: &OwnedChild) {
 impl Broker {
     pub fn launch(child: OwnedChild) -> Result<Self, IvyErrorCode> {
         let modules = [
+            ("stellar_ivy_activity", include_str!("ivy_activity.py")),
+            ("stellar_ivy_controls", include_str!("ivy_controls.py")),
             (
                 "stellar_workspace_credentials",
                 include_str!("workspace_credentials.py"),
@@ -216,8 +218,12 @@ impl Broker {
                 continue;
             }
             if frame.get("id").and_then(Value::as_u64) == Some(self.sequence) {
-                if frame.get("error").is_some() {
-                    return Err(IvyErrorCode::Uncertain);
+                if let Some(error) = frame.get("error") {
+                    return Err(match error.get("code").and_then(Value::as_str) {
+                        Some("busy") => IvyErrorCode::Busy,
+                        Some("unavailable") => IvyErrorCode::Unavailable,
+                        _ => IvyErrorCode::Uncertain,
+                    });
                 }
                 return frame.get("result").cloned().ok_or(IvyErrorCode::Protocol);
             }

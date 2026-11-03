@@ -71,6 +71,20 @@ describe('DesktopExperienceTemplate', () => {
     expect(fixture.componentInstance.emblemPhase()).toBe('shutdown');
   });
 
+  it('allows explicit manual activity to assemble while voice remains passive', async () => {
+    fixture.componentRef.setInput('passiveListening', true);
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'listening',
+      manualActive: true,
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('state', initialState);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('idle');
+  });
+
   it('assembles while waiting, restores presence for narration and removes waiting on suspension', async () => {
     fixture.componentRef.setInput('assistantWaiting', true);
     await fixture.whenStable();
@@ -208,4 +222,18 @@ describe('DesktopExperienceTemplate', () => {
     select.dispatchEvent(new Event('change'));
     expect(selected).toHaveBeenCalledExactlyOnceWith('');
   });
+});
+
+it('keeps passive reset exploded during recognition and still respects suspension', async () => {
+  const f = TestBed.createComponent(DesktopExperienceTemplate);
+  f.componentRef.setInput('passiveListening', true);
+  f.componentRef.setInput('assistantWaiting', true);
+  f.componentRef.setInput('conversationActive', true);
+  await f.whenStable();
+  expect(f.componentInstance.emblemPhase()).toBe('idle');
+  expect(f.componentInstance.assistantActive()).toBe(false);
+  f.componentRef.setInput('state', { ...initialState, phase: 'suspended' });
+  await f.whenStable();
+  expect(f.componentInstance.emblemPhase()).toBe('suspended');
+  f.destroy();
 });

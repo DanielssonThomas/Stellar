@@ -25,6 +25,7 @@ export interface DesktopSessionOptions {
 
 export class DesktopSession {
   private commandId = 0;
+  private passiveListening = false;
   private captureId: number | null = null;
   private manualStart: number | null = null;
   private manualDuration = 0;
@@ -52,7 +53,19 @@ export class DesktopSession {
     return this.controller.getState();
   }
 
+  setPassiveListening(passive: boolean) {
+    if (passive === this.passiveListening) return;
+    this.passiveListening = passive;
+    if (passive) this.dispatch({ type: 'conversation-reset' });
+  }
+
   dispatch(event: InteractionEvent) {
+    if (
+      this.passiveListening &&
+      event.type === 'presentation-change' &&
+      !event.visible
+    )
+      event = { type: 'conversation-reset' };
     if (event.type === 'manual-start' && !this.state.manualActive) {
       if (['idle', 'presenting', 'returning'].includes(this.state.phase))
         this.manualDuration = 0;
@@ -83,7 +96,10 @@ export class DesktopSession {
       this.dispatch({
         type: 'audio-activity',
         requestId,
-        active: !this.options.voiceDriven && audio.activity.active,
+        active:
+          !this.options.voiceDriven &&
+          !this.passiveListening &&
+          audio.activity.active,
       });
       return;
     }

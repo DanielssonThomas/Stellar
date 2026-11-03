@@ -57,6 +57,7 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
         useValue: {
           state: signal({ phase: 'idle' }),
           startListening: vi.fn(),
+          setPassiveListening: vi.fn(),
         },
       },
     ],
@@ -214,6 +215,7 @@ describe('desktop voice cleanup integration', () => {
           provide: DesktopExperience,
           useValue: {
             state: signal({ phase: 'idle' }),
+            setPassiveListening: vi.fn(),
             setVoiceCapturePaused: vi.fn(),
             waitForVoiceCaptureRelease: vi.fn(async () => undefined),
           },

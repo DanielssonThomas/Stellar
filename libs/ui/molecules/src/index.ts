@@ -28,3 +28,4 @@ export {
 export * from './lib/molecules/prompt-composer-molecule.component';
 export * from './lib/molecules/fault-log-molecule.component';
 export * from './lib/molecules/voice-transcript-molecule.component';
+export * from './lib/molecules/ivy-activity-molecule.component';

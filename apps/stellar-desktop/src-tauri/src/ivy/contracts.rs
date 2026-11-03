@@ -54,6 +54,37 @@ pub enum IvyModel {
     Terra,
     Sol,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityKind {
+    Shell,
+    Web,
+    FileRead,
+    FileWrite,
+    Mcp,
+    Skill,
+    SkillCreate,
+    Memory,
+    Tool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityState {
+    Running,
+    Completed,
+    Failed,
+    Finished,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyActivity {
+    pub id: String,
+    pub kind: IvyActivityKind,
+    pub state: IvyActivityState,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvySelectRequest {
@@ -86,6 +117,10 @@ pub struct IvySnapshot {
     pub workspace_epoch: String,
     pub connection: IvyConnectionState,
     pub turn: IvyTurnState,
+    #[serde(default)]
+    pub activity: Vec<IvyActivity>,
+    #[serde(default)]
+    pub reset_id: Option<String>,
     pub items: Vec<super::presentation::IvyPresentation>,
     pub error: Option<IvyErrorCode>,
 }
@@ -102,6 +137,8 @@ impl Default for IvySnapshot {
             workspace_epoch: "0".into(),
             connection: IvyConnectionState::Disconnected,
             turn: IvyTurnState::Idle,
+            activity: vec![],
+            reset_id: None,
             items: vec![],
             error: None,
         }

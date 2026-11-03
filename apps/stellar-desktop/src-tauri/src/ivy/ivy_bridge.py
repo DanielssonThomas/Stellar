@@ -23,6 +23,8 @@ METHODS = {
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
+    'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
+    'integrations.reload': {'session_id': object},
     'workspace.setup': {'descriptor': object, 'session_id': object}, 'workspace.stop': {},
 }
 CAPABILITIES = ['durable-admission-v1', 'event-replay-v1', 'local-cli-create-v1']
@@ -112,8 +114,10 @@ def validate(request):
             raise ValueError()
         if key == 'text' and not value.strip():
             raise ValueError()
-        if key == 'execution_generation' and value < 0:
+        if key in {'execution_generation', 'generation', 'revision'} and value < 0:
             raise ValueError()
+    if method == 'integrations.reload' and params['session_id'] is not None and not string(params['session_id']):
+        raise ValueError()
     if method == 'session.create' and params['model'] not in {'gpt-6.1-terra', 'gpt-6.1-sol'}:
         raise ValueError()
     return rid, method, params
@@ -142,17 +146,32 @@ def load_library():
 
 
 async def pump(conn, workspace=None):
+    from stellar_ivy_activity import Activity
+    activity = Activity()
     while True:
-        event = await conn.client.events.get()
+        try:
+            event = await asyncio.wait_for(conn.client.events.get(), activity.delay())
+        except asyncio.TimeoutError:
+            clean = activity.flush()
+            if clean is not None:
+                emit({'event': 'gateway', 'data': {'params': clean}})
+            continue
         if isinstance(event, Exception) or type(event) is not dict:
             raise Closed()
         params = event.get('params')
         if type(params) is not dict:
             continue
         kind = params.get('type')
+        if kind in {'tool.start', 'tool.complete'}:
+            activity.offer(params)
+            continue
         if kind not in {'message.complete', 'session.replay_gap',
                         'approval.request', 'clarify.request'}:
             continue
+        # Terminal/control events retain ordering ahead of the next activity batch.
+        pending = activity.flush()
+        if pending is not None:
+            emit({'event': 'gateway', 'data': {'params': pending}})
         payload = params.get('payload', {})
         if type(payload) is not dict:
             raise Closed()
@@ -257,6 +276,7 @@ async def requests_with_workspace(conn, workspace):
 
 
 async def request_worker(conn, workspace, queue):
+    from stellar_ivy_controls import control, Refused
     while True:
         request = await queue.get()
         if request is None:
@@ -265,7 +285,9 @@ async def request_worker(conn, workspace, queue):
             raise Closed() from None
         rid, method, params = request
         try:
-            if method == 'workspace.setup':
+            if method in {'session.new', 'integrations.reload'}:
+                result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
+            elif method == 'workspace.setup':
                 if workspace is None:
                     raise Closed()
                 result = await workspace.start(params['descriptor'])
@@ -359,6 +381,8 @@ async def request_worker(conn, workspace, queue):
                 workspace.gate.disarm()
             emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
             raise Closed() from None
+        except Refused as error:
+            emit({'id': rid, 'error': {'code': error.code}})
         except Closed:
             if workspace is not None:
                 workspace.gate.disarm()

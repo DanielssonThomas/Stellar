@@ -264,6 +264,16 @@ export function reduceInteraction(
           move(s.automaticSummary === false ? 'center' : 'docked');
       }
       break;
+    case 'conversation-reset':
+      cancelHangover();
+      closeSurface();
+      update({
+        manualActive: false,
+        audioActive: false,
+        presentationRequested: false,
+      });
+      move('center');
+      break;
     case 'dismiss':
       cancelHangover();
       closeSurface();

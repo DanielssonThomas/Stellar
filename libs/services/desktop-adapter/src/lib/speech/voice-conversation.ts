@@ -38,6 +38,8 @@ export interface VoiceContext {
 export interface VoiceView {
   readonly inputText?: string;
   readonly foregroundActive?: boolean;
+  readonly passive?: boolean;
+  readonly notice?: string;
   readonly status: string;
   readonly muted: boolean;
   readonly error: boolean;
@@ -46,6 +48,9 @@ export interface VoiceView {
 
 export interface VoicePorts {
   readonly onForegroundEnd?: () => void;
+  readonly newSession?: () => Promise<boolean>;
+  readonly reloadMcp?: () => Promise<boolean>;
+  readonly onNewSession?: () => void;
   readonly transcribe: (
     pcm: Int16Array,
     id: string,
@@ -101,6 +106,9 @@ export class VoiceConversation {
   private dispatchPending = false;
   private routeUncertain = false;
   private sessionPending = false;
+  private controlNotice = '';
+  private newSessionRequested = false;
+  private lastResetId: string | null = null;
   private readonly draftRecognition?: DraftRecognition;
   private previewSamples = 0;
   private draftSequence: number | null = null;
@@ -153,6 +161,13 @@ export class VoiceConversation {
       context.assistant.turn,
     );
     this.context = context;
+    if (
+      context.assistant.reset_id &&
+      context.assistant.reset_id !== this.lastResetId
+    ) {
+      this.lastResetId = context.assistant.reset_id;
+      this.finishNewSession();
+    }
     if (
       !context.available ||
       (hadCapture &&
@@ -464,7 +479,10 @@ export class VoiceConversation {
       )
         return false;
       const accepted = await action();
-      if (accepted && this.current(generation)) this.invocation.activate();
+      if (accepted && this.current(generation)) {
+        this.invocation.activate();
+        this.controlNotice = '';
+      }
       return accepted;
     } catch {
       return false;
@@ -505,6 +523,11 @@ export class VoiceConversation {
     }
     if (!final || !text.trim()) return;
     const generation = this.generation;
+    const control = commandAllowed ? voiceCommand(text) : null;
+    if (control === 'new session' || control === 'reload mcp') {
+      await this.recognize(text, id, generation, commandAllowed);
+      return;
+    }
     // A capped continuation cannot introduce a new utterance-prefix wake word.
     if (
       !commandAllowed &&
@@ -554,7 +577,9 @@ export class VoiceConversation {
       command === 'send prompt' ||
       command === 'send' ||
       command === 'clear' ||
-      command === 'done'
+      command === 'done' ||
+      command === 'new session' ||
+      command === 'reload mcp'
     ) {
       this.draftRecognition?.clearPending();
       this.assembler.reset();
@@ -693,9 +718,15 @@ export class VoiceConversation {
     commandAllowed = true,
   ) {
     if (!this.current(generation)) return;
+    if (this.sessionPending) return;
     const composing = this.promptOpen;
     if (composing && cancelsPrompt(text)) {
       this.cancelPrompt();
+      return;
+    }
+    const control = commandAllowed ? voiceCommand(text) : null;
+    if (control === 'new session' || control === 'reload mcp') {
+      await this.lifecycleCommand(control, generation);
       return;
     }
     const invocation = this.invocation.accept(text, composing);
@@ -734,6 +765,11 @@ export class VoiceConversation {
       return;
     }
     const command = commandAllowed ? voiceCommand(text) : null;
+    if (command === 'new session' || command === 'reload mcp') {
+      await this.lifecycleCommand(command, generation);
+      return;
+    }
+    this.controlNotice = '';
     if (command === 'prompt') {
       this.promptOpen = true;
       this.phase = null;
@@ -810,6 +846,93 @@ export class VoiceConversation {
           'Could not select the conversation. Your text is retained.',
         );
     }
+  }
+
+  private async lifecycleCommand(
+    command: 'new session' | 'reload mcp',
+    generation: number,
+  ) {
+    const context = this.context;
+    if (
+      !context ||
+      ['submitting', 'admitted', 'uncertain'].includes(
+        context.assistant.turn,
+      ) ||
+      this.dispatchPending ||
+      this.dispatchUncertain
+    ) {
+      this.phase = null;
+      this.controlNotice =
+        'Ivy is busy. Try the command after this turn finishes.';
+      this.publish();
+      return;
+    }
+    this.sessionPending = true;
+    this.controlNotice =
+      command === 'new session'
+        ? 'Starting a fresh session'
+        : 'Reloading MCP integrations';
+    if (command === 'new session') this.newSessionRequested = true;
+    this.publish();
+    try {
+      const operation =
+        command === 'new session'
+          ? this.ports.newSession
+          : this.ports.reloadMcp;
+      const accepted = operation ? await operation() : false;
+      if (command === 'new session' && !this.newSessionRequested) return;
+      if (
+        this.disposed ||
+        (!this.current(generation) && !(accepted && command === 'new session'))
+      )
+        return;
+      this.phase = null;
+      if (!accepted) {
+        this.controlNotice =
+          command === 'new session'
+            ? 'New session was not confirmed. Check Ivy before continuing.'
+            : 'MCP reload unavailable or busy. Conversation preserved.';
+      } else if (command === 'new session') {
+        if (this.newSessionRequested) this.finishNewSession();
+      } else this.controlNotice = 'MCP integrations reloaded.';
+    } catch {
+      if (
+        this.current(generation) &&
+        (command !== 'new session' || this.newSessionRequested)
+      ) {
+        this.phase = null;
+        this.controlNotice =
+          command === 'new session'
+            ? 'New session was not confirmed. Check Ivy before continuing.'
+            : 'MCP reload failed or is unsupported. Conversation preserved.';
+      }
+    } finally {
+      this.sessionPending = false;
+      if (!this.disposed) this.publish();
+    }
+  }
+
+  private finishNewSession() {
+    this.newSessionRequested = false;
+    this.invocation.reset();
+    this.promptOpen = false;
+    this.invalidate();
+    this.dispatchUncertain = false;
+    this.routeUncertain = false;
+    this.voiceTurn = null;
+    this.settledTurn = null;
+    this.phase = null;
+    this.setComposition({
+      raw: '',
+      refined: null,
+      lastSubmittedRaw: '',
+      model: this.composition.model,
+      status: 'idle',
+      error: '',
+    });
+    this.controlNotice = 'New session. Say Ivy.';
+    this.publish();
+    this.ports.onNewSession?.();
   }
 
   private async clearConversation(generation: number): Promise<boolean> {
@@ -1230,6 +1353,7 @@ export class VoiceConversation {
       this.stopping ||
       this.unconfirmedStop ||
       this.dispatchPending ||
+      this.sessionPending ||
       this.dispatchUncertain ||
       this.blocked ||
       this.routeUncertain ||
@@ -1244,6 +1368,8 @@ export class VoiceConversation {
     this.ports.onChange({
       inputText: this.inputText,
       foregroundActive: this.promptOpen || this.invocation.active(),
+      passive: !this.promptOpen && !this.invocation.active(),
+      notice: this.controlNotice,
       muted: this.muted,
       error: !!this.failure || this.routeUncertain,
       busy:
@@ -1253,6 +1379,7 @@ export class VoiceConversation {
         this.phase === 'speaking',
       status:
         this.failure ||
+        this.controlNotice ||
         (this.routeUncertain
           ? 'Conversation state is uncertain. Refresh it in the menu before voice resumes.'
           : '') ||

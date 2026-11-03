@@ -1,5 +1,30 @@
 {
   "issue": 247,
+  "standbyIntegration": {
+    "date": "2026-11-03",
+    "developBase": "f2a781ae42c02a29a6dcd9d4611c00b5a2e7f463",
+    "problem": "Develop still derived foreground presence from a retained turn ID; the wake-driven implementation was in unmerged PR 248.",
+    "resolution": "Integrate activity/native lifecycle controls with the explicit wake gate. Derive passive and foreground state from that gate; preserve manual demo assembly. Confirmed new session resets the gate and fences pending recognition.",
+    "productionExecutableSha256": "f90f19e896849e843c464896bf44d30e31d21abe4587c910d59d31f608de3487",
+    "nativeObservation": {
+      "normalExecutable": true,
+      "existingProfileAndRuntimePreserved": true,
+      "startupExploded": true,
+      "independentRingMotionObserved": true,
+      "microphoneOn": true,
+      "voiceStatus": "Listening for Ivy",
+      "newSpeechConversationTested": false,
+      "limitations": "This verifies actual native standby and visible motion, not acoustic wake accuracy or a new spoken conversation. Earlier synthetic qualification below is historical."
+    },
+    "verification": {
+      "frontendUnitTests": 650,
+      "desktopPlaywright": "37/37 passed; retained completed Sol startup also passed 2/2 after final test formatting.",
+      "nativeRust": "101 desktop and 7 size tests passed, with 3 existing ignored desktop tests.",
+      "python": "40 worker/bridge tests passed.",
+      "checks": "Affected lint and production build; Rust format, Clippy with warnings denied, bindings drift, size policy; native smoke and normal native build passed.",
+      "initialFailure": "The first combined browser run found four manual-emblem regressions caused by passive override. Corrected the manual-active guard; the full rerun passed."
+    }
+  },
   "currentQualification": {
     "purpose": "Activate immediately on the first exact leading Ivy result; trust it without final wake confirmation. Recognize alright/all right I am/Im done as whole completion commands.",
     "syntheticSpeech": true,

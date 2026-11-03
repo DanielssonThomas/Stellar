@@ -33,6 +33,31 @@ function surface(component: IvyComponent): 'assistant-message' {
 export class DesktopAssistant {
   private readonly adapter = inject(IvyAdapterService);
   readonly state = this.adapter.state;
+  readonly activity = computed(() =>
+    this.state().activity.map((row) => ({
+      id: row.id,
+      label: {
+        shell: 'Shell command',
+        web: 'Web request',
+        file_read: 'Read files',
+        file_write: 'Write files',
+        mcp: 'MCP tool call',
+        skill: 'Modify skill',
+        skill_create: 'Create skill',
+        memory: 'Update memory',
+        tool: 'Tool call',
+      }[row.kind],
+      status: row.state,
+      running: row.state === 'running',
+      confirmed: row.state === 'completed',
+      indicator:
+        row.kind === 'skill_create'
+          ? ('skill' as const)
+          : row.kind === 'skill' || row.kind === 'memory'
+            ? row.kind
+            : null,
+    })),
+  );
   private readonly presentationError = signal(false);
   private readonly inputError = signal(false);
   private readonly ready = signal(false);

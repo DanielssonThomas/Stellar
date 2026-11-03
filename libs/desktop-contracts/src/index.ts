@@ -19,6 +19,9 @@ export {
 } from './lib/app-info-codec';
 export { capabilityLabel } from './lib/capability-label';
 export type {
+  IvyActivity,
+  IvyActivityKind,
+  IvyActivityState,
   IvyConnectionState,
   IvyTurnState,
   IvyErrorCode,
@@ -48,6 +51,8 @@ export {
   ivyDisconnectCommand,
   ivySelectSessionCommand,
   ivyClearConversationCommand,
+  ivyNewSessionCommand,
+  ivyReloadMcpCommand,
   ivyEvent,
   workspaceToolEvent,
   workspaceToolReplyCommand,

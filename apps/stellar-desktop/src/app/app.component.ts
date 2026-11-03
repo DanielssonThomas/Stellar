@@ -140,8 +140,12 @@ export class AppComponent {
         }),
       );
       destroy.onDestroy(unbind);
-      this.voice.bindForegroundClear(() => {
+      this.voice.bindForegroundClear((reason) => {
         this.view().stage().closePresentations();
+        if (reason === 'new_session') {
+          this.view().draft.set('');
+          this.view().menu.close();
+        }
       });
       this.assistant.bind(
         (command) => {
