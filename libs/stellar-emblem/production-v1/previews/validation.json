@@ -1,6 +1,6 @@
 {
   "canvas": 1280,
-  "layers": 73,
+  "layers": 81,
   "rasterLayers": [
     {
       "id": "violet-body",
@@ -108,6 +108,25 @@
   "strands": [
     {
       "color": "gold",
+      "kind": "body",
+      "fragments": 11,
+      "visiblePixels": [
+        4521,
+        6071,
+        6157,
+        7149,
+        4783,
+        7827,
+        9649,
+        10032,
+        18880,
+        18550,
+        8744
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "gold",
       "kind": "hair",
       "fragments": 12,
       "visiblePixels": [
@@ -151,6 +170,25 @@
     },
     {
       "color": "violet",
+      "kind": "body",
+      "fragments": 11,
+      "visiblePixels": [
+        4447,
+        7379,
+        7014,
+        9159,
+        13466,
+        8850,
+        15741,
+        10682,
+        5751,
+        15693,
+        9087
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "violet",
       "kind": "hair",
       "fragments": 12,
       "visiblePixels": [
@@ -186,9 +224,33 @@
     }
   ],
   "svgLayers": 5,
+  "ringArcs": [
+    {
+      "ring": "inner-circle",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-2",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-3",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-4",
+      "arcs": 3,
+      "pixelIdentical": true
+    }
+  ],
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 6914513,
+  "runtimeBytes": 6492302,
   "budgetBytes": 8388608,
   "activeSvgContent": false,
-  "fragmentAssemblyPixelIdentical": true
+  "fragmentAssemblyPixelIdentical": false,
+  "rasterizedRegistrationPixelIdentical": true,
+  "canonicalUsesOriginalSources": true
 }

@@ -139,13 +139,14 @@ export function layerTransform(
   const stacked = planeIndex !== undefined && isExplodedPhase(phase);
   const depth =
     (stacked
-      ? planeDepth(
+      ? (pose.depth ??
+        planeDepth(
           planeIndex,
           layers.length,
           manifest.planeSpacing,
           manifest.spacingProfile,
           manifest.planeCore,
-        )
+        ))
       : pose.depth) ??
     (reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
       ? 0
@@ -162,7 +163,7 @@ export function layerTransform(
       manifest.spacingProfile,
       manifest.planeCore,
     );
-    const normalized = extent > 0 ? depth / extent : 0;
+    const normalized = extent > 0 ? Math.min(1, Math.abs(depth) / extent) : 0;
     const contraction =
       1 - Math.sqrt(1 - (normalized * manifest.radialTaper) ** 2);
     const radians = (pose.rotation * Math.PI) / 180;
@@ -294,7 +295,7 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
         (!layer.assembly ||
           typeof layer.assembly !== 'object' ||
           typeof layer.assembly.file !== 'string' ||
-          !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:png|webp)$/.test(
+          !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:svg|png|webp)$/.test(
             layer.assembly.file,
           ) ||
           layer.assembly.file === layer.file ||

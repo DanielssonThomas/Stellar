@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportStrands, measureFragmentCentroids } from './render-strands.mjs';
+import { exportRingArcs } from './render-ring-arcs.mjs';
 
 const { chromium } = createRequire(import.meta.url)('@playwright/test');
 const { format } = createRequire(import.meta.url)('prettier');
@@ -60,20 +61,29 @@ const geometries = [
     id: 'inner-circle-' + number,
   })),
 ];
-const bodyRows = [0, 512, 560, 608, 656, 704, 752, 800, 848, 896, 944, size];
-const bodyClips = bodyRows
-  .slice(0, -1)
-  .map((top, index) => [
-    String(index + 1),
-    [0, top, size, bodyRows[index + 1] - top],
-  ]);
+const bodyParts = Array.from({ length: 11 }, (_, index) => String(index + 1));
+const arcDepths = {
+  'inner-circle': [-570, -480, -410],
+  'inner-circle-2': [-330, -240, -170],
+  'inner-circle-3': [150, 240, 330],
+  'inner-circle-4': [390, 480, 570],
+};
+const ringLayers = geometries.flatMap((item) =>
+  item.id === 'outer-frame'
+    ? [item]
+    : arcDepths[item.id].map((depth, index) => ({
+        ...item,
+        id: `${item.id}-arc-${index + 1}`,
+        assembly: { file: `layers/${item.id}.svg`, index, count: 3 },
+        depth,
+      })),
+);
 const characterLayers = registration.layers.flatMap((item) =>
   item.id.endsWith('-body')
-    ? bodyClips.map(([part, clip], index) => ({
+    ? bodyParts.map((part, index) => ({
         ...item,
-        sourceId: item.id,
         id: item.id + '-' + part,
-        clip,
+        assembly: { file: `layers/${item.id}.png`, index, count: 11 },
         scatter: {
           x: ((index * 89) % 290) - 145,
           y: ((index * 53) % 140) - 70,
@@ -125,11 +135,11 @@ const planeOrder = [
   ...fragments('gold', 'body', bodyOrder.slice(0, 4)),
   ...fragments('violet', 'hair', hairOrder),
   ...fragments('violet', 'ornament', ornamentOrder.violet),
-  'inner-circle',
-  'inner-circle-2',
+  ...fragments('inner', 'circle-arc', [0, 1, 2]),
+  ...fragments('inner', 'circle-2-arc', [0, 1, 2]),
   'outer-frame',
-  'inner-circle-3',
-  'inner-circle-4',
+  ...fragments('inner', 'circle-3-arc', [0, 1, 2]),
+  ...fragments('inner', 'circle-4-arc', [0, 1, 2]),
   ...fragments('gold', 'body', bodyOrder.slice(4)),
   ...fragments('gold', 'hair', hairOrder),
   ...fragments('gold', 'ornament', ornamentOrder.gold),
@@ -144,8 +154,8 @@ for (const character of ['violet', 'gold']) {
     ornamentOrder[character],
   ).map((id) => planeOrder.indexOf(id));
   if (
-    bodyClips.some(
-      ([part]) =>
+    bodyParts.some(
+      (part) =>
         planeOrder.indexOf(`${character}-body-${part}`) >=
         Math.min(...hairIndices),
     )
@@ -165,7 +175,9 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded: item.scatter ?? zero,
+  exploded:
+    item.scatter ??
+    (item.depth !== undefined ? { ...zero, depth: item.depth } : zero),
   planeIndex: planeOrder.indexOf(item.id),
   ...(item.clip ? { clip: item.clip } : {}),
   ...(item.assembly ? { assembly: item.assembly } : {}),
@@ -181,12 +193,16 @@ const manifest = {
   viewBox: [0, 0, size, size],
   planeSpacing: 49.4,
   spacingProfile: 'outer-dense',
-  planeCore: { count: 5, spacing: 240 },
+  planeCore: { count: 13, spacing: 80 },
   radialTaper: 0.94,
   layers: [
     ...characterLayers.map((item, z) => entry(item, z, 'png')),
-    ...geometries.map((item, z) =>
-      entry(item, z + characterLayers.length, 'svg'),
+    ...ringLayers.map((item, z) =>
+      entry(
+        item,
+        z + characterLayers.length,
+        item.id === 'outer-frame' ? 'svg' : 'png',
+      ),
     ),
   ],
 };
@@ -369,6 +385,7 @@ try {
     });
   }
   const strands = await exportStrands(page, root, size, registration);
+  const ringArcs = await exportRingArcs(page, root, geometries, size);
   const centroids = await measureFragmentCentroids(
     page,
     root,
@@ -407,7 +424,7 @@ try {
       ...(layer.assembly
         ? {
             originalSrc:
-              'data:image/png;base64,' +
+              `data:image/${layer.assembly.file.endsWith('.svg') ? 'svg+xml' : 'png'};base64,` +
               fs
                 .readFileSync(path.join(root, layer.assembly.file))
                 .toString('base64'),
@@ -417,6 +434,7 @@ try {
   });
   const renders = await page.evaluate(
     async ({ layers, size }) => {
+      const originalRasters = new Map();
       const images = await Promise.all(
         layers.map(async (layer) => {
           const img = new Image();
@@ -425,7 +443,15 @@ try {
           const originalImg = new Image();
           originalImg.src = layer.originalSrc ?? layer.src;
           await originalImg.decode();
-          return { layer, img, originalImg };
+          const originalFile = layer.assembly?.file ?? layer.file;
+          let originalRaster = originalRasters.get(originalFile);
+          if (!originalRaster) {
+            originalRaster = document.createElement('canvas');
+            originalRaster.width = originalRaster.height = size;
+            originalRaster.getContext('2d').drawImage(originalImg, 0, 0);
+            originalRasters.set(originalFile, originalRaster);
+          }
+          return { layer, img, originalImg, originalRaster };
         }),
       );
       const render = (
@@ -433,6 +459,7 @@ try {
         exploded,
         applyAssembled = false,
         original = false,
+        rasterizedOriginal = false,
       ) => {
         const c = document.createElement('canvas');
         c.width = c.height = dimension;
@@ -442,7 +469,7 @@ try {
         ctx.scale(scale, scale);
         ctx.translate(margin, margin);
         const drawn = new Set();
-        for (const { layer, img, originalImg } of images) {
+        for (const { layer, img, originalImg, originalRaster } of images) {
           const file = original
             ? (layer.assembly?.file ?? layer.file)
             : layer.file;
@@ -461,7 +488,17 @@ try {
             ctx.rect(...layer.clip);
             ctx.clip();
           }
-          ctx.drawImage(original ? originalImg : img, 0, 0, size, size);
+          ctx.drawImage(
+            original
+              ? rasterizedOriginal
+                ? originalRaster
+                : originalImg
+              : img,
+            0,
+            0,
+            size,
+            size,
+          );
           ctx.restore();
         }
         return {
@@ -469,7 +506,8 @@ try {
           pixels: ctx.getImageData(0, 0, dimension, dimension).data,
         };
       };
-      const canonical = render(size, false);
+      const fragments = render(size, false);
+      const canonical = render(size, false, false, true);
       for (const { layer, img } of images) {
         if (!layer.clip) continue;
         const c = document.createElement('canvas');
@@ -484,12 +522,12 @@ try {
           throw new Error(`Empty or negligible fragment: ${layer.id}`);
       }
       const duplicate = render(size, false, true);
-      const original = render(size, false, false, true);
-      if (!canonical.pixels.every((byte, i) => byte === original.pixels[i]))
+      const rasterized = render(size, false, false, true, true);
+      if (!fragments.pixels.every((byte, i) => byte === rasterized.pixels[i]))
         throw new Error(
-          'Fragment assembly differs from original registered artwork',
+          'Fragment assembly differs from independently rasterized registered sources',
         );
-      if (!canonical.pixels.every((byte, i) => byte === duplicate.pixels[i]))
+      if (!fragments.pixels.every((byte, i) => byte === duplicate.pixels[i]))
         throw new Error('Zero-pose assembly differs');
       return {
         canonical: canonical.url,
@@ -498,15 +536,23 @@ try {
         dock48: render(48, false, false, true).url,
         dock64: render(64, false, false, true).url,
         dock96: render(96, false, false, true).url,
+        comparison: {
+          fragmentAssemblyPixelIdentical: fragments.pixels.every(
+            (byte, i) => byte === canonical.pixels[i],
+          ),
+          rasterizedRegistrationPixelIdentical: true,
+        },
       };
     },
     { layers, size },
   );
-  for (const [name, url] of Object.entries(renders))
+  for (const [name, url] of Object.entries(renders)) {
+    if (typeof url !== 'string') continue;
     fs.writeFileSync(
       path.join(root, 'previews', `${name}.png`),
       Buffer.from(url.split(',')[1], 'base64'),
     );
+  }
   await page.setContent(
     `<style>body{margin:24px;background:#0b0812;color:#ede1fa;font:14px system-ui}h1{font-size:20px}main,footer{display:flex;gap:28px;align-items:center}h2{font-size:14px;font-weight:400}img{display:block}footer{margin-top:24px}</style><h1>Stellar production candidate v1 — registered hybrid layers</h1><main><section><h2>Canonical assembled · 512 px</h2><img src="${renders.assembled512}"></section><section><h2>Flat registration · 512 px (camera omitted)</h2><img src="${renders.exploded512}"></section></main><footer>${[48, 64, 96].map((n) => `<section><h2>${n} px</h2><img src="${renders['dock' + n]}"></section>`).join('')}<p>${layers.length} independently compositable planes.<br>Profiles and colour masses survive at 48 px;<br>leaf facets and individual strands need larger sizes.</p></footer>`,
   );
@@ -534,6 +580,19 @@ try {
     path: path.join(root, 'previews', 'leaf-contact-sheet.png'),
     fullPage: true,
   });
+  await page.setContent(
+    `<style>body{margin:20px;background:#0b0812;color:#ede1fa;font:14px system-ui}main{display:grid;grid-template-columns:repeat(4,270px);gap:12px}figure{margin:0}div{position:relative;width:270px;height:320px;overflow:hidden}img{position:absolute;width:640px;height:640px}figcaption{padding:4px}</style><h1>Organic body fragments — original pixels</h1><main>${layers
+      .filter((layer) => layer.assembly?.file.endsWith('-body.png'))
+      .map(
+        (layer) =>
+          `<figure><div><img src="${layer.src}" style="left:-${layer.id.startsWith('gold') ? 260 : 110}px;top:-${layer.id.startsWith('gold') ? 180 : 200}px"></div><figcaption>${layer.id}</figcaption></figure>`,
+      )
+      .join('')}</main>`,
+  );
+  await page.screenshot({
+    path: path.join(root, 'previews', 'body-contact-sheet.png'),
+    fullPage: true,
+  });
   const bytes =
     fs.statSync(path.join(root, 'manifest.json')).size +
     [
@@ -552,12 +611,14 @@ try {
     rasterLayers: alpha,
     strands,
     svgLayers: geometries.length,
+    ringArcs,
     zeroPose:
       'All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.',
     runtimeBytes: bytes,
     budgetBytes: budget,
     activeSvgContent: false,
-    fragmentAssemblyPixelIdentical: true,
+    ...renders.comparison,
+    canonicalUsesOriginalSources: true,
   };
   fs.writeFileSync(
     path.join(root, 'previews', 'validation.json'),

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { optimizePng } from './optimize-png.mjs';
 
 const palette = [
   [255, 48, 48],
@@ -75,6 +76,7 @@ export async function measureFragmentCentroids(page, root, layers, size) {
 export async function exportStrands(page, root, size, registration) {
   const evidence = [];
   const groups = ['gold', 'violet'].flatMap((color) => [
+    { color, kind: 'body', count: 11 },
     { color, kind: 'hair', count: 12 },
     { color, kind: 'ornament', count: color === 'gold' ? 15 : 7 },
   ]);
@@ -165,7 +167,7 @@ export async function exportStrands(page, root, size, registration) {
         ctx.clearRect(0, 0, size, size);
         ctx.drawImage(await load(source), 0, 0);
         const original = ctx.getImageData(0, 0, size, size).data;
-        if (kind === 'ornament') {
+        if (kind !== 'hair') {
           const neighbors = (index) => {
             const result = [];
             if (index >= size) result.push(index - size);
@@ -273,7 +275,7 @@ export async function exportStrands(page, root, size, registration) {
     result.forEach((fragment, index) =>
       fs.writeFileSync(
         path.join(root, 'layers', `${color}-${kind}-${index + 1}.png`),
-        Buffer.from(fragment.png, 'base64'),
+        optimizePng(Buffer.from(fragment.png, 'base64')),
       ),
     );
     evidence.push({

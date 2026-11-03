@@ -20,21 +20,45 @@ test('body fragments contain only small portions of the visible avatar silhouett
       ctx.drawImage(image, 0, 0);
       const pixels = ctx.getImageData(0, 0, 1280, 1280).data;
       const parts = manifest.layers.filter(
-        (layer: { file: string }) => layer.file === `layers/${color}-body.png`,
+        (layer: { assembly?: { file: string } }) =>
+          layer.assembly?.file === `layers/${color}-body.png`,
       );
-      const areas = parts.map((layer: { clip: number[] }) => {
-        const [left, top, width, height] = layer.clip;
-        let visible = 0;
-        for (let y = top; y < top + height; y++)
-          for (let x = left; x < left + width; x++)
-            if (pixels[(y * 1280 + x) * 4 + 3] >= 24) visible++;
-        return visible;
-      });
+      let longestHorizontalCut = 0;
+      const areas = await Promise.all(
+        parts.map(async (layer: { file: string }) => {
+          const fragment = new Image();
+          fragment.src = '/emblem/' + layer.file;
+          await fragment.decode();
+          ctx.clearRect(0, 0, 1280, 1280);
+          ctx.drawImage(fragment, 0, 0);
+          const fragmentPixels = ctx.getImageData(0, 0, 1280, 1280).data;
+          let visible = 0;
+          for (let y = 0; y < 1280; y++) {
+            let horizontalCut = 0;
+            for (let x = 0; x < 1280; x++) {
+              const p = (y * 1280 + x) * 4 + 3;
+              if (fragmentPixels[p] >= 24) visible++;
+              const cut =
+                y > 0 &&
+                pixels[p] >= 24 &&
+                pixels[p - 5120] >= 24 &&
+                fragmentPixels[p] >= 24 !== fragmentPixels[p - 5120] >= 24;
+              horizontalCut = cut ? horizontalCut + 1 : 0;
+              longestHorizontalCut = Math.max(
+                longestHorizontalCut,
+                horizontalCut,
+              );
+            }
+          }
+          return visible;
+        }),
+      );
       result.push({
         count: parts.length,
         smallest: Math.min(...areas),
         largest:
           Math.max(...areas) / areas.reduce((a: number, b: number) => a + b, 0),
+        longestHorizontalCut,
       });
     }
     return result;
@@ -43,6 +67,7 @@ test('body fragments contain only small portions of the visible avatar silhouett
     expect(size.count).toBe(11);
     expect(size.smallest).toBeGreaterThan(32);
     expect(size.largest).toBeLessThan(0.22);
+    expect(size.longestHorizontalCut).toBeLessThan(64);
   }
 });
 
@@ -54,7 +79,7 @@ test('outer fragment centers taper inward while the five rings remain coaxial', 
   const manifest = await (
     await page.request.get('/emblem/manifest.json')
   ).json();
-  await expect(page.locator('.plane')).toHaveCount(73);
+  await expect(page.locator('.plane')).toHaveCount(81);
   await expect
     .poll(() =>
       page.locator('.camera').evaluate((element) => element.clientWidth),
@@ -64,7 +89,7 @@ test('outer fragment centers taper inward while the five rings remain coaxial', 
     (planes, layers) =>
       planes.flatMap((element, index) => {
         const layer = layers[index];
-        if (!layer.centroid || Math.abs(layer.planeIndex - 36) < 27) return [];
+        if (!layer.centroid || Math.abs(layer.planeIndex - 40) < 31) return [];
         const width = (element as HTMLElement).clientWidth;
         const ratio = width / 1280;
         const origin = getComputedStyle(element)
@@ -127,7 +152,7 @@ test('purple hair stays in front of every body fragment before settlement', asyn
       /\/violet-hair-\d+\.png$/.test(plane.querySelector('img')?.src ?? ''),
     );
     const bodies = planes.filter((plane) =>
-      plane.querySelector('img')?.src.endsWith('/violet-body.png'),
+      /\/violet-body-\d+\.png$/.test(plane.querySelector('img')?.src ?? ''),
     );
     if (hairs.length !== 12 || bodies.length !== 11)
       throw Error('Missing purple artwork planes');
@@ -185,7 +210,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
           .locator('.plane')
           .evaluateAll(
             (planes) =>
-              planes.length === 73 &&
+              planes.length === 81 &&
               planes.every(
                 (plane) =>
                   new DOMMatrix(getComputedStyle(plane).transform).isIdentity,
@@ -198,7 +223,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         camera.locator('img').evaluateAll((images) => {
           const seen = new Set<string>();
           return (
-            images.length === 73 &&
+            images.length === 81 &&
             images.every((image) => {
               const first = !seen.has((image as HTMLImageElement).src);
               seen.add((image as HTMLImageElement).src);
@@ -274,20 +299,20 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     .click();
   const scene = page.locator('.camera');
   const ring = page.locator('.spin-clockwise');
-  await expect(page.locator('.plane img')).toHaveCount(73);
+  await expect(page.locator('.plane img')).toHaveCount(81);
   const manifestResponse = await page.request.get('/emblem/manifest.json');
   const manifest = await manifestResponse.json();
   expect(
     manifest.layers
       .map((layer: { planeIndex: number }) => layer.planeIndex)
       .sort((a: number, b: number) => a - b),
-  ).toEqual(Array.from({ length: 73 }, (_, index) => index));
+  ).toEqual(Array.from({ length: 81 }, (_, index) => index));
   expect(manifest.spacingProfile).toBe('outer-dense');
   const mainRing = manifest.layers.find(
     (layer: { id: string }) => layer.id === 'outer-frame',
   );
   expect(mainRing.exploded).toEqual({ x: 0, y: 0, rotation: 0 });
-  expect(mainRing.planeIndex).toBe(36);
+  expect(mainRing.planeIndex).toBe(40);
   const scatteredRings = manifest.layers.filter(
     (layer: { id: string; exploded: { x: number } }) =>
       layer.id.startsWith('inner-circle') && layer.exploded.x !== 0,
@@ -309,19 +334,16 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
   ).toBe(true);
   for (const color of ['gold', 'violet']) {
     const bodies = manifest.layers.filter(
-      (layer: { file: string }) =>
-        layer.file === 'layers/' + color + '-body.png',
+      (layer: { assembly?: { file: string } }) =>
+        layer.assembly?.file === 'layers/' + color + '-body.png',
     );
-    expect(bodies.map((layer: { clip: number[] }) => layer.clip)).toEqual([
-      [0, 0, 1280, 512],
-      ...[512, 560, 608, 656, 704, 752, 800, 848, 896].map((top) => [
-        0,
-        top,
-        1280,
-        48,
-      ]),
-      [0, 944, 1280, 336],
-    ]);
+    expect(bodies).toHaveLength(11);
+    expect(
+      bodies.every(
+        (layer: { clip?: unknown; file: string }) =>
+          layer.clip === undefined && /-body-\d+\.png$/.test(layer.file),
+      ),
+    ).toBe(true);
     const jewelry = manifest.layers.filter(
       (layer: { assembly?: { file: string } }) =>
         layer.assembly?.file === `layers/${color}-ornament.png`,
@@ -350,19 +372,42 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
   await expect
     .poll(() => scene.evaluate((element) => element.clientWidth))
     .toBe(480);
-  const depths = await page
+  const planeDepths = await page
     .locator('.plane')
     .evaluateAll((planes) =>
-      planes
-        .map((plane) => new DOMMatrix(getComputedStyle(plane).transform).m43)
-        .sort((a, b) => a - b),
+      planes.map(
+        (plane) => new DOMMatrix(getComputedStyle(plane).transform).m43,
+      ),
     );
+  const depths = planeDepths
+    .filter((_, index) => !manifest.layers[index].spin)
+    .sort((a, b) => a - b);
   const interval = depths[1] - depths[0];
   expect(interval).toBeGreaterThan(4);
   const gaps = depths.slice(1).map((depth, index) => depth - depths[index]);
-  for (let index = 1; index < 34; index++)
+  for (let index = 1; index < 33; index++)
     expect(gaps[index]).toBeGreaterThan(gaps[index - 1]);
-  expect(depths.slice(34, 39)).toEqual([-180, -90, 0, 90, 180]);
+  const ringDepths = planeDepths
+    .filter((_, index) => manifest.layers[index].spin)
+    .sort((a, b) => a - b);
+  expect(ringDepths).toEqual(
+    [-570, -480, -410, -330, -240, -170, 0, 150, 240, 330, 390, 480, 570].map(
+      (depth) => depth * 0.375,
+    ),
+  );
+  const arcs = manifest.layers.filter(
+    (layer: { assembly?: { file: string } }) =>
+      layer.assembly?.file.endsWith('.svg'),
+  );
+  expect(arcs).toHaveLength(12);
+  for (const file of new Set(
+    arcs.map((layer: { assembly: { file: string } }) => layer.assembly.file),
+  ))
+    expect(
+      arcs.filter(
+        (layer: { assembly: { file: string } }) => layer.assembly.file === file,
+      ),
+    ).toHaveLength(3);
   expect(gaps[Math.floor(gaps.length / 2)]).toBeGreaterThan(interval * 3);
   expect(depths[0] + (depths.at(-1) ?? 0)).toBeCloseTo(0, 2);
   const outer = await page.request.get('/emblem/layers/outer-frame.svg');

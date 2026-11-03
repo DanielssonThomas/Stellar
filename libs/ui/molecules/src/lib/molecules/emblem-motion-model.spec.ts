@@ -26,6 +26,59 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('honors explicit arc depths in indexed stacks and bounds radial taper for extreme overrides', () => {
+    const spaced: EmblemManifest = {
+      ...manifest,
+      planeSpacing: 100,
+      layers: manifest.layers.map((item, index) => ({
+        ...item,
+        planeIndex: index,
+        exploded: { x: 0, y: 0, rotation: 0, depth: index ? 330 : -170 },
+      })),
+    };
+    expect(manifestError(spaced)).toBeNull();
+    expect(layerTransform(spaced.layers[0], spaced, 'idle', true)).toContain(
+      'translateZ(-33.203125cqw)',
+    );
+    expect(layerTransform(spaced.layers[1], spaced, 'idle', false)).toContain(
+      'translateZ(64.453125cqw)',
+    );
+    expect(
+      layerTransform(spaced.layers[1], spaced, 'listening', false),
+    ).toContain('translateZ(0px)');
+    const extreme = {
+      ...spaced.layers[1],
+      centroid: { x: 400, y: 400 },
+      exploded: { x: 0, y: 0, rotation: 0, depth: 4096 },
+    };
+    expect(
+      layerTransform(extreme, { ...spaced, radialTaper: 1 }, 'idle', false),
+    ).not.toMatch(/NaN|Infinity/);
+  });
+  it('accepts complete arc groups with inert SVG originals while rejecting external SVG paths', () => {
+    const arcs: EmblemManifest = {
+      ...manifest,
+      layers: [0, 1, 2].map((index) => ({
+        ...layer,
+        id: `arc-${index}`,
+        file: `layers/arc-${index}.png`,
+        z: index,
+        assembled: { x: 0, y: 0, rotation: 0 },
+        assembly: { file: 'layers/ring.svg', index, count: 3 },
+      })),
+    };
+    expect(decodeEmblemManifest(arcs)).toEqual(arcs);
+    expect([...consolidatedFragmentFiles(arcs)]).toEqual(['layers/ring.svg']);
+    expect(
+      decodeEmblemManifest({
+        ...arcs,
+        layers: arcs.layers.map((item) => ({
+          ...item,
+          assembly: { ...item.assembly, file: 'https://external/ring.svg' },
+        })),
+      }),
+    ).toBeNull();
+  });
   it('moves outer fragment centers onto an elliptical envelope without changing depth or assembly', () => {
     const tapered: EmblemManifest = {
       version: 1,
