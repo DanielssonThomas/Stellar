@@ -244,9 +244,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
         ).__voiceFixture,
     );
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page.getByRole('button', { name: 'Retry voice', exact: true }).click();
   await expect(page.getByText('Ivy connected', { exact: true })).toBeVisible();
   expect(
@@ -257,6 +255,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await page
     .getByRole('button', { name: 'Enable microphone', exact: true })
     .click();
+  await page.keyboard.press('Escape');
   const panel = page.getByRole('region', { name: 'Requested voice content' });
   await expect(panel).toContainText('Requested voice content', {
     timeout: 15000,
@@ -293,17 +292,13 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       async () => (await page.locator('.emblem-slot').boundingBox())?.x ?? 0,
     )
     .toBeGreaterThan(900);
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Stop microphone', exact: true })
     .click();
   await expect.poll(async () => (await fixture()).activeTracks).toBe(0);
   await expect(panel).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await panel.focus();
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);

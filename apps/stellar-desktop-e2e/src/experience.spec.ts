@@ -55,9 +55,7 @@ test('passive microphone frames leave the emblem exploded and explicit stop rele
     });
   });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const experience = page.locator('stellar-desktop-experience-template');
   await expect(page.locator('html')).not.toHaveAttribute(
     'data-inputs-listed',
@@ -125,9 +123,7 @@ test('manual activity repeats, restores keyboard focus and never requests captur
     });
   });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const experience = page.locator('stellar-desktop-experience-template');
   await expect(experience).toHaveAttribute('aria-busy', 'false');
   await expect(
@@ -163,9 +159,7 @@ test('denial preserves manual fallback without unsolicited panels', async ({
     });
   });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page.getByRole('button', { name: 'Enable microphone' }).click();
   await expect(
     page.getByText(
@@ -186,9 +180,7 @@ test('resuming during docking and dismissing during motion cannot open stale sum
   page,
 }) => {
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const experience = page.locator('stellar-desktop-experience-template');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })

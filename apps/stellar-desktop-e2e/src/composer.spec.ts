@@ -252,9 +252,7 @@ async function wakeCapture(page: Page) {
       }
     };
   });
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Enable microphone', exact: true })
     .click();
@@ -269,9 +267,7 @@ async function wakeCapture(page: Page) {
       { active, count },
     );
   await feed(false, 20);
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const say = async (
     text: string,
     options: { wake?: boolean; recognize?: boolean } = {},
@@ -550,9 +546,7 @@ test('typed submit preserves the form and keeps continuous capture active', asyn
 }) => {
   await install(page, false);
   await wakeCapture(page);
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const input = page.getByLabel('Message Ivy');
   await input.fill('A typed message');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -628,9 +622,7 @@ test('synthetic voice preview, stable sentence and cleanup reach one finalized s
       }
     };
   });
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Enable microphone', exact: true })
     .click();

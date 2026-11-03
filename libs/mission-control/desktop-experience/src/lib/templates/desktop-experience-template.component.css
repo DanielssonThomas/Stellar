@@ -42,18 +42,43 @@
   font-size: 0.75rem;
 }
 
-.controls {
-  position: absolute;
-  top: 3.5rem;
-  left: 0.75rem;
-  z-index: 3;
-  width: min(23rem, calc(100% - 1.5rem));
-  max-height: calc(100% - 4.25rem);
-  overflow: auto;
-  background: var(--stellar-color-canvas);
-  border: 1px solid var(--stellar-color-line);
-  border-radius: var(--stellar-radius-control);
-  padding: 0.75rem 1rem;
+.controls-dialog {
+  margin: auto;
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 1px;
+  background: var(--stellar-color-primary);
+  color: var(--stellar-color-foreground);
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--stellar-color-primary) 12%, transparent);
+}
+.controls-dialog::backdrop {
+  background: #0009;
+  backdrop-filter: blur(5px);
+}
+.controls-content {
+  padding: 1.5rem;
+  clip-path: inherit;
+  background:
+    radial-gradient(
+      ellipse at 50% 0,
+      color-mix(in srgb, var(--stellar-color-primary) 5%, transparent),
+      transparent 75%
+    ),
+    var(--stellar-color-canvas);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -62,13 +87,12 @@
   color: var(--stellar-color-foreground);
 }
 
-.menu-trigger {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 4;
-  width: 2.75rem;
-  background: var(--stellar-color-canvas);
+.controls-content h2 {
+  color: var(--stellar-color-primary);
+}
+.close-button {
+  padding: 0.25rem 0.5rem;
+  border: 0;
 }
 
 .assistant-input {
@@ -116,8 +140,8 @@ button,
 .motion-toggle {
   min-height: 2.75rem;
   border: 1px solid var(--stellar-color-line, currentColor);
-  border-radius: 999px;
-  color: inherit;
+  border-radius: 0;
+  color: var(--stellar-color-primary);
   font: inherit;
 }
 

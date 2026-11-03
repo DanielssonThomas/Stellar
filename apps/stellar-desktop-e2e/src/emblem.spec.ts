@@ -100,9 +100,7 @@ test('81 pieces retain individual idle floats and thirteen independent ring rota
         ),
     )
     .toBe(68);
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
@@ -205,9 +203,7 @@ test('resolution hints follow container and viewport resize without changing the
   await page.goto('/');
   const raster = page.locator('.plane img').first();
   await expect(raster).toHaveAttribute('sizes', '480px');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
@@ -421,11 +417,7 @@ test('purple hair stays in front of every body fragment before settlement', asyn
   page,
 }) => {
   await page.goto('/');
-  const menu = page.getByRole('button', {
-    name: 'Experience menu',
-    exact: true,
-  });
-  await menu.click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
@@ -458,7 +450,7 @@ test('purple hair stays in front of every body fragment before settlement', asyn
     expect(hair).toBeLessThan(0);
     for (const body of ordering.bodies) expect(hair).toBeGreaterThan(body);
   }
-  await menu.click();
+  await page.keyboard.press('m');
 });
 
 test('settled face assembly is pixel-identical to the original unclipped image stack at supported sizes', async ({
@@ -466,8 +458,8 @@ test('settled face assembly is pixel-identical to the original unclipped image s
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  const menu = page.getByRole('button', {
-    name: 'Experience menu',
+  const menu = page.getByRole('dialog', {
+    name: 'Experience controls',
     exact: true,
   });
   for (const viewport of [
@@ -475,12 +467,12 @@ test('settled face assembly is pixel-identical to the original unclipped image s
     { width: 480, height: 360 },
   ]) {
     await page.setViewportSize(viewport);
-    await menu.click();
+    await page.keyboard.press('m');
     await page
       .getByRole('button', { name: 'Start activity', exact: true })
       .click();
-    await menu.click();
-    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await page.keyboard.press('m');
+    await expect(menu).toBeHidden();
     await expect(
       page.locator('stellar-desktop-experience-template'),
     ).toHaveAttribute('data-phase', 'listening');
@@ -575,9 +567,9 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         ?.remove();
       (element as HTMLElement).style.visibility = '';
     });
-    await menu.click();
+    await page.keyboard.press('m');
     await page.getByRole('button', { name: 'Dismiss', exact: true }).click();
-    await menu.click();
+    await page.keyboard.press('m');
   }
 });
 
@@ -586,9 +578,7 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
 }) => {
   await page.setViewportSize({ width: 1100, height: 760 });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const scene = page.locator('.camera');
   const ring = page
     .locator('.artwork')
@@ -862,9 +852,7 @@ test('reduced motion keeps depth static and viewport fitting survives resize', a
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page
-    .getByRole('button', { name: 'Experience menu', exact: true })
-    .click();
+  await page.keyboard.press('m');
   const scene = page.locator('.camera');
   for (const viewport of [
     { width: 1100, height: 760 },

@@ -5,27 +5,21 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   page,
 }) => {
   await page.goto('/');
-  const trigger = page.getByRole('button', {
-    name: 'Experience menu',
-    exact: true,
-  });
-  await expect(page.locator('[data-desktop-menu]')).toHaveCount(0);
-  await trigger.focus();
-  await page.keyboard.press('Enter');
-  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const desktop = page.locator('stellar-desktop-experience-template');
+  const controls = page.getByRole('dialog', { name: 'Experience controls' });
+  await expect(
+    page.getByRole('button', { name: 'Experience menu', exact: true }),
+  ).toHaveCount(0);
+  await expect(controls).toBeHidden();
+  await desktop.focus();
+  await page.keyboard.press('m');
+  await expect(controls).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(trigger).toBeFocused();
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  await trigger.click();
-  await page.locator('.emblem-slot').evaluate((element) => {
-    element.setAttribute('tabindex', '0');
-    (element as HTMLElement).focus();
-  });
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  await trigger.click();
+  await expect(desktop).toBeFocused();
+  await expect(controls).toBeHidden();
+  await page.keyboard.press('m');
   await page.getByLabel('Reduce motion').check();
-  await page.mouse.click(1000, 650);
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('Escape');
   const request = (commandId: number, surface = 'assistant-message') =>
     page.evaluate(
       ({ commandId, surface }) => {
@@ -63,7 +57,7 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   const emblem = page.locator('.emblem-slot');
   const dock = await emblem.boundingBox();
   expect(dock?.x).toBeGreaterThan(900);
-  await trigger.click();
+  await page.keyboard.press('m');
   await page
     .getByRole('button', { name: 'Start activity', exact: true })
     .click();
@@ -71,13 +65,13 @@ test('menu keyboard and explicit trusted presentation retain activity and return
   await expect(panel).toBeVisible();
   await controlPane(page, 'minimize');
   await expect(panel).toBeHidden();
-  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(controls).toBeVisible();
   await page.getByRole('button', { name: 'Show content', exact: true }).click();
   await expect(panel).toBeVisible();
   await panel.focus();
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
-  await expect(trigger).toBeFocused();
+  await expect(desktop).toBeFocused();
   await expect(
     page.locator('stellar-desktop-experience-template'),
   ).toHaveAttribute('data-phase', 'idle');

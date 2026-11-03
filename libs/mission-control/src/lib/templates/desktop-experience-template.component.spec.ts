@@ -12,6 +12,71 @@ describe('DesktopExperienceTemplate', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(DesktopExperienceTemplate);
     await fixture.whenStable();
+    for (const dialog of Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'dialog',
+      ) as NodeListOf<HTMLDialogElement>,
+    )) {
+      dialog.showModal = () => {
+        dialog.open = true;
+      };
+      dialog.close = () => {
+        dialog.open = false;
+        dialog.dispatchEvent(new Event('close'));
+      };
+    }
+  });
+
+  it('opens controls with M, preserves typing and switches dialogs without stacking', async () => {
+    const view = fixture.componentInstance;
+    const key = (options: KeyboardEventInit = {}) =>
+      new KeyboardEvent('keydown', {
+        key: 'm',
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      });
+    expect(
+      fixture.nativeElement.querySelector('[data-menu-trigger]'),
+    ).toBeNull();
+    for (const options of [
+      { repeat: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { altKey: true },
+      { isComposing: true },
+    ])
+      fixture.nativeElement.dispatchEvent(key(options));
+    const prevented = key();
+    prevented.preventDefault();
+    fixture.nativeElement.dispatchEvent(prevented);
+    expect(view.menu.open()).toBe(false);
+    fixture.nativeElement.dispatchEvent(key({ key: 'M', shiftKey: true }));
+    expect(view.menu.open()).toBe(true);
+    fixture.nativeElement.querySelector('textarea').dispatchEvent(key());
+    expect(view.menu.open()).toBe(true);
+    const editable = document.createElement('div');
+    editable.setAttribute('contenteditable', 'true');
+    fixture.nativeElement.append(editable);
+    editable.dispatchEvent(key());
+    expect(view.menu.open()).toBe(true);
+    fixture.nativeElement.dispatchEvent(key({ key: 'p' }));
+    expect(view.menu.open()).toBe(false);
+    expect(fixture.nativeElement.querySelector('.visualizer-dialog').open).toBe(
+      true,
+    );
+    fixture.nativeElement.dispatchEvent(key());
+    expect(view.menu.open()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.visualizer-dialog').open).toBe(
+      false,
+    );
+    for (const phase of ['suspended', 'shutdown']) {
+      view.menu.close();
+      fixture.componentRef.setInput('state', { ...initialState, phase });
+      await fixture.whenStable();
+      fixture.nativeElement.dispatchEvent(key());
+      expect(view.menu.open()).toBe(false);
+    }
   });
 
   it('closes controls on Connect Ivy so its result cannot be covered by the menu', async () => {
@@ -145,7 +210,7 @@ describe('DesktopExperienceTemplate', () => {
     const action = vi.fn();
     fixture.componentInstance.action.subscribe(action);
     expect(
-      fixture.nativeElement.querySelector('[data-desktop-menu]'),
+      fixture.nativeElement.querySelector('[data-desktop-menu][open]'),
     ).toBeNull();
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();

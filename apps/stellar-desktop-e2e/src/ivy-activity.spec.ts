@@ -243,7 +243,9 @@ test('new session clears foreground views, preserves Sol and waits passively for
   await say(page, 'unsent draft');
   await say(page, 'new session');
   await expect(
-    page.getByText('New session. Say Ivy.', { exact: true }),
+    page
+      .locator('.voice-notice')
+      .getByText('New session. Say Ivy.', { exact: true }),
   ).toBeVisible();
   await expect(page.locator('.surface')).toHaveCount(0);
   await expect(page.locator('[data-ivy-activity]')).toHaveCount(0);
@@ -266,7 +268,9 @@ test('reload MCP confirms supported success and reports failures without clearin
   await install(page);
   await say(page, 'reload mcp');
   await expect(
-    page.getByText('MCP integrations reloaded.', { exact: true }),
+    page
+      .locator('.voice-notice')
+      .getByText('MCP integrations reloaded.', { exact: true }),
   ).toBeVisible();
   await page.evaluate(() => {
     (
@@ -275,10 +279,12 @@ test('reload MCP confirms supported success and reports failures without clearin
   });
   await say(page, 'reload mcp');
   await expect(
-    page.getByText(
-      'MCP reload failed or is unsupported. Conversation preserved.',
-      { exact: true },
-    ),
+    page
+      .locator('.voice-notice')
+      .getByText(
+        'MCP reload failed or is unsupported. Conversation preserved.',
+        { exact: true },
+      ),
   ).toBeVisible();
   const commands = await page.evaluate(
     () =>
