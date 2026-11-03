@@ -24,6 +24,7 @@ export interface EmblemLayer {
   readonly z: number;
   readonly planeIndex?: number;
   readonly clip?: EmblemClip;
+  readonly centroid?: { readonly x: number; readonly y: number };
   readonly assembly?: {
     readonly file: string;
     readonly index: number;
@@ -42,6 +43,7 @@ export interface EmblemManifest {
   readonly planeSpacing?: number;
   readonly spacingProfile?: EmblemSpacingProfile;
   readonly planeCore?: EmblemPlaneCore;
+  readonly radialTaper?: number;
 }
 
 export function consolidatedFragmentFiles(
@@ -150,9 +152,32 @@ export function layerTransform(
       : ((layer.z - (minZ + maxZ) / 2) / (maxZ - minZ)) * 18);
   const width = manifest?.viewBox?.[2];
   const height = manifest?.viewBox?.[3];
-  const x = Number.isFinite(width) && width !== 0 ? (pose.x / width) * 100 : 0;
+  let offsetX = pose.x;
+  let offsetY = pose.y;
+  if (stacked && layer.centroid && manifest.radialTaper) {
+    const extent = planeDepth(
+      layers.length - 1,
+      layers.length,
+      manifest.planeSpacing,
+      manifest.spacingProfile,
+      manifest.planeCore,
+    );
+    const normalized = extent > 0 ? depth / extent : 0;
+    const contraction =
+      1 - Math.sqrt(1 - (normalized * manifest.radialTaper) ** 2);
+    const radians = (pose.rotation * Math.PI) / 180;
+    const dx = layer.centroid.x - layer.anchor.x;
+    const dy = layer.centroid.y - layer.anchor.y;
+    const centerX =
+      layer.anchor.x + dx * Math.cos(radians) - dy * Math.sin(radians) + pose.x;
+    const centerY =
+      layer.anchor.y + dx * Math.sin(radians) + dy * Math.cos(radians) + pose.y;
+    offsetX += (manifest.viewBox[0] + width / 2 - centerX) * contraction;
+    offsetY += (manifest.viewBox[1] + height / 2 - centerY) * contraction;
+  }
+  const x = Number.isFinite(width) && width !== 0 ? (offsetX / width) * 100 : 0;
   const y =
-    Number.isFinite(height) && height !== 0 ? (pose.y / height) * 100 : 0;
+    Number.isFinite(height) && height !== 0 ? (offsetY / height) * 100 : 0;
   const depthTransform =
     pose.depth === undefined && !stacked
       ? `translateZ(${depth}px)`
@@ -208,6 +233,13 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       manifest.spacingProfile !== 'outer-dense'
     )
       return 'Invalid emblem spacing profile.';
+    if (
+      manifest.radialTaper !== undefined &&
+      (!Number.isFinite(manifest.radialTaper) ||
+        manifest.radialTaper < 0 ||
+        manifest.radialTaper > 1)
+    )
+      return 'Invalid emblem radial taper.';
     const ids = new Set<string>();
     const planeIndices = new Set<number>();
     for (const candidate of layers as readonly unknown[]) {
@@ -224,6 +256,15 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       ids.add(layer.id);
       if (!validEmblemClip(layer.clip, manifest.viewBox))
         return 'Invalid emblem clip.';
+      if (
+        layer.centroid !== undefined &&
+        (!finitePoint(layer.centroid) ||
+          layer.centroid.x < box[0] ||
+          layer.centroid.y < box[1] ||
+          layer.centroid.x > box[0] + box[2] ||
+          layer.centroid.y > box[1] + box[3])
+      )
+        return 'Invalid emblem fragment centroid.';
       if (layer.planeIndex !== undefined) {
         planeDepth(
           layer.planeIndex,
@@ -297,6 +338,7 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       (planeIndices.size ||
         manifest.planeSpacing !== undefined ||
         manifest.planeCore !== undefined ||
+        manifest.radialTaper !== undefined ||
         manifest.spacingProfile !== undefined) &&
       planeIndices.size !== layers.length
     )

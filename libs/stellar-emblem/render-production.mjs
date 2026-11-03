@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { exportStrands } from './render-strands.mjs';
+import { exportStrands, measureFragmentCentroids } from './render-strands.mjs';
 
 const { chromium } = createRequire(import.meta.url)('@playwright/test');
 const { format } = createRequire(import.meta.url)('prettier');
@@ -152,13 +152,7 @@ const entry = (item, z, extension) => ({
   z,
   anchor: { x: item.anchor[0], y: item.anchor[1] },
   assembled: zero,
-  exploded:
-    item.scatter ??
-    (item.id === 'inner-circle-2'
-      ? { x: -180, y: -115, rotation: -18 }
-      : item.id === 'inner-circle-3'
-        ? { x: 165, y: 125, rotation: 16 }
-        : zero),
+  exploded: item.scatter ?? zero,
   planeIndex: planeOrder.indexOf(item.id),
   ...(item.clip ? { clip: item.clip } : {}),
   ...(item.assembly ? { assembly: item.assembly } : {}),
@@ -175,6 +169,7 @@ const manifest = {
   planeSpacing: 80,
   spacingProfile: 'outer-dense',
   planeCore: { count: 5, spacing: 240 },
+  radialTaper: 0.94,
   layers: [
     ...characterLayers.map((item, z) => entry(item, z, 'png')),
     ...geometries.map((item, z) =>
@@ -361,6 +356,14 @@ try {
     });
   }
   const strands = await exportStrands(page, root, size);
+  const centroids = await measureFragmentCentroids(
+    page,
+    root,
+    manifest.layers,
+    size,
+  );
+  for (const layer of manifest.layers)
+    if (centroids[layer.id]) layer.centroid = centroids[layer.id];
   fs.writeFileSync(
     path.join(root, 'manifest.json'),
     await format(JSON.stringify(manifest), { parser: 'json' }),

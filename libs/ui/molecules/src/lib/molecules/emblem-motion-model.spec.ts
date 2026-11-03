@@ -26,6 +26,73 @@ const manifest: EmblemManifest = {
 };
 
 describe('emblem motion model', () => {
+  it('moves outer fragment centers onto an elliptical envelope without changing depth or assembly', () => {
+    const tapered: EmblemManifest = {
+      version: 1,
+      viewBox: [0, 0, 100, 100],
+      planeSpacing: 100,
+      radialTaper: 0.8,
+      layers: Array.from({ length: 5 }, (_, index) => ({
+        ...layer,
+        id: `lock-${index}`,
+        planeIndex: index,
+        anchor: { x: 50, y: 50 },
+        centroid: { x: 100, y: 50 },
+        exploded: { x: 0, y: 0, rotation: 0 },
+      })),
+    };
+    expect(manifestError(tapered)).toBeNull();
+    const translation = (transform: string) =>
+      transform
+        .match(/translate\(([-\d.e]+)% , ([-\d.e]+)%\)/)
+        ?.slice(1)
+        .map(Number) ?? [];
+    const offsets = tapered.layers.map((item) =>
+      translation(layerTransform(item, tapered, 'idle', true)),
+    );
+    expect(offsets[0][0]).toBeCloseTo(-20);
+    expect(offsets[0]).toEqual(offsets[4]);
+    expect(offsets[2]).toEqual([0, 0]);
+    expect(Math.abs(offsets[1][0])).toBeLessThan(Math.abs(offsets[0][0]));
+    expect(layerTransform(tapered.layers[0], tapered, 'idle', true)).toContain(
+      'translateZ(-200cqw)',
+    );
+    expect(
+      translation(
+        layerTransform(tapered.layers[0], tapered, 'listening', false),
+      ),
+    ).toEqual([0, 0]);
+    const rotated = {
+      ...tapered.layers[0],
+      exploded: { x: 10, y: 0, rotation: 90 },
+    };
+    const rotatedOffset = translation(
+      layerTransform(rotated, tapered, 'idle', false),
+    );
+    expect(rotatedOffset[0]).toBeCloseTo(6);
+    expect(rotatedOffset[1]).toBeCloseTo(-20);
+    expect(
+      translation(
+        layerTransform(
+          { ...tapered.layers[0], centroid: undefined },
+          tapered,
+          'idle',
+          false,
+        ),
+      ),
+    ).toEqual([0, 0]);
+    for (const radialTaper of [-0.1, 1.1, NaN, null, '0.8'])
+      expect(decodeEmblemManifest({ ...tapered, radialTaper })).toBeNull();
+    expect(
+      decodeEmblemManifest({
+        ...tapered,
+        layers: tapered.layers.map((item) => ({
+          ...item,
+          centroid: { x: 101, y: 50 },
+        })),
+      }),
+    ).toBeNull();
+  });
   it('validates complete strand groups and consolidates only registered contiguous paint', () => {
     const group: EmblemManifest = {
       ...manifest,

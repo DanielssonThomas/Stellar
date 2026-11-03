@@ -147,7 +147,7 @@
   ],
   "svgLayers": 5,
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 5919167,
+  "runtimeBytes": 5921244,
   "budgetBytes": 6291456,
   "activeSvgContent": false,
   "fragmentAssemblyPixelIdentical": true

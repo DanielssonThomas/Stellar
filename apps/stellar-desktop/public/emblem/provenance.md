@@ -2,15 +2,15 @@
 
 Runtime PNGs are byte-identical copies from [the production-v1 source pack](https://github.com/DanielssonThomas/Stellar/blob/develop/libs/stellar-emblem/production-v1/README.md); JSON and SVG copies match after LF normalization. Issue #176 supplied the hybrid raster artwork and SVG geometry. #204 added circle planes, #211 divided bodies into registered clips, and #221 corrected body registration. The six original generated cutouts remain unchanged.
 
-Experiment #251 uses 47 planes. Built-in ImageGen supplied two flat strand-segmentation maps, preserved with their prompts in the source library. Deterministic Canvas extraction assigns each original hair pixel to one of twelve curved groups per color. Full-resolution recomposition is pixel-identical. Complete registered assembly groups preload and restore their original hair image after settlement. Jewelry retains six clips per color. Two secondary rings scatter laterally while all five retain their previous depth intervals of 240 source units. The complete main frame stays centered; only outer fragments use progressively denser spacing. All assembled transforms remain zero.
+Experiment #251 uses 47 planes. Built-in ImageGen supplied two flat strand-segmentation maps, preserved with their prompts in the source library. Deterministic Canvas extraction assigns each original hair pixel to one of twelve curved groups per color. Full-resolution recomposition is pixel-identical. Complete registered assembly groups preload and restore their original hair image after settlement. Jewelry retains six clips per color. All five rings align on one straight axis and retain their previous depth intervals of 240 source units. The complete main frame stays centered; outer fragments use progressively denser spacing and an elliptical inward taper of their measured visible centers. All assembled transforms remain zero.
 
-The experimental runtime payload is 5,919,167 bytes across the manifest and 35 unique image files, within a 6 MiB budget. Text newline conventions can change this count slightly. References, source maps, registration, generation prompts and review captures remain in the source library. Native appearance/performance remains separate verification; this pack is an experimental candidate.
+The experimental runtime payload is 5,921,244 bytes across the manifest and 35 unique image files, within a 6 MiB budget. Text newline conventions can change this count slightly. References, source maps, registration, generation prompts and review captures remain in the source library. Native appearance/performance remains separate verification; this pack is an experimental candidate.
 
 Copy integrity was checked against source files on this checkout. SHA-256 hashes normalize JSON/SVG text to LF and preserve exact PNG bytes.
 
 | Runtime file               | SHA-256                                                          |
 | -------------------------- | ---------------------------------------------------------------- |
-| manifest.json              | fcabbe8caf659567df02be752e4ce56e97f1193372170db738d602f360505576 |
+| manifest.json              | 55d889db7323b1b1c2796a4d4e1657558a20fea9cb911afc5c689d5165c614e8 |
 | layers/violet-body.png     | 2d26d670fbaab0630cd7d243e55ba75de39b8662d34507fd3ceefef482868730 |
 | layers/violet-hair-1.png   | 42d846e30c9020b61d8c1cc1d620ee0cacdc0059c4a5fb6940894ddd16b64257 |
 | layers/violet-hair.png     | 5ca76606302c0758dd55b520c5ce0cd751bda9e9b8c827ff2e78920c19938da3 |

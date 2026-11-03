@@ -16,6 +16,59 @@ const palette = [
   [128, 64, 32],
 ];
 
+export async function measureFragmentCentroids(page, root, layers, size) {
+  return page.evaluate(
+    async ({ layers, size }) => {
+      const images = new Map();
+      const centroids = {};
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      for (const layer of layers) {
+        let pixels = images.get(layer.file);
+        if (!pixels) {
+          const image = new Image();
+          image.src = layer.src;
+          await image.decode();
+          ctx.clearRect(0, 0, size, size);
+          ctx.drawImage(image, 0, 0);
+          pixels = ctx.getImageData(0, 0, size, size).data;
+          images.set(layer.file, pixels);
+        }
+        const [left, top, width, height] = layer.clip ?? [0, 0, size, size];
+        let weight = 0,
+          xSum = 0,
+          ySum = 0;
+        for (let y = top; y < top + height; y++)
+          for (let x = left; x < left + width; x++) {
+            const alpha = pixels[(y * size + x) * 4 + 3];
+            if (alpha < 24) continue;
+            weight += alpha;
+            xSum += (x + 0.5) * alpha;
+            ySum += (y + 0.5) * alpha;
+          }
+        if (!weight) throw new Error(`Empty centroid: ${layer.id}`);
+        centroids[layer.id] = {
+          x: Math.round((xSum / weight) * 100) / 100,
+          y: Math.round((ySum / weight) * 100) / 100,
+        };
+      }
+      return centroids;
+    },
+    {
+      layers: layers
+        .filter((layer) => !layer.spin)
+        .map((layer) => ({
+          ...layer,
+          src:
+            'data:image/png;base64,' +
+            fs.readFileSync(path.join(root, layer.file)).toString('base64'),
+        })),
+      size,
+    },
+  );
+}
+
 export async function exportStrands(page, root, size) {
   const evidence = [];
   for (const color of ['gold', 'violet']) {

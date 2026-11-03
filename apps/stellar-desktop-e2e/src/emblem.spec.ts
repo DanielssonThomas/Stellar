@@ -1,5 +1,59 @@
 import { expect, test } from '@playwright/test';
 
+test('outer fragment centers taper inward while the five rings remain coaxial', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const manifest = await (
+    await page.request.get('/emblem/manifest.json')
+  ).json();
+  await expect(page.locator('.plane')).toHaveCount(47);
+  await expect
+    .poll(() =>
+      page.locator('.camera').evaluate((element) => element.clientWidth),
+    )
+    .toBe(480);
+  const measured = await page.locator('.plane').evaluateAll(
+    (planes, layers) =>
+      planes.flatMap((element, index) => {
+        const layer = layers[index];
+        if (!layer.centroid || Math.abs(layer.planeIndex - 23) < 17) return [];
+        const width = (element as HTMLElement).clientWidth;
+        const ratio = width / 1280;
+        const origin = getComputedStyle(element)
+          .transformOrigin.split(' ')
+          .map(parseFloat);
+        const matrix = new DOMMatrix(getComputedStyle(element).transform);
+        const dx = layer.centroid.x * ratio - origin[0];
+        const dy = layer.centroid.y * ratio - origin[1];
+        const x = origin[0] + matrix.m11 * dx + matrix.m21 * dy + matrix.m41;
+        const y = origin[1] + matrix.m12 * dx + matrix.m22 * dy + matrix.m42;
+        const angle = (layer.exploded.rotation * Math.PI) / 180;
+        const rawX =
+          origin[0] +
+          Math.cos(angle) * dx -
+          Math.sin(angle) * dy +
+          layer.exploded.x * ratio;
+        const rawY =
+          origin[1] +
+          Math.sin(angle) * dx +
+          Math.cos(angle) * dy +
+          layer.exploded.y * ratio;
+        return [
+          {
+            focused: Math.hypot(x - width / 2, y - width / 2),
+            original: Math.hypot(rawX - width / 2, rawY - width / 2),
+          },
+        ];
+      }),
+    manifest.layers,
+  );
+  expect(measured.length).toBeGreaterThan(10);
+  for (const point of measured)
+    expect(point.focused).toBeLessThan(point.original * 0.75);
+});
+
 test('purple hair stays in front of every body fragment before settlement', async ({
   page,
 }) => {
@@ -192,7 +246,21 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     (layer: { id: string; exploded: { x: number } }) =>
       layer.id.startsWith('inner-circle') && layer.exploded.x !== 0,
   );
-  expect(scatteredRings).toHaveLength(2);
+  expect(scatteredRings).toHaveLength(0);
+  expect(
+    manifest.layers
+      .filter((layer: { spin?: string }) => layer.spin)
+      .every(
+        (layer: {
+          exploded: { x: number; y: number; rotation: number };
+          centroid?: unknown;
+        }) =>
+          layer.exploded.x === 0 &&
+          layer.exploded.y === 0 &&
+          layer.exploded.rotation === 0 &&
+          layer.centroid === undefined,
+      ),
+  ).toBe(true);
   for (const color of ['gold', 'violet']) {
     const bodies = manifest.layers.filter(
       (layer: { file: string }) =>
