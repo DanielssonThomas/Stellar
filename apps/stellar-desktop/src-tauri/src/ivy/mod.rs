@@ -20,6 +20,7 @@ mod session;
 mod session_tests;
 mod state;
 mod workspace_capture;
+mod workspace_context;
 pub mod workspace_contracts;
 mod workspace_data;
 mod workspace_deadline;

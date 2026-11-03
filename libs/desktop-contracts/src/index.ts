@@ -133,3 +133,15 @@ export type {
 export { decodeTelemetrySnapshot } from './lib/telemetry-codec';
 
 export { telemetrySnapshotCommand } from './generated';
+export type {
+  BrowserRequest,
+  BrowserAction,
+  BrowserBounds,
+  BrowserEvent,
+  BrowserLoadState,
+  ImageRequest,
+  ImagePreview,
+  MediaError,
+} from './generated';
+export { decodeBrowserEvent, decodeImagePreview } from './lib/media-codec';
+export type { WorkspacePaneOperation, WorkspacePaneLayout } from './generated';

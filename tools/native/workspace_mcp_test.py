@@ -29,6 +29,7 @@ mcp = load('workspace_mcp')
 service = load('workspace_service')
 credentials = load('workspace_credentials')
 bridge = load('ivy_bridge')
+sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 
 
 class MemoryCredentials:
@@ -255,9 +256,13 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
             async with streamable_http_client(self.url, http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
-                    names = {tool.name for tool in (await session.list_tools()).tools}
+                    tools = (await session.list_tools()).tools
+                    names = {tool.name for tool in tools}
+                    self.assertIn('conversing inside Stellar Desktop', next(t.description for t in tools if t.name == 'open_pane'))
+                    self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertEqual(names, {'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
-                                             'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window'})
+                                             'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window',
+                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content'})
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
                     for _ in range(200):
                         if self.frames:
@@ -297,6 +302,13 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
             ('open_pane', {'instance_id': 'pane', 'surface': 'rich-text', 'payload_json': '{"text":"hello"}', 'prominence': 'primary'}, 'open'),
             ('update_pane', {'instance_id': 'pane', 'surface': 'rich-text', 'payload_json': '{"text":"updated"}'}, 'update'),
             ('focus_pane', {'instance_id': 'pane'}, 'focus'),
+            ('minimize_pane', {'instance_id': 'pane'}, 'minimize'),
+            ('restore_pane', {'instance_id': 'pane'}, 'restore'),
+            ('maximize_pane', {'instance_id': 'pane'}, 'maximize'),
+            ('resize_pane', {'instance_id': 'pane', 'percent': 65}, 'resize'),
+            ('swap_panes', {'instance_id': 'pane', 'other_id': 'other'}, 'swap'),
+            ('restore_layout', {}, 'restore_layout'),
+            ('inspect_content', {'instance_id': 'pane'}, 'inspect_content'),
             ('arrange_panes', {'instance_ids': ['pane']}, 'arrange'),
             ('inspect_panes', {}, 'inspect'),
             ('remove_pane', {'instance_id': 'pane'}, 'remove'),
@@ -315,7 +327,7 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                         request = self.frames.pop(0)['data']
                         self.assertEqual(request['operation']['kind'], expected)
                         reply = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
-                        outcome = {'kind': 'inspection', 'panes': []} if expected == 'inspect' else {'kind': 'applied'}
+                        outcome = {'kind': 'inspection', 'panes': []} if expected == 'inspect' else {'kind': 'content','instance_id': 'pane','surface':'rich-text','revision':2,'payload_json':'{}'} if expected == 'inspect_content' else {'kind': 'applied'}
                         self.gate.reply({**reply, 'outcome': outcome})
                         result = await asyncio.wait_for(task, 5)
                         self.assertFalse(result.is_error)

@@ -1,7 +1,40 @@
 use tauri::{Manager, Webview, Wry};
 
 #[tauri::command]
-fn smoke_result(app: tauri::AppHandle, success: bool) {
+fn smoke_result(
+    app: tauri::AppHandle,
+    success: bool,
+    workspace_metrics: Option<Vec<f64>>,
+    stage: Option<String>,
+    diagnostics: Option<Vec<bool>>,
+) {
+    if let Some(metrics) = workspace_metrics
+        && metrics.len() == 5
+        && metrics
+            .iter()
+            .all(|n| n.is_finite() && *n >= 0. && *n < 30000.)
+    {
+        println!(
+            "STELLAR_WORKSPACE_METRICS {}",
+            serde_json::to_string(&metrics).unwrap_or_default()
+        );
+    }
+    if let Some(stage) = stage
+        && stage.len() <= 40
+        && stage
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        println!("STELLAR_SMOKE_STAGE {stage}");
+    }
+    if let Some(values) = diagnostics
+        && values.len() <= 24
+    {
+        println!(
+            "STELLAR_SMOKE_CHECKS {}",
+            serde_json::to_string(&values).unwrap_or_default()
+        );
+    }
     if success {
         println!("STELLAR_NATIVE_SMOKE_OK");
     }
@@ -31,6 +64,7 @@ fn check_page(window: Webview) {
     let script = r#"
         (async () => {
             const invoke = window.__TAURI__.core.invoke;
+            let stage='startup';let workspaceChecks=[];
             try {
                 for (let n = 0; n < 100 && !(document.querySelector('stellar-root')?.getAttribute('data-desktop-ready') === 'true' &&
                     document.querySelector('stellar-root')?.getAttribute('data-desktop-event') === 'true'); n++)
@@ -44,6 +78,51 @@ fn check_page(window: Webview) {
                 try { await invoke('music_set_enabled', { request: { version: 2, enabled: true } }); }
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
+                let workspaceMetrics=null;
+                let mediaRejected=0;
+                for (const url of ['file:///secret','https://127.0.0.1/','https://169.254.169.254/']) {
+                    try { await invoke('workspace_browser',{request:{version:1,operation:{action:'open',generation:1,id:'00000000-0000-4000-8000-000000000001',url,bounds:{x:20,y:120,width:500,height:300,visible:true}}}}); }
+                    catch (error) { if(error === 'blocked') mediaRejected++; }
+                }
+                let mediaOk=mediaRejected === 3;
+                if (__WORKSPACE_LIVE__) {
+                    const id='00000000-0000-4000-8000-000000000001';
+                    let loaded=false,focused=false,readyGeneration=0; const observedUrls=[];
+                    const unlisten=await window.__TAURI__.event.listen('stellar-browser',event=>{if(event.payload.id===id && event.payload.state==='ready') {loaded=true;readyGeneration=event.payload.generation;observedUrls.push(event.payload.url);} if(event.payload.id===id && event.payload.state==='focused') focused=true;});
+                    const start=performance.now();
+                    stage='browser-create';
+                    await invoke('workspace_browser',{request:{version:1,operation:{action:'open',generation:1,id,url:'https://example.com/',bounds:{x:20,y:140,width:700,height:420,visible:true}}}});
+                    stage='browser-load';
+                    for(let n=0;n<100 && !loaded;n++) await new Promise(resolve=>setTimeout(resolve,100));
+                    const creationMs=performance.now()-start;
+                    const probe=loaded && await invoke('smoke_media_probe');
+                    const operations=[];
+                    for(const width of [400,650,450,700]) {
+                        const before=performance.now();
+                        await invoke('workspace_browser',{request:{version:1,operation:{action:'bounds',id,bounds:{x:20,y:140,width,height:420,visible:true}}}});
+                        operations.push(performance.now()-before);
+                    }
+                    stage='image-fetch';
+                    const preview=await invoke('workspace_image',{request:{version:1,url:'https://www.w3.org/assets/logos/w3c-2025-transitional/w3c-72x48.png'}});
+                    const remoteImage=preview.data_uri.startsWith('data:image/png;base64,') && preview.width>0 && preview.width<=1600 && preview.height<=1200;
+                    const image=document.createElement('img');image.src=preview.data_uri;image.alt='Native remote image preview';image.style.position='fixed';image.style.left='760px';image.style.top='140px';document.body.append(image);
+                    const retained=await invoke('smoke_media_probe',{retained:true});
+                    const sourceChanged=observedUrls.some(url=>url.endsWith('#stellar-source-smoke'));
+                    for(const [action,generation,url] of [['navigate',2,'https://example.com/#workspace-fragment'],['back',3,null],['forward',4,null],['reload',5,null]]){
+                        stage='browser-'+action;
+                        await invoke('workspace_browser',{request:{version:1,operation:{action,id,generation,...(url?{url}:{})}}});
+                        for(let n=0;n<100 && readyGeneration<generation;n++) await new Promise(resolve=>setTimeout(resolve,50));
+                        if(readyGeneration<generation) throw Error('Native navigation did not settle');
+                    }
+                    await invoke('smoke_media_probe');
+                    await invoke('workspace_browser',{request:{version:1,operation:{action:'close',id}}});
+                    unlisten();
+                    workspaceChecks=[loaded,probe,retained,focused,remoteImage,sourceChanged];
+                    mediaOk=mediaOk && probe && retained && focused && remoteImage && sourceChanged;
+                    workspaceMetrics=[creationMs,...operations];
+                    console.log('STELLAR_WORKSPACE_LIVE',JSON.stringify({creationMs,boundsMs:operations,loaded,isolated:probe,retained}));
+                }
+                stage='local-checks';
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
@@ -98,14 +177,22 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: musicOk && lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===2,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
-            } catch (_) { await invoke('smoke_result', { success: false }); }
+            } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
     "#;
     let script = script.replace(
         "__TELEMETRY_EXPECT_LIVE__",
         if std::env::var_os("STELLAR_TELEMETRY_SMOKE_EXPECT_LIVE").is_some() {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    let script = script.replace(
+        "__WORKSPACE_LIVE__",
+        if std::env::var_os("STELLAR_WORKSPACE_SMOKE_LIVE").is_some() {
             "true"
         } else {
             "false"
@@ -121,6 +208,9 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
             crate::music::music_set_enabled,
+            crate::media::workspace_browser,
+            crate::media::workspace_image,
+            crate::media::smoke::smoke_media_probe,
             crate::cleanup::cleanup_refine,
             crate::app_info::app_info,
             crate::telemetry::telemetry_snapshot,
@@ -135,7 +225,9 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             smoke_result
         ])
         .on_page_load(|window, payload| {
-            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            if window.label() == "main"
+                && payload.event() == tauri::webview::PageLoadEvent::Finished
+            {
                 check_page(window.clone());
             }
         })

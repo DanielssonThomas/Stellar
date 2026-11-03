@@ -1,4 +1,5 @@
 import type { EmblemTarget } from '@stellar/desktop-interaction';
+import { paneWeight } from './stage-layout-state';
 
 export interface StageRect {
   readonly x: number;
@@ -13,7 +14,17 @@ export interface StageLayoutItem {
   readonly minimized: boolean;
 }
 
+export interface StageDivider extends StageRect {
+  readonly id: string;
+  readonly axis: 'x' | 'y';
+  readonly first: readonly string[];
+  readonly second: readonly string[];
+  readonly bounds: StageRect;
+  readonly ratio: number;
+  readonly minimum: number;
+}
 export interface StageLayout {
+  readonly dividers: readonly StageDivider[];
   readonly emblem: StageRect;
   readonly composer?: StageRect;
   readonly surfaces: readonly (StageRect & { readonly instanceId: string })[];
@@ -22,28 +33,44 @@ export interface StageLayout {
 function tile(
   bounds: StageRect,
   items: readonly StageLayoutItem[],
+  weights: Readonly<Record<string, number>>,
+  dividers: StageDivider[],
+  root = true,
 ): StageLayout['surfaces'] {
   if (!items.length) return [];
   if (items.length === 1)
     return [{ ...bounds, instanceId: items[0].instanceId }];
-  const primary = items.findIndex((item) => item.prominence === 'primary');
-  if (primary >= 0 && bounds.width >= 760) {
-    const split = bounds.width * 0.54;
-    const rest = items.filter((_, index) => index !== primary);
-    return [
-      { ...bounds, width: split, instanceId: items[primary].instanceId },
-      ...rest.map((item, index) => ({
-        instanceId: item.instanceId,
-        x: bounds.x + split,
-        y: bounds.y + (bounds.height * index) / rest.length,
-        width: bounds.width - split,
-        height: bounds.height / rest.length,
-      })),
-    ];
-  }
-  const count = Math.ceil(items.length / 2);
-  const ratio = count / items.length;
-  const horizontal = bounds.width >= bounds.height;
+  const primary =
+    root &&
+    items.some((item) => item.prominence === 'primary') &&
+    bounds.width >= 760;
+  const count = primary ? 1 : Math.ceil(items.length / 2);
+  const horizontal = primary || bounds.width >= bounds.height;
+  const firstItems = items.slice(0, count),
+    secondItems = items.slice(count);
+  const sum = (group: readonly StageLayoutItem[]) =>
+    group.reduce(
+      (n, p) =>
+        n +
+        paneWeight(
+          weights,
+          p.instanceId,
+          primary ? (p === items[0] ? 0.54 : 0.46 / secondItems.length) : 1,
+        ),
+      0,
+    );
+  const dimension = horizontal ? bounds.width : bounds.height;
+  const minimum = Math.min(
+    0.5,
+    (horizontal ? 220 : 140) / Math.max(1, dimension),
+  );
+  const ratio = Math.max(
+    minimum,
+    Math.min(
+      1 - minimum,
+      sum(firstItems) / (sum(firstItems) + sum(secondItems)),
+    ),
+  );
   const first = horizontal
     ? { ...bounds, width: bounds.width * ratio }
     : { ...bounds, height: bounds.height * ratio };
@@ -58,9 +85,24 @@ function tile(
         y: bounds.y + first.height,
         height: bounds.height - first.height,
       };
+  const firstIds = firstItems.map((p) => p.instanceId),
+    secondIds = secondItems.map((p) => p.instanceId);
+  dividers.push({
+    id: [...firstIds, 'split', ...secondIds].join(':'),
+    axis: horizontal ? 'x' : 'y',
+    first: firstIds,
+    second: secondIds,
+    bounds,
+    ratio,
+    minimum,
+    x: horizontal ? second.x - 4 : bounds.x,
+    y: horizontal ? bounds.y : second.y - 4,
+    width: horizontal ? 8 : bounds.width,
+    height: horizontal ? bounds.height : 8,
+  });
   return [
-    ...tile(first, items.slice(0, count)),
-    ...tile(second, items.slice(count)),
+    ...tile(first, firstItems, weights, dividers, false),
+    ...tile(second, secondItems, weights, dividers, false),
   ];
 }
 
@@ -69,6 +111,10 @@ export function directStage(
   instances: readonly StageLayoutItem[],
   target?: EmblemTarget,
   composing = false,
+  layout?: {
+    readonly maximizedId: string | null;
+    readonly weights: Readonly<Record<string, number>>;
+  },
 ): StageLayout {
   const dimension = (value: number) =>
     Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -76,7 +122,11 @@ export function directStage(
   const height = dimension(viewport.height);
   const padding = Math.min(24, width / 8, height / 8);
   const visible = instances
-    .filter((instance) => !instance.minimized)
+    .filter(
+      (instance) =>
+        !instance.minimized &&
+        (!layout?.maximizedId || layout.maximizedId === instance.instanceId),
+    )
     .slice(0, 4);
   const docked = !composing && (visible.length > 0 || target === 'docked');
   const composerHeight = Math.min(
@@ -117,7 +167,15 @@ export function directStage(
     height: size,
   };
   const composerWidth = Math.min(800, width - padding * 2);
+  const dividers: StageDivider[] = [];
+  const surfaces = tile(
+    { x: 0, y: 0, width, height },
+    visible,
+    layout?.weights ?? {},
+    dividers,
+  );
   return {
+    dividers,
     emblem,
     ...(composing
       ? {
@@ -129,6 +187,6 @@ export function directStage(
           },
         }
       : {}),
-    surfaces: tile({ x: 0, y: 0, width, height }, visible),
+    surfaces,
   };
 }

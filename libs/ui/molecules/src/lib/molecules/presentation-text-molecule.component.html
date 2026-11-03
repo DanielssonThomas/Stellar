@@ -4,6 +4,7 @@
   <article class="presentation">
     <h2>{{ content.title }}</h2>
     @for (block of content.blocks; track $index) {
+      @let blockIndex = $index;
       @switch (block.kind) {
         @case ('heading') {
           <h3>{{ block.text }}</h3>
@@ -25,11 +26,15 @@
           <ul class="checklist">
             @for (item of block.items; track $index) {
               <li>
-                <span
+                <button
+                  type="button"
+                  (click)="toggle(blockIndex, $index)"
+                  [attr.aria-pressed]="item.checked"
                   class="text-stellar-primary"
                   [attr.aria-label]="item.checked ? 'Complete' : 'Incomplete'"
-                  >{{ item.checked ? '✓' : '○' }}</span
                 >
+                  {{ item.checked ? '✓' : '○' }}
+                </button>
                 {{ item.text }}
               </li>
             }

@@ -9,16 +9,20 @@ default-run = "stellar-desktop"
 tauri-build = { version = "=2.7.4", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.5", features = [] }
+tauri = { version = "=2.12.5", features = ["unstable"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ts-rs = "=12.0.1"
-reqwest = { version = "=0.13.5", default-features = false }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
+tokio = { version = "=1.54.1", features = ["net", "io-util", "sync", "time", "rt", "macros"] }
+base64 = "=0.23.1"
+image = { version = "=0.25.9", default-features = false, features = ["png", "jpeg", "webp"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "=2.0.1"
 wasapi = "=0.26.0"
+webview2-com = "=0.39.1"
 process-wrap = { version = "=10.0.1", default-features = false, features = ["std", "creation-flags", "job-object"] }
 windows = { version = "=0.62.2", features = ["Win32_System_Threading"] }
 

@@ -34,3 +34,13 @@ export type {
   EmblemMusicLevels,
   EmblemMusicMode,
 } from './lib/molecules/emblem-music-motion';
+export {
+  PRESENTATION_EDIT,
+  PRESENTATION_SELECT,
+} from './lib/molecules/presentation-edit';
+export { PRESENTATION_WORKSPACE } from './lib/molecules/presentation-workspace';
+export type {
+  PresentationWorkspace,
+  BrowserPane,
+  BrowserView,
+} from './lib/molecules/presentation-workspace';

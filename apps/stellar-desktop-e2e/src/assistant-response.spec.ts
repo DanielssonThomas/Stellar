@@ -149,7 +149,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
       },
     ]);
   }, body);
-  const panel = page.getByRole('region', { name: 'Assistant message' });
+  const panel = page.getByRole('region', { name: 'Long requested content' });
   const content = panel.locator('.surface-content');
   await expect(panel).toBeVisible();
   await expect(page.locator('.waiting-ring')).toHaveCount(0);

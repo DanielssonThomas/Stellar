@@ -143,7 +143,9 @@ test('browser fallback and source selectors expose limits without accepting inve
     }),
   ).toBe('applied');
   await expect(
-    page.getByText('Embedded browsing is unavailable', { exact: false }),
+    page.getByText('Embedded browsing requires the native desktop', {
+      exact: false,
+    }),
   ).toBeVisible();
   await expect(page.locator('iframe')).toHaveCount(0);
   expect(

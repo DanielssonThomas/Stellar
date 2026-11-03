@@ -71,10 +71,13 @@ if (action === 'smoke') {
         capabilities: [
           {
             identifier: 'desktop-smoke',
-            windows: ['main'],
+            webviews: ['main'],
             permissions: [
               'allow-music-set-enabled',
               'allow-shell-status',
+              'allow-workspace-browser',
+              'allow-workspace-image',
+              'allow-smoke-media-probe',
               'allow-cleanup-refine',
               'allow-app-info',
               'allow-telemetry-snapshot',
@@ -135,6 +138,10 @@ if (action === 'smoke') {
   });
   child.on('close', (code) => {
     clearTimeout(deadline);
+    for (const line of output.split(/\r?\n/)) {
+      if (/^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS) /.test(line))
+        console.log(line);
+    }
     if (!nativeSmokeSucceeded(code, timedOut, output)) {
       console.error(
         'Native smoke lacked a successful IPC completion handshake',

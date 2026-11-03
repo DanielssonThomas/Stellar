@@ -3,7 +3,10 @@ import { nxE2EPreset } from '@nx/playwright/preset';
 import { workspaceRoot } from '@nx/devkit';
 
 // For CI, you may want to set BASE_URL to the deployed application.
-const baseURL = process.env['BASE_URL'] || 'http://127.0.0.1:4300';
+const port = Number(process.env['STELLAR_DESKTOP_E2E_PORT'] ?? 4300);
+if (!Number.isInteger(port) || port < 1024 || port > 65535)
+  throw Error('Invalid desktop E2E port');
+const baseURL = process.env['BASE_URL'] || `http://127.0.0.1:${port}`;
 
 /**
  * Read environment variables from file.
@@ -24,8 +27,8 @@ export default defineConfig({
   },
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'corepack pnpm exec nx run stellar-desktop:serve',
-    url: 'http://127.0.0.1:4300',
+    command: `corepack pnpm exec nx run stellar-desktop:serve --port=${port}`,
+    url: `http://127.0.0.1:${port}`,
     reuseExistingServer: !process.env['CI'],
     cwd: workspaceRoot,
   },
