@@ -88,6 +88,8 @@ fn main() {
         SpeechTranscript::decl(&config),
         SpeechSpeakRequest::decl(&config),
         SpeechSnapshot::decl(&config),
+        SpeechTiming::decl(&config),
+        SpeechTimingStage::decl(&config),
     ] {
         let definition = definition
             .lines()

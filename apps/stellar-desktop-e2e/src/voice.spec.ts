@@ -17,6 +17,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       transcribeActive: -1,
       speakActive: -1,
       submitActive: -1,
+      synthesisFrames: 0,
+      playbackFrames: 0,
     };
     const callbacks = new Map<
       string,
@@ -35,6 +37,12 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       state: 'idle',
       error: null,
     };
+    const frame = () => {
+      if (currentSpeech.state === 'synthesizing') results.synthesisFrames++;
+      if (currentSpeech.state === 'speaking') results.playbackFrames++;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
     const ivy = (turn_id: string | null = null): IvySnapshot => ({
       version: 1,
       revision: String(++ivyRevision),
@@ -218,6 +226,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
               transcribeActive: number;
               speakActive: number;
               submitActive: number;
+              synthesisFrames: number;
+              playbackFrames: number;
             };
           }
         ).__voiceFixture,
@@ -251,6 +261,10 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
   await expect(page.locator('.waiting-ring')).toHaveCount(0);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
+  await expect
+    .poll(async () => (await fixture()).playbackFrames)
+    .toBeGreaterThan(5);
+  expect((await fixture()).synthesisFrames).toBeGreaterThan(0);
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);
   expect(result.transcribeActive).toBe(0);

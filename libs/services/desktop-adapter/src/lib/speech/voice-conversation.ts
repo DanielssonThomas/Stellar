@@ -19,6 +19,8 @@ import {
   type PromptPresentation,
 } from './prompt-presentation';
 import { DraftRecognition } from './draft-recognition';
+import { VoiceLatency } from './voice-latency';
+import { spokenResponse } from './spoken-response';
 
 const preparing = (status: VoiceComposition['status']) =>
   ['refining', 'finalizing', 'submitting'].includes(status);
@@ -64,6 +66,7 @@ export interface VoicePorts {
 }
 
 export class VoiceConversation {
+  private readonly latency = new VoiceLatency();
   private readonly assembler = createUtteranceAssembler();
   private context?: VoiceContext;
   private generation = 0;
@@ -143,6 +146,11 @@ export class VoiceConversation {
 
   update(context: VoiceContext) {
     if (this.disposed) return;
+    if (
+      this.phase === 'speaking' &&
+      context.speech.operation_id === this.settledTurn
+    )
+      this.latency.speech(context.speech);
     const hadCapture = this.context?.audio.status === 'capturing';
     const assistantWasBusy = ['submitting', 'admitted'].includes(
       this.context?.assistant.turn ?? '',
@@ -238,6 +246,7 @@ export class VoiceConversation {
           this.assembler.reset();
           return;
         }
+        this.latency.activity(context.audio.activity.active);
         const pcm = this.assembler.push(event.chunk, {
           ...context.audio.activity,
           draft:
@@ -647,6 +656,7 @@ export class VoiceConversation {
     }
     this.controlNotice = '';
     if (command === 'prompt') {
+      this.latency.finish('interrupted');
       this.phase = null;
       this.setComposition({
         ...this.composition,
@@ -984,6 +994,7 @@ export class VoiceConversation {
     this.phase = 'waiting';
     this.publish();
     if (!this.current(generation)) return false;
+    this.latency.point('hermes_submit');
     const accepted = await this.ports.submit(text, id);
     if (
       this.current(generation) &&
@@ -995,6 +1006,7 @@ export class VoiceConversation {
       this.phase = null;
       this.failure =
         'Message was not sent. Check Ivy in the menu; it will not be resent.';
+      this.latency.finish('interrupted');
       this.publish();
     }
     return accepted;
@@ -1022,6 +1034,8 @@ export class VoiceConversation {
   }
 
   private async transcribe(pcm: Int16Array) {
+    this.latency.finish('interrupted');
+    this.latency.begin();
     const generation = ++this.generation;
     const id = this.ports.id();
     this.phase = 'transcribing';
@@ -1033,16 +1047,23 @@ export class VoiceConversation {
         await this.ports.waitForCapturePause();
         if (!this.current(generation)) return;
       }
+      this.latency.point('stt_request');
       const transcript = await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
+      this.latency.point('stt_completed');
       const text = transcript.text;
       if (transcript.utterance_id !== id) throw new Error();
       if (!text.trim()) {
         this.phase = null;
+        this.latency.finish('completed');
         this.publish();
         return;
       }
       await this.recognize(text, id, generation);
+      if (this.current(generation) && this.phase === null)
+        this.latency.finish(
+          this.failure || this.composition.error ? 'interrupted' : 'completed',
+        );
     } catch {
       if (this.current(generation))
         this.fail('Local recognition unavailable. Retry voice or use text.');
@@ -1056,11 +1077,14 @@ export class VoiceConversation {
     if (!context || this.phase !== 'waiting' || !this.voiceTurn) return;
     const snapshot = context.assistant;
     if (snapshot.turn_id !== this.voiceTurn) return;
+    if (snapshot.first_text_observed) this.latency.point('first_model_delta');
+    if (snapshot.turn === 'admitted') this.latency.point('hermes_admitted');
     if (
       ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
     )
       this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
+      this.latency.finish('interrupted');
       this.voiceTurn = null;
       this.phase = null;
       this.failure =
@@ -1070,29 +1094,32 @@ export class VoiceConversation {
       return;
     }
     if (snapshot.turn !== 'completed') return;
+    this.latency.point('model_completed');
     const id = this.voiceTurn;
     this.voiceTurn = null;
     this.phase = null;
-    const text = snapshot.items
-      .flatMap((item) => (item.kind === 'text' ? [item.text] : []))
-      .join('\n\n')
-      .trim();
+    const text = spokenResponse(snapshot.items);
+    if (text) this.latency.point('first_validated_text');
     if (
       !text ||
       this.muted ||
       !context.available ||
       !['capturing', 'turn-paused'].includes(context.audio.status)
-    )
+    ) {
+      this.latency.finish('completed');
       return;
+    }
     if (new TextEncoder().encode(text).length > 4000) {
       this.failure =
         'Reply is available as text; it exceeds the local voice limit.';
+      this.latency.finish('completed');
       return;
     }
     const generation = this.generation;
     this.phase = 'speaking';
     this.playbackAcknowledged = false;
     this.assembler.reset();
+    this.latency.point('tts_request');
     void this.ports
       .speak(text, id)
       .then((snapshot) => {
@@ -1103,6 +1130,7 @@ export class VoiceConversation {
           );
           return;
         }
+        this.latency.speech(snapshot);
         this.playbackAcknowledged = true;
         this.playbackRevision = BigInt(snapshot.revision);
         const observed = this.context?.speech;
@@ -1126,6 +1154,7 @@ export class VoiceConversation {
   }
 
   private invalidate() {
+    this.latency.finish('interrupted');
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();

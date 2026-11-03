@@ -7,6 +7,8 @@ import type {
   SpeechState,
   SpeechTranscribeRequest,
   SpeechTranscript,
+  SpeechTiming,
+  SpeechTimingStage,
 } from '../generated';
 import {
   boundedString,
@@ -34,6 +36,34 @@ const errors: Record<SpeechError, true> = {
   cancelled: true,
   protocol: true,
 };
+const timingStages: Record<SpeechTimingStage, true> = {
+  synthesis_started: true,
+  first_audio: true,
+  synthesis_completed: true,
+  playback_dispatched: true,
+  playback_completed: true,
+};
+
+function decodeTimings(value: unknown): SpeechTiming[] {
+  if (!Array.isArray(value) || value.length > 5)
+    throw new DesktopContractError('malformed');
+  const seen = new Set<SpeechTimingStage>();
+  return value.map((item) => {
+    const data = record(item, ['stage', 'elapsed_ms']);
+    const stage = variant(data['stage'], timingStages);
+    const elapsed = data['elapsed_ms'];
+    if (
+      seen.has(stage) ||
+      typeof elapsed !== 'number' ||
+      !Number.isInteger(elapsed) ||
+      elapsed < 0 ||
+      elapsed > 120000
+    )
+      throw new DesktopContractError('malformed');
+    seen.add(stage);
+    return { stage, elapsed_ms: elapsed };
+  });
+}
 
 function variant<T extends string>(value: unknown, values: Record<T, true>): T {
   if (typeof value !== 'string' || !Object.hasOwn(values, value))
@@ -119,14 +149,11 @@ export function decodeSpeechSpeakRequest(value: unknown): SpeechSpeakRequest {
 }
 
 export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
-  const data = record(value, [
-    'version',
-    'revision',
-    'epoch',
-    'operation_id',
-    'state',
-    'error',
-  ]);
+  const data = record(
+    value,
+    ['version', 'revision', 'epoch', 'operation_id', 'state', 'error'],
+    ['timings'],
+  );
   return {
     version: version(data['version']),
     revision: sequence(data['revision']),
@@ -135,5 +162,8 @@ export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
       data['operation_id'] === null ? null : identifier(data['operation_id']),
     state: variant(data['state'], states),
     error: data['error'] === null ? null : decodeSpeechError(data['error']),
+    ...(Object.hasOwn(data, 'timings')
+      ? { timings: decodeTimings(data['timings']) }
+      : {}),
   };
 }

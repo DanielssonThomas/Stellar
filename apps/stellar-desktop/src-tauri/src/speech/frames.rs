@@ -12,12 +12,14 @@ mod tests;
 pub fn collect(
     cancelled: &AtomicBool,
     mode: &str,
-    frames: Frames,
+    frames: &Frames,
     deadline: Instant,
     mut on_speaking: impl FnMut() -> Result<(), SpeechError>,
+    mut on_timing: impl FnMut(super::contracts::SpeechTiming) -> Result<(), SpeechError>,
 ) -> Result<String, SpeechError> {
     let mut started = false;
     let mut speaking = false;
+    let mut timings = std::collections::HashSet::new();
     loop {
         if cancelled.load(Ordering::SeqCst) {
             return Err(SpeechError::Cancelled);
@@ -34,6 +36,19 @@ pub fn collect(
             .as_object()
             .filter(|value| value.len() == 1)
             .ok_or(SpeechError::Protocol)?;
+        if let Some(value) = object.get("timing") {
+            let timing: super::contracts::SpeechTiming =
+                serde_json::from_value(value.clone()).map_err(|_| SpeechError::Protocol)?;
+            if mode != "speak"
+                || !started
+                || timing.elapsed_ms > 120_000
+                || !timings.insert(timing.stage.clone())
+            {
+                return Err(SpeechError::Protocol);
+            }
+            on_timing(timing)?;
+            continue;
+        }
         if let Some(error) = object.get("error") {
             return Err(match error.as_str() {
                 Some("model_missing") => SpeechError::ModelMissing,

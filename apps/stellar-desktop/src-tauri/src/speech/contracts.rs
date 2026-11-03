@@ -69,6 +69,27 @@ pub struct SpeechSnapshot {
     pub operation_id: Option<String>,
     pub state: SpeechState,
     pub error: Option<SpeechError>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub timings: Option<Vec<SpeechTiming>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechTimingStage {
+    SynthesisStarted,
+    FirstAudio,
+    SynthesisCompleted,
+    PlaybackDispatched,
+    PlaybackCompleted,
+}
+
+/// Milliseconds since worker synthesis dispatch; playback dispatch is not acoustic onset.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechTiming {
+    pub stage: SpeechTimingStage,
+    pub elapsed_ms: u32,
 }
 
 impl Default for SpeechSnapshot {
@@ -80,6 +101,7 @@ impl Default for SpeechSnapshot {
             operation_id: None,
             state: SpeechState::Idle,
             error: None,
+            timings: None,
         }
     }
 }
