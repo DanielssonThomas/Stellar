@@ -186,43 +186,43 @@
     }
   ],
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 6492501,
+  "runtimeBytes": 6492458,
   "budgetBytes": 8388608,
   "responsiveImages": {
     "rasterFiles": 86,
     "tiers": [
       {
         "width": 128,
-        "runtimeBytes": 195937,
+        "runtimeBytes": 195894,
         "rgbaBytes": 5636096
       },
       {
         "width": 256,
-        "runtimeBytes": 478539,
+        "runtimeBytes": 478496,
         "rgbaBytes": 22544384
       },
       {
         "width": 512,
-        "runtimeBytes": 1352100,
+        "runtimeBytes": 1352057,
         "rgbaBytes": 90177536
       },
       {
         "width": 768,
-        "runtimeBytes": 2549771,
+        "runtimeBytes": 2549728,
         "rgbaBytes": 202899456
       },
       {
         "width": 1024,
-        "runtimeBytes": 4121654,
+        "runtimeBytes": 4121611,
         "rgbaBytes": 360710144
       },
       {
         "width": 1280,
-        "runtimeBytes": 6492501,
+        "runtimeBytes": 6492458,
         "rgbaBytes": 563609600
       }
     ],
-    "distributionBytes": 14998507,
+    "distributionBytes": 14998464,
     "budgetBytes": 16777216
   },
   "activeSvgContent": false,
