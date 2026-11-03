@@ -191,6 +191,12 @@ export class AppComponent {
             info.capabilities.map(capabilityLabel).join(', '),
           );
           this.desktopReady.set(true);
+          if (
+            info.capabilities.some(
+              (capability) => capability.kind === 'native_window',
+            )
+          )
+            void this.voice.startListening();
         }
       } catch {
         unsubscribe();

@@ -23,6 +23,7 @@ import {
   type IvyActivityItem,
   PromptComposerMolecule,
   FaultLogMolecule,
+  VoiceTranscriptMolecule,
   type FaultLogEntry,
   type ComposerFinalizedText,
   type PromptComposerStatus,
@@ -46,6 +47,7 @@ export interface MicrophoneOption {
     IvyActivityMolecule,
     PromptComposerMolecule,
     FaultLogMolecule,
+    VoiceTranscriptMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -113,6 +115,7 @@ export class DesktopExperienceTemplate {
     this.faultActive()
       ? ('idle' as const)
       : this.passiveListening() &&
+          !this.state().manualActive &&
           !['suspended', 'shutdown'].includes(this.state().phase)
         ? ('idle' as const)
         : this.assistantActive() ||
@@ -126,6 +129,7 @@ export class DesktopExperienceTemplate {
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
+  readonly voiceInputText = input('');
   readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
   readonly voiceBusy = input(false);

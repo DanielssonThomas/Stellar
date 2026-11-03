@@ -24,6 +24,26 @@ function fixtureSource() {
 }
 
 describe('audio lifecycle owner', () => {
+  it('retains continuous capture while hidden and still releases on page exit and explicit stop', async () => {
+    const owner = new AudioActivityController(() => undefined);
+    const source = fixtureSource();
+    const doc = Object.assign(new EventTarget(), { hidden: false });
+    const win = new EventTarget();
+    owner.bindLifecycle(doc as unknown as Document, win as unknown as Window);
+    owner.setContinuousCapture(true);
+    await owner.start(source.source);
+    doc.hidden = true;
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(owner.snapshot().status).toBe('capturing');
+    expect(source.source.stop).not.toHaveBeenCalled();
+    win.dispatchEvent(new Event('pagehide'));
+    expect(source.source.stop).toHaveBeenCalledOnce();
+    await owner.start(source.source);
+    await owner.stop();
+    expect(source.source.stop).toHaveBeenCalledTimes(2);
+    await owner.dispose();
+  });
+
   it('publishes a pending onset immediately, before activity confirmation', async () => {
     const source = new SyntheticAudioSource();
     const published: boolean[] = [];

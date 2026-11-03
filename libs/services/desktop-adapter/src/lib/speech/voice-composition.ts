@@ -1,6 +1,7 @@
 export type VoiceModel = 'terra' | 'sol';
 export type VoiceCommand =
   | 'prompt'
+  | 'prompt cancel'
   | 'end prompt'
   | 'send prompt'
   | 'send'
@@ -35,6 +36,7 @@ export function voiceCommand(text: string): VoiceCommand | null {
     .trim();
   if (
     normalized === 'prompt' ||
+    normalized === 'prompt cancel' ||
     normalized === 'end prompt' ||
     normalized === 'send prompt' ||
     normalized === 'send' ||
@@ -44,9 +46,17 @@ export function voiceCommand(text: string): VoiceCommand | null {
   )
     return normalized;
   if (
-    ['done', 'thats all', 'that is all', 'im done', 'i am done'].includes(
-      normalized,
-    )
+    [
+      'done',
+      'thats all',
+      'that is all',
+      'im done',
+      'i am done',
+      'alright im done',
+      'alright i am done',
+      'all right im done',
+      'all right i am done',
+    ].includes(normalized)
   )
     return 'done';
   return null;

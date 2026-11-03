@@ -37,6 +37,37 @@ describe('DesktopExperienceTemplate', () => {
     expect(open).toHaveBeenCalledTimes(2);
   });
 
+  it('shows only available Whisper input and hides it throughout prompt mode and suspension', async () => {
+    const panel = () =>
+      fixture.nativeElement.querySelector('stellar-voice-transcript-molecule');
+    expect(panel()).toBeNull();
+    fixture.componentRef.setInput('voiceInputText', 'Ivy, misheard request');
+    await fixture.whenStable();
+    expect(panel()?.textContent).toContain('Ivy, misheard request');
+    fixture.componentRef.setInput('promptStatus', 'error');
+    await fixture.whenStable();
+    expect(panel()?.textContent).toContain('Ivy, misheard request');
+    fixture.componentRef.setInput('solActive', true);
+    for (const status of [
+      'composing',
+      'refining',
+      'finalizing',
+      'submitting',
+      'error',
+    ]) {
+      fixture.componentRef.setInput('promptStatus', status);
+      await fixture.whenStable();
+      expect(panel()).toBeNull();
+    }
+    fixture.componentRef.setInput('promptStatus', 'idle');
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'suspended',
+    });
+    await fixture.whenStable();
+    expect(panel()).toBeNull();
+  });
+
   it('retains assembled presence between foreground turns until clear, while suspension still wins', async () => {
     expect(fixture.componentInstance.emblemPhase()).toBe('idle');
     fixture.componentRef.setInput('conversationActive', true);
@@ -61,6 +92,20 @@ describe('DesktopExperienceTemplate', () => {
     });
     await fixture.whenStable();
     expect(fixture.componentInstance.emblemPhase()).toBe('shutdown');
+  });
+
+  it('allows explicit manual activity to assemble while voice remains passive', async () => {
+    fixture.componentRef.setInput('passiveListening', true);
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      phase: 'listening',
+      manualActive: true,
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('listening');
+    fixture.componentRef.setInput('state', initialState);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.emblemPhase()).toBe('idle');
   });
 
   it('assembles while waiting, restores presence for narration and removes waiting on suspension', async () => {

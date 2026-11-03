@@ -15,6 +15,14 @@ spec = importlib.util.spec_from_file_location('stellar_speech_worker', SOURCE)
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 
+recognition_spec = importlib.util.spec_from_file_location('stellar_recognition_worker', SOURCE.with_name('recognition_worker.py'))
+recognition = importlib.util.module_from_spec(recognition_spec)
+recognition_spec.loader.exec_module(recognition)
+policy_spec = importlib.util.spec_from_file_location('recognition_policy_tests', Path(__file__).with_name('recognition_policy_test.py'))
+policy_tests = importlib.util.module_from_spec(policy_spec)
+policy_spec.loader.exec_module(policy_tests)
+RecognitionPolicyTests = policy_tests.RecognitionPolicyTests
+
 
 def config():
     return {'stt': {'enabled': True, 'provider': 'local', 'language': '',
@@ -23,6 +31,42 @@ def config():
 
 
 class SpeechWorkerTests(unittest.TestCase):
+    def test_persistent_parser_and_pcm_fail_closed_without_model_loading(self):
+        for raw in ['{"mode":1,"mode":2}', '{"pcm":[NaN]}', '{"pcm":[Infinity]}']:
+            with self.assertRaises(recognition.Rejected):
+                json.loads(raw, object_pairs_hook=recognition.unique, parse_constant=recognition.invalid)
+        for pcm in [[], [True], [1.0], [-32769], [32768], [0]*641]:
+            with self.assertRaises(recognition.Rejected):
+                recognition.samples({'pcm': pcm}, 640)
+
+    def test_parakeet_is_loaded_once_for_multiple_streams_on_cpu(self):
+        calls = []
+        class Model:
+            def create_stream(self):
+                return types.SimpleNamespace(accept_waveform=lambda *args: None, result=types.SimpleNamespace(text='English fixture'))
+            def decode_stream(self, stream):
+                pass
+        def create(**kwargs):
+            calls.append(kwargs)
+            return Model()
+        with patch.dict(sys.modules, {'sherpa_onnx': types.SimpleNamespace(OfflineRecognizer=types.SimpleNamespace(from_transducer=create))}), \
+                patch.object(recognition, 'files', return_value={}), patch.object(recognition, 'samples', return_value=[0]):
+            engine = recognition.Transcriber()
+            for _ in range(2):
+                self.assertEqual(engine.run({'pcm':[0], 'sample_rate_hz':16000}), {'text':'English fixture'})
+            for invalid in [{'pcm':[0], 'sample_rate_hz':8000}, {'pcm':[0], 'sample_rate_hz':True}, {'pcm':[0], 'sample_rate_hz':16000, 'path':'ignored'}]:
+                with self.assertRaises(recognition.Rejected):
+                    engine.run(invalid)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]['provider'], 'cpu')
+        self.assertEqual(calls[0]['model_type'], 'nemo_transducer')
+        self.assertEqual(calls[0]['num_threads'], 2)
+
+    def test_missing_recognition_assets_fail_without_download_or_fallback(self):
+        with patch.object(Path, 'is_file', return_value=False):
+            with self.assertRaises(FileNotFoundError):
+                recognition.files(Path('missing'), {'encoder':'model.onnx'})
+
     def test_windows_playback_is_synchronous_and_stops_without_fallback(self):
         with tempfile.TemporaryDirectory(prefix='stellar-playback-') as folder:
             target = Path(folder) / 'fixture.wav'
@@ -90,12 +134,26 @@ class SpeechWorkerTests(unittest.TestCase):
             with self.assertRaises(worker.Failure):
                 worker.validate_stt_config(candidate)
 
+    def test_desktop_accepts_english_or_unspecified_profile_language_only(self):
+        for language in [None, '', 'auto', 'en']:
+            candidate = config()
+            candidate['stt']['language'] = language
+            candidate['stt']['local']['language'] = language
+            self.assertEqual(worker.validate_stt_config(candidate)['local']['language'], language)
+        for section in ['stt', 'local']:
+            candidate = config()
+            target = candidate['stt'] if section == 'stt' else candidate['stt']['local']
+            target['language'] = 'de'
+            with self.assertRaises(worker.Failure):
+                worker.validate_stt_config(candidate)
+
     def test_malformed_and_oversized_pcm_never_loads_a_model(self):
         with patch.object(worker, 'load_stt_config', side_effect=AssertionError('model path reached')):
             for request in [{'pcm': [True], 'sample_rate_hz': 16000},
                             {'pcm': [32768], 'sample_rate_hz': 16000},
                             {'pcm': [0], 'sample_rate_hz': 48000},
                             {'pcm': [0] * 320001, 'sample_rate_hz': 16000},
+                            {'pcm': [0], 'sample_rate_hz': 16000, 'language': 'de'},
                             {'pcm': [0], 'sample_rate_hz': 16000, 'provider': 'cloud'}]:
                 with self.assertRaises(worker.Failure):
                     worker.transcribe(request, io.BytesIO())
@@ -117,6 +175,7 @@ class SpeechWorkerTests(unittest.TestCase):
 
     def test_local_constructor_has_no_download_retry_and_silence_stays_empty(self):
         calls = []
+        decoding = []
         class Array:
             def __truediv__(self, divisor):
                 self.divisor = divisor
@@ -125,13 +184,16 @@ class SpeechWorkerTests(unittest.TestCase):
             def __init__(self, *args, **kwargs):
                 calls.append((args, kwargs))
             def transcribe(self, audio, **kwargs):
-                self.kwargs = kwargs
+                decoding.append(kwargs)
                 return iter([]), None
+        expected = {'vad_filter': True, 'condition_on_previous_text': False,
+                    'beam_size': 5, 'no_speech_threshold': 0.6, 'log_prob_threshold': -1.0,
+                    'vad_parameters': {'min_silence_duration_ms': 500}}
         modules = {
             'numpy': types.SimpleNamespace(asarray=lambda *args, **kwargs: Array(), float32=float),
             'faster_whisper': types.SimpleNamespace(WhisperModel=Model),
             'tools.transcription_tools': types.SimpleNamespace(
-                build_local_transcribe_kwargs=lambda cfg: {'vad_filter': True, 'condition_on_previous_text': False},
+                build_local_transcribe_kwargs=lambda cfg: dict(expected, language='de'),
                 _join_confident_segments=lambda segments, cfg: ' '.join(segments)),
         }
         with patch.dict(sys.modules, modules), patch.object(worker, 'load_stt_config', return_value=config()['stt']), \
@@ -142,6 +204,22 @@ class SpeechWorkerTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0], (('base',), {'device': 'cpu', 'compute_type': 'int8',
                                              'local_files_only': True, 'cpu_threads': 4}))
+        self.assertEqual(decoding, [dict(expected, language='en')])
+        self.assertNotIn('initial_prompt', decoding[0])
+        self.assertNotIn('hotwords', decoding[0])
+
+    def test_desktop_still_requires_vad_before_loading_the_model(self):
+        modules = {
+            'numpy': types.SimpleNamespace(),
+            'faster_whisper': types.SimpleNamespace(WhisperModel=lambda *args, **kwargs: self.fail('model loaded')),
+            'tools.transcription_tools': types.SimpleNamespace(
+                build_local_transcribe_kwargs=lambda cfg: {'vad_filter': False},
+                _join_confident_segments=lambda *args: self.fail('decoded')),
+        }
+        with patch.dict(sys.modules, modules), patch.object(worker, 'load_stt_config', return_value=config()['stt']), \
+             patch.object(Path, 'is_dir', return_value=True), patch.object(sys, 'path', list(sys.path)):
+            with self.assertRaises(worker.Failure):
+                worker.transcribe({'pcm': [0], 'sample_rate_hz': 16000}, io.BytesIO())
 
     def test_missing_cache_never_retries_or_calls_cloud(self):
         class LocalEntryNotFoundError(Exception):

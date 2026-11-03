@@ -23,6 +23,7 @@ fn main() {
         telemetry_name::TELEMETRY_COMMAND,
         "smoke_hold_ivy",
         "smoke_capture_window",
+        "recognition_result",
         ivy_names::IVY_COMMANDS[0],
         ivy_names::IVY_COMMANDS[1],
         ivy_names::IVY_COMMANDS[2],
@@ -39,6 +40,7 @@ fn main() {
         speech_names::SPEECH_COMMANDS[2],
         speech_names::SPEECH_COMMANDS[3],
         speech_names::SPEECH_COMMANDS[4],
+        speech_names::SPEECH_COMMANDS[5],
     ];
     let _ = ivy_names::IVY_EVENT;
     let _ = ivy_names::WORKSPACE_EVENT;

@@ -9,6 +9,45 @@ function issue(labels) {
 }
 
 describe('issue metadata policy', () => {
+  for (const worker of ['ivy', 'foreman-cloud', 'peon-cloud']) {
+    it(`admits ${worker} without admitting local role aliases or critical assignments`, () => {
+      const labels = [
+        'priority:high',
+        'review:critical',
+        'target:develop',
+        'type:feature',
+        `worker:${worker}`,
+        'status:ready',
+      ];
+      assert.equal(
+        validateIssue({ ...issue(labels), number: 259 }).ready,
+        true,
+      );
+      assert.equal(
+        validateIssue({
+          ...issue(
+            labels.map((label) =>
+              label === 'priority:high' ? 'priority:critical' : label,
+            ),
+          ),
+          number: 259,
+        }).valid,
+        false,
+      );
+      for (const alias of ['foreman', 'architect', 'ivy-cloud'])
+        assert.equal(
+          validateIssue({
+            ...issue(
+              labels.map((label) =>
+                label === `worker:${worker}` ? `worker:${alias}` : label,
+              ),
+            ),
+            number: 259,
+          }).valid,
+          false,
+        );
+    });
+  }
   it('requires one independent review tier on new actionable issues', () => {
     const labels = [
       'priority:low',

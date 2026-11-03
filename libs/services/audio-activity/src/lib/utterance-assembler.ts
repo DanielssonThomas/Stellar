@@ -1,6 +1,8 @@
 import type { PcmChunk } from './pcm-model';
 
-export function createUtteranceAssembler(): {
+export function createUtteranceAssembler(
+  options: { silenceMs?: number; draftSilenceMs?: number } = {},
+): {
   push(
     chunk: PcmChunk,
     gate: {
@@ -17,8 +19,14 @@ export function createUtteranceAssembler(): {
 } {
   const MAX_SAMPLES = 320000;
   const PREROLL_SAMPLES = 3840;
-  const SILENT_TAIL_SAMPLES = 22400;
-  const DRAFT_SILENT_TAIL_SAMPLES = 8640;
+  function silence(value: number | undefined, fallback: number): number {
+    if (value === undefined) return fallback;
+    if (!Number.isFinite(value) || value < 240 || value > 3000)
+      throw new RangeError('Invalid speech endpoint');
+    return Math.round(value * 16);
+  }
+  const SILENT_TAIL_SAMPLES = silence(options.silenceMs, 22400);
+  const DRAFT_SILENT_TAIL_SAMPLES = silence(options.draftSilenceMs, 8640);
   const MIN_VOICE_SAMPLES = 3200;
   const MAX_CHUNK_SAMPLES = 640;
 
@@ -165,7 +173,7 @@ export function createUtteranceAssembler(): {
     if (gate.active) {
       voiceSamples += count;
       silentSamples = 0;
-    } else if (gate.draft && gate.starting) {
+    } else if (gate.starting) {
       silentSamples = 0;
     } else {
       silentSamples += count;

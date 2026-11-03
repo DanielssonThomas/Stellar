@@ -20,6 +20,20 @@ const id = '11111111-2222-4333-8444-555555555555';
 describe('speech service ownership', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('initializes native readiness once without loading models or transcribing audio', async () => {
+    const invoke = vi.fn(async () => initialSpeechSnapshot());
+    const listen = vi.fn(async () => () => undefined);
+    TestBed.configureTestingModule({
+      providers: [{ provide: SPEECH_TRANSPORT, useValue: { invoke, listen } }],
+    });
+    const service = TestBed.inject(SpeechAdapterService);
+    await Promise.all([service.initialize(), service.initialize()]);
+    expect(listen).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(speechSnapshotCommand, {
+      request: { version: 1 },
+    });
+  });
+
   it('clears a local stop failure when a confirmed retry returns the same idle revision', async () => {
     const idle = { ...initialSpeechSnapshot(), revision: '5' };
     let stops = 0;

@@ -47,10 +47,9 @@
     [promptRefinementRevision]="voice.composition().refinementRevision ?? 0"
     [promptRefined]="voice.composition().refined"
     [promptStatus]="voice.composition().status"
-    [conversationActive]="
-      voice.composition().model === 'sol' || assistant.state().turn_id !== null
-    "
+    [conversationActive]="voice.state().foregroundActive ?? false"
     [voiceStatus]="voice.state().status"
+    [voiceInputText]="voice.state().inputText ?? ''"
     [voiceNotice]="voice.state().notice ?? ''"
     [voiceMuted]="voice.state().muted"
     [voiceBusy]="voice.state().busy"

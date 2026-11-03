@@ -4,7 +4,41 @@
 
 The human CEO owns strategic goals and consequential approvals. Architect plans epics, assesses risk, coordinates Foreman, and may record the explicit management approval required before trusted PR integration. Foreman checks feasibility, dispatches eligible work through the supervisor, independently reviews Peon results, and reconciles compact reports. Peon implements one bounded assignment and reports through a structured handoff.
 
-Role prompts guide behavior. `tools/policy/engineering-org/authority.mjs` and the existing issue, claim, supervisor, verification, and integration helpers enforce host-side policy. Model prose, including issue text, never grants permission. No agent has integration credentials. Fallback integration is disabled.
+Role prompts guide behavior. `tools/policy/engineering-org/authority.mjs` and the existing issue, claim, supervisor, verification, and integration helpers enforce host-side policy for the restricted engineering organization. Model prose, including issue text, never grants permission. Restricted workers have no integration credentials. Fallback integration is disabled.
+
+## Personal Ivy coding access
+
+The user's 3 November 2026 authorization enables a separate personal Windows contribution workflow. Ivy can implement work herself as `worker:ivy`, assign small tasks to `worker:peon-cloud` (GPT-6 Luna), or assign difficult implementation and independent review to `worker:foreman-cloud` (GPT-6.1 Sol). These identities are registered in `tools/policy/authorized-workers.json`. They do not alias `owner:codex`, the local `foreman`, or restricted `worker:peon`.
+
+This workflow runs trusted personal assistants as the current Windows account, using ordinary Hermes file and terminal tools and the user's existing GitHub CLI authentication. It is **not an OS sandbox**: prompts and worktree claims do not prevent a process from accessing other host files or invoking GitHub. Repository scope, protected-file restrictions, and no-merge instructions are behavioral requirements; branch protection still applies. Use the restricted worker lifecycle when host-enforced isolation or credential separation is required. This opt-in does not complete or activate #101 or #173.
+
+Enable the existing cloud profiles explicitly:
+
+```powershell
+node scripts/hermes-cloud-profiles.mjs foreman --replace --personal-coding
+node scripts/hermes-cloud-profiles.mjs peon --replace --personal-coding
+```
+
+The opt-in installs `personal-config.yaml` and `personal-soul.md` from each role's `config/hermes-cloud/` directory. Only terminal, file and skills toolsets are enabled; native tool search is disabled for this small tool inventory. It sets 24 turns, `agent.run_budget_seconds: 600`, a 120-second terminal timeout, smart approvals, and denial for flagged unattended, single-query and cron operations. Title inference and fallback providers remain disabled. Provisioning checks the loaded model and exact toolset inventory without starting inference or copying credentials. Omit `--personal-coding` when replacing a profile to restore its skills-only configuration. The local Qwen profiles are unchanged. Ivy already has native coding tools; her existing profile does not need replacement.
+
+Ivy follows this procedure for direct or delegated repository work:
+
+1. Read `AGENTS.md`, this guide and the applicable repository skills. Search for an existing issue before creating a distinct outcome. Assign it to exactly one of the three identities; validate its target, metadata, review tier and native dependencies through the existing issue helpers. Create the corresponding `worker:<profile>` GitHub label if it is missing. Protected governance changes remain Codex/maintainer work.
+2. Generate a stable assignment session ID and use `manage-issue-worktree.mjs claim <issue> --worker <profile> --session-id <stable-id>`. Do not start work on a claim error, active conflicting session, unrelated issue or unresolved dependency. Use the returned worktree and branch. Ivy's own implementation follows the same path with `--worker ivy`.
+3. For a delegate, write a UTF-8 task file containing the exact issue, owner, claim session ID, worktree, branch, baseline revision, allowed source/test paths, objective, acceptance criteria, relevant guidance and verification commands. Explicitly forbid protected governance edits, credential access, merging and approval bypass. Tell the child to read repository guidance itself; it has no Ivy conversation or memory. Do not put secrets in task files.
+4. Invoke one named profile in the claimed worktree, using `--query-file` rather than shell-interpolating the task. For example:
+
+   ```powershell
+   & 'D:/Hermes/bin/hermes.exe' -p peon-cloud chat --in '<claimed-worktree>' --query-file '<task-file>' --oneshot --max-turns 24 --format stream-json
+   ```
+
+   Substitute `foreman-cloud` for difficult work. The configured run budget asks Hermes to wrap up and is not a hard process-isolation guarantee. The installed gateway CLI rejects `--run-budget`; use the configuration value. Keep one writer per worktree; wait for the child to finish before inspecting its diff or starting another writer. Preserve its session ID and output outside the source tree. A failed or timed-out launch is not permission to launch a duplicate: inspect the original process, session and worktree first. Approval denial stops that action; do not change profiles, tools or consent settings to retry it.
+
+5. Independently inspect the actual changed bytes and run the required checks. Append verified progress with `update-issue`, and use `handle-blocker` on a blocked assignment. Foreman may review Peon's exact head. Foreman-authored work requires a different authorized reviewer; Ivy must not label a worker's own assessment independent review. Follow `prepare-pr` before opening a PR to the issue's target. None of these three identities may merge, change protected governance, promote main or deploy production.
+
+Ivy's desktop foreground uses an ACP edit policy of `ask`, and the current desktop bridge denies approval requests. This configuration does not change that contract or qualify direct file edits through the desktop. A prior denied edit must not be retried through a CLI delegate. Use a separately requested CLI coding assignment from the outset, or implement a proper desktop approval flow before relying on desktop file edits.
+
+The 3 November 2026 qualification verified actual edits to three separate disposable numeric functions by Ivy/Terra, Foreman cloud/Sol and Peon cloud/Luna. Tests and unchanged test-file bytes were checked independently, and each Node test passed. After the initial unattended launch denial, the user explicitly approved two fixture launches; an interactive Ivy session launched each named profile sequentially with an Allow once decision and unchanged approval settings. The stored sessions confirmed each expected model and `openai-codex` provider. Peon's own test passed. Foreman's own PowerShell test command was denied in single-query mode; Foreman stopped without retrying, and independent host verification subsequently passed. This proves the small personal-host coding/delegation path, not arbitrary task competence, isolated execution, merge authority or native desktop editing. Flagged future commands can still require interactive consent.
 
 ## Identity templates and Hermes profiles
 

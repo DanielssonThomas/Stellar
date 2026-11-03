@@ -1,12 +1,15 @@
 import {
   createUtteranceAssembler,
+  validPcmChunk,
   type AudioActivityState,
   type PcmEvent,
+  type PcmChunk,
 } from '@stellar/service-audio-activity';
 import type {
   IvySnapshot,
   SpeechSnapshot,
   SpeechTranscript,
+  KeywordDetection,
 } from '@stellar/desktop-contracts';
 import {
   fitsVoicePrompt,
@@ -19,8 +22,15 @@ import {
   type PromptPresentation,
 } from './prompt-presentation';
 import { DraftRecognition } from './draft-recognition';
+import { FastCommands, type KeywordPort } from './fast-commands';
+import {
+  VoiceInvocation,
+  cancelsPrompt,
+  promptInvocation,
+} from './voice-invocation';
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
+import { SpeechActivity } from './speech-activity';
 
 const preparing = (status: VoiceComposition['status']) =>
   ['refining', 'finalizing', 'submitting'].includes(status);
@@ -33,6 +43,8 @@ export interface VoiceContext {
 }
 
 export interface VoiceView {
+  readonly inputText?: string;
+  readonly foregroundActive?: boolean;
   readonly passive?: boolean;
   readonly notice?: string;
   readonly status: string;
@@ -42,6 +54,9 @@ export interface VoiceView {
 }
 
 export interface VoicePorts {
+  readonly keywords?: KeywordPort;
+  readonly silenceMs?: number;
+  readonly onForegroundEnd?: () => void;
   readonly newSession?: () => Promise<boolean>;
   readonly reloadMcp?: () => Promise<boolean>;
   readonly onNewSession?: () => void;
@@ -66,8 +81,25 @@ export interface VoicePorts {
 }
 
 export class VoiceConversation {
+  private readonly assembler;
+  private readonly fastCommands?: FastCommands;
+  private readonly speechActivity?: SpeechActivity;
+  private pendingControl?: KeywordDetection;
+  private suppressControls = false;
+  private lastVoicedSequence: number | null = null;
+  private pcmSequence: number | null = null;
+  private speechResourcesUsed = false;
+  private get awaitingWake() {
+    return !this.promptOpen && !this.invocation.active();
+  }
+  private set awaitingWake(value: boolean) {
+    if (value) this.invocation.reset();
+    else this.invocation.activate();
+  }
+  private inputText = '';
+  private readonly invocation = new VoiceInvocation();
+  private promptOpen = false;
   private readonly latency = new VoiceLatency();
-  private readonly assembler = createUtteranceAssembler();
   private context?: VoiceContext;
   private generation = 0;
   private phase: 'transcribing' | 'waiting' | 'speaking' | null = null;
@@ -98,7 +130,6 @@ export class VoiceConversation {
   private dispatchPending = false;
   private routeUncertain = false;
   private sessionPending = false;
-  private awaitingWake = false;
   private controlNotice = '';
   private newSessionRequested = false;
   private lastResetId: string | null = null;
@@ -112,14 +143,50 @@ export class VoiceConversation {
   private typedLease?: AbortController;
 
   constructor(private readonly ports: VoicePorts) {
+    this.assembler = createUtteranceAssembler({
+      silenceMs: ports.silenceMs ?? (ports.keywords ? 800 : 1400),
+    });
+    if (ports.keywords) {
+      this.speechActivity = new SpeechActivity();
+      this.awaitingWake = true;
+      this.fastCommands = new FastCommands(
+        ports.keywords,
+        ports.id,
+        (detection, tail, sequence) => {
+          if (detection.command === 'ivy')
+            void this.acceptFastCommand(detection, tail);
+          else if (
+            !this.suppressControls &&
+            !this.pendingControl &&
+            (this.lastVoicedSequence === null ||
+              this.lastVoicedSequence <= sequence)
+          ) {
+            if ((this.speechActivity?.quietMs() ?? 0) >= 1000)
+              void this.acceptFastCommand(detection, []);
+            else this.pendingControl = detection;
+          }
+        },
+        () =>
+          this.fail(
+            'Local command recognition unavailable. Retry voice or use text.',
+          ),
+      );
+    }
     if (ports.collect) {
       this.draftRecognition = new DraftRecognition(
         ports.collect,
         ports.stop,
-        (text, id, final, commandAllowed) =>
-          this.acceptDraftTranscript(text, id, final, commandAllowed),
+        (text, id, final, commandAllowed, wakeAllowed) =>
+          this.acceptCollectedTranscript(
+            text,
+            id,
+            final,
+            commandAllowed,
+            wakeAllowed,
+          ),
         () =>
           this.fail('Local draft recognition stopped. Your text is retained.'),
+        !ports.keywords,
       );
     }
     if (ports.presentFinalized)
@@ -164,6 +231,7 @@ export class VoiceConversation {
       context.assistant.reset_id !== this.lastResetId
     ) {
       this.lastResetId = context.assistant.reset_id;
+      if (this.fastCommands) this.invalidate();
       this.finishNewSession();
     }
     if (
@@ -171,8 +239,14 @@ export class VoiceConversation {
       (hadCapture &&
         !['capturing', 'turn-paused'].includes(context.audio.status))
     ) {
+      this.invocation.reset();
       this.invalidate();
-    } else if (!assistantWasBusy && assistantIsBusy && this.phase === null) {
+    } else if (
+      !assistantWasBusy &&
+      assistantIsBusy &&
+      this.phase === null &&
+      !this.typedLease
+    ) {
       this.invalidate();
     } else if (
       this.phase === 'speaking' &&
@@ -181,6 +255,7 @@ export class VoiceConversation {
       BigInt(context.speech.revision) >= this.playbackRevision
     ) {
       this.phase = null;
+      this.invocation.activate();
       this.awaitingQuiet = true;
       this.assembler.reset();
     } else if (
@@ -196,11 +271,18 @@ export class VoiceConversation {
   accept(event: PcmEvent, audio?: AudioActivityState) {
     if (this.disposed) return;
     if (event.type === 'turn-pause') {
+      this.pcmSequence = null;
+      this.lastVoicedSequence = null;
+      this.pendingControl = undefined;
+      this.suppressControls = false;
       this.assembler.reset();
+      this.resetSpeechActivity();
+      this.fastCommands?.reset();
       return;
     }
     if (event.type === 'reset') {
-      this.invalidate();
+      this.invocation.reset();
+      this.invalidate(false);
       this.blocked = false;
       this.failure = '';
       this.publish();
@@ -215,6 +297,15 @@ export class VoiceConversation {
     }
     if (event.type === 'chunk') {
       try {
+        if (
+          !validPcmChunk(event.chunk) ||
+          (this.pcmSequence !== null &&
+            event.chunk.sequence !== this.pcmSequence + 1)
+        ) {
+          this.fail('Audio was interrupted. Retry voice before continuing.');
+          return;
+        }
+        this.pcmSequence = event.chunk.sequence;
         const context =
           this.context && audio ? { ...this.context, audio } : this.context;
         if (this.composition.status === 'composing' && this.draftRecognition) {
@@ -230,7 +321,9 @@ export class VoiceConversation {
           this.draftSequence = event.chunk.sequence;
         } else this.draftSequence = null;
         if (this.awaitingQuiet) {
+          this.pendingControl = undefined;
           this.assembler.reset();
+          this.resetSpeechActivity();
           if (
             !this.stopping &&
             !this.unconfirmedStop &&
@@ -243,21 +336,70 @@ export class VoiceConversation {
           return;
         }
         if (!context || !this.canCollect(context)) {
+          this.pendingControl = undefined;
           this.assembler.reset();
+          this.resetSpeechActivity();
+          this.fastCommands?.reset();
           return;
         }
-        this.latency.activity(context.audio.activity.active);
+        const activity =
+          this.speechActivity?.push(
+            event.chunk.samples,
+            context.audio.activity,
+          ) ?? context.audio.activity;
+        if (this.speechActivity?.voiced())
+          this.lastVoicedSequence = event.chunk.sequence;
+        if (this.pendingControl && this.speechActivity?.voiced()) {
+          this.pendingControl = undefined;
+          this.suppressControls = true;
+        }
+        // A spoken prefix followed by a thinking pause is still dictation.
+        // The acoustic event is provisional until this separate action boundary.
+        if ((this.speechActivity?.quietMs() ?? 0) >= 1000) {
+          // Retire all hypotheses from the continued phrase before rearming.
+          if (this.suppressControls) this.fastCommands?.reset();
+          this.suppressControls = false;
+          if (this.pendingControl) {
+            const command = this.pendingControl;
+            this.pendingControl = undefined;
+            this.fastCommands?.reset();
+            void this.acceptFastCommand(command, []);
+            return;
+          }
+        }
+        this.latency.activity(activity.active);
+        if (this.fastCommands && !context.audio.activity.calibrating) {
+          this.speechResourcesUsed = true;
+          this.fastCommands.push(
+            event.chunk,
+            Math.min(
+              0.2,
+              Math.max(0.008, context.audio.activity.noiseFloor * 3),
+            ),
+            this.awaitingWake
+              ? 'passive'
+              : this.composition.status === 'composing'
+                ? 'composing'
+                : 'listening',
+          );
+        }
+        if (this.fastCommands && this.awaitingWake) return;
         const pcm = this.assembler.push(event.chunk, {
-          ...context.audio.activity,
+          ...activity,
           draft:
             this.composition.status === 'composing' &&
             Boolean(this.draftRecognition),
         });
-        if (this.composition.status === 'composing' && this.draftRecognition) {
-          this.previewSamples += event.chunk.samples.length;
+        if (this.draftRecognition) {
+          this.previewSamples =
+            this.composition.status === 'composing' ||
+            (!this.invocation.active() && context.audio.activity.active)
+              ? this.previewSamples + event.chunk.samples.length
+              : 0;
           if (pcm) {
             this.previewSamples = 0;
             const capped = this.assembler.lastResultCapped();
+            const wakeAllowed = !this.draftCapped;
             const commandAllowed = !capped && !this.draftCapped;
             this.draftCapped = capped;
             this.draftRecognition.offer(
@@ -265,15 +407,32 @@ export class VoiceConversation {
               this.ports.id(),
               true,
               commandAllowed,
+              'draft',
+              wakeAllowed,
             );
           } else if (
-            this.previewSamples >= 16000 &&
+            (this.composition.status === 'composing' ||
+              (!this.fastCommands &&
+                !this.invocation.active() &&
+                context.audio.activity.active)) &&
+            this.previewSamples >=
+              (this.fastCommands
+                ? 32000
+                : this.composition.status === 'composing'
+                  ? 16000
+                  : 8000) &&
             this.draftRecognition.canPreview()
           ) {
             this.previewSamples = 0;
             const preview = this.assembler.snapshot();
             if (preview)
-              this.draftRecognition.offer(preview, this.ports.id(), false);
+              this.draftRecognition.offer(
+                preview,
+                this.ports.id(),
+                false,
+                !this.draftCapped,
+                this.composition.status === 'composing' ? 'draft' : 'wake',
+              );
           }
           if (
             !pcm &&
@@ -285,6 +444,63 @@ export class VoiceConversation {
       } finally {
         event.chunk.samples.fill(0);
       }
+    }
+  }
+
+  private async acceptFastCommand(
+    detection: KeywordDetection,
+    tail: PcmChunk[],
+  ) {
+    const context = this.context;
+    try {
+      if (!context || !this.canCollect(context) || this.awaitingQuiet) return;
+      if (detection.command === 'ivy') {
+        if (!this.awaitingWake) return;
+        this.invocation.activateAcoustically();
+        this.setComposition({ ...this.composition, model: 'terra' });
+        this.resetSpeechActivity();
+        this.controlNotice = '';
+        this.assembler.reset();
+        let completed: Int16Array | null = null;
+        for (const chunk of tail) {
+          const activity =
+            this.speechActivity?.push(chunk.samples, context.audio.activity) ??
+            context.audio.activity;
+          const pcm = this.assembler.push(chunk, activity);
+          if (pcm) {
+            if (!completed) completed = pcm;
+            else pcm.fill(0);
+          }
+        }
+        this.publish();
+        if (completed) void this.transcribe(completed);
+        return;
+      }
+      if (this.awaitingWake) return;
+      const generation = ++this.generation;
+      this.assembler.reset();
+      this.resetSpeechActivity();
+      this.previewSamples = 0;
+      const stopped = this.draftRecognition?.reset();
+      this.phase = 'transcribing';
+      this.publish();
+      if (stopped) await stopped;
+      if (!this.current(generation)) return;
+      if (detection.command === 'prompt cancel') {
+        if (this.composition.status !== 'composing') {
+          this.phase = null;
+          this.publish();
+          return;
+        }
+        this.cancelPrompt();
+        return;
+      }
+      await this.recognize(detection.command, this.ports.id(), generation);
+    } catch {
+      if (!this.disposed)
+        this.fail('Local command could not complete. Retry voice or use text.');
+    } finally {
+      for (const chunk of tail) chunk.samples.fill(0);
     }
   }
 
@@ -345,6 +561,8 @@ export class VoiceConversation {
       preparing(this.composition.status)
     )
       return;
+    this.invocation.activate();
+    this.promptOpen = true;
     if (raw !== this.composition.raw) {
       this.dispatchUncertain = false;
       this.cancelDraftCleanup();
@@ -373,6 +591,8 @@ export class VoiceConversation {
   }
 
   async resetConversation(): Promise<boolean> {
+    this.fastCommands?.reset();
+    this.resetSpeechActivity();
     if (this.disposed || this.sessionPending || this.phase !== null)
       return false;
     if (this.typedLease) {
@@ -432,6 +652,8 @@ export class VoiceConversation {
       )
     )
       return false;
+    this.fastCommands?.reset();
+    this.resetSpeechActivity();
     const controller = new AbortController();
     this.typedLease = controller;
     const generation = this.generation;
@@ -455,8 +677,8 @@ export class VoiceConversation {
       )
         return false;
       const accepted = await action();
-      if (accepted) {
-        this.awaitingWake = false;
+      if (accepted && this.current(generation)) {
+        this.invocation.activate();
         this.controlNotice = '';
       }
       return accepted;
@@ -470,8 +692,83 @@ export class VoiceConversation {
   }
 
   private setComposition(state: VoiceComposition) {
+    if (state.status === 'composing') this.inputText = '';
     this.composition = Object.freeze(state);
     this.ports.onComposition?.(this.composition);
+  }
+
+  private isPromptCancellation(text: string, commandAllowed: boolean) {
+    return this.fastCommands
+      ? commandAllowed && voiceCommand(text) === 'prompt cancel'
+      : cancelsPrompt(text);
+  }
+
+  private async acceptCollectedTranscript(
+    text: string,
+    id: string,
+    final: boolean,
+    commandAllowed: boolean,
+    wakeAllowed: boolean,
+  ) {
+    if (this.disposed) return;
+    if (this.fastCommands && final && commandAllowed) {
+      this.fastCommands.reset();
+      this.resetSpeechActivity();
+    }
+    this.observeInput(text);
+    if (!final && !this.promptOpen && !this.invocation.active()) {
+      if (wakeAllowed && this.invocation.accept(text, false)) {
+        this.publish();
+      }
+      return;
+    }
+    if (
+      final &&
+      this.promptOpen &&
+      this.isPromptCancellation(text, commandAllowed)
+    ) {
+      this.cancelPrompt();
+      return;
+    }
+    if (this.composition.status === 'composing') {
+      await this.acceptDraftTranscript(text, id, final, commandAllowed);
+      return;
+    }
+    if (!final || !text.trim()) return;
+    const generation = this.generation;
+    const control = commandAllowed ? voiceCommand(text) : null;
+    if (control === 'new session' || control === 'reload mcp') {
+      await this.recognize(text, id, generation, commandAllowed);
+      return;
+    }
+    // A capped continuation cannot introduce a new utterance-prefix wake word.
+    if (
+      !wakeAllowed &&
+      !this.invocation.active() &&
+      this.composition.status === 'idle'
+    )
+      return;
+    const invocation = this.invocation.accept(text, this.promptOpen);
+    if (!invocation) {
+      this.publish();
+      return;
+    }
+    const opensPrompt =
+      (invocation.invoked &&
+        !(
+          this.fastCommands && voiceCommand(invocation.text) === 'prompt cancel'
+        ) &&
+        promptInvocation(invocation.text) !== null) ||
+      voiceCommand(invocation.text) === 'prompt';
+    if (invocation.text.trim() && !opensPrompt) {
+      this.draftRecognition?.clearPending();
+      this.assembler.reset();
+      this.phase = 'transcribing';
+      this.publish();
+      await this.ports.waitForCapturePause?.();
+      if (!this.current(generation)) return;
+    }
+    await this.recognize(text, id, generation, commandAllowed, invocation);
   }
 
   private async acceptDraftTranscript(
@@ -481,6 +778,10 @@ export class VoiceConversation {
     commandAllowed: boolean,
   ) {
     if (this.disposed || this.composition.status !== 'composing') return;
+    if (final && this.isPromptCancellation(text, commandAllowed)) {
+      this.cancelPrompt();
+      return;
+    }
     if (!final) {
       this.setComposition({ ...this.composition, preview: text });
       return;
@@ -494,6 +795,7 @@ export class VoiceConversation {
       command === 'send' ||
       command === 'clear' ||
       command === 'done' ||
+      command === 'prompt cancel' ||
       command === 'new session' ||
       command === 'reload mcp'
     ) {
@@ -632,30 +934,68 @@ export class VoiceConversation {
     id: string,
     generation: number,
     commandAllowed = true,
+    acceptedInvocation?: NonNullable<ReturnType<VoiceInvocation['accept']>>,
   ) {
-    const command = commandAllowed ? voiceCommand(text) : null;
+    if (!this.current(generation)) return;
     if (this.sessionPending) return;
+    const composing = this.promptOpen;
+    if (composing && this.isPromptCancellation(text, commandAllowed)) {
+      this.cancelPrompt();
+      return;
+    }
+    const control = commandAllowed ? voiceCommand(text) : null;
+    if (control === 'new session' || control === 'reload mcp') {
+      await this.lifecycleCommand(control, generation);
+      return;
+    }
+    const invocation =
+      acceptedInvocation ?? this.invocation.accept(text, composing);
+    if (!invocation) {
+      this.phase = null;
+      this.publish();
+      return;
+    }
+    text = invocation.text;
+    const prompt =
+      invocation.invoked &&
+      !(this.fastCommands && voiceCommand(text) === 'prompt cancel')
+        ? promptInvocation(text)
+        : null;
+    if (invocation.invoked && !composing)
+      this.setComposition({
+        ...this.composition,
+        model: prompt === null ? 'terra' : 'sol',
+      });
+    if (!text.trim()) {
+      this.phase = null;
+      this.publish();
+      return;
+    }
+    if (prompt !== null) {
+      this.promptOpen = true;
+      this.phase = null;
+      this.setComposition({
+        ...this.composition,
+        model: 'sol',
+        status: 'composing',
+        error: '',
+      });
+      if (this.isPromptCancellation(prompt, commandAllowed)) {
+        this.cancelPrompt();
+        return;
+      }
+      if (prompt.trim()) await this.recognize(prompt, id, generation, false);
+      this.publish();
+      return;
+    }
+    const command = commandAllowed ? voiceCommand(text) : null;
     if (command === 'new session' || command === 'reload mcp') {
       await this.lifecycleCommand(command, generation);
       return;
     }
-    if (this.awaitingWake) {
-      const wake = /^\s*ivy\b[\s,.!?;:-]*(.*)$/iu.exec(text);
-      this.phase = null;
-      if (!wake) {
-        this.publish();
-        return;
-      }
-      this.awaitingWake = false;
-      this.controlNotice = '';
-      text = wake[1].trim();
-      this.publish();
-      if (!text) return;
-      await this.recognize(text, id, generation, commandAllowed);
-      return;
-    }
     this.controlNotice = '';
     if (command === 'prompt') {
+      this.promptOpen = true;
       this.latency.finish('interrupted');
       this.phase = null;
       this.setComposition({
@@ -668,7 +1008,11 @@ export class VoiceConversation {
       return;
     }
     if (command === 'clear' || command === 'done') {
-      await this.clearConversation(generation);
+      const cleared = await this.clearConversation(generation);
+      if (cleared && this.fastCommands && this.current(generation)) {
+        this.awaitingWake = true;
+        this.publish();
+      }
       return;
     }
     if (
@@ -798,16 +1142,18 @@ export class VoiceConversation {
   }
 
   private finishNewSession() {
+    this.fastCommands?.reset();
+    this.assembler.reset();
+    this.resetSpeechActivity();
     this.newSessionRequested = false;
-    this.cancelDraftCleanup();
-    this.refinement?.abort();
-    this.draftRecognition?.clearPending();
+    this.invocation.reset();
+    this.promptOpen = false;
+    this.invalidate();
     this.dispatchUncertain = false;
     this.routeUncertain = false;
     this.voiceTurn = null;
     this.settledTurn = null;
     this.phase = null;
-    this.awaitingWake = true;
     this.setComposition({
       raw: '',
       refined: null,
@@ -822,6 +1168,7 @@ export class VoiceConversation {
   }
 
   private async clearConversation(generation: number): Promise<boolean> {
+    this.invocation.reset();
     if (!this.ports.clearConversation) {
       this.compositionError('Conversation could not be cleared.');
       return false;
@@ -837,6 +1184,8 @@ export class VoiceConversation {
     }
     this.dispatchUncertain = false;
     this.routeUncertain = false;
+    this.invocation.reset();
+    this.promptOpen = false;
     this.phase = null;
     this.setComposition({
       raw: '',
@@ -848,6 +1197,24 @@ export class VoiceConversation {
     });
     this.publish();
     return true;
+  }
+
+  private cancelPrompt() {
+    this.promptOpen = false;
+    this.invocation.reset();
+    this.invalidate();
+    this.dispatchUncertain = false;
+    this.failure = '';
+    this.setComposition({
+      raw: '',
+      refined: null,
+      lastSubmittedRaw: '',
+      model: 'terra',
+      status: 'idle',
+      error: '',
+    });
+    this.ports.onForegroundEnd?.();
+    this.publish();
   }
 
   private async finalize(id: string, generation: number) {
@@ -973,6 +1340,7 @@ export class VoiceConversation {
       return;
     }
     this.dispatchUncertain = false;
+    this.promptOpen = false;
     this.setComposition({
       raw: '',
       refined: null,
@@ -1017,6 +1385,7 @@ export class VoiceConversation {
       context.available &&
       context.audio.status === 'capturing' &&
       !this.phase &&
+      !this.typedLease &&
       !this.stopping &&
       !this.sessionPending &&
       !this.dispatchPending &&
@@ -1034,6 +1403,9 @@ export class VoiceConversation {
   }
 
   private async transcribe(pcm: Int16Array) {
+    this.speechResourcesUsed = true;
+    this.resetSpeechActivity();
+    this.fastCommands?.reset();
     this.latency.finish('interrupted');
     this.latency.begin();
     const generation = ++this.generation;
@@ -1053,6 +1425,7 @@ export class VoiceConversation {
       this.latency.point('stt_completed');
       const text = transcript.text;
       if (transcript.utterance_id !== id) throw new Error();
+      this.observeInput(text);
       if (!text.trim()) {
         this.phase = null;
         this.latency.finish('completed');
@@ -1094,6 +1467,7 @@ export class VoiceConversation {
       return;
     }
     if (snapshot.turn !== 'completed') return;
+    this.invocation.activate();
     this.latency.point('model_completed');
     const id = this.voiceTurn;
     this.voiceTurn = null;
@@ -1140,6 +1514,7 @@ export class VoiceConversation {
             BigInt(observed.revision) >= this.playbackRevision)
         ) {
           this.phase = null;
+          this.invocation.activate();
           this.awaitingQuiet = true;
           this.assembler.reset();
           this.publish();
@@ -1153,12 +1528,27 @@ export class VoiceConversation {
       });
   }
 
-  private invalidate() {
+  private resetSpeechActivity() {
+    this.pendingControl = undefined;
+    this.suppressControls = false;
+    this.lastVoicedSequence = null;
+    this.speechActivity?.reset();
+  }
+
+  private invalidate(stopWarmWorkers = true) {
+    this.pcmSequence = null;
+    this.lastVoicedSequence = null;
+    this.pendingControl = undefined;
+    this.suppressControls = false;
+    this.fastCommands?.reset();
+    this.resetSpeechActivity();
+    this.inputText = '';
     this.latency.finish('interrupted');
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();
     const active =
+      (stopWarmWorkers && this.speechResourcesUsed) ||
       Boolean(draftStop) ||
       this.unconfirmedStop ||
       this.phase !== null ||
@@ -1166,6 +1556,7 @@ export class VoiceConversation {
         ['collecting', 'transcribing', 'synthesizing', 'speaking'].includes(
           this.context.speech.state,
         ));
+    if (stopWarmWorkers || active) this.speechResourcesUsed = false;
     ++this.generation;
     this.cancelDraftCleanup();
     this.previewSamples = 0;
@@ -1218,6 +1609,12 @@ export class VoiceConversation {
     return !this.disposed && generation === this.generation;
   }
 
+  private observeInput(text: string) {
+    if (this.promptOpen || !text.trim()) return;
+    this.inputText = text;
+    this.publish();
+  }
+
   private publish() {
     const paused =
       Boolean(this.typedLease) ||
@@ -1238,7 +1635,9 @@ export class VoiceConversation {
     }
     const context = this.context;
     this.ports.onChange({
-      passive: this.awaitingWake,
+      inputText: this.inputText,
+      foregroundActive: this.promptOpen || this.invocation.active(),
+      passive: !this.promptOpen && !this.invocation.active(),
       notice: this.controlNotice,
       muted: this.muted,
       error: !!this.failure || this.routeUncertain,
@@ -1260,7 +1659,9 @@ export class VoiceConversation {
             : this.phase === 'speaking'
               ? 'Speaking locally'
               : context?.audio.status === 'capturing'
-                ? 'Local voice listening'
+                ? this.invocation.active() || this.composition.status !== 'idle'
+                  ? 'Local voice listening'
+                  : 'Listening for Ivy'
                 : 'Local voice idle'),
     });
   }

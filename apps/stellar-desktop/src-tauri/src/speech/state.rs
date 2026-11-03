@@ -12,6 +12,7 @@ pub(super) struct Operation {
     pub(super) child: ChildSlot,
     pub(super) cancelled: AtomicBool,
     pub(super) scratch: Option<Scratch>,
+    pub(super) recognition_epoch: u64,
 }
 pub(super) struct View {
     pub(super) snapshot: SpeechSnapshot,
@@ -25,6 +26,8 @@ pub(super) struct Inner {
     pub(super) view: Mutex<View>,
     pub(super) publish: Publisher,
     pub(super) scratch: PathBuf,
+    pub(super) transcriber: super::warm_worker::WarmWorker,
+    pub(super) keywords: super::warm_worker::WarmWorker,
     #[cfg(test)]
     pub(super) settlement_gate: Mutex<Option<SettlementGate>>,
 }

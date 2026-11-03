@@ -1,5 +1,10 @@
 import {
   decodeSpeechError,
+  decodeKeywordRequest,
+  decodeKeywordReply,
+  speechKeywordsCommand,
+  type KeywordRequest,
+  type KeywordReply,
   decodeSpeechRequest,
   decodeSpeechStopRequest,
   decodeSpeechSnapshot,
@@ -39,6 +44,18 @@ export class SpeechAdapter {
   private disposed = false;
   private readonly subscriptions = new Set<Subscription>();
   constructor(private readonly transport: SpeechTransport) {}
+
+  async keywords(input: KeywordRequest): Promise<KeywordReply> {
+    const request = this.validate(() => decodeKeywordRequest(input));
+    const reply = await this.invoke(
+      speechKeywordsCommand,
+      request,
+      decodeKeywordReply,
+    );
+    if (reply.sequence !== request.sequence)
+      throw new SpeechAdapterError('contract');
+    return reply;
+  }
 
   async transcribe(input: SpeechTranscribeRequest): Promise<SpeechTranscript> {
     return this.transcribeWith(input, false);

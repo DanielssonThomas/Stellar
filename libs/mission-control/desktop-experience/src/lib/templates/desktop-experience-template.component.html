@@ -96,6 +96,18 @@
     (sensitivityChange)="musicSensitivityChange.emit($event)"
   />
 
+  @if (
+    voiceInputText() &&
+    (!solActive() || promptStatus() === 'idle') &&
+    !['suspended', 'shutdown'].includes(state().phase)
+  ) {
+    <stellar-voice-transcript-molecule
+      class="absolute bottom-4 left-4 z-2 max-w-[calc(100%-2rem)]"
+      [text]="voiceInputText()"
+      [loading]="loading()"
+    />
+  }
+
   <button
     #menuTrigger
     class="menu-trigger"

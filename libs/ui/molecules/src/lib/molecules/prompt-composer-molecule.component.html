@@ -2,7 +2,13 @@
   @if (loading()) {
     <stellar-skeleton-atom shape="text" />
   } @else {
-    <div #group [class]="classes()" role="region" aria-label="Spoken prompt">
+    <div
+      #group
+      [class]="classes()"
+      animate.leave="composer-leaving"
+      role="region"
+      aria-label="Spoken prompt"
+    >
       <svg
         class="brace left-brace"
         viewBox="-8 -3 48 118"

@@ -742,14 +742,25 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     );
   for (const { current, previous } of adjacent)
     expect(current.gap).toBeGreaterThan(previous.gap);
-  const ringDepths = planeDepths
-    .filter((_, index) => manifest.layers[index].spin)
-    .sort((a, b) => a - b);
-  expect(ringDepths).toEqual(
-    [-570, -480, -410, -330, -240, -170, 0, 150, 240, 330, 390, 480, 570].map(
-      (depth) => depth * 0.375,
-    ),
-  );
+  // Image preparation can finish just before the initial depth transition settles.
+  await expect
+    .poll(async () => {
+      const currentDepths = await page
+        .locator('.plane')
+        .evaluateAll((planes) =>
+          planes.map(
+            (plane) => new DOMMatrix(getComputedStyle(plane).transform).m43,
+          ),
+        );
+      return currentDepths
+        .filter((_, index) => manifest.layers[index].spin)
+        .sort((a, b) => a - b);
+    })
+    .toEqual(
+      [-570, -480, -410, -330, -240, -170, 0, 150, 240, 330, 390, 480, 570].map(
+        (depth) => depth * 0.375,
+      ),
+    );
   const arcs = manifest.layers.filter(
     (layer: { assembly?: { file: string } }) =>
       layer.assembly?.file.endsWith('.svg'),
