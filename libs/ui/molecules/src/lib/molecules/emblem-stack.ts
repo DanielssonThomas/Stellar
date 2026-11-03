@@ -1,4 +1,4 @@
-export const MAX_EMBLEM_PLANES = 64;
+export const MAX_EMBLEM_PLANES = 96;
 export const DEFAULT_PLANE_SPACING = 240;
 export type EmblemSpacingProfile = 'uniform' | 'outer-dense';
 export interface EmblemPlaneCore {

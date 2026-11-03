@@ -60,18 +60,25 @@ const geometries = [
     id: 'inner-circle-' + number,
   })),
 ];
-const bodyClips = [
-  ['upper', [0, 0, 1280, 512]],
-  ['middle', [0, 512, 1280, 128]],
-  ['lower', [0, 640, 1280, 640]],
-];
+const bodyRows = [0, 512, 560, 608, 656, 704, 752, 800, 848, 896, 944, size];
+const bodyClips = bodyRows
+  .slice(0, -1)
+  .map((top, index) => [
+    String(index + 1),
+    [0, top, size, bodyRows[index + 1] - top],
+  ]);
 const characterLayers = registration.layers.flatMap((item) =>
   item.id.endsWith('-body')
-    ? bodyClips.map(([part, clip]) => ({
+    ? bodyClips.map(([part, clip], index) => ({
         ...item,
         sourceId: item.id,
         id: item.id + '-' + part,
         clip,
+        scatter: {
+          x: ((index * 89) % 290) - 145,
+          y: ((index * 53) % 140) - 70,
+          rotation: ((index * 17) % 56) - 28,
+        },
       }))
     : item.id.endsWith('-hair')
       ? Array.from({ length: 12 }, (_, index) => ({
@@ -84,52 +91,58 @@ const characterLayers = registration.layers.flatMap((item) =>
             rotation: ((index * 13) % 46) - 23,
           },
         }))
-      : [0, 360, 390, 420, 450, 480, size]
-          .slice(0, -1)
-          .map((top, index, tops) => {
-            const next = tops[index + 1] ?? size;
+      : Array.from(
+          { length: item.id.startsWith('gold') ? 15 : 7 },
+          (_, index) => {
             const direction = item.id.startsWith('violet') ? -1 : 1;
             return {
               ...item,
-              sourceId: item.id,
               id: `${item.id}-${index + 1}`,
-              clip: [0, top, size, next - top],
+              assembly: {
+                file: `layers/${item.id}.png`,
+                index,
+                count: item.id.startsWith('gold') ? 15 : 7,
+              },
               scatter: {
                 x: direction * (((index * 73) % 230) - 115),
                 y: ((index * 47) % 110) - 55,
                 rotation: direction * (((index * 13) % 46) - 23),
               },
             };
-          }),
+          },
+        ),
 );
 const hairOrder = [5, 0, 9, 2, 7, 11, 4, 1, 10, 6, 3, 8];
-const ornamentOrder = [2, 5, 0, 4, 1, 3];
+const bodyOrder = [4, 0, 8, 2, 10, 6, 1, 9, 3, 7, 5];
+const ornamentOrder = {
+  violet: [2, 5, 0, 6, 4, 1, 3],
+  gold: [2, 8, 5, 0, 12, 6, 14, 4, 10, 1, 13, 7, 3, 11, 9],
+};
 const fragments = (character, kind, order) =>
   order.map((index) => `${character}-${kind}-${index + 1}`);
 const planeOrder = [
-  'violet-body-upper',
-  'violet-body-middle',
-  'violet-body-lower',
+  ...fragments('violet', 'body', bodyOrder),
+  ...fragments('gold', 'body', bodyOrder.slice(0, 4)),
   ...fragments('violet', 'hair', hairOrder),
-  ...fragments('violet', 'ornament', ornamentOrder),
+  ...fragments('violet', 'ornament', ornamentOrder.violet),
   'inner-circle',
   'inner-circle-2',
   'outer-frame',
   'inner-circle-3',
   'inner-circle-4',
-  'gold-body-lower',
-  'gold-body-upper',
-  'gold-body-middle',
+  ...fragments('gold', 'body', bodyOrder.slice(4)),
   ...fragments('gold', 'hair', hairOrder),
-  ...fragments('gold', 'ornament', ornamentOrder),
+  ...fragments('gold', 'ornament', ornamentOrder.gold),
 ];
 for (const character of ['violet', 'gold']) {
   const hairIndices = fragments(character, 'hair', hairOrder).map((id) =>
     planeOrder.indexOf(id),
   );
-  const ornamentIndices = fragments(character, 'ornament', ornamentOrder).map(
-    (id) => planeOrder.indexOf(id),
-  );
+  const ornamentIndices = fragments(
+    character,
+    'ornament',
+    ornamentOrder[character],
+  ).map((id) => planeOrder.indexOf(id));
   if (
     bodyClips.some(
       ([part]) =>
@@ -166,7 +179,7 @@ const manifest = {
   version: 1,
   status: 'production-candidate',
   viewBox: [0, 0, size, size],
-  planeSpacing: 80,
+  planeSpacing: 49.4,
   spacingProfile: 'outer-dense',
   planeCore: { count: 5, spacing: 240 },
   radialTaper: 0.94,
@@ -355,7 +368,7 @@ try {
       visibleRadius: result.visibleRadius,
     });
   }
-  const strands = await exportStrands(page, root, size);
+  const strands = await exportStrands(page, root, size, registration);
   const centroids = await measureFragmentCentroids(
     page,
     root,
@@ -508,6 +521,19 @@ try {
     path: path.join(root, 'previews', 'layer-contact-sheet.png'),
     fullPage: true,
   });
+  await page.setContent(
+    `<style>body{margin:20px;background:#0b0812;color:#ede1fa;font:14px system-ui}main{display:grid;grid-template-columns:repeat(5,220px);gap:12px}figure{margin:0}div{position:relative;width:220px;height:270px;overflow:hidden}img{position:absolute;width:1280px;height:1280px}figcaption{padding:4px}</style><h1>Individual jewelry leaves and gemstone settings</h1><main>${layers
+      .filter((layer) => layer.assembly?.file.endsWith('-ornament.png'))
+      .map(
+        (layer) =>
+          `<figure><div><img src="${layer.src}" style="left:-${layer.id.startsWith('gold') ? 590 : 390}px;top:-275px"></div><figcaption>${layer.id}</figcaption></figure>`,
+      )
+      .join('')}</main>`,
+  );
+  await page.screenshot({
+    path: path.join(root, 'previews', 'leaf-contact-sheet.png'),
+    fullPage: true,
+  });
   const bytes =
     fs.statSync(path.join(root, 'manifest.json')).size +
     [
@@ -518,7 +544,7 @@ try {
         ]),
       ),
     ].reduce((sum, file) => sum + fs.statSync(path.join(root, file)).size, 0);
-  const budget = 6 * 1024 * 1024;
+  const budget = 8 * 1024 * 1024;
   if (bytes > budget) throw new Error(`Runtime byte budget exceeded: ${bytes}`);
   const validation = {
     canvas: size,

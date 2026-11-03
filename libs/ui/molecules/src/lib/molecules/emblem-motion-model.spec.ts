@@ -140,14 +140,14 @@ describe('emblem motion model', () => {
       ...manifest,
       planeSpacing: 100,
       spacingProfile: 'outer-dense',
-      layers: Array.from({ length: 47 }, (_, index) => ({
+      layers: Array.from({ length: 73 }, (_, index) => ({
         ...layer,
         id: `fragment-${index}`,
         planeIndex: index,
       })),
     };
     expect(decodeEmblemManifest(dense)).toEqual(dense);
-    expect(layerTransform(dense.layers[23], dense, 'idle', true)).toContain(
+    expect(layerTransform(dense.layers[36], dense, 'idle', true)).toContain(
       'translateZ(0cqw)',
     );
     expect(
@@ -159,7 +159,7 @@ describe('emblem motion model', () => {
     expect(
       decodeEmblemManifest({
         ...dense,
-        layers: Array.from({ length: 65 }, (_, index) => ({
+        layers: Array.from({ length: 97 }, (_, index) => ({
           ...layer,
           id: `fragment-${index}`,
           planeIndex: index,

@@ -2,162 +2,250 @@
   "version": 1,
   "status": "production-candidate",
   "viewBox": [0, 0, 1280, 1280],
-  "planeSpacing": 80,
+  "planeSpacing": 49.4,
   "spacingProfile": "outer-dense",
   "planeCore": { "count": 5, "spacing": 240 },
   "radialTaper": 0.94,
   "layers": [
     {
-      "id": "violet-body-upper",
+      "id": "violet-body-1",
       "file": "layers/violet-body.png",
       "z": 0,
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 0,
+      "exploded": { "x": -145, "y": -70, "rotation": -28 },
+      "planeIndex": 1,
       "clip": [0, 0, 1280, 512],
       "centroid": { "x": 334.23, "y": 498.22 }
     },
     {
-      "id": "violet-body-middle",
+      "id": "violet-body-2",
       "file": "layers/violet-body.png",
       "z": 1,
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 1,
-      "clip": [0, 512, 1280, 128],
-      "centroid": { "x": 375.98, "y": 591.81 }
+      "exploded": { "x": -56, "y": -17, "rotation": -11 },
+      "planeIndex": 6,
+      "clip": [0, 512, 1280, 48],
+      "centroid": { "x": 356.17, "y": 541.25 }
     },
     {
-      "id": "violet-body-lower",
+      "id": "violet-body-3",
       "file": "layers/violet-body.png",
       "z": 2,
       "anchor": { "x": 410, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 33, "y": 36, "rotation": 6 },
+      "planeIndex": 3,
+      "clip": [0, 560, 1280, 48],
+      "centroid": { "x": 367.78, "y": 585.78 }
+    },
+    {
+      "id": "violet-body-4",
+      "file": "layers/violet-body.png",
+      "z": 3,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 122, "y": -51, "rotation": 23 },
+      "planeIndex": 8,
+      "clip": [0, 608, 1280, 48],
+      "centroid": { "x": 402.56, "y": 632.81 }
+    },
+    {
+      "id": "violet-body-5",
+      "file": "layers/violet-body.png",
+      "z": 4,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -79, "y": 2, "rotation": -16 },
+      "planeIndex": 0,
+      "clip": [0, 656, 1280, 48],
+      "centroid": { "x": 435.72, "y": 680.25 }
+    },
+    {
+      "id": "violet-body-6",
+      "file": "layers/violet-body.png",
+      "z": 5,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 10, "y": 55, "rotation": 1 },
+      "planeIndex": 10,
+      "clip": [0, 704, 1280, 48],
+      "centroid": { "x": 480.51, "y": 724.81 }
+    },
+    {
+      "id": "violet-body-7",
+      "file": "layers/violet-body.png",
+      "z": 6,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 99, "y": -32, "rotation": 18 },
+      "planeIndex": 5,
+      "clip": [0, 752, 1280, 48],
+      "centroid": { "x": 536.28, "y": 776.81 }
+    },
+    {
+      "id": "violet-body-8",
+      "file": "layers/violet-body.png",
+      "z": 7,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -102, "y": 21, "rotation": -21 },
+      "planeIndex": 9,
+      "clip": [0, 800, 1280, 48],
+      "centroid": { "x": 539.57, "y": 826.23 }
+    },
+    {
+      "id": "violet-body-9",
+      "file": "layers/violet-body.png",
+      "z": 8,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -13, "y": -66, "rotation": -4 },
       "planeIndex": 2,
-      "clip": [0, 640, 1280, 640],
-      "centroid": { "x": 486.99, "y": 842.86 }
+      "clip": [0, 848, 1280, 48],
+      "centroid": { "x": 493.55, "y": 873.36 }
+    },
+    {
+      "id": "violet-body-10",
+      "file": "layers/violet-body.png",
+      "z": 9,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 76, "y": -13, "rotation": 13 },
+      "planeIndex": 7,
+      "clip": [0, 896, 1280, 48],
+      "centroid": { "x": 485.38, "y": 920.4 }
+    },
+    {
+      "id": "violet-body-11",
+      "file": "layers/violet-body.png",
+      "z": 10,
+      "anchor": { "x": 410, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -125, "y": 40, "rotation": -26 },
+      "planeIndex": 4,
+      "clip": [0, 944, 1280, 336],
+      "centroid": { "x": 477.78, "y": 961.12 }
     },
     {
       "id": "violet-hair-1",
       "file": "layers/violet-hair-1.png",
-      "z": 3,
+      "z": 11,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -115, "y": -55, "rotation": -23 },
-      "planeIndex": 4,
+      "planeIndex": 16,
       "assembly": { "file": "layers/violet-hair.png", "index": 0, "count": 12 },
       "centroid": { "x": 547.7, "y": 292.97 }
     },
     {
       "id": "violet-hair-2",
       "file": "layers/violet-hair-2.png",
-      "z": 4,
+      "z": 12,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -42, "y": -8, "rotation": -10 },
-      "planeIndex": 10,
+      "planeIndex": 22,
       "assembly": { "file": "layers/violet-hair.png", "index": 1, "count": 12 },
       "centroid": { "x": 554.25, "y": 362.02 }
     },
     {
       "id": "violet-hair-3",
       "file": "layers/violet-hair-3.png",
-      "z": 5,
+      "z": 13,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 31, "y": 39, "rotation": 3 },
-      "planeIndex": 6,
+      "planeIndex": 18,
       "assembly": { "file": "layers/violet-hair.png", "index": 2, "count": 12 },
       "centroid": { "x": 586.06, "y": 475.32 }
     },
     {
       "id": "violet-hair-4",
       "file": "layers/violet-hair-4.png",
-      "z": 6,
+      "z": 14,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 104, "y": -24, "rotation": 16 },
-      "planeIndex": 13,
+      "planeIndex": 25,
       "assembly": { "file": "layers/violet-hair.png", "index": 3, "count": 12 },
       "centroid": { "x": 508.01, "y": 467.6 }
     },
     {
       "id": "violet-hair-5",
       "file": "layers/violet-hair-5.png",
-      "z": 7,
+      "z": 15,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -53, "y": 23, "rotation": -17 },
-      "planeIndex": 9,
+      "planeIndex": 21,
       "assembly": { "file": "layers/violet-hair.png", "index": 4, "count": 12 },
       "centroid": { "x": 518.8, "y": 626.81 }
     },
     {
       "id": "violet-hair-6",
       "file": "layers/violet-hair-6.png",
-      "z": 8,
+      "z": 16,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 20, "y": -40, "rotation": -4 },
-      "planeIndex": 3,
+      "planeIndex": 15,
       "assembly": { "file": "layers/violet-hair.png", "index": 5, "count": 12 },
       "centroid": { "x": 564.26, "y": 726.43 }
     },
     {
       "id": "violet-hair-7",
       "file": "layers/violet-hair-7.png",
-      "z": 9,
+      "z": 17,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 93, "y": 7, "rotation": 9 },
-      "planeIndex": 12,
+      "planeIndex": 24,
       "assembly": { "file": "layers/violet-hair.png", "index": 6, "count": 12 },
       "centroid": { "x": 408.9, "y": 753.04 }
     },
     {
       "id": "violet-hair-8",
       "file": "layers/violet-hair-8.png",
-      "z": 10,
+      "z": 18,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -64, "y": 54, "rotation": 22 },
-      "planeIndex": 7,
+      "planeIndex": 19,
       "assembly": { "file": "layers/violet-hair.png", "index": 7, "count": 12 },
       "centroid": { "x": 781.55, "y": 768.44 }
     },
     {
       "id": "violet-hair-9",
       "file": "layers/violet-hair-9.png",
-      "z": 11,
+      "z": 19,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 9, "y": -9, "rotation": -11 },
-      "planeIndex": 14,
+      "planeIndex": 26,
       "assembly": { "file": "layers/violet-hair.png", "index": 8, "count": 12 },
       "centroid": { "x": 546.76, "y": 894.39 }
     },
     {
       "id": "violet-hair-10",
       "file": "layers/violet-hair-10.png",
-      "z": 12,
+      "z": 20,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 82, "y": 38, "rotation": 2 },
-      "planeIndex": 5,
+      "planeIndex": 17,
       "assembly": { "file": "layers/violet-hair.png", "index": 9, "count": 12 },
       "centroid": { "x": 700.57, "y": 965.21 }
     },
     {
       "id": "violet-hair-11",
       "file": "layers/violet-hair-11.png",
-      "z": 13,
+      "z": 21,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -75, "y": -25, "rotation": 15 },
-      "planeIndex": 11,
+      "planeIndex": 23,
       "assembly": {
         "file": "layers/violet-hair.png",
         "index": 10,
@@ -168,11 +256,11 @@
     {
       "id": "violet-hair-12",
       "file": "layers/violet-hair-12.png",
-      "z": 14,
+      "z": 22,
       "anchor": { "x": 450, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -2, "y": 22, "rotation": -18 },
-      "planeIndex": 8,
+      "planeIndex": 20,
       "assembly": {
         "file": "layers/violet-hair.png",
         "index": 11,
@@ -182,349 +270,635 @@
     },
     {
       "id": "violet-ornament-1",
-      "file": "layers/violet-ornament.png",
-      "z": 15,
+      "file": "layers/violet-ornament-1.png",
+      "z": 23,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 115, "y": -55, "rotation": 23 },
-      "planeIndex": 17,
-      "clip": [0, 0, 1280, 360],
-      "centroid": { "x": 454.86, "y": 341.61 }
+      "planeIndex": 29,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 0,
+        "count": 7
+      },
+      "centroid": { "x": 452.83, "y": 363.97 }
     },
     {
       "id": "violet-ornament-2",
-      "file": "layers/violet-ornament.png",
-      "z": 16,
+      "file": "layers/violet-ornament-2.png",
+      "z": 24,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 42, "y": -8, "rotation": 10 },
-      "planeIndex": 19,
-      "clip": [0, 360, 1280, 30],
-      "centroid": { "x": 481.28, "y": 375.48 }
+      "planeIndex": 32,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 1,
+        "count": 7
+      },
+      "centroid": { "x": 504.62, "y": 392.88 }
     },
     {
       "id": "violet-ornament-3",
-      "file": "layers/violet-ornament.png",
-      "z": 17,
+      "file": "layers/violet-ornament-3.png",
+      "z": 25,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -31, "y": 39, "rotation": -3 },
-      "planeIndex": 15,
-      "clip": [0, 390, 1280, 30],
-      "centroid": { "x": 475.14, "y": 405.26 }
+      "planeIndex": 27,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 2,
+        "count": 7
+      },
+      "centroid": { "x": 435.8, "y": 409.29 }
     },
     {
       "id": "violet-ornament-4",
-      "file": "layers/violet-ornament.png",
-      "z": 18,
+      "file": "layers/violet-ornament-4.png",
+      "z": 26,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -104, "y": -24, "rotation": -16 },
-      "planeIndex": 20,
-      "clip": [0, 420, 1280, 30],
-      "centroid": { "x": 488.06, "y": 434.85 }
+      "planeIndex": 33,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 3,
+        "count": 7
+      },
+      "centroid": { "x": 510.15, "y": 429.51 }
     },
     {
       "id": "violet-ornament-5",
-      "file": "layers/violet-ornament.png",
-      "z": 19,
+      "file": "layers/violet-ornament-5.png",
+      "z": 27,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 53, "y": 23, "rotation": 17 },
-      "planeIndex": 18,
-      "clip": [0, 450, 1280, 30],
-      "centroid": { "x": 504.93, "y": 464.34 }
+      "planeIndex": 31,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 4,
+        "count": 7
+      },
+      "centroid": { "x": 532.62, "y": 461.2 }
     },
     {
       "id": "violet-ornament-6",
-      "file": "layers/violet-ornament.png",
-      "z": 20,
+      "file": "layers/violet-ornament-6.png",
+      "z": 28,
       "anchor": { "x": 460, "y": 455 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -20, "y": -40, "rotation": 4 },
-      "planeIndex": 16,
-      "clip": [0, 480, 1280, 800],
-      "centroid": { "x": 500.88, "y": 495.23 }
+      "planeIndex": 28,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 5,
+        "count": 7
+      },
+      "centroid": { "x": 506.56, "y": 491.41 }
     },
     {
-      "id": "gold-body-upper",
+      "id": "violet-ornament-7",
+      "file": "layers/violet-ornament-7.png",
+      "z": 29,
+      "anchor": { "x": 460, "y": 455 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -93, "y": 7, "rotation": -9 },
+      "planeIndex": 30,
+      "assembly": {
+        "file": "layers/violet-ornament.png",
+        "index": 6,
+        "count": 7
+      },
+      "centroid": { "x": 461.42, "y": 456.85 }
+    },
+    {
+      "id": "gold-body-1",
       "file": "layers/gold-body.png",
-      "z": 21,
+      "z": 30,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 27,
+      "exploded": { "x": -145, "y": -70, "rotation": -28 },
+      "planeIndex": 12,
       "clip": [0, 0, 1280, 512],
       "centroid": { "x": 943.43, "y": 472.29 }
     },
     {
-      "id": "gold-body-middle",
+      "id": "gold-body-2",
       "file": "layers/gold-body.png",
-      "z": 22,
+      "z": 31,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 28,
-      "clip": [0, 512, 1280, 128],
-      "centroid": { "x": 901.63, "y": 583.86 }
+      "exploded": { "x": -56, "y": -17, "rotation": -11 },
+      "planeIndex": 41,
+      "clip": [0, 512, 1280, 48],
+      "centroid": { "x": 923.23, "y": 538.61 }
     },
     {
-      "id": "gold-body-lower",
+      "id": "gold-body-3",
       "file": "layers/gold-body.png",
-      "z": 23,
+      "z": 32,
       "anchor": { "x": 870, "y": 600 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
-      "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 26,
-      "clip": [0, 640, 1280, 640],
-      "centroid": { "x": 788.68, "y": 841.7 }
+      "exploded": { "x": 33, "y": 36, "rotation": 6 },
+      "planeIndex": 14,
+      "clip": [0, 560, 1280, 48],
+      "centroid": { "x": 906.59, "y": 584.53 }
+    },
+    {
+      "id": "gold-body-4",
+      "file": "layers/gold-body.png",
+      "z": 33,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 122, "y": -51, "rotation": 23 },
+      "planeIndex": 43,
+      "clip": [0, 608, 1280, 48],
+      "centroid": { "x": 870.81, "y": 632.16 }
+    },
+    {
+      "id": "gold-body-5",
+      "file": "layers/gold-body.png",
+      "z": 34,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -79, "y": 2, "rotation": -16 },
+      "planeIndex": 11,
+      "clip": [0, 656, 1280, 48],
+      "centroid": { "x": 834.77, "y": 676.47 }
+    },
+    {
+      "id": "gold-body-6",
+      "file": "layers/gold-body.png",
+      "z": 35,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 10, "y": 55, "rotation": 1 },
+      "planeIndex": 45,
+      "clip": [0, 704, 1280, 48],
+      "centroid": { "x": 787.7, "y": 729.41 }
+    },
+    {
+      "id": "gold-body-7",
+      "file": "layers/gold-body.png",
+      "z": 36,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 99, "y": -32, "rotation": 18 },
+      "planeIndex": 40,
+      "clip": [0, 752, 1280, 48],
+      "centroid": { "x": 780.83, "y": 778.66 }
+    },
+    {
+      "id": "gold-body-8",
+      "file": "layers/gold-body.png",
+      "z": 37,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -102, "y": 21, "rotation": -21 },
+      "planeIndex": 44,
+      "clip": [0, 800, 1280, 48],
+      "centroid": { "x": 784.99, "y": 824.84 }
+    },
+    {
+      "id": "gold-body-9",
+      "file": "layers/gold-body.png",
+      "z": 38,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -13, "y": -66, "rotation": -4 },
+      "planeIndex": 13,
+      "clip": [0, 848, 1280, 48],
+      "centroid": { "x": 778.59, "y": 872.44 }
+    },
+    {
+      "id": "gold-body-10",
+      "file": "layers/gold-body.png",
+      "z": 39,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 76, "y": -13, "rotation": 13 },
+      "planeIndex": 42,
+      "clip": [0, 896, 1280, 48],
+      "centroid": { "x": 785.52, "y": 920.54 }
+    },
+    {
+      "id": "gold-body-11",
+      "file": "layers/gold-body.png",
+      "z": 40,
+      "anchor": { "x": 870, "y": 600 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -125, "y": 40, "rotation": -26 },
+      "planeIndex": 39,
+      "clip": [0, 944, 1280, 336],
+      "centroid": { "x": 772.92, "y": 958.31 }
     },
     {
       "id": "gold-hair-1",
       "file": "layers/gold-hair-1.png",
-      "z": 24,
+      "z": 41,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -115, "y": -55, "rotation": -23 },
-      "planeIndex": 30,
+      "planeIndex": 47,
       "assembly": { "file": "layers/gold-hair.png", "index": 0, "count": 12 },
       "centroid": { "x": 808.8, "y": 326.23 }
     },
     {
       "id": "gold-hair-2",
       "file": "layers/gold-hair-2.png",
-      "z": 25,
+      "z": 42,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -42, "y": -8, "rotation": -10 },
-      "planeIndex": 36,
+      "planeIndex": 53,
       "assembly": { "file": "layers/gold-hair.png", "index": 1, "count": 12 },
       "centroid": { "x": 793.44, "y": 378.23 }
     },
     {
       "id": "gold-hair-3",
       "file": "layers/gold-hair-3.png",
-      "z": 26,
+      "z": 43,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 31, "y": 39, "rotation": 3 },
-      "planeIndex": 32,
+      "planeIndex": 49,
       "assembly": { "file": "layers/gold-hair.png", "index": 2, "count": 12 },
       "centroid": { "x": 866.5, "y": 456.35 }
     },
     {
       "id": "gold-hair-4",
       "file": "layers/gold-hair-4.png",
-      "z": 27,
+      "z": 44,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 104, "y": -24, "rotation": 16 },
-      "planeIndex": 39,
+      "planeIndex": 56,
       "assembly": { "file": "layers/gold-hair.png", "index": 3, "count": 12 },
       "centroid": { "x": 551.86, "y": 628.19 }
     },
     {
       "id": "gold-hair-5",
       "file": "layers/gold-hair-5.png",
-      "z": 28,
+      "z": 45,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -53, "y": 23, "rotation": -17 },
-      "planeIndex": 35,
+      "planeIndex": 52,
       "assembly": { "file": "layers/gold-hair.png", "index": 4, "count": 12 },
       "centroid": { "x": 630.82, "y": 613.04 }
     },
     {
       "id": "gold-hair-6",
       "file": "layers/gold-hair-6.png",
-      "z": 29,
+      "z": 46,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 20, "y": -40, "rotation": -4 },
-      "planeIndex": 29,
+      "planeIndex": 46,
       "assembly": { "file": "layers/gold-hair.png", "index": 5, "count": 12 },
       "centroid": { "x": 627.25, "y": 720.61 }
     },
     {
       "id": "gold-hair-7",
       "file": "layers/gold-hair-7.png",
-      "z": 30,
+      "z": 47,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 93, "y": 7, "rotation": 9 },
-      "planeIndex": 38,
+      "planeIndex": 55,
       "assembly": { "file": "layers/gold-hair.png", "index": 6, "count": 12 },
       "centroid": { "x": 791.88, "y": 645.74 }
     },
     {
       "id": "gold-hair-8",
       "file": "layers/gold-hair-8.png",
-      "z": 31,
+      "z": 48,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -64, "y": 54, "rotation": 22 },
-      "planeIndex": 33,
+      "planeIndex": 50,
       "assembly": { "file": "layers/gold-hair.png", "index": 7, "count": 12 },
       "centroid": { "x": 764.16, "y": 805.32 }
     },
     {
       "id": "gold-hair-9",
       "file": "layers/gold-hair-9.png",
-      "z": 32,
+      "z": 49,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 9, "y": -9, "rotation": -11 },
-      "planeIndex": 40,
+      "planeIndex": 57,
       "assembly": { "file": "layers/gold-hair.png", "index": 8, "count": 12 },
       "centroid": { "x": 828.42, "y": 887.27 }
     },
     {
       "id": "gold-hair-10",
       "file": "layers/gold-hair-10.png",
-      "z": 33,
+      "z": 50,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 82, "y": 38, "rotation": 2 },
-      "planeIndex": 31,
+      "planeIndex": 48,
       "assembly": { "file": "layers/gold-hair.png", "index": 9, "count": 12 },
       "centroid": { "x": 653.87, "y": 976.23 }
     },
     {
       "id": "gold-hair-11",
       "file": "layers/gold-hair-11.png",
-      "z": 34,
+      "z": 51,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -75, "y": -25, "rotation": 15 },
-      "planeIndex": 37,
+      "planeIndex": 54,
       "assembly": { "file": "layers/gold-hair.png", "index": 10, "count": 12 },
       "centroid": { "x": 763.59, "y": 947.88 }
     },
     {
       "id": "gold-hair-12",
       "file": "layers/gold-hair-12.png",
-      "z": 35,
+      "z": 52,
       "anchor": { "x": 830, "y": 450 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -2, "y": 22, "rotation": -18 },
-      "planeIndex": 34,
+      "planeIndex": 51,
       "assembly": { "file": "layers/gold-hair.png", "index": 11, "count": 12 },
       "centroid": { "x": 696.57, "y": 849.7 }
     },
     {
       "id": "gold-ornament-1",
-      "file": "layers/gold-ornament.png",
-      "z": 36,
+      "file": "layers/gold-ornament-1.png",
+      "z": 53,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -115, "y": -55, "rotation": -23 },
-      "planeIndex": 43,
-      "clip": [0, 0, 1280, 360],
-      "centroid": { "x": 703.86, "y": 339.76 }
+      "planeIndex": 61,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 0,
+        "count": 15
+      },
+      "centroid": { "x": 697.98, "y": 344.3 }
     },
     {
       "id": "gold-ornament-2",
-      "file": "layers/gold-ornament.png",
-      "z": 37,
+      "file": "layers/gold-ornament-2.png",
+      "z": 54,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -42, "y": -8, "rotation": -10 },
-      "planeIndex": 45,
-      "clip": [0, 360, 1280, 30],
-      "centroid": { "x": 698.38, "y": 375.84 }
+      "planeIndex": 67,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 1,
+        "count": 15
+      },
+      "centroid": { "x": 672.51, "y": 363.74 }
     },
     {
       "id": "gold-ornament-3",
-      "file": "layers/gold-ornament.png",
-      "z": 38,
+      "file": "layers/gold-ornament-3.png",
+      "z": 55,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 31, "y": 39, "rotation": 3 },
-      "planeIndex": 41,
-      "clip": [0, 390, 1280, 30],
-      "centroid": { "x": 708.12, "y": 405.5 }
+      "planeIndex": 58,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 2,
+        "count": 15
+      },
+      "centroid": { "x": 732.62, "y": 365.46 }
     },
     {
       "id": "gold-ornament-4",
-      "file": "layers/gold-ornament.png",
-      "z": 39,
+      "file": "layers/gold-ornament-4.png",
+      "z": 56,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 104, "y": -24, "rotation": 16 },
-      "planeIndex": 46,
-      "clip": [0, 420, 1280, 30],
-      "centroid": { "x": 704.59, "y": 435.35 }
+      "planeIndex": 70,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 3,
+        "count": 15
+      },
+      "centroid": { "x": 676.6, "y": 386.54 }
     },
     {
       "id": "gold-ornament-5",
-      "file": "layers/gold-ornament.png",
-      "z": 40,
+      "file": "layers/gold-ornament-5.png",
+      "z": 57,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": -53, "y": 23, "rotation": -17 },
-      "planeIndex": 44,
-      "clip": [0, 450, 1280, 30],
-      "centroid": { "x": 720.14, "y": 462.75 }
+      "planeIndex": 65,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 4,
+        "count": 15
+      },
+      "centroid": { "x": 732.62, "y": 400.65 }
     },
     {
       "id": "gold-ornament-6",
-      "file": "layers/gold-ornament.png",
-      "z": 41,
+      "file": "layers/gold-ornament-6.png",
+      "z": 58,
       "anchor": { "x": 700, "y": 425 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 20, "y": -40, "rotation": -4 },
-      "planeIndex": 42,
-      "clip": [0, 480, 1280, 800],
-      "centroid": { "x": 687.84, "y": 496.69 }
+      "planeIndex": 60,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 5,
+        "count": 15
+      },
+      "centroid": { "x": 651.31, "y": 398.49 }
+    },
+    {
+      "id": "gold-ornament-7",
+      "file": "layers/gold-ornament-7.png",
+      "z": 59,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 93, "y": 7, "rotation": 9 },
+      "planeIndex": 63,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 6,
+        "count": 15
+      },
+      "centroid": { "x": 764.53, "y": 416.39 }
+    },
+    {
+      "id": "gold-ornament-8",
+      "file": "layers/gold-ornament-8.png",
+      "z": 60,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -64, "y": 54, "rotation": 22 },
+      "planeIndex": 69,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 7,
+        "count": 15
+      },
+      "centroid": { "x": 631.25, "y": 434.77 }
+    },
+    {
+      "id": "gold-ornament-9",
+      "file": "layers/gold-ornament-9.png",
+      "z": 61,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 9, "y": -9, "rotation": -11 },
+      "planeIndex": 59,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 8,
+        "count": 15
+      },
+      "centroid": { "x": 767.52, "y": 449.91 }
+    },
+    {
+      "id": "gold-ornament-10",
+      "file": "layers/gold-ornament-10.png",
+      "z": 62,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 82, "y": 38, "rotation": 2 },
+      "planeIndex": 72,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 9,
+        "count": 15
+      },
+      "centroid": { "x": 661.74, "y": 438.72 }
+    },
+    {
+      "id": "gold-ornament-11",
+      "file": "layers/gold-ornament-11.png",
+      "z": 63,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -75, "y": -25, "rotation": 15 },
+      "planeIndex": 66,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 10,
+        "count": 15
+      },
+      "centroid": { "x": 674.4, "y": 463.93 }
+    },
+    {
+      "id": "gold-ornament-12",
+      "file": "layers/gold-ornament-12.png",
+      "z": 64,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -2, "y": 22, "rotation": -18 },
+      "planeIndex": 71,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 11,
+        "count": 15
+      },
+      "centroid": { "x": 669.39, "y": 492.52 }
+    },
+    {
+      "id": "gold-ornament-13",
+      "file": "layers/gold-ornament-13.png",
+      "z": 65,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": 71, "y": -41, "rotation": -5 },
+      "planeIndex": 62,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 12,
+        "count": 15
+      },
+      "centroid": { "x": 715.5, "y": 481.85 }
+    },
+    {
+      "id": "gold-ornament-14",
+      "file": "layers/gold-ornament-14.png",
+      "z": 66,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -86, "y": 6, "rotation": 8 },
+      "planeIndex": 68,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 13,
+        "count": 15
+      },
+      "centroid": { "x": 724.91, "y": 461.16 }
+    },
+    {
+      "id": "gold-ornament-15",
+      "file": "layers/gold-ornament-15.png",
+      "z": 67,
+      "anchor": { "x": 700, "y": 425 },
+      "assembled": { "x": 0, "y": 0, "rotation": 0 },
+      "exploded": { "x": -13, "y": 53, "rotation": 21 },
+      "planeIndex": 64,
+      "assembly": {
+        "file": "layers/gold-ornament.png",
+        "index": 14,
+        "count": 15
+      },
+      "centroid": { "x": 697.8, "y": 422.36 }
     },
     {
       "id": "outer-frame",
       "file": "layers/outer-frame.svg",
-      "z": 42,
+      "z": 68,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 23,
+      "planeIndex": 36,
       "spin": "clockwise"
     },
     {
       "id": "inner-circle",
       "file": "layers/inner-circle.svg",
-      "z": 43,
+      "z": 69,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 21,
+      "planeIndex": 34,
       "spin": "counter-clockwise"
     },
     {
       "id": "inner-circle-2",
       "file": "layers/inner-circle-2.svg",
-      "z": 44,
+      "z": 70,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 22,
+      "planeIndex": 35,
       "spin": "counter-clockwise"
     },
     {
       "id": "inner-circle-3",
       "file": "layers/inner-circle-3.svg",
-      "z": 45,
+      "z": 71,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 24,
+      "planeIndex": 37,
       "spin": "counter-clockwise"
     },
     {
       "id": "inner-circle-4",
       "file": "layers/inner-circle-4.svg",
-      "z": 46,
+      "z": 72,
       "anchor": { "x": 640, "y": 640 },
       "assembled": { "x": 0, "y": 0, "rotation": 0 },
       "exploded": { "x": 0, "y": 0, "rotation": 0 },
-      "planeIndex": 25,
+      "planeIndex": 38,
       "spin": "counter-clockwise"
     }
   ]

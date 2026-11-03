@@ -14,6 +14,9 @@ const palette = [
   [255, 144, 176],
   [255, 255, 255],
   [128, 64, 32],
+  [0, 128, 128],
+  [144, 144, 144],
+  [144, 192, 255],
 ];
 
 export async function measureFragmentCentroids(page, root, layers, size) {
@@ -69,14 +72,18 @@ export async function measureFragmentCentroids(page, root, layers, size) {
   );
 }
 
-export async function exportStrands(page, root, size) {
+export async function exportStrands(page, root, size, registration) {
   const evidence = [];
-  for (const color of ['gold', 'violet']) {
+  const groups = ['gold', 'violet'].flatMap((color) => [
+    { color, kind: 'hair', count: 12 },
+    { color, kind: 'ornament', count: color === 'gold' ? 15 : 7 },
+  ]);
+  for (const { color, kind, count } of groups) {
     const dataUrl = (file) =>
       'data:image/png;base64,' +
       fs.readFileSync(path.join(root, file)).toString('base64');
     const result = await page.evaluate(
-      async ({ source, segmentation, palette, size }) => {
+      async ({ source, segmentation, palette, size, registration, kind }) => {
         const load = async (src) => {
           const img = new Image();
           img.src = src;
@@ -86,7 +93,16 @@ export async function exportStrands(page, root, size) {
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = size;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(await load(segmentation), 0, 0, size, size);
+        const map = await load(segmentation);
+        if (registration)
+          ctx.drawImage(
+            map,
+            registration.x,
+            registration.y,
+            1254 * registration.scale,
+            1254 * registration.scale,
+          );
+        else ctx.drawImage(map, 0, 0, size, size);
         const mask = ctx.getImageData(0, 0, size, size).data;
         const labels = new Int8Array(size * size).fill(-1);
         const queue = new Int32Array(labels.length);
@@ -128,6 +144,70 @@ export async function exportStrands(page, root, size) {
         ctx.clearRect(0, 0, size, size);
         ctx.drawImage(await load(source), 0, 0);
         const original = ctx.getImageData(0, 0, size, size).data;
+        if (kind === 'ornament') {
+          const neighbors = (index) => {
+            const result = [];
+            if (index >= size) result.push(index - size);
+            if (index + size < labels.length) result.push(index + size);
+            if (index % size > 0) result.push(index - 1);
+            if (index % size < size - 1) result.push(index + 1);
+            return result;
+          };
+          const cores = new Int8Array(labels.length).fill(-1);
+          for (let index = 0; index < labels.length; index++)
+            if (
+              original[index * 4 + 3] >= 24 &&
+              neighbors(index).every(
+                (next) =>
+                  labels[next] === labels[index] &&
+                  original[next * 4 + 3] >= 24,
+              )
+            )
+              cores[index] = labels[index];
+          const visited = new Uint8Array(labels.length);
+          const largest = Array.from({ length: palette.length }, () => []);
+          for (let start = 0; start < cores.length; start++) {
+            if (cores[start] < 0 || visited[start]) continue;
+            const label = cores[start];
+            let tail = 1;
+            queue[0] = start;
+            visited[start] = 1;
+            for (let head = 0; head < tail; head++)
+              for (const next of neighbors(queue[head]))
+                if (!visited[next] && cores[next] === label) {
+                  visited[next] = 1;
+                  queue[tail++] = next;
+                }
+            if (tail > largest[label].length)
+              largest[label] = Array.from(queue.subarray(0, tail));
+          }
+          labels.fill(-1);
+          end = 0;
+          largest.forEach((component, label) => {
+            if (!component.length)
+              throw new Error(`Missing leaf core ${label}`);
+            for (const index of component) {
+              labels[index] = label;
+              queue[end++] = index;
+            }
+          });
+          // Grow through the real ornament first, so a leaf's fringe cannot
+          // jump the transparent gap onto another leaf's distant outline.
+          for (let head = 0; head < end; head++)
+            for (const next of neighbors(queue[head]))
+              if (labels[next] < 0 && original[next * 4 + 3] >= 24) {
+                labels[next] = labels[queue[head]];
+                queue[end++] = next;
+              }
+          for (let head = 0; head < end; head++)
+            for (const next of neighbors(queue[head]))
+              if (labels[next] < 0) {
+                labels[next] = labels[queue[head]];
+                queue[end++] = next;
+              }
+          if (end !== labels.length)
+            throw new Error('Incomplete leaf coverage');
+        }
         const fragments = [];
         const assembly = document.createElement('canvas');
         assembly.width = assembly.height = size;
@@ -155,20 +235,28 @@ export async function exportStrands(page, root, size) {
         return fragments;
       },
       {
-        source: dataUrl(`layers/${color}-hair.png`),
-        segmentation: dataUrl(`sources/${color}-hair-segmentation-v2.png`),
-        palette,
+        source: dataUrl(`layers/${color}-${kind}.png`),
+        segmentation: dataUrl(`sources/${color}-${kind}-segmentation-v2.png`),
+        palette: palette.slice(0, count),
+        kind,
+        registration:
+          kind === 'ornament'
+            ? registration.layers.find(
+                (layer) => layer.id === `${color}-${kind}`,
+              )
+            : null,
         size,
       },
     );
     result.forEach((fragment, index) =>
       fs.writeFileSync(
-        path.join(root, 'layers', `${color}-hair-${index + 1}.png`),
+        path.join(root, 'layers', `${color}-${kind}-${index + 1}.png`),
         Buffer.from(fragment.png, 'base64'),
       ),
     );
     evidence.push({
       color,
+      kind,
       fragments: result.length,
       visiblePixels: result.map((fragment) => fragment.visible),
       pixelIdentical: true,

@@ -1,5 +1,51 @@
 import { expect, test } from '@playwright/test';
 
+test('body fragments contain only small portions of the visible avatar silhouette', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const manifest = await (
+    await page.request.get('/emblem/manifest.json')
+  ).json();
+  const sizes = await page.evaluate(async (manifest) => {
+    const result = [];
+    for (const color of ['gold', 'violet']) {
+      const image = new Image();
+      image.src = `/emblem/layers/${color}-body.png`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 1280;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is unavailable');
+      ctx.drawImage(image, 0, 0);
+      const pixels = ctx.getImageData(0, 0, 1280, 1280).data;
+      const parts = manifest.layers.filter(
+        (layer: { file: string }) => layer.file === `layers/${color}-body.png`,
+      );
+      const areas = parts.map((layer: { clip: number[] }) => {
+        const [left, top, width, height] = layer.clip;
+        let visible = 0;
+        for (let y = top; y < top + height; y++)
+          for (let x = left; x < left + width; x++)
+            if (pixels[(y * 1280 + x) * 4 + 3] >= 24) visible++;
+        return visible;
+      });
+      result.push({
+        count: parts.length,
+        smallest: Math.min(...areas),
+        largest:
+          Math.max(...areas) / areas.reduce((a: number, b: number) => a + b, 0),
+      });
+    }
+    return result;
+  }, manifest);
+  for (const size of sizes) {
+    expect(size.count).toBe(11);
+    expect(size.smallest).toBeGreaterThan(32);
+    expect(size.largest).toBeLessThan(0.22);
+  }
+});
+
 test('outer fragment centers taper inward while the five rings remain coaxial', async ({
   page,
 }) => {
@@ -8,7 +54,7 @@ test('outer fragment centers taper inward while the five rings remain coaxial', 
   const manifest = await (
     await page.request.get('/emblem/manifest.json')
   ).json();
-  await expect(page.locator('.plane')).toHaveCount(47);
+  await expect(page.locator('.plane')).toHaveCount(73);
   await expect
     .poll(() =>
       page.locator('.camera').evaluate((element) => element.clientWidth),
@@ -18,7 +64,7 @@ test('outer fragment centers taper inward while the five rings remain coaxial', 
     (planes, layers) =>
       planes.flatMap((element, index) => {
         const layer = layers[index];
-        if (!layer.centroid || Math.abs(layer.planeIndex - 23) < 17) return [];
+        if (!layer.centroid || Math.abs(layer.planeIndex - 36) < 27) return [];
         const width = (element as HTMLElement).clientWidth;
         const ratio = width / 1280;
         const origin = getComputedStyle(element)
@@ -83,7 +129,7 @@ test('purple hair stays in front of every body fragment before settlement', asyn
     const bodies = planes.filter((plane) =>
       plane.querySelector('img')?.src.endsWith('/violet-body.png'),
     );
-    if (hairs.length !== 12 || bodies.length !== 3)
+    if (hairs.length !== 12 || bodies.length !== 11)
       throw Error('Missing purple artwork planes');
     const depth = (plane: HTMLElement) =>
       new DOMMatrix(getComputedStyle(plane).transform).m43;
@@ -139,7 +185,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
           .locator('.plane')
           .evaluateAll(
             (planes) =>
-              planes.length === 47 &&
+              planes.length === 73 &&
               planes.every(
                 (plane) =>
                   new DOMMatrix(getComputedStyle(plane).transform).isIdentity,
@@ -152,7 +198,7 @@ test('settled face assembly is pixel-identical to the original unclipped image s
         camera.locator('img').evaluateAll((images) => {
           const seen = new Set<string>();
           return (
-            images.length === 47 &&
+            images.length === 73 &&
             images.every((image) => {
               const first = !seen.has((image as HTMLImageElement).src);
               seen.add((image as HTMLImageElement).src);
@@ -228,20 +274,20 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     .click();
   const scene = page.locator('.camera');
   const ring = page.locator('.spin-clockwise');
-  await expect(page.locator('.plane img')).toHaveCount(47);
+  await expect(page.locator('.plane img')).toHaveCount(73);
   const manifestResponse = await page.request.get('/emblem/manifest.json');
   const manifest = await manifestResponse.json();
   expect(
     manifest.layers
       .map((layer: { planeIndex: number }) => layer.planeIndex)
       .sort((a: number, b: number) => a - b),
-  ).toEqual(Array.from({ length: 47 }, (_, index) => index));
+  ).toEqual(Array.from({ length: 73 }, (_, index) => index));
   expect(manifest.spacingProfile).toBe('outer-dense');
   const mainRing = manifest.layers.find(
     (layer: { id: string }) => layer.id === 'outer-frame',
   );
   expect(mainRing.exploded).toEqual({ x: 0, y: 0, rotation: 0 });
-  expect(mainRing.planeIndex).toBe(23);
+  expect(mainRing.planeIndex).toBe(36);
   const scatteredRings = manifest.layers.filter(
     (layer: { id: string; exploded: { x: number } }) =>
       layer.id.startsWith('inner-circle') && layer.exploded.x !== 0,
@@ -268,9 +314,25 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     );
     expect(bodies.map((layer: { clip: number[] }) => layer.clip)).toEqual([
       [0, 0, 1280, 512],
-      [0, 512, 1280, 128],
-      [0, 640, 1280, 640],
+      ...[512, 560, 608, 656, 704, 752, 800, 848, 896].map((top) => [
+        0,
+        top,
+        1280,
+        48,
+      ]),
+      [0, 944, 1280, 336],
     ]);
+    const jewelry = manifest.layers.filter(
+      (layer: { assembly?: { file: string } }) =>
+        layer.assembly?.file === `layers/${color}-ornament.png`,
+    );
+    expect(jewelry).toHaveLength(color === 'gold' ? 15 : 7);
+    expect(
+      jewelry.every(
+        (layer: { clip?: unknown; file: string }) =>
+          layer.clip === undefined && /-ornament-\d+\.png$/.test(layer.file),
+      ),
+    ).toBe(true);
   }
   await expect
     .poll(() =>
@@ -296,11 +358,11 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
         .sort((a, b) => a - b),
     );
   const interval = depths[1] - depths[0];
-  expect(interval).toBeGreaterThan(7);
+  expect(interval).toBeGreaterThan(4);
   const gaps = depths.slice(1).map((depth, index) => depth - depths[index]);
-  for (let index = 1; index < 21; index++)
+  for (let index = 1; index < 34; index++)
     expect(gaps[index]).toBeGreaterThan(gaps[index - 1]);
-  expect(depths.slice(21, 26)).toEqual([-180, -90, 0, 90, 180]);
+  expect(depths.slice(34, 39)).toEqual([-180, -90, 0, 90, 180]);
   expect(gaps[Math.floor(gaps.length / 2)]).toBeGreaterThan(interval * 3);
   expect(depths[0] + (depths.at(-1) ?? 0)).toBeCloseTo(0, 2);
   const outer = await page.request.get('/emblem/layers/outer-frame.svg');
