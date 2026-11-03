@@ -3,6 +3,7 @@ import { SkeletonAtom } from '@stellar/ui-atoms';
 import {
   silentEmblemMusic,
   type EmblemMusicLevels,
+  type EmblemMusicMode,
 } from './emblem-music-motion';
 
 @Component({
@@ -24,6 +25,25 @@ export class AudioVisualizerMolecule {
     treble: 1,
   });
   readonly listeningChange = output<boolean>();
+  readonly mode = input<EmblemMusicMode>('dynamic');
+  readonly modeChange = output<EmblemMusicMode>();
+  readonly modes: readonly {
+    value: EmblemMusicMode;
+    label: string;
+    detail: string;
+  }[] = [
+    { value: 'calm', label: 'Calm', detail: 'Gentle drift · soft ring pulses' },
+    {
+      value: 'dynamic',
+      label: 'Dynamic',
+      detail: 'Directional fragments · ring kicks',
+    },
+    {
+      value: 'flashy',
+      label: 'Flashy',
+      detail: 'Bolder movement · staggered blinks',
+    },
+  ];
   readonly sensitivityChange = output<{
     band: keyof EmblemMusicLevels;
     value: number;

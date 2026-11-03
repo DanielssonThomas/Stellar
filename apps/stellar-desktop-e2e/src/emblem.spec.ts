@@ -662,8 +662,19 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
     )
     .toBe(true);
   await expect
-    .poll(() => scene.evaluate((element) => element.clientWidth))
+    .poll(() =>
+      scene.evaluate((element) => parseFloat(getComputedStyle(element).width)),
+    )
     .toBe(480);
+  await expect
+    .poll(() =>
+      page
+        .locator('.plane')
+        .evaluateAll((planes) =>
+          planes.every((plane) => plane.getAnimations().length === 0),
+        ),
+    )
+    .toBe(true);
   const planeDepths = await page
     .locator('.plane')
     .evaluateAll((planes) =>

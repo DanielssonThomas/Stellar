@@ -52,7 +52,7 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
           ) => {
             if (command === 'music_set_enabled') {
               calls.push(args.request['enabled'] === true);
-              return frame(0, args.request['enabled'] ? 'starting' : 'idle');
+              return frame(0, args.request['enabled'] ? 'capturing' : 'idle');
             }
             if (command === 'ivy_connect' || command === 'ivy_snapshot')
               return ivy;
@@ -111,13 +111,59 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
           .__musicFixture.calls,
     );
   expect(await calls()).toEqual([]);
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .focus();
   await page.keyboard.press('p');
   const dialog = page.getByRole('dialog', { name: 'Music visualizer' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('slider')).toHaveCount(4);
+  await expect(
+    dialog.getByRole('button', { name: 'Dynamic', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await dialog.getByRole('button', { name: 'Flashy', exact: true }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Flashy', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', { name: 'Listen to desktop audio' }).click();
   await expect.poll(calls).toEqual([true]);
+  await expect(dialog.locator('p[role="status"]')).toHaveText(
+    'Listening to desktop audio',
+  );
   await pulse(0.4);
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.music-piece')].some(
+      (element) => element.getAnimations().length > 0,
+    ),
+  );
+  const pulseCounts = await page
+    .locator('.music-piece')
+    .evaluateAll((elements) => ({
+      rings: elements.filter(
+        (element) =>
+          element.parentElement?.classList.contains('spin-counter') &&
+          element
+            .getAnimations()
+            .some((animation) =>
+              animation.effect
+                ?.getKeyframes()
+                .some((frame) =>
+                  String(frame.transform).includes('translate('),
+                ),
+            ),
+      ).length,
+      blinks: elements.filter((element) =>
+        element
+          .getAnimations()
+          .some((animation) =>
+            animation.effect
+              ?.getKeyframes()
+              .some((frame) => frame.opacity !== undefined),
+          ),
+      ).length,
+    }));
+  expect(pulseCounts.rings).toBe(12);
+  expect(pulseCounts.blinks).toBeGreaterThan(10);
   await expect(dialog.locator('p[role="status"]')).toHaveText(
     'Listening to desktop audio',
   );
@@ -128,6 +174,11 @@ test('P opens local music controls, adjusts bands, preserves floats and neutrali
     dialog.getByRole('meter', { name: 'Bass level', exact: true }),
   ).toHaveAttribute('value', '0.8');
   expect(await floats()).toEqual(initial);
+  await dialog.getByRole('button', { name: 'Calm', exact: true }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Calm', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.locator('output[for="music-bass"]')).toHaveText('200%');
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await pulse(0.8);
@@ -163,6 +214,9 @@ test('browser preview offers a controlled unavailable state without microphone p
   page,
 }) => {
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .focus();
   await page.keyboard.press('p');
   const dialog = page.getByRole('dialog', { name: 'Music visualizer' });
   await dialog.getByRole('button', { name: 'Listen to desktop audio' }).click();

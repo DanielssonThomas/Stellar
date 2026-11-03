@@ -20,10 +20,11 @@ import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
 import {
-  musicTransform,
   silentEmblemMusic,
   type EmblemMusicLevels,
+  type EmblemMusicMode,
 } from './emblem-music-motion';
+import { createEmblemMusicPulses } from './emblem-music-pulses';
 import { emblemClipPath } from './emblem-clip';
 import { emblemImageSource } from './emblem-image-sources';
 import { createEmblemImagePreparation } from './emblem-image-preparation';
@@ -68,6 +69,7 @@ export class EmblemMotionMolecule {
   readonly faultLightFilterId = `${this.solMaskId}-fault-light`;
   readonly audioLevel = input(0);
   readonly musicLevels = input<EmblemMusicLevels>(silentEmblemMusic);
+  readonly musicMode = input<EmblemMusicMode>('dynamic');
   readonly waiting = input(false);
   readonly solActive = input(false);
   readonly reducedMotion = input(false);
@@ -110,6 +112,9 @@ export class EmblemMotionMolecule {
     () => this.settledPhase.set(this.posePhase()),
   );
   private readonly ambient = createEmblemAmbientMotion(
+    this.document.defaultView,
+  );
+  private readonly musicPulses = createEmblemMusicPulses(
     this.document.defaultView,
   );
 
@@ -253,6 +258,7 @@ export class EmblemMotionMolecule {
       this.media?.removeEventListener('change', preferenceChanged);
       this.motion.dispose();
       this.ambient.dispose();
+      this.musicPulses.dispose();
       this.preparation.dispose();
     });
     afterRenderEffect(() => {
@@ -326,19 +332,19 @@ export class EmblemMotionMolecule {
     });
     afterRenderEffect(() => {
       const layers = this.layers();
-      const levels =
-        !this.fault() && idleMotionEnabled(this.posePhase(), this.paused())
-          ? this.musicLevels()
-          : silentEmblemMusic;
-      for (const [index, piece] of this.musicPieces().entries()) {
-        const layer = layers[index];
-        if (layer)
-          piece.nativeElement.style.transform = musicTransform(
-            layer,
-            index,
-            levels,
-          );
-      }
+      const active =
+        !this.fault() && idleMotionEnabled(this.posePhase(), this.paused());
+      this.musicPulses.update(
+        this.musicPieces().flatMap((piece, order) =>
+          layers[order]
+            ? [{ element: piece.nativeElement, layer: layers[order], order }]
+            : [],
+        ),
+        active ? this.musicLevels() : silentEmblemMusic,
+        this.musicMode(),
+        active,
+        this.paused(),
+      );
     });
   }
 

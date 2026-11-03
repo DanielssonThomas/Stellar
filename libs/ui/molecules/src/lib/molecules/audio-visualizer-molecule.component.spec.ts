@@ -39,4 +39,21 @@ describe('AudioVisualizerMolecule', () => {
     ).not.toBeNull();
     expect(fixture.nativeElement.getAttribute('aria-busy')).toBe('true');
   });
+
+  it('delegates mode selection and keeps sensitivity controls in every mode', async () => {
+    const changed = vi.fn();
+    fixture.componentInstance.modeChange.subscribe(changed);
+    const modes = [
+      ...fixture.nativeElement.querySelectorAll('.modes button'),
+    ] as HTMLButtonElement[];
+    expect(modes).toHaveLength(3);
+    modes[2].click();
+    expect(changed).toHaveBeenCalledWith('flashy');
+    fixture.componentRef.setInput('mode', 'flashy');
+    await fixture.whenStable();
+    expect(modes[2].getAttribute('aria-pressed')).toBe('true');
+    expect(
+      fixture.nativeElement.querySelectorAll('input[type="range"]'),
+    ).toHaveLength(4);
+  });
 });

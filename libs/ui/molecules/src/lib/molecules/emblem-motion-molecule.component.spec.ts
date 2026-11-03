@@ -86,7 +86,7 @@ describe('EmblemMotionMolecule', () => {
     const music = fixture.nativeElement.querySelector(
       '.music-piece',
     ) as HTMLElement;
-    expect(music.style.transform).toContain('1.248%');
+    expect(music.style.transform).not.toBe('none');
     expect(animate.mock.calls).toHaveLength(before);
     fixture.componentRef.setInput('phase', 'focusing');
     await fixture.whenStable();

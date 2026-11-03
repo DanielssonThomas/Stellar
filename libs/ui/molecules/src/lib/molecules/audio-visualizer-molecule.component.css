@@ -3,15 +3,56 @@
 }
 .visualizer-dialog {
   margin: auto;
-  width: min(30rem, calc(100vw - 2rem));
+  width: min(38rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
-  border: 1px solid var(--stellar-color-line);
-  border-radius: 1.25rem;
-  padding: 1.75rem;
-  background: var(--stellar-color-panel);
+  border: 0;
+  border-radius: 0;
+  padding: 1px;
+  background: var(--stellar-color-primary);
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
   color: var(--stellar-color-foreground);
-  box-shadow: 0 1rem 4rem #0008;
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--stellar-color-primary) 12%, transparent);
+}
+.dialog-content {
+  padding: 1.5rem;
+  clip-path: inherit;
+  background:
+    radial-gradient(
+      ellipse at 50% 0,
+      color-mix(in srgb, var(--stellar-color-primary) 5%, transparent),
+      transparent 75%
+    ),
+    var(--stellar-color-canvas);
+}
+h2,
+legend {
+  color: var(--stellar-color-primary);
+}
+.modes {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+}
+.modes button {
+  border: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
+  padding: 0.6rem 0.35rem;
+  color: var(--stellar-color-primary);
+  font-size: 0.8rem;
+}
+.modes button[aria-pressed='true'] {
+  border-color: var(--stellar-color-primary);
+  background: color-mix(in srgb, var(--stellar-color-primary) 13%, transparent);
 }
 .visualizer-dialog::backdrop {
   background: #0009;
@@ -19,22 +60,23 @@
 }
 button {
   cursor: pointer;
-  border-radius: 0.5rem;
+  border-radius: 0;
 }
 .close-button {
   padding: 0.25rem 0.5rem;
 }
 .listen-button {
   padding: 0.65rem 0.85rem;
-  border: 1px solid var(--stellar-color-line);
+  border: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
+  color: var(--stellar-color-primary);
   font-size: 0.8rem;
 }
 input,
 meter {
-  accent-color: var(--stellar-color-accent);
+  accent-color: var(--stellar-color-primary);
 }
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--stellar-color-accent);
+  outline: 2px solid var(--stellar-color-primary);
   outline-offset: 4px;
 }

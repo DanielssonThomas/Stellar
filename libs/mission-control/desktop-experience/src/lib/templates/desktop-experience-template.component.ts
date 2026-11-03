@@ -18,6 +18,7 @@ import {
   EmblemMotionMolecule,
   AudioVisualizerMolecule,
   type EmblemMusicLevels,
+  type EmblemMusicMode,
   IvyActivityMolecule,
   type IvyActivityItem,
   PromptComposerMolecule,
@@ -163,6 +164,7 @@ export class DesktopExperienceTemplate {
     value: number;
   }>();
   readonly musicControls = viewChild.required(AudioVisualizerMolecule);
+  readonly musicMode = signal<EmblemMusicMode>('dynamic');
   readonly statusText = input('Ready');
   readonly inputs = input<readonly MicrophoneOption[]>([]);
   readonly inputsVisible = input(false);
