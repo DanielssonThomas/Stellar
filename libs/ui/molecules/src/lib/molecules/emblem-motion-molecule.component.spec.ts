@@ -183,6 +183,119 @@ describe('EmblemMotionMolecule', () => {
     ).toEqual(['inset(0% 0% 50% 0%)', 'inset(50% 0% 0% 0%)']);
   });
 
+  it('preloads strand originals and swaps only at settlement, restoring pieces on return', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: manifest.layers.map((layer, index) => ({
+        ...layer,
+        file: `layers/strand-${index}.png`,
+        assembly: { file: 'layers/hair.png', index, count: 2 },
+      })),
+    });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.assemblySources()).toEqual([
+      { src: '/assets/emblem/layers/hair.png', srcset: null },
+    ]);
+    fixture.componentRef.setInput('phase', 'focusing');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.src),
+    ).toEqual([
+      '/assets/emblem/layers/strand-0.png',
+      '/assets/emblem/layers/strand-1.png',
+    ]);
+    for (const animation of animations) animation.onfinish?.();
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance
+        .layers()
+        .map((layer) => [layer.src, layer.clipPath]),
+    ).toEqual([
+      ['/assets/emblem/layers/hair.png', 'none'],
+      ['/assets/emblem/layers/hair.png', 'inset(100%)'],
+    ]);
+    fixture.componentRef.setInput('phase', 'returning');
+    await fixture.whenStable();
+    expect(
+      fixture.componentInstance.layers().map((layer) => layer.src),
+    ).toEqual([
+      '/assets/emblem/layers/strand-0.png',
+      '/assets/emblem/layers/strand-1.png',
+    ]);
+    fixture.nativeElement
+      .querySelector('.emblem-presence > img')
+      .dispatchEvent(new Event('error'));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.unavailable()).toBe(true);
+  });
+
+  it('waits for container measurement and sizes fragments and preloaded originals without restarting motion', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      rasterSizes: [128, 256],
+      layers: manifest.layers.map((layer, index) => ({
+        ...layer,
+        file: `layers/hair-${index}.png`,
+        assembly: { file: 'layers/hair.png', index, count: 2 },
+      })),
+    });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('img')).toHaveLength(0);
+    expect(
+      fixture.nativeElement.querySelector('stellar-skeleton-atom'),
+    ).not.toBeNull();
+    const width = vi
+      .spyOn(fixture.nativeElement, 'clientWidth', 'get')
+      .mockReturnValue(96);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const images: HTMLImageElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('img'),
+    );
+    expect(images).toHaveLength(3);
+    expect(images.every((image) => image.sizes === '96px')).toBe(true);
+    expect(images[0].srcset).toContain(
+      '/assets/emblem/resolutions/128/layers/hair.png 128w',
+    );
+    expect(images[1].srcset).toContain(
+      '/assets/emblem/resolutions/256/layers/hair-0.png 256w',
+    );
+    expect(images[1].srcset).toContain('/assets/emblem/layers/hair-0.png 512w');
+    const animationCount = animate.mock.calls.length;
+    width.mockReturnValue(400);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    expect(images.every((image) => image.sizes === '400px')).toBe(true);
+    expect(animate).toHaveBeenCalledTimes(animationCount);
+  });
+
+  it('keeps independent floats for every non-ring fragment and retains existing ring spin', async () => {
+    fixture.componentRef.setInput('manifest', {
+      ...manifest,
+      layers: [
+        ...manifest.layers,
+        ...Array.from({ length: 20 }, (_, index) => ({
+          ...manifest.layers[0],
+          id: `fragment-${index}`,
+          z: index + 2,
+          spin: undefined,
+        })),
+      ],
+    });
+    animate.mockClear();
+    await fixture.whenStable();
+    const infinite = animate.mock.calls.filter(
+      (call) => call[1]?.iterations === Infinity,
+    );
+    expect(infinite).toHaveLength(20);
+    expect(
+      fixture.nativeElement.querySelectorAll('.camera .plane'),
+    ).toHaveLength(22);
+    expect(
+      fixture.nativeElement.querySelectorAll('.spin-clockwise,.spin-counter'),
+    ).toHaveLength(2);
+  });
+
   it('renders independent inert SVG images, accessible label and supplied origins', () => {
     const images: HTMLImageElement[] = Array.from(
       fixture.nativeElement.querySelectorAll('img'),

@@ -1,0 +1,84 @@
+{
+  "baselineRevision": "b9d496416987879dd3365bfc78bf6ed610ecdf8e",
+  "method": "Headless Chromium via Playwright; localhost:4311 production; 1100x760 DPR1; 3 manual activity/dismiss cycles with 1150ms wait after each action; CDP Performance and devtools.timeline; one local run per revision, trace overhead included.",
+  "candidateSources": {
+    "emblem-layer-motion.ts": "4047df0cc075bc7a697156e06794bcae7aecf162b49e48a8db217b3514f9d346",
+    "emblem-ambient-motion.ts": "eb78775b806bbed88ff403b3e40ecce652b0c84a86178c19378e28576e0a782a",
+    "emblem-motion-molecule.component.ts": "9b6b1c4f3ea81feaeabe0adb753cd0873290f3e6d9248a03df5cc1872c59c37a",
+    "emblem-motion-molecule.component.html": "b056e4d87bf460315d709b0835c6e040fb1497ecf84b81e976e7123247c6152b",
+    "emblem-motion-molecule.component.css": "07fa3340463e7492b9d50361adf253ec68f27b8df9d375463b509f0f950f75ee"
+  },
+  "before": {
+    "idleAnimations": 81,
+    "RecalcStyleCount": 1466,
+    "RecalcStyleDuration": 0.226282,
+    "LayoutCount": 232,
+    "LayoutDuration": 0.09116500000000001,
+    "ScriptDuration": 0.160609,
+    "TaskDuration": 1.42005,
+    "trace": {
+      "UpdateLayoutTree": {
+        "count": 1247,
+        "durationMs": 119.664
+      },
+      "Layout": {
+        "count": 365,
+        "durationMs": 200.478
+      },
+      "Paint": {
+        "count": 21756,
+        "durationMs": 731.486
+      },
+      "PrePaint": {
+        "count": 812,
+        "durationMs": 103.687
+      },
+      "CompositeLayers": {
+        "count": 0,
+        "durationMs": 0
+      }
+    },
+    "frames": {
+      "count": 155,
+      "p95": 116.69999999999982,
+      "over25ms": 73
+    }
+  },
+  "after": {
+    "idleAnimations": 14,
+    "RecalcStyleCount": 483,
+    "RecalcStyleDuration": 0.163174,
+    "LayoutCount": 225,
+    "LayoutDuration": 0.08458,
+    "ScriptDuration": 0.136725,
+    "TaskDuration": 1.096466,
+    "trace": {
+      "UpdateLayoutTree": {
+        "count": 275,
+        "durationMs": 58.698
+      },
+      "Layout": {
+        "count": 351,
+        "durationMs": 190.634
+      },
+      "Paint": {
+        "count": 12469,
+        "durationMs": 603.874
+      },
+      "PrePaint": {
+        "count": 767,
+        "durationMs": 77.322
+      },
+      "CompositeLayers": {
+        "count": 0,
+        "durationMs": 0
+      }
+    },
+    "frames": {
+      "count": 154,
+      "p95": 116.70000000000073,
+      "over25ms": 72
+    }
+  },
+  "limitation": "Headless frame p95 is unchanged; no native frame-time or measured GPU allocation claim."
+}

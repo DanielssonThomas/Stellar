@@ -1,0 +1,36 @@
+{
+  "info": {
+    "density": 1.5,
+    "width": 480,
+    "idleAnimations": 81,
+    "promotion": "transform"
+  },
+  "cycles": [
+    {
+      "frames": 125,
+      "p95": 18.700000000000728,
+      "max": 25,
+      "over25ms": 0
+    },
+    {
+      "frames": 125,
+      "p95": 18.799999999999272,
+      "max": 25.100000000000364,
+      "over25ms": 1
+    },
+    {
+      "frames": 123,
+      "p95": 18.700000000000728,
+      "max": 31.200000000000728,
+      "over25ms": 2
+    }
+  ],
+  "limitation": "One local native run with development CDP enabled. No before-change native baseline. Includes real Stage size transitions, not just layer transforms.",
+  "method": "Existing native WebView2 user profile; first three manual Start activity/Dismiss cycles after launching rebuilt app. 1150 ms sample per Start activity, 1150 ms return pause, requestAnimationFrame intervals; temporary loopback CDP enabled. No prompt sent or microphone enabled. Not an empty browser disk cache.",
+  "sourceHashes": {
+    "emblem-image-preparation.ts": "7ca76ef0c15602fe2b4adfe2c34bbc95c2fba267db81342ceb9f3cb82c0a5582",
+    "emblem-motion-molecule.component.ts": "0939284440f5899468b1c61aaec21a39265407ca9e67cee7ed20b947d0f68fa2",
+    "emblem-motion-molecule.component.html": "447493a994bd4e2767a17e962ebed265054dc82b66f43a2ccfa6268a575f5092",
+    "emblem-motion-molecule.component.css": "0133a945f183a61659a80e4cf93dd0bf318b373e9099a12bb12d9d16f6de1dfe"
+  }
+}

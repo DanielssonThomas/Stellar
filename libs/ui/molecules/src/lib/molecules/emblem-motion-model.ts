@@ -1,5 +1,10 @@
 import type { Phase } from '@stellar/desktop-interaction';
-import { planeDepth } from './emblem-stack';
+import {
+  MAX_EMBLEM_PLANES,
+  planeDepth,
+  type EmblemSpacingProfile,
+  type EmblemPlaneCore,
+} from './emblem-stack';
 import {
   completeClipFiles,
   validEmblemClip,
@@ -19,6 +24,12 @@ export interface EmblemLayer {
   readonly z: number;
   readonly planeIndex?: number;
   readonly clip?: EmblemClip;
+  readonly centroid?: { readonly x: number; readonly y: number };
+  readonly assembly?: {
+    readonly file: string;
+    readonly index: number;
+    readonly count: number;
+  };
   readonly anchor: { readonly x: number; readonly y: number };
   readonly assembled: EmblemPose;
   readonly exploded: EmblemPose;
@@ -30,6 +41,44 @@ export interface EmblemManifest {
   readonly viewBox: readonly [number, number, number, number];
   readonly layers: readonly EmblemLayer[];
   readonly planeSpacing?: number;
+  readonly spacingProfile?: EmblemSpacingProfile;
+  readonly planeCore?: EmblemPlaneCore;
+  readonly radialTaper?: number;
+  readonly rasterSizes?: readonly number[];
+}
+
+export function consolidatedFragmentFiles(
+  manifest: EmblemManifest,
+): ReadonlySet<string> {
+  const files = new Set<string>();
+  const painted = [...manifest.layers].sort((a, b) => a.z - b.z);
+  for (const file of new Set(
+    manifest.layers.flatMap((layer) =>
+      layer.assembly ? [layer.assembly.file] : [],
+    ),
+  )) {
+    const group = manifest.layers.filter(
+      (layer) => layer.assembly?.file === file,
+    );
+    const positions = painted.flatMap((layer, index) =>
+      layer.assembly?.file === file ? [index] : [],
+    );
+    const anchor = group[0].anchor;
+    if (
+      positions[positions.length - 1] - positions[0] + 1 === group.length &&
+      group.every(
+        (layer) =>
+          layer.assembled.x === 0 &&
+          layer.assembled.y === 0 &&
+          layer.assembled.rotation === 0 &&
+          (layer.assembled.depth ?? 0) === 0 &&
+          layer.anchor.x === anchor.x &&
+          layer.anchor.y === anchor.y,
+      )
+    )
+      files.add(file);
+  }
+  return files;
 }
 
 export function consolidatedClipFiles(
@@ -91,16 +140,46 @@ export function layerTransform(
   const stacked = planeIndex !== undefined && isExplodedPhase(phase);
   const depth =
     (stacked
-      ? planeDepth(planeIndex, layers.length, manifest.planeSpacing)
+      ? (pose.depth ??
+        planeDepth(
+          planeIndex,
+          layers.length,
+          manifest.planeSpacing,
+          manifest.spacingProfile,
+          manifest.planeCore,
+        ))
       : pose.depth) ??
     (reducedMotion || !isExplodedPhase(phase) || maxZ === minZ
       ? 0
       : ((layer.z - (minZ + maxZ) / 2) / (maxZ - minZ)) * 18);
   const width = manifest?.viewBox?.[2];
   const height = manifest?.viewBox?.[3];
-  const x = Number.isFinite(width) && width !== 0 ? (pose.x / width) * 100 : 0;
+  let offsetX = pose.x;
+  let offsetY = pose.y;
+  if (stacked && layer.centroid && manifest.radialTaper) {
+    const extent = planeDepth(
+      layers.length - 1,
+      layers.length,
+      manifest.planeSpacing,
+      manifest.spacingProfile,
+      manifest.planeCore,
+    );
+    const normalized = extent > 0 ? Math.min(1, Math.abs(depth) / extent) : 0;
+    const contraction =
+      1 - Math.sqrt(1 - (normalized * manifest.radialTaper) ** 2);
+    const radians = (pose.rotation * Math.PI) / 180;
+    const dx = layer.centroid.x - layer.anchor.x;
+    const dy = layer.centroid.y - layer.anchor.y;
+    const centerX =
+      layer.anchor.x + dx * Math.cos(radians) - dy * Math.sin(radians) + pose.x;
+    const centerY =
+      layer.anchor.y + dx * Math.sin(radians) + dy * Math.cos(radians) + pose.y;
+    offsetX += (manifest.viewBox[0] + width / 2 - centerX) * contraction;
+    offsetY += (manifest.viewBox[1] + height / 2 - centerY) * contraction;
+  }
+  const x = Number.isFinite(width) && width !== 0 ? (offsetX / width) * 100 : 0;
   const y =
-    Number.isFinite(height) && height !== 0 ? (pose.y / height) * 100 : 0;
+    Number.isFinite(height) && height !== 0 ? (offsetY / height) * 100 : 0;
   const depthTransform =
     pose.depth === undefined && !stacked
       ? `translateZ(${depth}px)`
@@ -143,9 +222,40 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       return 'Invalid emblem manifest viewBox.';
     }
     const layers = manifest.layers;
-    if (!Array.isArray(layers) || layers.length === 0 || layers.length > 32) {
-      return 'Emblem manifest must contain between 1 and 32 layers.';
+    if (
+      manifest.rasterSizes !== undefined &&
+      (!Array.isArray(manifest.rasterSizes) ||
+        manifest.rasterSizes.length === 0 ||
+        manifest.rasterSizes.length > 8 ||
+        manifest.rasterSizes.some(
+          (size, index, sizes) =>
+            !Number.isInteger(size) ||
+            size < 32 ||
+            size >= box[2] ||
+            (index > 0 && size <= sizes[index - 1]),
+        ))
+    )
+      return 'Invalid emblem raster sizes.';
+    if (
+      !Array.isArray(layers) ||
+      layers.length === 0 ||
+      layers.length > MAX_EMBLEM_PLANES
+    ) {
+      return `Emblem manifest must contain between 1 and ${MAX_EMBLEM_PLANES} layers.`;
     }
+    if (
+      manifest.spacingProfile !== undefined &&
+      manifest.spacingProfile !== 'uniform' &&
+      manifest.spacingProfile !== 'outer-dense'
+    )
+      return 'Invalid emblem spacing profile.';
+    if (
+      manifest.radialTaper !== undefined &&
+      (!Number.isFinite(manifest.radialTaper) ||
+        manifest.radialTaper < 0 ||
+        manifest.radialTaper > 1)
+    )
+      return 'Invalid emblem radial taper.';
     const ids = new Set<string>();
     const planeIndices = new Set<number>();
     for (const candidate of layers as readonly unknown[]) {
@@ -162,8 +272,23 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       ids.add(layer.id);
       if (!validEmblemClip(layer.clip, manifest.viewBox))
         return 'Invalid emblem clip.';
+      if (
+        layer.centroid !== undefined &&
+        (!finitePoint(layer.centroid) ||
+          layer.centroid.x < box[0] ||
+          layer.centroid.y < box[1] ||
+          layer.centroid.x > box[0] + box[2] ||
+          layer.centroid.y > box[1] + box[3])
+      )
+        return 'Invalid emblem fragment centroid.';
       if (layer.planeIndex !== undefined) {
-        planeDepth(layer.planeIndex, layers.length, manifest.planeSpacing);
+        planeDepth(
+          layer.planeIndex,
+          layers.length,
+          manifest.planeSpacing,
+          manifest.spacingProfile,
+          manifest.planeCore,
+        );
         if (planeIndices.has(layer.planeIndex))
           return 'Emblem plane indices must be unique.';
         planeIndices.add(layer.planeIndex);
@@ -181,6 +306,24 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
         return 'Emblem layer file must be a safe relative SVG, PNG or WebP path.';
       }
       if (
+        layer.assembly !== undefined &&
+        (!layer.assembly ||
+          typeof layer.assembly !== 'object' ||
+          typeof layer.assembly.file !== 'string' ||
+          !/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:svg|png|webp)$/.test(
+            layer.assembly.file,
+          ) ||
+          layer.assembly.file === layer.file ||
+          layer.clip !== undefined ||
+          !Number.isInteger(layer.assembly.index) ||
+          !Number.isInteger(layer.assembly.count) ||
+          layer.assembly.count < 2 ||
+          layer.assembly.count > MAX_EMBLEM_PLANES ||
+          layer.assembly.index < 0 ||
+          layer.assembly.index >= layer.assembly.count)
+      )
+        return 'Invalid emblem fragment assembly.';
+      if (
         !Number.isFinite(layer.z) ||
         !finitePoint(layer.anchor) ||
         !finitePose(layer.assembled) ||
@@ -195,8 +338,24 @@ export function manifestError(manifest: EmblemManifest | null): string | null {
       )
         return 'Emblem layer has invalid spin.';
     }
+    for (const file of new Set(
+      layers.flatMap((layer) => (layer.assembly ? [layer.assembly.file] : [])),
+    )) {
+      const group = layers.filter((layer) => layer.assembly?.file === file);
+      if (
+        group.some((layer) => layer.assembly?.count !== group.length) ||
+        new Set(group.map((layer) => layer.assembly?.index)).size !==
+          group.length ||
+        layers.some((layer) => layer.file === file)
+      )
+        return 'Incomplete emblem fragment assembly.';
+    }
     if (
-      (planeIndices.size || manifest.planeSpacing !== undefined) &&
+      (planeIndices.size ||
+        manifest.planeSpacing !== undefined ||
+        manifest.planeCore !== undefined ||
+        manifest.radialTaper !== undefined ||
+        manifest.spacingProfile !== undefined) &&
       planeIndices.size !== layers.length
     )
       return 'Every spaced emblem plane requires an index.';
