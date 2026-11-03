@@ -31,6 +31,7 @@ export class DraftRecognition {
       commandAllowed: boolean,
     ) => void | Promise<void>,
     private readonly failed: () => void,
+    private readonly interruptPreviews = true,
   ) {}
 
   canPreview(): boolean {
@@ -72,7 +73,8 @@ export class DraftRecognition {
       this.finals.push(work);
       this.preview?.pcm.fill(0);
       this.preview = undefined;
-      if (this.running && !this.running.final) this.interrupt();
+      if (this.interruptPreviews && this.running && !this.running.final)
+        this.interrupt();
     } else {
       this.preview?.pcm.fill(0);
       this.preview = work;

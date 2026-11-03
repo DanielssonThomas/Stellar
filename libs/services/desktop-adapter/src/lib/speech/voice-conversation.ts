@@ -2,11 +2,13 @@ import {
   createUtteranceAssembler,
   type AudioActivityState,
   type PcmEvent,
+  type PcmChunk,
 } from '@stellar/service-audio-activity';
 import type {
   IvySnapshot,
   SpeechSnapshot,
   SpeechTranscript,
+  KeywordDetection,
 } from '@stellar/desktop-contracts';
 import {
   fitsVoicePrompt,
@@ -19,6 +21,7 @@ import {
   type PromptPresentation,
 } from './prompt-presentation';
 import { DraftRecognition } from './draft-recognition';
+import { FastCommands, type KeywordPort } from './fast-commands';
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
 
@@ -42,6 +45,8 @@ export interface VoiceView {
 }
 
 export interface VoicePorts {
+  readonly keywords?: KeywordPort;
+  readonly silenceMs?: number;
   readonly newSession?: () => Promise<boolean>;
   readonly reloadMcp?: () => Promise<boolean>;
   readonly onNewSession?: () => void;
@@ -66,8 +71,11 @@ export interface VoicePorts {
 }
 
 export class VoiceConversation {
+  private readonly assembler;
+  private readonly fastCommands?: FastCommands;
+  private wakeTail = false;
+  private speechResourcesUsed = false;
   private readonly latency = new VoiceLatency();
-  private readonly assembler = createUtteranceAssembler();
   private context?: VoiceContext;
   private generation = 0;
   private phase: 'transcribing' | 'waiting' | 'speaking' | null = null;
@@ -112,6 +120,23 @@ export class VoiceConversation {
   private typedLease?: AbortController;
 
   constructor(private readonly ports: VoicePorts) {
+    this.assembler = createUtteranceAssembler({
+      silenceMs: ports.silenceMs ?? (ports.keywords ? 800 : 1400),
+    });
+    if (ports.keywords) {
+      this.awaitingWake = true;
+      this.fastCommands = new FastCommands(
+        ports.keywords,
+        ports.id,
+        (detection, tail) => {
+          void this.acceptFastCommand(detection, tail);
+        },
+        () =>
+          this.fail(
+            'Local command recognition unavailable. Retry voice or use text.',
+          ),
+      );
+    }
     if (ports.collect) {
       this.draftRecognition = new DraftRecognition(
         ports.collect,
@@ -120,6 +145,7 @@ export class VoiceConversation {
           this.acceptDraftTranscript(text, id, final, commandAllowed),
         () =>
           this.fail('Local draft recognition stopped. Your text is retained.'),
+        !ports.keywords,
       );
     }
     if (ports.presentFinalized)
@@ -164,6 +190,7 @@ export class VoiceConversation {
       context.assistant.reset_id !== this.lastResetId
     ) {
       this.lastResetId = context.assistant.reset_id;
+      if (this.fastCommands) this.invalidate();
       this.finishNewSession();
     }
     if (
@@ -197,10 +224,11 @@ export class VoiceConversation {
     if (this.disposed) return;
     if (event.type === 'turn-pause') {
       this.assembler.reset();
+      this.fastCommands?.reset();
       return;
     }
     if (event.type === 'reset') {
-      this.invalidate();
+      this.invalidate(false);
       this.blocked = false;
       this.failure = '';
       this.publish();
@@ -244,11 +272,35 @@ export class VoiceConversation {
         }
         if (!context || !this.canCollect(context)) {
           this.assembler.reset();
+          this.fastCommands?.reset();
           return;
         }
         this.latency.activity(context.audio.activity.active);
+        if (this.fastCommands && !context.audio.activity.calibrating) {
+          this.speechResourcesUsed = true;
+          this.fastCommands.push(
+            event.chunk,
+            Math.min(
+              0.2,
+              Math.max(0.008, context.audio.activity.noiseFloor * 3),
+            ),
+            this.awaitingWake
+              ? 'passive'
+              : this.composition.status === 'composing'
+                ? 'composing'
+                : 'listening',
+          );
+        }
+        if (this.fastCommands && this.awaitingWake) return;
+        const activity = this.wakeTail
+          ? {
+              ...context.audio.activity,
+              active: this.voiced(event.chunk.samples, context),
+              starting: false,
+            }
+          : context.audio.activity;
         const pcm = this.assembler.push(event.chunk, {
-          ...context.audio.activity,
+          ...activity,
           draft:
             this.composition.status === 'composing' &&
             Boolean(this.draftRecognition),
@@ -267,7 +319,7 @@ export class VoiceConversation {
               commandAllowed,
             );
           } else if (
-            this.previewSamples >= 16000 &&
+            this.previewSamples >= (this.fastCommands ? 32000 : 16000) &&
             this.draftRecognition.canPreview()
           ) {
             this.previewSamples = 0;
@@ -285,6 +337,81 @@ export class VoiceConversation {
       } finally {
         event.chunk.samples.fill(0);
       }
+    }
+  }
+
+  private voiced(samples: Int16Array, context: VoiceContext): boolean {
+    const threshold = Math.max(0.008, context.audio.activity.noiseFloor * 1.8);
+    let energy = 0;
+    for (const sample of samples) energy += (sample / 32768) ** 2;
+    return Math.sqrt(energy / samples.length) >= threshold;
+  }
+
+  private async acceptFastCommand(
+    detection: KeywordDetection,
+    tail: PcmChunk[],
+  ) {
+    const context = this.context;
+    try {
+      if (!context || !this.canCollect(context) || this.awaitingQuiet) return;
+      if (detection.command === 'ivy') {
+        if (!this.awaitingWake) return;
+        this.awaitingWake = false;
+        this.wakeTail = true;
+        this.controlNotice = '';
+        this.assembler.reset();
+        let completed: Int16Array | null = null;
+        for (const chunk of tail) {
+          const pcm = this.assembler.push(chunk, {
+            active: this.voiced(chunk.samples, context),
+            calibrating: false,
+          });
+          if (pcm) {
+            if (!completed) completed = pcm;
+            else pcm.fill(0);
+          }
+        }
+        this.publish();
+        if (completed) void this.transcribe(completed);
+        return;
+      }
+      if (this.awaitingWake) return;
+      const generation = ++this.generation;
+      this.assembler.reset();
+      this.wakeTail = false;
+      this.previewSamples = 0;
+      const stopped = this.draftRecognition?.reset();
+      this.phase = 'transcribing';
+      this.publish();
+      if (stopped) await stopped;
+      if (!this.current(generation)) return;
+      if (detection.command === 'prompt cancel') {
+        if (this.composition.status !== 'composing') {
+          this.phase = null;
+          this.publish();
+          return;
+        }
+        this.cancelDraftCleanup();
+        this.refinement?.abort();
+        this.awaitingWake = true;
+        this.phase = null;
+        this.setComposition({
+          raw: '',
+          refined: null,
+          lastSubmittedRaw: '',
+          model: this.composition.model,
+          status: 'idle',
+          error: '',
+        });
+        this.publish();
+        return;
+      }
+      await this.recognize(detection.command, this.ports.id(), generation);
+    } catch {
+      if (!this.disposed)
+        this.fail('Local command could not complete. Retry voice or use text.');
+    } finally {
+      for (const chunk of tail) chunk.samples.fill(0);
     }
   }
 
@@ -345,6 +472,7 @@ export class VoiceConversation {
       preparing(this.composition.status)
     )
       return;
+    if (this.fastCommands) this.awaitingWake = false;
     if (raw !== this.composition.raw) {
       this.dispatchUncertain = false;
       this.cancelDraftCleanup();
@@ -668,7 +796,29 @@ export class VoiceConversation {
       return;
     }
     if (command === 'clear' || command === 'done') {
-      await this.clearConversation(generation);
+      const cleared = await this.clearConversation(generation);
+      if (cleared && this.fastCommands && this.current(generation)) {
+        this.awaitingWake = true;
+        this.publish();
+      }
+      return;
+    }
+    if (command === 'prompt cancel') {
+      this.phase = null;
+      if (this.composition.status === 'composing') {
+        this.cancelDraftCleanup();
+        this.refinement?.abort();
+        this.awaitingWake = true;
+        this.setComposition({
+          raw: '',
+          refined: null,
+          lastSubmittedRaw: '',
+          model: this.composition.model,
+          status: 'idle',
+          error: '',
+        });
+      }
+      this.publish();
       return;
     }
     if (
@@ -798,6 +948,9 @@ export class VoiceConversation {
   }
 
   private finishNewSession() {
+    this.fastCommands?.reset();
+    this.assembler.reset();
+    this.wakeTail = false;
     this.newSessionRequested = false;
     this.cancelDraftCleanup();
     this.refinement?.abort();
@@ -1034,6 +1187,9 @@ export class VoiceConversation {
   }
 
   private async transcribe(pcm: Int16Array) {
+    this.speechResourcesUsed = true;
+    this.wakeTail = false;
+    this.fastCommands?.reset();
     this.latency.finish('interrupted');
     this.latency.begin();
     const generation = ++this.generation;
@@ -1153,12 +1309,15 @@ export class VoiceConversation {
       });
   }
 
-  private invalidate() {
+  private invalidate(stopWarmWorkers = true) {
+    this.fastCommands?.reset();
+    this.wakeTail = false;
     this.latency.finish('interrupted');
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
     const draftStop = this.draftRecognition?.reset();
     const active =
+      (stopWarmWorkers && this.speechResourcesUsed) ||
       Boolean(draftStop) ||
       this.unconfirmedStop ||
       this.phase !== null ||
@@ -1166,6 +1325,7 @@ export class VoiceConversation {
         ['collecting', 'transcribing', 'synthesizing', 'speaking'].includes(
           this.context.speech.state,
         ));
+    if (stopWarmWorkers || active) this.speechResourcesUsed = false;
     ++this.generation;
     this.cancelDraftCleanup();
     this.previewSamples = 0;

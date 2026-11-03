@@ -100,6 +100,7 @@ fn main() {
         ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_collect,
+        speech::speech_keywords,
         speech::speech_speak,
         speech::speech_stop,
         speech::speech_snapshot,

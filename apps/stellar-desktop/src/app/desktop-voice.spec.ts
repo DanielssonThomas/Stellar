@@ -165,7 +165,21 @@ describe('desktop voice cleanup integration', () => {
       }),
     };
     const speech = {
+      keywordsAvailable: true,
       state: signal(initialSpeechSnapshot()),
+      keywords: vi.fn(
+        async (
+          _pcm: Int16Array,
+          _stream: string,
+          sequence: number,
+          _threshold: number,
+          mode: string,
+        ) => ({
+          sequence,
+          detection:
+            mode === 'passive' ? { command: 'ivy', end_sample: 640 } : null,
+        }),
+      ),
       transcribe: vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
         version: 1,
         utterance_id,
@@ -215,6 +229,15 @@ describe('desktop voice cleanup integration', () => {
     await Promise.resolve();
     TestBed.tick();
     let sequence = 0;
+    receive({
+      type: 'chunk',
+      chunk: {
+        sampleRate: 16000,
+        sequence: sequence++,
+        samples: new Int16Array(640).fill(2000),
+      },
+    });
+    for (let i = 0; i < 12; i++) await Promise.resolve();
     const utterance = () => {
       for (const [active, count] of [
         [true, 5],

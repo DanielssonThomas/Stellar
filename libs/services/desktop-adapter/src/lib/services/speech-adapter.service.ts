@@ -8,6 +8,8 @@ import {
 import type {
   SpeechSnapshot,
   SpeechTranscript,
+  KeywordMode,
+  KeywordReply,
 } from '@stellar/desktop-contracts';
 import { SpeechAdapter, SpeechAdapterError } from '../speech/speech-adapter';
 import {
@@ -33,6 +35,8 @@ export const SPEECH_TRANSPORT = new InjectionToken<SpeechTransport>(
 
 @Injectable({ providedIn: 'root' })
 export class SpeechAdapterService {
+  readonly keywordsAvailable =
+    inject(SPEECH_TRANSPORT).keywordsAvailable === true;
   private readonly adapter = new SpeechAdapter(inject(SPEECH_TRANSPORT));
   private readonly current = signal(initialSpeechSnapshot());
   readonly state = this.current.asReadonly();
@@ -61,6 +65,27 @@ export class SpeechAdapterService {
 
   collect(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
     return this.transcribeWith(pcm, utteranceId, true);
+  }
+
+  async keywords(
+    pcm: Int16Array,
+    streamId: string,
+    sequence: number,
+    threshold: number,
+    mode: KeywordMode,
+  ): Promise<KeywordReply> {
+    const generation = this.generation;
+    await this.prepare();
+    this.assertCurrent(generation);
+    return this.adapter.keywords({
+      version: 1,
+      epoch: this.current().epoch,
+      stream_id: streamId,
+      sequence,
+      pcm: Array.from(pcm),
+      threshold,
+      mode,
+    });
   }
 
   private transcribeWith(

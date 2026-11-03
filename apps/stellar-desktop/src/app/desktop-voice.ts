@@ -73,6 +73,10 @@ export class DesktopVoice {
       this.speech.state().state === 'speaking',
   );
   private readonly conversation = new VoiceConversation({
+    keywords: this.speech.keywordsAvailable
+      ? (pcm, stream, sequence, threshold, mode) =>
+          this.speech.keywords(pcm, stream, sequence, threshold, mode)
+      : undefined,
     transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
     collect: (pcm, id) => this.speech.collect(pcm, id),
     refinePrompt: async (raw, signal) =>

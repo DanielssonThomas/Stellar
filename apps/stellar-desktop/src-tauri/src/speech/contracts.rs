@@ -112,3 +112,52 @@ pub struct SpeechStopRequest {
     pub version: u16,
     pub epoch: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum KeywordMode {
+    Passive,
+    Listening,
+    Composing,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum KeywordCommand {
+    Ivy,
+    Done,
+    Clear,
+    Prompt,
+    #[serde(rename = "prompt cancel")]
+    PromptCancel,
+    #[serde(rename = "new session")]
+    NewSession,
+    #[serde(rename = "reload mcp")]
+    ReloadMcp,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordRequest {
+    pub version: u16,
+    pub epoch: String,
+    pub stream_id: String,
+    pub sequence: u32,
+    pub pcm: Vec<i16>,
+    pub threshold: f32,
+    pub mode: KeywordMode,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordDetection {
+    pub command: KeywordCommand,
+    pub end_sample: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordReply {
+    pub sequence: u32,
+    pub detection: Option<KeywordDetection>,
+}

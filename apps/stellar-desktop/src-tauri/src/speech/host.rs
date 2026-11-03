@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Clone)]
 pub struct SpeechHost {
-    inner: Arc<Inner>,
+    pub(super) inner: Arc<Inner>,
 }
 
 impl SpeechHost {
@@ -28,6 +28,8 @@ impl SpeechHost {
                 }),
                 publish,
                 scratch,
+                transcriber: super::warm_worker::WarmWorker::new("transcribe"),
+                keywords: super::warm_worker::WarmWorker::new("keywords"),
                 #[cfg(test)]
                 settlement_gate: Mutex::new(None),
             }),
@@ -82,6 +84,7 @@ impl SpeechHost {
                 },
                 cancelled: AtomicBool::new(false),
                 scratch,
+                recognition_epoch: self.inner.transcriber.ticket(),
             });
             view.active = Some(operation.clone());
             view.snapshot.operation_id = Some(id);
@@ -160,6 +163,36 @@ impl SpeechHost {
         payload: Vec<u8>,
         timeout: Duration,
     ) -> Result<String, SpeechError> {
+        {
+            let view = self
+                .inner
+                .view
+                .lock()
+                .map_err(|_| SpeechError::Unavailable)?;
+            if !current(&view, operation) || operation.cancelled.load(Ordering::SeqCst) {
+                return Err(SpeechError::Cancelled);
+            }
+        }
+        if mode == "transcribe" {
+            let frame =
+                self.inner
+                    .transcriber
+                    .request(payload, operation.recognition_epoch, timeout)?;
+            let text = frame
+                .as_object()
+                .filter(|object| object.len() == 1)
+                .and_then(|object| object.get("text"))
+                .and_then(serde_json::Value::as_str)
+                .filter(|text| text.len() <= 8192)
+                .map(str::to_owned);
+            return match text {
+                Some(text) => Ok(text),
+                None => {
+                    self.inner.transcriber.stop()?;
+                    Err(SpeechError::Protocol)
+                }
+            };
+        }
         let deadline = Instant::now() + timeout;
         if mode == "speak" {
             return self.inner.voice.run(
@@ -321,8 +354,10 @@ impl SpeechHost {
                 .as_ref()
                 .is_none_or(|operation| operation.scratch.is_none())
             {
-                process::stop(&self.inner.voice.child)?;
+                self.inner.voice.stop()?;
             }
+            self.inner.transcriber.stop()?;
+            self.inner.keywords.stop()?;
             (view.active.clone(), advance(&mut view))
         };
         if let Some(operation) = active {

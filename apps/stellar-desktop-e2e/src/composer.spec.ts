@@ -116,15 +116,17 @@ async function install(page: Page, hold = true) {
               if (command === 'cleanup_refine') {
                 return { version: 1, text: fixture.cleanupText ?? refined };
               }
+              if (command === 'speech_keywords')
+                return { sequence: request['sequence'], detection: null };
               if (command === 'speech_collect') {
                 const pcm = request['pcm'] as number[];
                 const marker = pcm.some((sample) => sample === 4000);
                 const words = pcm.filter((sample) => sample === 2000).length;
                 const text = marker
                   ? 'send prompt'
-                  : words < 22000
+                  : words < 40000
                     ? 'the'
-                    : words < 30000
+                    : words < 45000
                       ? 'the next'
                       : 'the next Stellar sprint.';
                 return {
@@ -417,9 +419,9 @@ test('synthetic voice preview, stable sentence and cleanup reach one finalized s
   await feed(false, 18);
   await draft(page, 'Um, Set up', false);
   await expect(page.locator('.composer')).toHaveClass(/opened/);
-  await feed(true, 30);
+  await feed(true, 55);
   await expect(page.locator('.prompt-text')).toContainText('the');
-  await feed(true, 25);
+  await feed(true, 55);
   await expect(page.locator('.prompt-text')).toContainText('the next');
   await feed(false, 36);
   await expect(page.locator('.text-stack')).toHaveAttribute('aria-live', 'off');

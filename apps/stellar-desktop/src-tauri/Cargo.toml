@@ -18,6 +18,8 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "=2.0.1"
+process-wrap = { version = "=10.0.1", default-features = false, features = ["std", "creation-flags", "job-object"] }
+windows = { version = "=0.62.2", features = ["Win32_System_Threading"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
