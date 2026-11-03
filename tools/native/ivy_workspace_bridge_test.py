@@ -19,6 +19,8 @@ def load(name):
 
 
 bridge = load('ivy_bridge')
+sys.modules['stellar_ivy_activity'] = load('ivy_activity')
+sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 protocol = load('workspace_protocol')
 
 

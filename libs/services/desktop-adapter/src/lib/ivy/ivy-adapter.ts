@@ -13,6 +13,8 @@ import {
   ivyDisconnectCommand,
   ivySelectSessionCommand,
   ivyClearConversationCommand,
+  ivyNewSessionCommand,
+  ivyReloadMcpCommand,
   type IvyCommands,
   type IvyErrorCode,
   type IvySnapshot,
@@ -41,6 +43,8 @@ const commands: Record<keyof IvyCommands, true> = {
   [ivyDisconnectCommand]: true,
   [ivySelectSessionCommand]: true,
   [ivyClearConversationCommand]: true,
+  [ivyNewSessionCommand]: true,
+  [ivyReloadMcpCommand]: true,
 };
 
 export class IvyAdapter {

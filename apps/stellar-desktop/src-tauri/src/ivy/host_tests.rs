@@ -1,6 +1,6 @@
 use super::*;
 
-fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
+pub(super) fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
     let shared = Shared {
         view: Arc::new(Mutex::new(View {
             epoch: 0,

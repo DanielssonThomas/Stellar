@@ -1,4 +1,7 @@
 import type {
+  IvyActivity,
+  IvyActivityKind,
+  IvyActivityState,
   IvyConnectionState,
   IvyComponent,
   IvyTurnState,
@@ -129,6 +132,41 @@ function presentation(value: unknown): IvyPresentation {
   };
 }
 
+const activityKinds: Record<IvyActivityKind, true> = {
+  shell: true,
+  web: true,
+  file_read: true,
+  file_write: true,
+  mcp: true,
+  skill: true,
+  skill_create: true,
+  memory: true,
+  tool: true,
+};
+const activityStates: Record<IvyActivityState, true> = {
+  running: true,
+  completed: true,
+  failed: true,
+  finished: true,
+};
+function activity(value: unknown): IvyActivity[] {
+  if (!Array.isArray(value) || value.length > 12)
+    throw new DesktopContractError('malformed');
+  const result = value.map((row): IvyActivity => {
+    const data = record(row, ['id', 'kind', 'state']);
+    const id = boundedString(data['id'], 16);
+    if (!/^[0-9a-f]{16}$/.test(id)) throw new DesktopContractError('malformed');
+    return {
+      id,
+      kind: variant(data['kind'], activityKinds),
+      state: variant(data['state'], activityStates),
+    };
+  });
+  if (new Set(result.map((row) => row.id)).size !== result.length)
+    throw new DesktopContractError('malformed');
+  return result;
+}
+
 export function decodeIvySnapshot(value: unknown): IvySnapshot {
   const data = record(value, [
     'version',
@@ -141,6 +179,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     'connection',
     'turn',
     'items',
+    'activity',
+    'reset_id',
     'error',
   ]);
   const items = data['items'];
@@ -165,6 +205,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     connection: variant(data['connection'], connections),
     turn: variant(data['turn'], turns),
     items: decoded,
+    activity: activity(data['activity']),
+    reset_id: data['reset_id'] === null ? null : text(data['reset_id'], 128),
     error: data['error'] === null ? null : decodeIvyError(data['error']),
   };
   if (

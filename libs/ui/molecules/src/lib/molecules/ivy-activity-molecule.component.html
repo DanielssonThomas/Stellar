@@ -1,0 +1,62 @@
+@if (view().visible && !suppressed()) {
+  <div [class]="classes()" data-ivy-activity>
+    <section class="activity-panel thinking" aria-label="Ivy activity">
+      <h2 class="uppercase tracking-widest">
+        <svg class="header-icon" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M10 2 17 6V14L10 18 3 14V6Z M3 6 10 10 17 6 M10 10V18" />
+        </svg>
+        Activity
+      </h2>
+      @if (loading()) {
+        <stellar-skeleton-atom shape="text" />
+      } @else {
+        <p role="status">{{ description() }}</p>
+      }
+      <span class="working-line" aria-hidden="true"></span>
+    </section>
+    @if (view().actions.length) {
+      <section class="activity-panel actions" aria-label="Ivy actions">
+        <h2 class="uppercase tracking-widest">
+          <span class="terminal-mark" aria-hidden="true">›_</span> Actions
+        </h2>
+        <ol>
+          @for (row of view().actions.slice(-6); track row.id) {
+            <li [attr.data-state]="row.status">
+              <span
+                class="action-mark"
+                [class.running]="row.running"
+                aria-hidden="true"
+              ></span>
+              <span class="action-label">{{ row.label }}</span>
+              <span class="action-state">{{ row.status }}</span>
+            </li>
+          }
+        </ol>
+      </section>
+    }
+    @for (special of indicators(); track special.indicator) {
+      <span
+        class="activity-glyph"
+        [class.memory-glyph]="special.indicator === 'memory'"
+        [class.constructing]="special.running"
+        [class.confirmed]="special.confirmed"
+        [attr.aria-label]="
+          special.label + (special.confirmed ? ' confirmed' : ' running')
+        "
+        role="img"
+      >
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          @if (special.indicator === 'memory') {
+            <circle cx="16" cy="16" r="11" />
+            <circle cx="16" cy="16" r="4" />
+            <path d="M16 1V5 M16 27V31 M1 16H5 M27 16H31" />
+          } @else {
+            <path
+              d="M16 3 29 10.5V25L16 30 3 25V10.5Z M3 10.5 16 18 29 10.5 M16 18V30 M9 7 23 14"
+            />
+          }
+        </svg>
+      </span>
+    }
+  </div>
+}

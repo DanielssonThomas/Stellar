@@ -215,3 +215,25 @@ describe('desktop composition session', () => {
     ).toEqual(['close']);
   });
 });
+
+it('returns to passive idle without stopping opted-in capture and ignores ambient activity until wake', () => {
+  const { session, audio } = setup(false);
+  session.dispatch({ type: 'capture-request' });
+  session.updateAudio(audioState('capturing', true));
+  vi.runAllTimers();
+  const requestId = session.state.microphone.requestId;
+  session.setPassiveListening(true);
+  session.dispatch({ type: 'presentation-change', visible: false });
+  session.updateAudio(audioState('capturing', true));
+  vi.runAllTimers();
+  expect(session.state.phase).toBe('idle');
+  expect(session.state.target).toBe('center');
+  expect(session.state.microphone.requestId).toBe(requestId);
+  expect(audio.stop).not.toHaveBeenCalled();
+  session.setPassiveListening(false);
+  session.updateAudio(audioState('capturing', true));
+  vi.runAllTimers();
+  expect(session.state.phase).toBe('listening');
+  session.dispose();
+  vi.useRealTimers();
+});

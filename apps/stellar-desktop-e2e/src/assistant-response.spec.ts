@@ -27,6 +27,8 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
       verified_model: null,
       workspace_tools: 'unavailable',
       workspace_epoch: '0',
+      reset_id: null,
+      activity: [],
       items,
       error: null,
     });

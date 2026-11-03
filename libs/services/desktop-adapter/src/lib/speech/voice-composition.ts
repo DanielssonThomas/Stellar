@@ -5,7 +5,9 @@ export type VoiceCommand =
   | 'send prompt'
   | 'send'
   | 'clear'
-  | 'done';
+  | 'done'
+  | 'new session'
+  | 'reload mcp';
 export interface VoiceComposition {
   readonly raw: string;
   readonly preview?: string;
@@ -36,7 +38,9 @@ export function voiceCommand(text: string): VoiceCommand | null {
     normalized === 'end prompt' ||
     normalized === 'send prompt' ||
     normalized === 'send' ||
-    normalized === 'clear'
+    normalized === 'clear' ||
+    normalized === 'new session' ||
+    normalized === 'reload mcp'
   )
     return normalized;
   if (

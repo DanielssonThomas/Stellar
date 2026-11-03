@@ -9,6 +9,8 @@ const snapshot = () => ({
   verified_model: null,
   workspace_tools: 'unavailable',
   workspace_epoch: '0',
+  reset_id: null,
+  activity: [],
   connection: 'ready',
   turn: 'completed',
   items: [
@@ -119,4 +121,20 @@ describe('Ivy wire validation', () => {
       }),
     ).toThrow();
   });
+});
+
+it('bounds and validates activity categories without admitting raw arguments or duplicated rows', () => {
+  const row = { id: '0123456789abcdef', kind: 'memory', state: 'running' };
+  expect(
+    decodeIvySnapshot({ ...snapshot(), activity: [row] }).activity,
+  ).toEqual([row]);
+  for (const activity of [
+    [{ ...row, args: { secret: 'hidden' } }],
+    [row, row],
+    Array(13).fill(row),
+    [{ ...row, state: 'guessed' }],
+    [{ ...row, id: 'unbounded private tool identifier' }],
+  ]) {
+    expect(() => decodeIvySnapshot({ ...snapshot(), activity })).toThrow();
+  }
 });

@@ -28,7 +28,7 @@ pub(super) fn acquire(
                         view.model = record.model;
                         view.verified_model = None;
                         view.workspace_tools = WorkspaceToolsState::Unavailable;
-                        view.turn = if record.unsettled {
+                        view.turn = if record.unsettled || record.pending_reset.is_some() {
                             IvyTurnState::Uncertain
                         } else {
                             IvyTurnState::Idle
@@ -50,7 +50,7 @@ pub(super) fn acquire(
 }
 
 fn reject_rotation(action: Action, rotations: &Pending, error: IvyErrorCode) {
-    if let Action::Rotate(_, _, ticket, reply) = action {
+    if let Action::Rotate(_, _, ticket, reply) | Action::Lifecycle(_, ticket, reply) = action {
         rotation::finish(rotations, &ticket);
         let _ = reply.send(Err(error));
     }

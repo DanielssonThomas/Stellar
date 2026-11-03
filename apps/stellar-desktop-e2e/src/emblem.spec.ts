@@ -291,9 +291,17 @@ test('actual scene rotates in idle, assembles frontward and rebases interrupted 
   ).toHaveAttribute('data-phase', 'idle');
   await expect
     .poll(() =>
-      scene.evaluate((element) => getComputedStyle(element).transform),
+      scene.evaluate((element, original) => {
+        const current = new DOMMatrix(
+          getComputedStyle(element).transform,
+        ).toFloat64Array();
+        const expected = new DOMMatrix(original).toFloat64Array();
+        return Math.max(
+          ...current.map((value, index) => Math.abs(value - expected[index])),
+        );
+      }, camera),
     )
-    .toBe(camera);
+    .toBeLessThan(0.000001);
   await expect(page.locator('[data-instance-id]')).toHaveCount(0);
 });
 

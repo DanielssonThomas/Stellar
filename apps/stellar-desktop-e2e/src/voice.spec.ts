@@ -43,6 +43,8 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       verified_model: null,
       workspace_tools: 'unavailable',
       workspace_epoch: '0',
+      reset_id: null,
+      activity: [],
       connection: 'ready',
       turn: 'idle',
       items: [],

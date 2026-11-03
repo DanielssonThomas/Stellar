@@ -82,6 +82,8 @@ if (action === 'smoke') {
               'allow-smoke-result',
               'allow-ivy-select-session',
               'allow-ivy-clear-conversation',
+              'allow-ivy-new-session',
+              'allow-ivy-reload-mcp',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
               'allow-smoke-hold-ivy',

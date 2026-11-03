@@ -16,6 +16,8 @@ import {
 } from '@stellar/desktop-interaction';
 import {
   EmblemMotionMolecule,
+  IvyActivityMolecule,
+  type IvyActivityItem,
   PromptComposerMolecule,
   FaultLogMolecule,
   type FaultLogEntry,
@@ -37,6 +39,7 @@ export interface MicrophoneOption {
   imports: [
     StageOrganism,
     EmblemMotionMolecule,
+    IvyActivityMolecule,
     PromptComposerMolecule,
     FaultLogMolecule,
   ],
@@ -57,6 +60,11 @@ export class DesktopExperienceTemplate {
       '[data-menu-trigger]',
     ),
   );
+  readonly ivyActivity = input<readonly IvyActivityItem[]>([]);
+  readonly ivyTurnId = input<string | null>(null);
+  readonly ivyWorking = input(false);
+  readonly ivyPreparing = input(false);
+  readonly passiveListening = input(false);
   readonly assistantStatus = input('Ivy disconnected');
   readonly assistantReply = input('');
   readonly assistantBusy = input(false);
@@ -92,23 +100,28 @@ export class DesktopExperienceTemplate {
   readonly promptComposer = viewChild.required(PromptComposerMolecule);
   readonly assistantActive = computed(
     () =>
+      !this.passiveListening() &&
       !['suspended', 'shutdown'].includes(this.state().phase) &&
       (this.assistantWaiting() || this.assistantNarrating()),
   );
   readonly emblemPhase = computed(() =>
     this.faultActive()
       ? ('idle' as const)
-      : this.assistantActive() ||
-          (this.conversationActive() &&
-            !['suspended', 'shutdown'].includes(this.state().phase))
-        ? ('listening' as const)
-        : this.state().phase,
+      : this.passiveListening() &&
+          !['suspended', 'shutdown'].includes(this.state().phase)
+        ? ('idle' as const)
+        : this.assistantActive() ||
+            (this.conversationActive() &&
+              !['suspended', 'shutdown'].includes(this.state().phase))
+          ? ('listening' as const)
+          : this.state().phase,
   );
   readonly retryIvy = output<void>();
   readonly cancelIvy = output<void>();
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
+  readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
   readonly voiceBusy = input(false);
   readonly voiceError = input(false);

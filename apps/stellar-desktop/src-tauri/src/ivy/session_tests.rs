@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
-fn fixture() -> (Session, std::path::PathBuf) {
+pub(super) fn fixture() -> (Session, std::path::PathBuf) {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let directory = std::env::temp_dir().join(format!(
         "stellar-ivy-{}-{}",
@@ -27,6 +27,7 @@ fn fixture() -> (Session, std::path::PathBuf) {
         model: IvyModel::Terra,
         route_verified: true,
         workspace: None,
+        pending_reset: None,
     };
     journal.save(&record).unwrap();
     let shared = Shared {

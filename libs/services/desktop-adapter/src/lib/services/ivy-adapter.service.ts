@@ -14,6 +14,8 @@ import {
   ivyDisconnectCommand,
   ivySelectSessionCommand,
   ivyClearConversationCommand,
+  ivyNewSessionCommand,
+  ivyReloadMcpCommand,
   type IvyModel,
   type IvyCommands,
   type IvySnapshot,
@@ -116,6 +118,26 @@ export class IvyAdapterService {
       );
     } catch {
       return false;
+    }
+  }
+
+  async newSession(): Promise<boolean> {
+    const state = await this.invoke(ivyNewSessionCommand, { version: 1 });
+    return (
+      state.turn === 'idle' &&
+      state.turn_id === null &&
+      state.activity.length === 0 &&
+      !state.error
+    );
+  }
+  async reloadMcp(): Promise<boolean> {
+    try {
+      await this.invoke(ivyReloadMcpCommand, { version: 1 });
+      return true;
+    } catch (error) {
+      if (error instanceof IvyAdapterError && error.code === 'busy')
+        return false;
+      throw error;
     }
   }
 

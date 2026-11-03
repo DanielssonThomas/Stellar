@@ -58,6 +58,8 @@ async function install(page: Page, hold = true) {
         verified_model: turn === 'completed' ? model : null,
         workspace_tools: 'unavailable',
         workspace_epoch: '0',
+        reset_id: null,
+        activity: [],
         connection: 'ready',
         turn,
         items: [],
