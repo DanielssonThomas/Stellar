@@ -75,6 +75,7 @@ export class PromptComposerMolecule {
     clsx('composer text-stellar-foreground', {
       opened: this.opened(),
       dissolved: this.dissolved(),
+      'motion-reduced': this.reducedMotion(),
     }),
   );
 
@@ -104,7 +105,6 @@ export class PromptComposerMolecule {
         this.entrance?.controller.abort();
         this.pending?.abort();
         this.entrance = undefined;
-        this.opened.set(false);
         observer?.disconnect();
         observer = undefined;
         return;

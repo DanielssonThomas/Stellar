@@ -30,6 +30,10 @@ type ComposerFixture = {
   edits: string[];
   submissions: { text: string; dissolved: boolean }[];
   hold: boolean;
+  transcript?: string;
+  recognitions: string[];
+  cleanups: string[];
+  sessions: string[];
   cleanupText?: string;
   panel?: Element;
 };
@@ -46,6 +50,9 @@ async function install(page: Page, hold = true) {
         edits: [],
         submissions: [],
         hold,
+        recognitions: [],
+        cleanups: [],
+        sessions: [],
       };
       const snapshot = (
         turn: IvySnapshot['turn'] = 'idle',
@@ -104,6 +111,7 @@ async function install(page: Page, hold = true) {
               if (command === 'ivy_connect' || command === 'ivy_snapshot')
                 return snapshot();
               if (command === 'ivy_select_session') {
+                fixture.sessions.push(String(request['model']));
                 model = request['model'] as 'terra' | 'sol';
                 return snapshot();
               }
@@ -112,9 +120,18 @@ async function install(page: Page, hold = true) {
                 return snapshot();
               }
               if (command === 'cleanup_refine') {
+                fixture.cleanups.push(String(request['raw']));
                 return { version: 1, text: fixture.cleanupText ?? refined };
               }
               if (command === 'speech_collect') {
+                if (fixture.transcript !== undefined) {
+                  fixture.recognitions.push(fixture.transcript);
+                  return {
+                    version: 1,
+                    utterance_id: request['utterance_id'],
+                    text: fixture.transcript,
+                  };
+                }
                 const pcm = request['pcm'] as number[];
                 const marker = pcm.some((sample) => sample === 4000);
                 const words = pcm.filter((sample) => sample === 2000).length;
@@ -165,6 +182,187 @@ async function install(page: Page, hold = true) {
     'true',
   );
 }
+
+async function wakeCapture(page: Page) {
+  await page.evaluate(() => {
+    const debug = window as unknown as {
+      ng: { getComponent(element: Element): ComposerApp };
+      __wakeFeed: (active: boolean, count: number) => Promise<void>;
+    };
+    const root = document.querySelector('stellar-root');
+    if (!root) throw Error('Root missing');
+    const audio = debug.ng.getComponent(root).voice.audio;
+    type Sink = {
+      status(value: string): void;
+      frame(value: unknown): void;
+      pcm?(value: unknown): void;
+    };
+    let sink: Sink | undefined;
+    let sequence = 0,
+      timestampMs = 0;
+    const source = {
+      async start(next: Sink) {
+        sink = next;
+        next.status('capturing');
+      },
+      async stop() {
+        sink = undefined;
+      },
+    };
+    audio.startMicrophone = () => audio.start(source);
+    debug.__wakeFeed = async (active, count) => {
+      for (let i = 0; i < count; i++) {
+        if (!sink) return;
+        timestampMs += 40;
+        sink.frame({
+          timestampMs,
+          rms: active ? 0.1 : 0.001,
+          peak: active ? 0.1 : 0.001,
+          clipped: false,
+        });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+        sink?.pcm?.({
+          type: 'chunk',
+          chunk: {
+            sampleRate: 16000,
+            sequence: sequence++,
+            samples: new Int16Array(640).fill(active ? 2000 : 0),
+          },
+        });
+      }
+    };
+  });
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Enable microphone', exact: true })
+    .click();
+  const feed = (active: boolean, count: number) =>
+    page.evaluate(
+      ({ active, count }) =>
+        (
+          window as unknown as {
+            __wakeFeed(active: boolean, count: number): Promise<void>;
+          }
+        ).__wakeFeed(active, count),
+      { active, count },
+    );
+  await feed(false, 20);
+  await page
+    .getByRole('button', { name: 'Experience menu', exact: true })
+    .click();
+  return async (text: string) => {
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const root = document.querySelector('stellar-root');
+          if (!root) throw Error('Root missing');
+          return (
+            window as unknown as {
+              ng: { getComponent(element: Element): ComposerApp };
+            }
+          ).ng
+            .getComponent(root)
+            .voice.audio.state().status;
+        }),
+      )
+      .toBe('capturing');
+    const before = await page.evaluate((text) => {
+      const fixture = (
+        window as unknown as { __composerFixture: ComposerFixture }
+      ).__composerFixture;
+      fixture.transcript = text;
+      return fixture.recognitions.length;
+    }, text);
+    await feed(false, 20);
+    await feed(true, 10);
+    await feed(false, 60);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __composerFixture: ComposerFixture })
+              .__composerFixture.recognitions.length,
+        ),
+      )
+      .toBeGreaterThan(before);
+  };
+}
+
+test('wake-only foreground flow routes Terra, composes Sol, cancels without cleanup, and requires re-invocation', async ({
+  page,
+}) => {
+  await install(page, false);
+  const say = await wakeCapture(page);
+  const observed = () =>
+    page.evaluate(() => {
+      const fixture = (
+        window as unknown as { __composerFixture: ComposerFixture }
+      ).__composerFixture;
+      const root = document.querySelector('stellar-root');
+      if (!root) throw Error('Root missing');
+      const app = (
+        window as unknown as {
+          ng: { getComponent(element: Element): ComposerApp };
+        }
+      ).ng.getComponent(root);
+      return {
+        submissions: fixture.submissions,
+        cleanups: fixture.cleanups,
+        sessions: fixture.sessions,
+        composition: app.voice.composition(),
+      };
+    });
+  for (const ambient of [
+    'ordinary ambient conversation',
+    'ivory is a color',
+    'prompt',
+  ])
+    await say(ambient);
+  expect((await observed()).sessions).toEqual([]);
+  expect((await observed()).submissions).toEqual([]);
+  await say('Ivy, tell me the plan');
+  await expect
+    .poll(async () => (await observed()).submissions)
+    .toEqual([{ text: 'tell me the plan', dissolved: false }]);
+  expect((await observed()).sessions).toEqual(['terra']);
+  await say('clear');
+  await say('another ambient request');
+  expect((await observed()).submissions).toHaveLength(1);
+  await say('Ivy, prompt');
+  await expect(
+    page.getByRole('region', { name: 'Spoken prompt' }),
+  ).toBeVisible();
+  expect((await observed()).composition.status).toBe('composing');
+  await say('Keep this draft private. Prompt cancel.');
+  await expect(page.getByRole('region', { name: 'Spoken prompt' })).toHaveCount(
+    0,
+  );
+  expect((await observed()).composition).toMatchObject({
+    raw: '',
+    refined: null,
+    status: 'idle',
+  });
+  expect((await observed()).cleanups).toEqual([]);
+  expect((await observed()).submissions).toHaveLength(1);
+  await say('prompt');
+  await say('unrelated background speech');
+  expect((await observed()).composition.status).toBe('idle');
+  expect((await observed()).submissions).toHaveLength(1);
+  await say('Ivy, prompt new draft');
+  await expect(
+    page.getByRole('region', { name: 'Spoken prompt' }),
+  ).toBeVisible();
+  expect((await observed()).composition.raw).toBe('new draft');
+  await say('prompt cancel');
+  await expect(page.getByRole('region', { name: 'Spoken prompt' })).toHaveCount(
+    0,
+  );
+  expect((await observed()).composition.raw).toBe('');
+});
 
 async function draft(page: Page, text = raw, finishOpening = true) {
   await page.evaluate((text) => {

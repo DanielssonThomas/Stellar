@@ -1,0 +1,57 @@
+{
+  "issue": 247,
+  "synthetic": true,
+  "physicalMicrophone": false,
+  "method": "Synthesized Kokoro speech fed through Web Audio in an isolated actual Tauri WebView; real local Whisper, cleanup, Ivy and speech playback boundaries.",
+  "build": "Angular development diagnostic embedded in native executable; production build and IPC smoke verified separately.",
+  "executableSha256": "bc49255cc7315d214cedfee9c14e46576311b9ebbd5416f71eafd47d3a0630c8",
+  "privateReceiptSha256": {
+    "first": "6c148f1114f763efd2fd39eeda4470dabb76dd9dc6a57afada6a83049dee541e",
+    "final": "4f60c93176d97d9c1ec25f74061a2ad8d590142c0eba9d221d0e00d4e91a0d3c"
+  },
+  "sourceSha256": {
+    "libs/services/desktop-adapter/src/lib/speech/voice-invocation.ts": "93cf1f0731b25b41c604650d970c8591a1592d791432e8b29b2dd140591e061a",
+    "libs/services/desktop-adapter/src/lib/speech/voice-conversation.ts": "a20ae5024e01048d732d97a60348f06ce0f31c8ae18511a1666c3201b7580cff"
+  },
+  "observations": {
+    "ambientAndSimilarWordsLeftForegroundInactive": true,
+    "ivyPromptOpenedSolCompositionWithCaptureActive": true,
+    "bufferedDraftBeforeCancellation": true,
+    "priorLiveCleanupCount": 1,
+    "cancellationAddedCleanupPasses": 0,
+    "cancellationAbortedPendingCleanupResult": true,
+    "cancelledDraftSubmissions": 0,
+    "cancelledRawRefinedAndPreviewDiscarded": true,
+    "ambientAfterCancellationDidNotInvoke": true,
+    "freshIvyRequestSelectedVerifiedTerra": true,
+    "microphoneTracksAtSelectionSubmissionAndSpeechStart": 0,
+    "speechSettledAndCaptureReacquired": true,
+    "spokenClearSucceededAfterInvocation": true,
+    "ambientAfterClearLeftForegroundInactive": true,
+    "standaloneIvyRecognized": true,
+    "ordinaryClearWhileAlreadyPassiveIgnored": true
+  },
+  "localRecognitionDurationMs": {
+    "minimum": 1905,
+    "maximum": 2084,
+    "firstRunColdObservation": 5899,
+    "note": "Single synthetic observations; excludes utterance settlement, not latency percentiles."
+  },
+  "automatedVerification": {
+    "adapterTests": 189,
+    "desktopTests": 73,
+    "moleculeTests": 107,
+    "organismTests": 64,
+    "desktopBrowserTests": 29,
+    "browserResult": "Full run passed before final refinements; final rerun passed 28/29 with all voice tests passing. Unrelated exact serialized camera-matrix comparison differed in tiny perspective decimals and passed its isolated retry.",
+    "lintAndBuild": "Affected desktop, adapter, molecule and organism checks passed; desktop E2E lint passed without warnings.",
+    "nativeSmoke": "Actual embedded WebView, styles and versioned IPC passed."
+  },
+  "limitations": [
+    "No physical microphone, Windows indicator, speaker audibility or acoustic false-accept-rate claim.",
+    "Wake detection waits for local utterance transcription; no dedicated acoustic detector or subsecond wake guarantee.",
+    "Cleanup admitted before cancellation cannot be undone; cancellation aborts its frontend result and never adds final cleanup or dispatch.",
+    "Native spoken suffix cancellation was exercised in the first run; buffered standalone cancellation and Terra gating were repeated on the final build.",
+    "Private fixtures and detailed synthetic receipts remain under ignored artifacts; no user audio is included."
+  ]
+}

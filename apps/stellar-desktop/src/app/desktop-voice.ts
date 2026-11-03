@@ -80,6 +80,7 @@ export class DesktopVoice {
     submit: (text, id) => this.assistant.submit(text, id),
     speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
+    onForegroundEnd: () => this.foregroundCleared?.(),
     selectSession: (model) => this.ivy.selectSession(model),
     clearConversation: async () => {
       const cleared = await this.ivy.clearConversation();

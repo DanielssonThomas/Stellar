@@ -302,7 +302,7 @@ describe('desktop voice cleanup integration', () => {
 
   it('does not call cleanup for an ordinary speech turn', async () => {
     const refine = vi.fn();
-    const f = await setup('ordinary request', refine);
+    const f = await setup('Ivy, ordinary request', refine);
     f.utterance();
     await vi.waitFor(() => expect(f.assistant.submit).toHaveBeenCalledOnce());
     expect(refine).not.toHaveBeenCalled();
