@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   SpeechTranscript,
   SpeechSnapshot,
+  KeywordCommand,
+  KeywordReply,
 } from '@stellar/desktop-contracts';
 import { initialIvySnapshot } from '../ivy/ivy-transport';
 import { initialSpeechSnapshot } from './speech-transport';
@@ -15,6 +17,420 @@ import { voiceCommand, type VoiceComposition } from './voice-composition';
 import { createNativePromptCleanup } from './native-prompt-cleanup';
 
 const id = '11111111-2222-4333-8444-555555555555';
+
+describe('dedicated command recognition integration', () => {
+  it('does not open a prompt for out-of-context cancel immediately after acoustic Ivy', async () => {
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'prompt cancel',
+    }));
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence, _threshold, mode) => ({
+        sequence,
+        detection:
+          mode === 'passive' ? { command: 'ivy', end_sample: 0 } : null,
+      }),
+      collect,
+    });
+    f.feed(true, 1);
+    await settle();
+    f.feed(true, 8);
+    f.feed(false, 40);
+    await settle();
+    expect(f.composition().status).not.toBe('composing');
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('prompt cancel', id);
+    f.controller.dispose();
+  });
+  it('retains a native prompt-cancel fragment at a long-dictation cap and its continuation', async () => {
+    const ended = vi.fn();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'prompt cancel',
+    }));
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: null,
+      }),
+      collect,
+      onForegroundEnd: ended,
+    });
+    f.controller.setDraft('Retain this draft');
+    for (let frame = 0; frame < 550; frame++) {
+      f.feed(true, 1);
+      await flush();
+    }
+    f.feed(false, 40);
+    await settle();
+    expect(f.composition().status).toBe('composing');
+    expect(f.composition().raw).toContain('Retain this draft');
+    expect(f.composition().raw).toContain('prompt cancel');
+    expect(f.view().error).toBe(false);
+    expect(ended).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('routes the request following acoustic Ivy into the existing prompt foreground', async () => {
+    const ended = vi.fn();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'prompt write a note',
+    }));
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence, _threshold, mode) => ({
+        sequence,
+        detection:
+          mode === 'passive' ? { command: 'ivy', end_sample: 0 } : null,
+      }),
+      collect,
+      onForegroundEnd: ended,
+    });
+    f.feed(true, 1);
+    await settle();
+    expect(f.view().foregroundActive).toBe(true);
+    expect(collect).not.toHaveBeenCalled();
+    f.feed(true, 8);
+    f.feed(false, 40);
+    await settle();
+    expect(f.composition()).toMatchObject({
+      raw: 'write a note',
+      model: 'sol',
+      status: 'composing',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    collect.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'Explain how to say prompt cancel',
+    });
+    f.utterance();
+    await settle();
+    expect(f.composition().status).toBe('composing');
+    expect(ended).not.toHaveBeenCalled();
+    collect.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'prompt cancel',
+    });
+    f.utterance();
+    await settle();
+    expect(f.composition()).toMatchObject({ raw: '', status: 'idle' });
+    expect(f.view().foregroundActive).toBe(false);
+    expect(ended).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  it('routes quiet speech through fallback even when visual activity stays below its threshold', async () => {
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: null,
+      }),
+    });
+    await f.controller.withCaptureReleased(async () => true);
+    for (let sequence = 0; sequence < 45; sequence++)
+      f.controller.accept({
+        type: 'chunk',
+        chunk: {
+          sampleRate: 16000,
+          sequence,
+          samples: new Int16Array(640).fill(sequence < 8 ? 180 : 0),
+        },
+      });
+    await settle();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  it('allows exact final prompt-cancel fallback without submitting or refining the draft', async () => {
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'Prompt cancel.',
+    }));
+    const refine = vi.fn(async (raw: string) => raw);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: null,
+      }),
+      collect,
+      refinePrompt: refine,
+    });
+    f.controller.setDraft('Retain until explicitly cancelled');
+    f.utterance();
+    await settle();
+    expect(f.composition()).toMatchObject({ raw: '', status: 'idle' });
+    expect(f.view().passive).toBe(true);
+    expect(refine).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('rejects a delayed acoustic prefix if later captured audio already resumed', async () => {
+    const result = deferred<KeywordReply>();
+    const cleared = vi.fn(async () => true);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) =>
+        sequence === 10 ? result.promise : { sequence, detection: null },
+      clearConversation: cleared,
+    });
+    await f.controller.withCaptureReleased(async () => true);
+    f.feed(true, 5);
+    f.feed(false, 6);
+    await settle();
+    f.feed(true, 10);
+    f.feed(false, 30);
+    result.resolve({
+      sequence: 10,
+      detection: { command: 'clear', end_sample: 3200 },
+    });
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('fences a delayed second candidate when a continued phrase reaches the quiet boundary', async () => {
+    const second = deferred<KeywordReply>();
+    const cleared = vi.fn(async () => true);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) =>
+        sequence === 26
+          ? second.promise
+          : {
+              sequence,
+              detection:
+                sequence === 10 ? { command: 'clear', end_sample: 3200 } : null,
+            },
+      clearConversation: cleared,
+    });
+    await f.controller.withCaptureReleased(async () => true);
+    f.feed(true, 5);
+    f.feed(false, 6);
+    await settle();
+    f.feed(true, 10);
+    f.feed(false, 6);
+    await settle();
+    f.feed(false, 19);
+    second.resolve({
+      sequence: 26,
+      detection: { command: 'clear', end_sample: 6400 },
+    });
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    f.feed(false, 15);
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  async function provisionalControl() {
+    const cleared = vi.fn(async () => true);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection:
+          sequence === 10 ? { command: 'clear', end_sample: 3200 } : null,
+      }),
+      clearConversation: cleared,
+    });
+    await f.controller.withCaptureReleased(async () => true);
+    f.feed(true, 5);
+    f.feed(false, 6);
+    await settle();
+    expect(cleared).not.toHaveBeenCalled();
+    return { ...f, cleared };
+  }
+  it('defers a standalone acoustic control until the action boundary', async () => {
+    const f = await provisionalControl();
+    f.feed(false, 19);
+    await settle();
+    expect(f.cleared).toHaveBeenCalledOnce();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('cancels a command prefix when speech continues after a thinking pause', async () => {
+    const f = await provisionalControl();
+    f.feed(false, 5);
+    f.feed(true, 10);
+    f.feed(false, 40);
+    await settle();
+    expect(f.cleared).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  it.each(['gap', 'malformed'] as const)(
+    'fails closed on %s at the exact control boundary',
+    async (kind) => {
+      const f = await provisionalControl();
+      f.feed(false, 18);
+      await settle();
+      f.controller.accept({
+        type: 'chunk',
+        chunk: {
+          sampleRate: 16000,
+          sequence: kind === 'gap' ? 30 : 29,
+          samples: new Int16Array(kind === 'malformed' ? 641 : 640),
+        },
+      });
+      await settle();
+      expect(f.cleared).not.toHaveBeenCalled();
+      expect(f.view().error).toBe(true);
+      f.controller.dispose();
+    },
+  );
+  it('fences a provisional control when public Clear completes between PCM events', async () => {
+    const f = await provisionalControl();
+    await f.controller.resetConversation();
+    expect(f.cleared).toHaveBeenCalledOnce();
+    f.feed(false, 30);
+    await settle();
+    expect(f.cleared).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  it('keeps warm recognizers through a capture continuity reset and reaps them on explicit stop', async () => {
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: { command: 'ivy', end_sample: 640 },
+      }),
+    });
+    f.feed(true, 1);
+    await settle();
+    f.controller.accept({ type: 'reset' });
+    await settle();
+    expect(f.ports.stop).not.toHaveBeenCalled();
+    f.controller.stopVoice();
+    await settle();
+    expect(f.ports.stop).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+  const settle = async () => {
+    for (let i = 0; i < 160; i++) await Promise.resolve();
+  };
+  it('does not transcribe passive speech and retains an immediate request while wake inference is pending', async () => {
+    const wake = deferred<KeywordReply>();
+    const f = fixture({ keywords: () => wake.promise });
+    f.feed(true, 8);
+    f.feed(false, 40);
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    wake.resolve({
+      sequence: 0,
+      detection: { command: 'ivy', end_sample: 640 },
+    });
+    await settle();
+    expect(f.ports.transcribe).toHaveBeenCalledOnce();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'A spoken request',
+      id,
+    );
+    f.controller.dispose();
+  });
+  it.each([
+    'done',
+    'clear',
+    'prompt',
+    'new session',
+    'reload mcp',
+  ] as KeywordCommand[])(
+    'routes acoustic %s through the existing command semantics without STT',
+    async (control) => {
+      let command: KeywordCommand | null = 'ivy';
+      const cleared = vi.fn(async () => true),
+        reset = vi.fn(async () => true),
+        reload = vi.fn(async () => true);
+      const f = fixture({
+        keywords: async (_pcm, _stream, sequence) => ({
+          sequence,
+          detection: command ? { command, end_sample: 640 } : null,
+        }),
+        clearConversation: cleared,
+        newSession: reset,
+        reloadMcp: reload,
+      });
+      f.feed(true, 1);
+      await settle();
+      command = control;
+      f.feed(true, 1);
+      f.feed(false, 25);
+      await settle();
+      expect(f.ports.transcribe).not.toHaveBeenCalled();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      if (control === 'clear' || control === 'done')
+        expect(cleared).toHaveBeenCalledOnce();
+      if (control === 'new session') expect(reset).toHaveBeenCalledOnce();
+      if (control === 'reload mcp') expect(reload).toHaveBeenCalledOnce();
+      if (control === 'prompt')
+        expect(f.composition()).toMatchObject({
+          model: 'sol',
+          status: 'composing',
+        });
+      f.controller.dispose();
+    },
+  );
+  it('cancels composition without cleanup, transcription, or submission and requires a fresh wake', async () => {
+    const refine = vi.fn(async (raw: string) => raw);
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: { command: 'prompt cancel', end_sample: 640 },
+      }),
+      refinePrompt: refine,
+    });
+    f.controller.setDraft('Keep this only until cancelled');
+    f.feed(true, 1);
+    f.feed(false, 25);
+    await settle();
+    expect(f.composition()).toMatchObject({
+      raw: '',
+      refined: null,
+      status: 'idle',
+    });
+    expect(f.view().passive).toBe(true);
+    expect(refine).not.toHaveBeenCalled();
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('retains the awake state and draft when acoustic clear is refused', async () => {
+    const f = fixture({
+      keywords: async (_pcm, _stream, sequence) => ({
+        sequence,
+        detection: { command: 'clear', end_sample: 640 },
+      }),
+      clearConversation: async () => false,
+      readSession: async () => 'sol',
+    });
+    f.controller.setDraft('Retain this draft');
+    f.feed(true, 1);
+    f.feed(false, 25);
+    await settle();
+    expect(f.view().passive).toBe(false);
+    expect(f.composition().raw).toBe('Retain this draft');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('fences a pending wake at an authoritative session reset', async () => {
+    const pending = deferred<KeywordReply>();
+    const f = fixture({ keywords: () => pending.promise });
+    f.feed(true, 1);
+    f.update({
+      assistant: { ...f.context().assistant, reset_id: 'new-session-fence' },
+    });
+    pending.resolve({
+      sequence: 0,
+      detection: { command: 'ivy', end_sample: 640 },
+    });
+    await settle();
+    expect(f.view().passive).toBe(true);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.ports.stop).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+});
 function deferred<T>() {
   let resolve!: (value: T) => void;
   return {
@@ -68,7 +484,15 @@ function fixture(extra: Partial<VoicePorts> = {}) {
       view = next;
     },
   };
-  const controller = new VoiceConversation({ ...ports, ...extra });
+  let composition!: VoiceComposition;
+  const controller = new VoiceConversation({
+    ...ports,
+    ...extra,
+    onComposition: (value) => {
+      composition = value;
+      extra.onComposition?.(value);
+    },
+  });
   controller.update(context);
   let sequence = 0;
   const update = (change: Partial<VoiceContext>) => {
@@ -121,6 +545,7 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     });
   return {
     controller,
+    composition: () => composition,
     ports,
     update,
     feed,

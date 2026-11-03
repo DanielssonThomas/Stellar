@@ -3,6 +3,7 @@
   "date": "2026-11-03",
   "sourceCommit": "600e319010ec1c163a737fb0278cc63439bf0c01",
   "developBase": "ccdefd9ac8990b5f53003123df25a805acdfffe7",
+  "scope": "Original workspace qualification at sourceCommit; subsequent recognition integration is recorded separately below.",
   "platform": "Windows, Tauri 2.12.5, installed WebView2; debug native smoke with production Angular assets",
   "verification": {
     "frontend": {
@@ -77,6 +78,24 @@
     "No additional inference was requested for state refresh or benchmarks. Tool descriptions supply durable Stellar guidance because the installed Hermes does not promote MCP initialize instructions to model context.",
     "Existing cached ACP sessions require explicit idle Reload MCP once to discover the expanded catalogue; no automatic conversation reset.",
     "Arbitrary website compatibility, long-duration memory/VRAM behavior and physical voice performance remain unqualified.",
-    "Source implementation is isolated from unfinished recognition PR 256 and music PR 262. No merge is authorized."
-  ]
+    "Original qualification preceded merged recognition PR 256. Its integration is recorded below; unfinished music PR 262 remains separate. Qualification evidence does not authorize merge."
+  ],
+  "recognitionIntegration": {
+    "developCommit": "8918f518f36c7464048f50ad3eccf6023bcca6f7",
+    "reason": "PR 256 merged while workspace CI was running, producing conflicts in Cargo.lock, Cargo.toml and main.rs.",
+    "resolution": "Retain both dependency sets and media/recognition-smoke modules. Voice lifecycle matches merged develop; keyword and workspace IPC remain restricted to the main WebView. Generated bindings pass deterministic drift checks without manual edits.",
+    "frontendVitestPassed": 717,
+    "localPlaywright": "51 of 52 passed initially; one initial page.goto failed with Chromium ERR_NO_BUFFER_SPACE before an application assertion. Its isolated rerun passed 1 of 1 without source changes. Final published-head CI must independently pass the complete suite.",
+    "productionBuild": "Passed; initial bundle 552.73 kB exceeds the 500 kB warning threshold, within the error budget.",
+    "rustFormattingClippyContractsSize": "Passed using the same serial native commands as the original qualification.",
+    "desktopRustPassed": 122,
+    "desktopRustIgnored": 5,
+    "sizeTestsPassed": 7,
+    "dependencyFreePythonPassed": 58,
+    "nativeJavascriptPassed": 26,
+    "liveNativeChecksPassed": 20,
+    "liveNativeCreationThroughReadyMs": 379.3,
+    "liveNativeBoundsRoundTripsMs": [5.6, 4.7, 5.1, 5.2],
+    "review": "Independent staged integration review found no actionable defects; final exact-head approval and CI recorded in PR 263."
+  }
 }

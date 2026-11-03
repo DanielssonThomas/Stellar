@@ -30,6 +30,8 @@ type ComposerFixture = {
   submissions: { text: string; dissolved: boolean }[];
   hold: boolean;
   transcript?: string;
+  acousticWake?: boolean;
+  unexpected?: string;
   recognitions: string[];
   cleanups: string[];
   sessions: string[];
@@ -124,7 +126,23 @@ async function install(page: Page, hold = true, autoStart = false) {
                 fixture.cleanups.push(String(request['raw']));
                 return { version: 1, text: fixture.cleanupText ?? refined };
               }
-              if (command === 'speech_collect') {
+              if (command === 'speech_keywords') {
+                const wake =
+                  fixture.acousticWake &&
+                  request['mode'] === 'passive' &&
+                  (request['pcm'] as number[]).some(
+                    (value) => Math.abs(value) > 500,
+                  );
+                if (wake) fixture.acousticWake = false;
+                return {
+                  sequence: request['sequence'],
+                  detection: wake ? { command: 'ivy', end_sample: 0 } : null,
+                };
+              }
+              if (
+                command === 'speech_collect' ||
+                command === 'speech_transcribe'
+              ) {
                 if (fixture.transcript !== undefined) {
                   fixture.recognitions.push(fixture.transcript);
                   return {
@@ -138,9 +156,9 @@ async function install(page: Page, hold = true, autoStart = false) {
                 const words = pcm.filter((sample) => sample === 2000).length;
                 const text = marker
                   ? 'send prompt'
-                  : words < 22000
+                  : words < 40000
                     ? 'the'
-                    : words < 30000
+                    : words < 45000
                       ? 'the next'
                       : 'the next Stellar sprint.';
                 return {
@@ -169,6 +187,7 @@ async function install(page: Page, hold = true, autoStart = false) {
                 });
                 return snapshot('completed', String(request['input_id']));
               }
+              fixture.unexpected = command;
               throw Error('Unexpected composer fixture command: ' + command);
             },
           },
@@ -253,7 +272,10 @@ async function wakeCapture(page: Page) {
   await page
     .getByRole('button', { name: 'Experience menu', exact: true })
     .click();
-  const say = async (text: string) => {
+  const say = async (
+    text: string,
+    options: { wake?: boolean; recognize?: boolean } = {},
+  ) => {
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -269,16 +291,30 @@ async function wakeCapture(page: Page) {
         }),
       )
       .toBe('capturing');
-    const before = await page.evaluate((text) => {
-      const fixture = (
-        window as unknown as { __composerFixture: ComposerFixture }
-      ).__composerFixture;
-      fixture.transcript = text;
-      return fixture.recognitions.length;
-    }, text);
+    const before = await page.evaluate(
+      ({ text, wake }) => {
+        const fixture = (
+          window as unknown as { __composerFixture: ComposerFixture }
+        ).__composerFixture;
+        fixture.transcript = text;
+        fixture.acousticWake = wake;
+        return fixture.recognitions.length;
+      },
+      { text, wake: options.wake },
+    );
     await feed(false, 20);
     await feed(true, 10);
     await feed(false, 60);
+    if (options.recognize === false) {
+      expect(
+        await page.evaluate(
+          () =>
+            (window as unknown as { __composerFixture: ComposerFixture })
+              .__composerFixture.recognitions.length,
+        ),
+      ).toBe(before);
+      return;
+    }
     await expect
       .poll(() =>
         page.evaluate(
@@ -330,6 +366,7 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
       ).ng.getComponent(root);
       return {
         submissions: fixture.submissions,
+        unexpected: fixture.unexpected,
         cleanups: fixture.cleanups,
         sessions: fixture.sessions,
         composition: app.voice.composition(),
@@ -342,31 +379,25 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
     'I mean, explain the next task',
     'prompt',
   ])
-    await say(ambient);
+    await say(ambient, { recognize: false });
   expect((await observed()).sessions).toEqual([]);
   expect((await observed()).submissions).toEqual([]);
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
   const transcript = page.getByRole('region', {
-    name: 'Whisper input',
+    name: 'Voice input',
     exact: true,
   });
-  await expect(transcript.getByRole('status')).toHaveText('prompt');
-  const bounds = await transcript.evaluate((element) => {
-    const { x, y, width, height } = element.getBoundingClientRect();
-    return { x, y, width, height, viewportHeight: window.innerHeight };
-  });
-  expect(bounds.x).toBeGreaterThanOrEqual(12);
-  expect(bounds.x).toBeLessThan(32);
-  expect(bounds.width).toBeLessThanOrEqual(340);
-  expect(bounds.y + bounds.height).toBeCloseTo(bounds.viewportHeight - 16, 0);
+  await expect(transcript).toHaveCount(0);
   await page.evaluate(() => {
-    (
+    const fixture = (
       window as unknown as { __composerFixture: ComposerFixture }
-    ).__composerFixture.transcript = 'I.V.';
+    ).__composerFixture;
+    fixture.acousticWake = true;
+    fixture.transcript = '';
   });
   await say.feed(true, 18);
   await expect(page.locator('.emblem')).not.toHaveClass(/idle-motion/);
-  await expect(transcript.getByRole('status')).toHaveText('I.V.');
+  await expect(transcript).toHaveCount(0);
   expect((await observed()).submissions).toEqual([]);
   await page.evaluate(() => {
     (
@@ -387,11 +418,19 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   });
   await say.feed(true, 20);
   await say.feed(false, 60);
-  await expect
-    .poll(async () => (await observed()).submissions)
-    .toEqual([{ text: 'tell me the plan', dissolved: false }]);
+  await expect.poll(observed).toMatchObject({
+    submissions: [{ text: 'tell me the plan', dissolved: false }],
+  });
   expect((await observed()).sessions).toEqual(['terra']);
   await expect(transcript.getByRole('status')).toHaveText('tell me the plan');
+  const bounds = await transcript.evaluate((element) => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height, viewportHeight: window.innerHeight };
+  });
+  expect(bounds.x).toBeGreaterThanOrEqual(12);
+  expect(bounds.x).toBeLessThan(32);
+  expect(bounds.width).toBeLessThanOrEqual(340);
+  expect(bounds.y + bounds.height).toBeCloseTo(bounds.viewportHeight - 16, 0);
   expect(
     await page.evaluate(
       () =>
@@ -405,15 +444,15 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   });
   await say("Alright, I'm done!");
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
-  await say('another ambient request');
+  await say('another ambient request', { recognize: false });
   expect((await observed()).submissions).toHaveLength(1);
-  await say('I.V., prompt');
+  await say('prompt', { wake: true });
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
   expect((await observed()).composition.status).toBe('composing');
   await expect(transcript).toHaveCount(0);
-  await say('Keep this draft private. Prompt cancel.');
+  await say('Prompt cancel.');
   await expect(page.getByRole('region', { name: 'Spoken prompt' })).toHaveCount(
     0,
   );
@@ -425,11 +464,11 @@ test('wake-only foreground flow routes Terra, composes Sol, cancels without clea
   expect((await observed()).cleanups).toEqual([]);
   await expect(transcript).toHaveCount(0);
   expect((await observed()).submissions).toHaveLength(1);
-  await say('prompt');
-  await say('unrelated background speech');
+  await say('prompt', { recognize: false });
+  await say('unrelated background speech', { recognize: false });
   expect((await observed()).composition.status).toBe('idle');
   expect((await observed()).submissions).toHaveLength(1);
-  await say('Ivy, prompt new draft');
+  await say('prompt new draft', { wake: true });
   await expect(
     page.getByRole('region', { name: 'Spoken prompt' }),
   ).toBeVisible();
@@ -629,9 +668,9 @@ test('synthetic voice preview, stable sentence and cleanup reach one finalized s
   await feed(false, 18);
   await draft(page, 'Um, Set up', false);
   await expect(page.locator('.composer')).toHaveClass(/opened/);
-  await feed(true, 30);
+  await feed(true, 55);
   await expect(page.locator('.prompt-text')).toContainText('the');
-  await feed(true, 25);
+  await feed(true, 55);
   await expect(page.locator('.prompt-text')).toContainText('the next');
   await feed(false, 36);
   await expect(page.locator('.text-stack')).toHaveAttribute('aria-live', 'off');

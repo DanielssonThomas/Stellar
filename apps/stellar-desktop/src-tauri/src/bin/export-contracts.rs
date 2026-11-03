@@ -101,6 +101,11 @@ fn main() {
         SpeechTranscript::decl(&config),
         SpeechSpeakRequest::decl(&config),
         SpeechSnapshot::decl(&config),
+        KeywordMode::decl(&config),
+        KeywordCommand::decl(&config),
+        KeywordRequest::decl(&config),
+        KeywordDetection::decl(&config),
+        KeywordReply::decl(&config),
         SpeechTiming::decl(&config),
         SpeechTimingStage::decl(&config),
     ] {
@@ -172,6 +177,7 @@ fn main() {
         "speechStopCommand",
         "speechSnapshotCommand",
         "speechCollectCommand",
+        "speechKeywordsCommand",
     ]
     .iter()
     .zip(speech_names::SPEECH_COMMANDS)
@@ -186,6 +192,6 @@ fn main() {
         serde_json::to_string(SPEECH_EVENT).unwrap()
     );
     println!(
-        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest; [speechCollectCommand]: SpeechTranscribeRequest }};"
+        "export type SpeechCommands = {{ [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest; [speechCollectCommand]: SpeechTranscribeRequest; [speechKeywordsCommand]: KeywordRequest }};"
     );
 }

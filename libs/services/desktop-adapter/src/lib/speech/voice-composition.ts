@@ -1,6 +1,7 @@
 export type VoiceModel = 'terra' | 'sol';
 export type VoiceCommand =
   | 'prompt'
+  | 'prompt cancel'
   | 'end prompt'
   | 'send prompt'
   | 'send'
@@ -35,6 +36,7 @@ export function voiceCommand(text: string): VoiceCommand | null {
     .trim();
   if (
     normalized === 'prompt' ||
+    normalized === 'prompt cancel' ||
     normalized === 'end prompt' ||
     normalized === 'send prompt' ||
     normalized === 'send' ||

@@ -10,6 +10,7 @@ fn operation(voice: &WarmVoice) -> Operation {
         child: voice.child.clone(),
         cancelled: AtomicBool::new(false),
         scratch: None,
+        recognition_epoch: 0,
     }
 }
 
