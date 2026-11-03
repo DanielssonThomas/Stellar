@@ -33,6 +33,7 @@ export class FastCommands {
     private readonly detected: (
       detection: KeywordDetection,
       tail: PcmChunk[],
+      sequence: number,
     ) => void,
     private readonly failed: () => void,
   ) {}
@@ -124,7 +125,7 @@ export class FastCommands {
                 })
               : [];
           this.reset();
-          this.detected(detection, tail);
+          this.detected(detection, tail, entry.chunk.sequence);
         } catch {
           if (generation === this.generation) {
             this.reset();

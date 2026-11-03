@@ -1,5 +1,6 @@
 import {
   createUtteranceAssembler,
+  validPcmChunk,
   type AudioActivityState,
   type PcmEvent,
   type PcmChunk,
@@ -24,6 +25,7 @@ import { DraftRecognition } from './draft-recognition';
 import { FastCommands, type KeywordPort } from './fast-commands';
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
+import { SpeechActivity } from './speech-activity';
 
 const preparing = (status: VoiceComposition['status']) =>
   ['refining', 'finalizing', 'submitting'].includes(status);
@@ -73,7 +75,11 @@ export interface VoicePorts {
 export class VoiceConversation {
   private readonly assembler;
   private readonly fastCommands?: FastCommands;
-  private wakeTail = false;
+  private readonly speechActivity?: SpeechActivity;
+  private pendingControl?: KeywordDetection;
+  private suppressControls = false;
+  private lastVoicedSequence: number | null = null;
+  private pcmSequence: number | null = null;
   private speechResourcesUsed = false;
   private readonly latency = new VoiceLatency();
   private context?: VoiceContext;
@@ -124,12 +130,24 @@ export class VoiceConversation {
       silenceMs: ports.silenceMs ?? (ports.keywords ? 800 : 1400),
     });
     if (ports.keywords) {
+      this.speechActivity = new SpeechActivity();
       this.awaitingWake = true;
       this.fastCommands = new FastCommands(
         ports.keywords,
         ports.id,
-        (detection, tail) => {
-          void this.acceptFastCommand(detection, tail);
+        (detection, tail, sequence) => {
+          if (detection.command === 'ivy')
+            void this.acceptFastCommand(detection, tail);
+          else if (
+            !this.suppressControls &&
+            !this.pendingControl &&
+            (this.lastVoicedSequence === null ||
+              this.lastVoicedSequence <= sequence)
+          ) {
+            if ((this.speechActivity?.quietMs() ?? 0) >= 1000)
+              void this.acceptFastCommand(detection, []);
+            else this.pendingControl = detection;
+          }
         },
         () =>
           this.fail(
@@ -223,7 +241,12 @@ export class VoiceConversation {
   accept(event: PcmEvent, audio?: AudioActivityState) {
     if (this.disposed) return;
     if (event.type === 'turn-pause') {
+      this.pcmSequence = null;
+      this.lastVoicedSequence = null;
+      this.pendingControl = undefined;
+      this.suppressControls = false;
       this.assembler.reset();
+      this.resetSpeechActivity();
       this.fastCommands?.reset();
       return;
     }
@@ -243,6 +266,15 @@ export class VoiceConversation {
     }
     if (event.type === 'chunk') {
       try {
+        if (
+          !validPcmChunk(event.chunk) ||
+          (this.pcmSequence !== null &&
+            event.chunk.sequence !== this.pcmSequence + 1)
+        ) {
+          this.fail('Audio was interrupted. Retry voice before continuing.');
+          return;
+        }
+        this.pcmSequence = event.chunk.sequence;
         const context =
           this.context && audio ? { ...this.context, audio } : this.context;
         if (this.composition.status === 'composing' && this.draftRecognition) {
@@ -258,7 +290,9 @@ export class VoiceConversation {
           this.draftSequence = event.chunk.sequence;
         } else this.draftSequence = null;
         if (this.awaitingQuiet) {
+          this.pendingControl = undefined;
           this.assembler.reset();
+          this.resetSpeechActivity();
           if (
             !this.stopping &&
             !this.unconfirmedStop &&
@@ -271,11 +305,36 @@ export class VoiceConversation {
           return;
         }
         if (!context || !this.canCollect(context)) {
+          this.pendingControl = undefined;
           this.assembler.reset();
+          this.resetSpeechActivity();
           this.fastCommands?.reset();
           return;
         }
-        this.latency.activity(context.audio.activity.active);
+        const activity =
+          this.speechActivity?.push(
+            event.chunk.samples,
+            context.audio.activity,
+          ) ?? context.audio.activity;
+        if (this.speechActivity?.voiced())
+          this.lastVoicedSequence = event.chunk.sequence;
+        if (this.pendingControl && this.speechActivity?.voiced()) {
+          this.pendingControl = undefined;
+          this.suppressControls = true;
+        }
+        // A spoken prefix followed by a thinking pause is still dictation.
+        // The acoustic event is provisional until this separate action boundary.
+        if ((this.speechActivity?.quietMs() ?? 0) >= 1000) {
+          this.suppressControls = false;
+          if (this.pendingControl) {
+            const command = this.pendingControl;
+            this.pendingControl = undefined;
+            this.fastCommands?.reset();
+            void this.acceptFastCommand(command, []);
+            return;
+          }
+        }
+        this.latency.activity(activity.active);
         if (this.fastCommands && !context.audio.activity.calibrating) {
           this.speechResourcesUsed = true;
           this.fastCommands.push(
@@ -292,13 +351,6 @@ export class VoiceConversation {
           );
         }
         if (this.fastCommands && this.awaitingWake) return;
-        const activity = this.wakeTail
-          ? {
-              ...context.audio.activity,
-              active: this.voiced(event.chunk.samples, context),
-              starting: false,
-            }
-          : context.audio.activity;
         const pcm = this.assembler.push(event.chunk, {
           ...activity,
           draft:
@@ -340,13 +392,6 @@ export class VoiceConversation {
     }
   }
 
-  private voiced(samples: Int16Array, context: VoiceContext): boolean {
-    const threshold = Math.max(0.008, context.audio.activity.noiseFloor * 1.8);
-    let energy = 0;
-    for (const sample of samples) energy += (sample / 32768) ** 2;
-    return Math.sqrt(energy / samples.length) >= threshold;
-  }
-
   private async acceptFastCommand(
     detection: KeywordDetection,
     tail: PcmChunk[],
@@ -357,15 +402,15 @@ export class VoiceConversation {
       if (detection.command === 'ivy') {
         if (!this.awaitingWake) return;
         this.awaitingWake = false;
-        this.wakeTail = true;
+        this.resetSpeechActivity();
         this.controlNotice = '';
         this.assembler.reset();
         let completed: Int16Array | null = null;
         for (const chunk of tail) {
-          const pcm = this.assembler.push(chunk, {
-            active: this.voiced(chunk.samples, context),
-            calibrating: false,
-          });
+          const activity =
+            this.speechActivity?.push(chunk.samples, context.audio.activity) ??
+            context.audio.activity;
+          const pcm = this.assembler.push(chunk, activity);
           if (pcm) {
             if (!completed) completed = pcm;
             else pcm.fill(0);
@@ -378,7 +423,7 @@ export class VoiceConversation {
       if (this.awaitingWake) return;
       const generation = ++this.generation;
       this.assembler.reset();
-      this.wakeTail = false;
+      this.resetSpeechActivity();
       this.previewSamples = 0;
       const stopped = this.draftRecognition?.reset();
       this.phase = 'transcribing';
@@ -501,6 +546,8 @@ export class VoiceConversation {
   }
 
   async resetConversation(): Promise<boolean> {
+    this.fastCommands?.reset();
+    this.resetSpeechActivity();
     if (this.disposed || this.sessionPending || this.phase !== null)
       return false;
     if (this.typedLease) {
@@ -560,6 +607,8 @@ export class VoiceConversation {
       )
     )
       return false;
+    this.fastCommands?.reset();
+    this.resetSpeechActivity();
     const controller = new AbortController();
     this.typedLease = controller;
     const generation = this.generation;
@@ -622,6 +671,7 @@ export class VoiceConversation {
       command === 'send' ||
       command === 'clear' ||
       command === 'done' ||
+      command === 'prompt cancel' ||
       command === 'new session' ||
       command === 'reload mcp'
     ) {
@@ -950,7 +1000,7 @@ export class VoiceConversation {
   private finishNewSession() {
     this.fastCommands?.reset();
     this.assembler.reset();
-    this.wakeTail = false;
+    this.resetSpeechActivity();
     this.newSessionRequested = false;
     this.cancelDraftCleanup();
     this.refinement?.abort();
@@ -1188,7 +1238,7 @@ export class VoiceConversation {
 
   private async transcribe(pcm: Int16Array) {
     this.speechResourcesUsed = true;
-    this.wakeTail = false;
+    this.resetSpeechActivity();
     this.fastCommands?.reset();
     this.latency.finish('interrupted');
     this.latency.begin();
@@ -1309,9 +1359,20 @@ export class VoiceConversation {
       });
   }
 
+  private resetSpeechActivity() {
+    this.pendingControl = undefined;
+    this.suppressControls = false;
+    this.lastVoicedSequence = null;
+    this.speechActivity?.reset();
+  }
+
   private invalidate(stopWarmWorkers = true) {
+    this.pcmSequence = null;
+    this.lastVoicedSequence = null;
+    this.pendingControl = undefined;
+    this.suppressControls = false;
     this.fastCommands?.reset();
-    this.wakeTail = false;
+    this.resetSpeechActivity();
     this.latency.finish('interrupted');
     this.typedLease?.abort();
     if (this.phase === 'speaking') this.awaitingQuiet = true;
