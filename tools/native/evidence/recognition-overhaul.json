@@ -47,7 +47,14 @@
       "parakeetExtracted": 630.8,
       "archivesNotNeededAtRuntime": 508.3
     },
-    "packaging": "Explicit SHA-checked archives and hash-pinned wheels; application never installs/downloads. Current desktop installer remains disabled; weights are outside tracked source."
+    "packaging": "Explicit SHA-checked archives and hash-pinned wheels; application never installs/downloads. Current desktop installer remains disabled; weights are outside tracked source.",
+    "searchWidthQualification": {
+      "selectedActivePaths": 8,
+      "selectedMissesPer54Positives": 9,
+      "sixteenActivePathsMissesPer54Positives": 12,
+      "negativeFalseActivationsPer90Trials": 0,
+      "scope": "Same fixed synthetic corpus; no live accuracy claim"
+    }
   },
   "method": {
     "phrasesPerVoice": 24,
@@ -2120,7 +2127,8 @@
     "installedEngines": "cargo test --locked -p stellar-desktop --bin stellar-desktop speech::warm_worker::tests::installed_offline_engines_reuse_processes_and_recover_after_stop -- --ignored --exact",
     "nativeWebViewSpeechIpc": "Not run: automatic approval review rejected the remote-debug native launch with reason blocked by policy",
     "standardNativeSmoke": "Passed; embedded WebView shell and versioned IPC only, not new speech IPC/device qualification",
-    "earlierFailures": "TTS startup fixtures exceeded 3-second deadlines during concurrent frontend load; isolated and complete quiet native reruns passed. An earlier workspace cancellation timing test also passed on rerun."
+    "earlierFailures": "TTS startup fixtures exceeded 3-second deadlines during concurrent frontend load; isolated and complete quiet native reruns passed. An earlier workspace cancellation timing test also passed on rerun. Initial PR quality CI caught an omitted keyword permission in the native JavaScript expected allowlist; the assertion was updated and the complete 22-test suite passed locally.",
+    "nativeJavaScript": "node --test tools/native/*.spec.mjs: 22 passed, including explicit keyword command capability allowlist"
   },
   "unqualified": [
     "Actual user pronunciation and physical microphone/device lifecycle",
