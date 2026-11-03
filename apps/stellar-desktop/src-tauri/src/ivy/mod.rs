@@ -33,6 +33,9 @@ use contracts::{
 };
 use host::Action;
 pub use host::IvyHost;
+
+#[cfg(test)]
+mod text_timing_tests;
 #[cfg(windows)]
 pub use workspace_capture::capture as capture_workspace_window;
 

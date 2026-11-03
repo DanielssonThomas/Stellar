@@ -620,6 +620,160 @@ describe('wake-word session lifecycle', () => {
 });
 
 describe('voice conversation ownership', () => {
+  it.each([
+    { label: 'empty reply', items: [], muted: false },
+    {
+      label: 'suppressed structured reply',
+      items: [{ kind: 'text' as const, text: '{"stellar_presentation":' }],
+      muted: false,
+    },
+    {
+      label: 'oversized reply',
+      items: [{ kind: 'text' as const, text: 'x'.repeat(4001) }],
+      muted: false,
+    },
+    {
+      label: 'muted reply',
+      items: [{ kind: 'text' as const, text: 'A completed reply' }],
+      muted: true,
+    },
+  ])(
+    'finishes latency immediately for a completed $label without playback',
+    async ({ items, muted }) => {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture();
+      if (muted) f.controller.setMuted(true);
+      f.utterance();
+      await flush();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(0);
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items,
+        },
+      });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe('completed');
+      expect(entries[0].detail.stages_ms.model_completed).toBeDefined();
+      expect(
+        entries[0].detail.durations_ms.tts_to_first_audio_observed,
+      ).toBeNull();
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      performance.clearMeasures('stellar.voice.latency');
+    },
+  );
+
+  it.each(['failed', 'cancelled', 'uncertain'] as const)(
+    'finishes latency immediately for a %s response',
+    async (turn) => {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture();
+      f.utterance();
+      await flush();
+      f.update({ assistant: { ...f.context().assistant, turn_id: id, turn } });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe('interrupted');
+      expect(entries[0].detail.durations_ms.validated_model_text).toBeNull();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      performance.clearMeasures('stellar.voice.latency');
+    },
+  );
+
+  it('finishes empty recognition and rejected admission latency without waiting for another turn', async () => {
+    for (const empty of [true, false]) {
+      performance.clearMeasures('stellar.voice.latency');
+      const f = fixture({ submit: async () => false });
+      if (empty)
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: '',
+        });
+      f.utterance();
+      await flush();
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].detail.outcome).toBe(
+        empty ? 'completed' : 'interrupted',
+      );
+      expect(entries[0].detail.durations_ms.validated_model_text).toBeNull();
+      f.controller.dispose();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+    }
+    performance.clearMeasures('stellar.voice.latency');
+  });
+
+  it('does not charge idle time or the next request to a text-only reply latency', async () => {
+    performance.clearMeasures('stellar.voice.latency');
+    let now = 10;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      now = 100;
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items: [{ kind: 'text', text: 'x'.repeat(4001) }],
+        },
+      });
+      const original = performance.getEntriesByName(
+        'stellar.voice.latency',
+      )[0] as PerformanceMeasure;
+      expect(original.duration).toBe(90);
+      expect(original.detail.outcome).toBe('completed');
+      now = 60100;
+      f.utterance();
+      await flush();
+      expect(
+        performance.getEntriesByName('stellar.voice.latency'),
+      ).toHaveLength(1);
+      expect(original.duration).toBe(90);
+      now = 60200;
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'completed',
+          items: [],
+        },
+      });
+      const entries = performance.getEntriesByName(
+        'stellar.voice.latency',
+      ) as PerformanceMeasure[];
+      expect(entries).toHaveLength(2);
+      expect(entries[1].duration).toBe(100);
+    } finally {
+      f.controller.dispose();
+      clock.mockRestore();
+      performance.clearMeasures('stellar.voice.latency');
+    }
+  });
+
   it('uses the current PCM-time onset snapshot even when the effect context is stale', async () => {
     let composition!: VoiceComposition;
     const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
@@ -868,6 +1022,52 @@ describe('voice conversation ownership', () => {
     expect(refinePrompt).toHaveBeenCalledTimes(1);
     expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('clean draft', id);
   });
+  it('admits a leading wake in the first capped chunk even when its preview missed it', async () => {
+    const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: pcm.length >= 320000 ? 'Ivy, explain the plan' : '',
+    }));
+    const f = fixture({ collect });
+    f.feed(true, 500);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(f.view().foregroundActive).toBe(true);
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'explain the plan',
+      id,
+    );
+  });
+
+  it('does not scan continuing passive speech for a new wake after the initial cap', async () => {
+    let finals = 0;
+    const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: pcm.length >= 320000 && ++finals > 1 ? 'Ivy, explain the plan' : '',
+    }));
+    const f = fixture({ collect });
+    f.feed(true, 500);
+    for (let i = 0; i < 8; i++) await flush();
+    f.feed(true, 500);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(finals).toBe(1);
+    expect(f.view().foregroundActive).toBe(false);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.feed(false, 35);
+    for (let i = 0; i < 4; i++) await flush();
+    collect.mockImplementation(async (_pcm, utterance_id) => ({
+      version: 1,
+      utterance_id,
+      text: 'Ivy, explain the plan',
+    }));
+    f.utterance();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'explain the plan',
+      id,
+    );
+  });
+
   it('treats capped continuous speech as content until a real quiet boundary', async () => {
     let composition!: VoiceComposition;
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

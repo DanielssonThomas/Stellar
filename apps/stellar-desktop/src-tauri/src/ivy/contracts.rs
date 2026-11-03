@@ -123,6 +123,9 @@ pub struct IvySnapshot {
     pub reset_id: Option<String>,
     pub items: Vec<super::presentation::IvyPresentation>,
     pub error: Option<IvyErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub first_text_observed: Option<bool>,
 }
 
 impl Default for IvySnapshot {
@@ -141,6 +144,7 @@ impl Default for IvySnapshot {
             reset_id: None,
             items: vec![],
             error: None,
+            first_text_observed: None,
         }
     }
 }

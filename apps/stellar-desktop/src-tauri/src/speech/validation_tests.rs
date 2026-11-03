@@ -58,6 +58,7 @@ fn speech_text_limit_counts_utf8_bytes_and_identity_is_canonical() {
         operation_id: Some(ID.into()),
         state: SpeechState::Speaking,
         error: None,
+        timings: None,
     };
     let encoded = serde_json::to_value(snapshot).unwrap();
     assert_eq!(encoded["revision"], json!("18446744073709551615"));

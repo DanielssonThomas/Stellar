@@ -57,6 +57,22 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_first_text_availability_is_bounded_content_free_and_not_narratable(self):
+        conn = Connection()
+        for seq in range(1, 5):
+            await conn.events.put({'params': {'type': 'message.delta', 'session_id': 'session',
+                'admission_id': 'admission', 'execution_generation': 1, 'replay_epoch': 'epoch', 'seq': seq,
+                'payload': {'text': '{"stellar_presentation":"private partial"', 'reasoning': 'private'}}})
+        await conn.events.put(RuntimeError('stop fixture'))
+        stdout = Pipe()
+        with patch.object(sys, 'stdout', stdout), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        frames = [json.loads(line) for line in stdout.buffer.getvalue().splitlines()]
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0]['data']['params']['type'], 'stellar.first_text')
+        self.assertEqual(frames[0]['data']['params']['payload'], {'available': True})
+        self.assertNotIn('private', stdout.buffer.getvalue().decode())
+
     async def test_health_is_silent_and_projects_only_verified_values(self):
         conn = Connection()
         stdin = Pipe(b'{"id":1,"method":"ping","params":{}}\n{"id":2,"method":"runtime.describe","params":{}}\n')
@@ -181,6 +197,25 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ActivityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tool_batches_keep_order_around_content_free_text_availability(self):
+        conn = Connection()
+        await conn.events.put({'params': self.event(1, name='mcp_example')})
+        for seq in (2, 4):
+            await conn.events.put({'params': {'type': 'message.delta', 'session_id': 's', 'admission_id': 'a',
+                'execution_generation': 3, 'replay_epoch': 'e', 'seq': seq, 'payload': {'text': 'SECRET partial'}}})
+            if seq == 2:
+                await conn.events.put({'params': self.event(3, kind='tool.complete', name='mcp_example', result={'success': True})})
+        await conn.events.put({'params': {'type': 'message.complete', 'session_id': 's', 'admission_id': 'a',
+            'execution_generation': 3, 'replay_epoch': 'e', 'seq': 5, 'payload': {'outcome': 'completed', 'text': 'final'}}})
+        await conn.events.put(RuntimeError('interrupted transport fixture'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        params = [json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual([value['type'] for value in params], ['stellar.activity', 'stellar.first_text', 'stellar.activity', 'message.complete'])
+        self.assertEqual([value['seq'] for value in params], [1, 2, 3, 5])
+        self.assertNotIn('SECRET', output.buffer.getvalue().decode())
+
     def event(self, seq, kind='tool.start', name='terminal', args=None, result=None):
         return {'type': kind, 'session_id': 's', 'admission_id': 'a', 'execution_generation': 3,
                 'replay_epoch': 'e', 'seq': seq, 'payload': {'tool_id': str(seq), 'name': name,

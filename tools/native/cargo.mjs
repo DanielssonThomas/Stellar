@@ -197,6 +197,7 @@ if (action === 'smoke') {
       'workspace_protocol_test.py',
       'workspace_credentials_test.py',
       'speech_worker_test.py',
+      'speech_pipeline_test.py',
       'cleanup_worker_test.py',
     ]) {
       const bridge = spawnSync('python', ['-I', `tools/native/${script}`], {

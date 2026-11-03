@@ -19,6 +19,29 @@ const input = {
 };
 
 describe('speech wire boundary', () => {
+  it('decodes bounded content-free timings and rejects unknown, duplicate or unbounded records', () => {
+    const snapshot = {
+      version: 1,
+      revision: '1',
+      epoch: '0',
+      operation_id: null,
+      state: 'speaking',
+      error: null,
+    };
+    const timing = { stage: 'first_audio', elapsed_ms: 240 };
+    expect(
+      decodeSpeechSnapshot({ ...snapshot, timings: [timing] }).timings,
+    ).toEqual([timing]);
+    for (const timings of [
+      [timing, timing],
+      [{ ...timing, elapsed_ms: 120001 }],
+      [{ ...timing, text: 'private' }],
+      [{ ...timing, stage: 'unknown' }],
+      null,
+    ]) {
+      expect(() => decodeSpeechSnapshot({ ...snapshot, timings })).toThrow();
+    }
+  });
   it('preserves exact signed PCM and copies the bounded caller buffer', () => {
     const decoded = decodeSpeechTranscribeRequest(input);
     expect(decoded).toEqual(input);

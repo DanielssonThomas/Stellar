@@ -20,6 +20,10 @@ pub fn stop(slot: &ChildSlot) -> Result<(), SpeechError> {
 }
 
 pub fn launch(mode: &str, slot: &ChildSlot, payload: Vec<u8>) -> Result<Frames, SpeechError> {
+    spawn(command(mode)?, slot, payload)
+}
+
+pub(super) fn command(mode: &str) -> Result<Command, SpeechError> {
     let python = if mode == "transcribe" {
         crate::ivy::runtime::python().map_err(|_| SpeechError::Unavailable)?
     } else {
@@ -44,14 +48,10 @@ pub fn launch(mode: &str, slot: &ChildSlot, payload: Vec<u8>) -> Result<Frames, 
             command.env_remove(key);
         }
     }
-    spawn(command, slot, payload)
+    Ok(command)
 }
 
-pub(super) fn spawn(
-    mut command: Command,
-    slot: &ChildSlot,
-    payload: Vec<u8>,
-) -> Result<Frames, SpeechError> {
+pub(super) fn configure(command: &mut Command) {
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -61,6 +61,14 @@ pub(super) fn spawn(
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
+}
+
+pub(super) fn spawn(
+    mut command: Command,
+    slot: &ChildSlot,
+    payload: Vec<u8>,
+) -> Result<Frames, SpeechError> {
+    configure(&mut command);
     let mut child = command.spawn().map_err(|_| SpeechError::Unavailable)?;
     let input = child.stdin.take();
     let output = child.stdout.take();
@@ -78,12 +86,23 @@ pub(super) fn spawn(
             let _ = writer.send(Err(SpeechError::Unavailable));
         }
     });
+    read_frames(output, send);
+    Ok(receive)
+}
+
+pub(super) fn read_frames(
+    output: impl Read + Send + 'static,
+    send: mpsc::SyncSender<Result<Value, SpeechError>>,
+) {
     std::thread::spawn(move || {
         let mut reader = BufReader::new(output);
         loop {
             let mut line = vec![];
             let result = match reader.by_ref().take(16_385).read_until(b'\n', &mut line) {
-                Ok(0) => break,
+                Ok(0) => {
+                    let _ = send.send(Err(SpeechError::Unavailable));
+                    break;
+                }
                 Ok(size) if size <= 16_384 && line.ends_with(b"\n") => {
                     serde_json::from_slice(&line).map_err(|_| SpeechError::Protocol)
                 }
@@ -95,7 +114,6 @@ pub(super) fn spawn(
             }
         }
     });
-    Ok(receive)
 }
 
 pub fn payload(value: Value) -> Result<Vec<u8>, SpeechError> {

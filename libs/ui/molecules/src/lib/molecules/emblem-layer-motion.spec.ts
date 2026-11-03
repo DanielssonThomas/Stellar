@@ -28,6 +28,46 @@ function setup(onSettled: () => void = () => undefined) {
 }
 
 describe('emblem layer motion', () => {
+  it('reads every rendered pose before writing any target and skips reads for static updates', () => {
+    const elements = [
+      document.createElement('div'),
+      document.createElement('div'),
+    ];
+    for (const element of elements)
+      element.animate = vi.fn(
+        () => ({ cancel: vi.fn() }) as unknown as Animation,
+      );
+    const snapshots: string[][] = [];
+    const getComputedStyle = vi.fn((element: Element) => {
+      snapshots.push(elements.map((item) => item.style.transform));
+      return {
+        transform: (element as HTMLElement).style.transform,
+      } as CSSStyleDeclaration;
+    });
+    const motion = createEmblemLayerMotion({ getComputedStyle });
+    motion.update(
+      elements.map((element) => ({ element, transform: 'translateX(0%)' })),
+      1000,
+    );
+    expect(getComputedStyle).not.toHaveBeenCalled();
+    motion.update(
+      elements.map((element) => ({ element, transform: 'translateX(50%)' })),
+      1000,
+    );
+    expect(snapshots).toEqual([
+      ['translateX(0%)', 'translateX(0%)'],
+      ['translateX(0%)', 'translateX(0%)'],
+    ]);
+    getComputedStyle.mockClear();
+    motion.update(
+      elements.map((element) => ({ element, transform: 'none' })),
+      0,
+    );
+    expect(getComputedStyle).not.toHaveBeenCalled();
+    expect(motion.settled()).toBe(true);
+    motion.dispose();
+  });
+
   it('notifies settlement only after the owned transition completes', () => {
     const onSettled = vi.fn();
     const { element, motion, animations } = setup(onSettled);

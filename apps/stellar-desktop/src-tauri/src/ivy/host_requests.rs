@@ -80,6 +80,22 @@ impl IvyHost {
         if slot.is_some() {
             return Err(IvyErrorCode::Busy);
         }
+        if !force
+            && view.snapshot.connection == IvyConnectionState::Ready
+            && view.snapshot.model == model
+            && view.snapshot.verified_model == Some(model)
+            && view.snapshot.error.is_none()
+        {
+            let (tx, rx) = mpsc::sync_channel(1);
+            tx.send(Ok(view.snapshot.clone()))
+                .map_err(|_| IvyErrorCode::Unavailable)?;
+            return Ok(RotationReply {
+                rx,
+                pending: self.pending_rotation.clone(),
+                ticket: rotation::ticket(),
+                timeout: Duration::from_secs(2),
+            });
+        }
         let workspace_epoch = view
             .snapshot
             .workspace_epoch
@@ -215,6 +231,7 @@ impl IvyHost {
             view.snapshot.connection = connection;
         }
         if let Some(id) = turn_id {
+            view.snapshot.first_text_observed = None;
             view.snapshot.turn = IvyTurnState::Submitting;
             view.snapshot.turn_id = Some(id);
             view.snapshot.items.clear();

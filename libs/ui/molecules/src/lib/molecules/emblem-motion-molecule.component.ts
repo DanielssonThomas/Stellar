@@ -1,4 +1,5 @@
 import {
+  afterNextRender,
   afterRenderEffect,
   Component,
   computed,
@@ -19,6 +20,8 @@ import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
 import { emblemClipPath } from './emblem-clip';
+import { emblemImageSource } from './emblem-image-sources';
+import { createEmblemImagePreparation } from './emblem-image-preparation';
 import {
   clampAudioLevel,
   EmblemManifest,
@@ -27,6 +30,7 @@ import {
   manifestError,
   isExplodedPhase,
   consolidatedClipFiles,
+  consolidatedFragmentFiles,
 } from './emblem-motion-model';
 
 let nextEmblemIdentity = 0;
@@ -37,7 +41,9 @@ let nextEmblemIdentity = 0;
   imports: [SkeletonAtom],
   templateUrl: './emblem-motion-molecule.component.html',
   styleUrl: './emblem-motion-molecule.component.css',
-  host: { '[attr.aria-busy]': 'loading()' },
+  host: {
+    '[attr.aria-busy]': 'loading() || (!unavailable() && awaitingSize())',
+  },
 })
 export class EmblemMotionMolecule {
   readonly solMaskId = `sol-stars-${++nextEmblemIdentity}`;
@@ -66,6 +72,13 @@ export class EmblemMotionMolecule {
   readonly label = input('Stellar emblem');
 
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly imageWidth = signal(0);
+  readonly imageSizes = computed(() => `${this.imageWidth()}px`);
+  readonly awaitingSize = computed(
+    () =>
+      Boolean(this.manifest()?.rasterSizes?.length) && this.imageWidth() <= 0,
+  );
   private readonly visible = signal(this.document.visibilityState !== 'hidden');
   private readonly media = this.document.defaultView?.matchMedia?.(
     '(prefers-reduced-motion: reduce)',
@@ -78,6 +91,11 @@ export class EmblemMotionMolecule {
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
   private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
   private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
+  private readonly images =
+    viewChildren<ElementRef<HTMLImageElement>>('emblemImage');
+  private readonly preparation = createEmblemImagePreparation(
+    this.document.defaultView,
+  );
   private readonly settledPhase = signal<Phase | null>(null);
   private readonly motion = createEmblemLayerMotion(
     this.document.defaultView,
@@ -137,6 +155,7 @@ export class EmblemMotionMolecule {
     clsx('emblem relative block h-full w-full', {
       'motion-paused': this.paused(),
       'motion-reduced': this.motionReduced(),
+      'render-active': !this.paused(),
       'waiting-response': this.showWaiting(),
       'sol-identity': this.solActive(),
       'with-environment': this.environment(),
@@ -162,25 +181,57 @@ export class EmblemMotionMolecule {
     const completeFiles = unified
       ? consolidatedClipFiles(manifest)
       : new Set<string>();
+    const fragmentFiles = unified
+      ? consolidatedFragmentFiles(manifest)
+      : new Set<string>();
     return manifest.layers.map((layer) => {
+      let file = layer.file;
       let clipPath = emblemClipPath(layer.clip, manifest.viewBox);
       // A single original avoids fractional clip-edge seams after assembly settles.
       if (unified && layer.clip && completeFiles.has(layer.file)) {
         clipPath = drawn.has(layer.file) ? 'inset(100%)' : 'none';
         drawn.add(layer.file);
       }
+      if (layer.assembly && fragmentFiles.has(layer.assembly.file)) {
+        file = layer.assembly.file;
+        clipPath = drawn.has(file) ? 'inset(100%)' : 'none';
+        drawn.add(file);
+      }
       return {
         ...layer,
-        src: base
-          ? `${base}${base.endsWith('/') ? '' : '/'}${layer.file}`
-          : layer.file,
+        ...emblemImageSource(file, base, manifest),
         origin: layerOrigin(layer, manifest),
         clipPath,
       };
     });
   });
+  readonly assemblySources = computed(() => {
+    const manifest = this.manifest();
+    if (!manifest || this.unavailable() || this.loading()) return [];
+    const base = this.assetBasePath();
+    return [
+      ...new Set(
+        manifest.layers.flatMap((layer) =>
+          layer.assembly ? [layer.assembly.file] : [],
+        ),
+      ),
+    ].map((file) => emblemImageSource(file, base, manifest));
+  });
 
   constructor() {
+    let sizeObserver: ResizeObserver | undefined;
+    const measure = () => {
+      const width = this.host.nativeElement.clientWidth;
+      if (width > 0) this.imageWidth.set(width);
+    };
+    afterNextRender(() => {
+      measure();
+      if (typeof ResizeObserver !== 'undefined') {
+        sizeObserver = new ResizeObserver(measure);
+        sizeObserver.observe(this.host.nativeElement);
+      }
+      this.document.defaultView?.addEventListener('resize', measure);
+    });
     const visibilityChanged = () =>
       this.visible.set(this.document.visibilityState !== 'hidden');
     const preferenceChanged = () =>
@@ -188,10 +239,13 @@ export class EmblemMotionMolecule {
     this.document.addEventListener('visibilitychange', visibilityChanged);
     this.media?.addEventListener('change', preferenceChanged);
     inject(DestroyRef).onDestroy(() => {
+      sizeObserver?.disconnect();
+      this.document.defaultView?.removeEventListener('resize', measure);
       this.document.removeEventListener('visibilitychange', visibilityChanged);
       this.media?.removeEventListener('change', preferenceChanged);
       this.motion.dispose();
       this.ambient.dispose();
+      this.preparation.dispose();
     });
     afterRenderEffect(() => {
       const manifest = this.manifest();
@@ -256,6 +310,29 @@ export class EmblemMotionMolecule {
         paused,
       );
     });
+    afterRenderEffect(() => {
+      this.layers();
+      this.assemblySources();
+      this.imageSizes();
+      this.prepareImages();
+    });
+  }
+
+  prepareImages() {
+    if (
+      this.loading() ||
+      this.unavailable() ||
+      !this.active() ||
+      !this.visible() ||
+      this.posePhase() === 'suspended' ||
+      this.posePhase() === 'shutdown'
+    ) {
+      this.preparation.cancel();
+      return;
+    }
+    this.preparation.schedule(
+      this.images().map((image) => image.nativeElement),
+    );
   }
 
   assetFailed() {

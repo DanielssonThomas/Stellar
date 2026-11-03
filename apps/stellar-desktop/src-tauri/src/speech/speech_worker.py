@@ -1,22 +1,26 @@
-"""One-request offline speech worker; lifecycle and temporary ownership are native-owned."""
+"""Offline speech worker; lifecycle and temporary ownership are native-owned."""
 from __future__ import annotations
 
 import sys
 sys.dont_write_bytecode = True
 
 import contextlib
-import importlib.util
 import json
 import math
 import os
 from pathlib import Path
 import wave
+import queue
+import re
+import threading
+import time
 
 PROFILE = Path('D:/Hermes/profiles/ivy')
 VOICE = PROFILE / 'voice'
 MAX_REQUEST = 3 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024
 MAX_WAV = 8 * 1024 * 1024
+PROTOCOL_LOCK = threading.Lock()
 
 for _key, _value in {
     'HF_HUB_OFFLINE': '1',
@@ -64,9 +68,10 @@ def read_bounded(path, limit):
     return data
 
 
-def request():
-    # One frame only: do not wait for EOF or attempt a second request.
+def request(eof=False):
     raw = sys.stdin.buffer.readline(MAX_REQUEST + 1)
+    if eof and not raw:
+        return None
     if not raw or len(raw) > MAX_REQUEST or not raw.endswith(b'\n'):
         reject()
     result = decode_json(raw)
@@ -79,8 +84,9 @@ def emit(stream, value):
     raw = (json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
     if len(raw) > MAX_RESPONSE:
         reject('unavailable')
-    stream.write(raw)
-    stream.flush()
+    with PROTOCOL_LOCK:
+        stream.write(raw)
+        stream.flush()
 
 
 def utf8_size(value):
@@ -198,7 +204,55 @@ def speech_settings():
     return settings
 
 
-def speak(req, protocol):
+class VoiceEngine:
+    def __init__(self):
+        self.model = None
+        self.settings = None
+
+    def configure(self, settings):
+        self.settings = dict(settings)
+
+    def synthesize(self, text, target):
+        import numpy as np
+        import soundfile as sf
+        if self.model is None:
+            for name in ('kokoro-v1.0.onnx', 'voices-v1.0.bin'):
+                if not (VOICE / 'models' / name).is_file():
+                    reject('model_missing')
+            import onnxruntime as ort
+            from kokoro_onnx import Kokoro
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = 4
+            options.inter_op_num_threads = 1
+            options.add_session_config_entry('session.intra_op.allow_spinning', '0')
+            session = ort.InferenceSession(str(VOICE / 'models/kokoro-v1.0.onnx'), options,
+                                          providers=['CPUExecutionProvider'])
+            self.model = Kokoro.from_session(session, str(VOICE / 'models/voices-v1.0.bin'))
+        audio, rate = self.model.create(text, voice='af_heart', speed=self.settings['speed'], lang='en-us')
+        audio = np.asarray(audio, dtype=np.float32).reshape(-1)
+        if (not len(audio) or not np.isfinite(audio).all() or np.max(np.abs(audio)) < 0.0001
+                or len(audio) > rate * 90 or len(audio) * 2 + 44 > MAX_WAV):
+            reject('unavailable')
+        partial = target.with_suffix('.tmp.wav')
+        sf.write(partial, audio, rate, subtype='PCM_16')
+        partial.replace(target)
+
+
+def sentences(text):
+    """Only split completed prose, retaining punctuation and combining short phrases."""
+    parts = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9])', text)
+    pending = ''
+    for part in parts:
+        pending = f'{pending} {part}'.strip() if pending else part
+        # Avoid fragmenting initials, titles, decimals and very short utterances.
+        if len(pending) >= 18 and not re.search(r'\b(?:Mr|Mrs|Ms|Dr|Prof|St|vs|e\.g|i\.e)\.$', pending):
+            yield pending
+            pending = ''
+    if pending:
+        yield pending
+
+
+def speak(req, protocol, engine=None):
     if set(req) != {'text', 'output'}:
         reject()
     text, output = req['text'], req['output']
@@ -217,21 +271,83 @@ def speak(req, protocol):
     settings = speech_settings()
     if len(text) > settings['max_characters']:
         reject()
-    for name in ('kokoro-v1.0.onnx', 'voices-v1.0.bin'):
-        if not (VOICE / 'models' / name).is_file():
-            reject('model_missing')
-    spec = importlib.util.spec_from_file_location('_ivy_local_voice_worker', VOICE / 'local_worker.py')
-    if spec is None or spec.loader is None:
-        reject('unavailable')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    alternate = target.with_name('reply-next.wav')
+    if alternate.exists() or alternate.is_symlink() or alternate.with_suffix('.tmp.wav').exists():
+        reject()
     emit(protocol, {'state': 'synthesizing'})
-    module.Engine().synthesize({'text': text, 'output': str(target),
-                               'engine': 'kokoro', 'voice': 'af_heart'})
-    playback(target, protocol)
+    engine = engine or VoiceEngine()
+    engine.configure(settings)
+    synthesize_segments(text, target, alternate, protocol, engine)
 
 
-def playback(target, protocol):
+def synthesize_segments(text, target, alternate, protocol, engine):
+    started = time.perf_counter()
+    def timing(stage):
+        emit(protocol, {'timing': {'stage': stage, 'elapsed_ms': round((time.perf_counter() - started) * 1000)}})
+
+    timing('synthesis_started')
+    ready = queue.Queue(maxsize=1)
+    free = queue.Queue(maxsize=2)
+    for path in (target, alternate):
+        free.put(path)
+    cancelled = threading.Event()
+
+    def offer(value):
+        while not cancelled.is_set():
+            try:
+                ready.put(value, timeout=0.05)
+                return
+            except queue.Full:
+                pass
+
+    def produce():
+        used = set()
+        first_audio = True
+        try:
+            for sentence in sentences(text):
+                while not cancelled.is_set():
+                    try:
+                        path = free.get(timeout=0.05)
+                        break
+                    except queue.Empty:
+                        pass
+                else:
+                    return
+                if path in used:
+                    path.unlink()
+                used.add(path)
+                engine.synthesize(sentence, path)
+                if first_audio:
+                    timing('first_audio')
+                    first_audio = False
+                offer(path)
+            timing('synthesis_completed')
+            offer(None)
+        except BaseException as error:
+            offer(error)
+
+    producer = threading.Thread(target=produce, name='kokoro-synthesis')
+    producer.start()
+    first = True
+    try:
+        while True:
+            result = ready.get()
+            if result is None:
+                break
+            if isinstance(result, BaseException):
+                raise result
+            playback(result, protocol, first=first, terminal=False,
+                     on_dispatch=lambda: timing('playback_dispatched') if first else None)
+            first = False
+            free.put(result)
+        timing('playback_completed')
+        emit(protocol, {'done': True})
+    finally:
+        cancelled.set()
+        producer.join()
+
+
+def playback(target, protocol, first=True, terminal=True, on_dispatch=lambda: None):
     if not target.is_file() or target.stat().st_size > MAX_WAV:
         reject('unavailable')
     with wave.open(str(target), 'rb') as wav:
@@ -245,12 +361,15 @@ def playback(target, protocol):
             reject('unavailable')
     import winsound
     try:
-        emit(protocol, {'state': 'speaking'})
+        if first:
+            emit(protocol, {'state': 'speaking'})
+        on_dispatch()
         # Synchronous playback is the default; Python 3.12 has no named SND_SYNC.
         winsound.PlaySound(str(target), winsound.SND_FILENAME | winsound.SND_NODEFAULT)
     finally:
         winsound.PlaySound(None, 0)
-    emit(protocol, {'done': True})
+    if terminal:
+        emit(protocol, {'done': True})
 
 
 def main():
@@ -262,14 +381,33 @@ def main():
             try:
                 if len(sys.argv) != 2 or sys.argv[1] not in ('transcribe', 'speak'):
                     reject()
-                req = request()
-                (transcribe if sys.argv[1] == 'transcribe' else speak)(req, protocol)
+                if sys.argv[1] == 'transcribe':
+                    transcribe(request(), protocol)
+                else:
+                    watch_parent()
+                    engine = VoiceEngine()
+                    while (req := request(eof=True)) is not None:
+                        speak(req, protocol, engine)
             except Failure as exc:
                 emit(protocol, {'error': exc.code})
             except (UnicodeError, json.JSONDecodeError, RecursionError):
                 emit(protocol, {'error': 'protocol'})
             except BaseException:
                 emit(protocol, {'error': 'unavailable'})
+
+
+def watch_parent():
+    if sys.platform != 'win32':
+        return
+    import _winapi
+    handle = _winapi.OpenProcess(0x100000, False, os.getppid())
+    def wait():
+        try:
+            _winapi.WaitForSingleObject(handle, _winapi.INFINITE)
+            os._exit(1)
+        finally:
+            _winapi.CloseHandle(handle)
+    threading.Thread(target=wait, name='speech-parent', daemon=True).start()
 
 
 if __name__ == '__main__':

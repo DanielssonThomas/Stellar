@@ -148,6 +148,7 @@ def load_library():
 async def pump(conn, workspace=None):
     from stellar_ivy_activity import Activity
     activity = Activity()
+    text_seen = {}
     while True:
         try:
             event = await asyncio.wait_for(conn.client.events.get(), activity.delay())
@@ -162,6 +163,22 @@ async def pump(conn, workspace=None):
         if type(params) is not dict:
             continue
         kind = params.get('type')
+        if kind == 'message.delta':
+            payload = params.get('payload')
+            sid, admission = params.get('session_id'), params.get('admission_id')
+            if (type(payload) is dict and type(payload.get('text')) is str and payload['text']
+                    and string(sid) and string(admission) and (sid, admission) not in text_seen):
+                if len(text_seen) >= 64:
+                    text_seen.pop(next(iter(text_seen)))
+                text_seen[(sid, admission)] = True
+                pending = activity.flush()
+                if pending is not None:
+                    emit({'event': 'gateway', 'data': {'params': pending}})
+                clean = project(params)
+                clean.update(type='stellar.first_text', payload={'available': True})
+                # Availability only. Raw deltas are not a committed user-facing text contract.
+                emit({'event': 'gateway', 'data': {'params': clean}})
+            continue
         if kind in {'tool.start', 'tool.complete'}:
             activity.offer(params)
             continue

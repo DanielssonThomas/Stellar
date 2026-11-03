@@ -1,6 +1,6 @@
 {
   "canvas": 1280,
-  "layers": 15,
+  "layers": 81,
   "rasterLayers": [
     {
       "id": "violet-body",
@@ -105,10 +105,128 @@
       "visibleRadius": 353.7237622778543
     }
   ],
+  "strands": [
+    {
+      "color": "gold",
+      "kind": "body",
+      "fragments": 11,
+      "visiblePixels": [
+        4521, 6071, 6157, 7149, 4783, 7827, 9649, 10032, 18880, 18550, 8744
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "gold",
+      "kind": "hair",
+      "fragments": 12,
+      "visiblePixels": [
+        55877, 27052, 18887, 26309, 25173, 27305, 29696, 47921, 32186, 22404,
+        12517, 16134
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "gold",
+      "kind": "ornament",
+      "fragments": 15,
+      "visiblePixels": [
+        2601, 1518, 1895, 584, 1090, 1515, 1702, 1621, 2274, 704, 1055, 1286,
+        1182, 989, 1665
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "violet",
+      "kind": "body",
+      "fragments": 11,
+      "visiblePixels": [
+        4447, 7379, 7014, 9159, 13466, 8850, 15741, 10682, 5751, 15693, 9087
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "violet",
+      "kind": "hair",
+      "fragments": 12,
+      "visiblePixels": [
+        19719, 34027, 40735, 16971, 45277, 32123, 41761, 43435, 42188, 19623,
+        26527, 21371
+      ],
+      "pixelIdentical": true
+    },
+    {
+      "color": "violet",
+      "kind": "ornament",
+      "fragments": 7,
+      "visiblePixels": [3549, 2899, 1110, 1402, 2561, 1658, 2574],
+      "pixelIdentical": true
+    }
+  ],
   "svgLayers": 5,
-  "zeroPose": "All manifest poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 2708109,
-  "budgetBytes": 4194304,
+  "ringArcs": [
+    {
+      "ring": "inner-circle",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-2",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-3",
+      "arcs": 3,
+      "pixelIdentical": true
+    },
+    {
+      "ring": "inner-circle-4",
+      "arcs": 3,
+      "pixelIdentical": true
+    }
+  ],
+  "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
+  "runtimeBytes": 6492501,
+  "budgetBytes": 8388608,
+  "responsiveImages": {
+    "rasterFiles": 86,
+    "tiers": [
+      {
+        "width": 128,
+        "runtimeBytes": 195937,
+        "rgbaBytes": 5636096
+      },
+      {
+        "width": 256,
+        "runtimeBytes": 478539,
+        "rgbaBytes": 22544384
+      },
+      {
+        "width": 512,
+        "runtimeBytes": 1352100,
+        "rgbaBytes": 90177536
+      },
+      {
+        "width": 768,
+        "runtimeBytes": 2549771,
+        "rgbaBytes": 202899456
+      },
+      {
+        "width": 1024,
+        "runtimeBytes": 4121654,
+        "rgbaBytes": 360710144
+      },
+      {
+        "width": 1280,
+        "runtimeBytes": 6492501,
+        "rgbaBytes": 563609600
+      }
+    ],
+    "distributionBytes": 14998507,
+    "budgetBytes": 16777216
+  },
   "activeSvgContent": false,
-  "fragmentAssemblyPixelIdentical": true
+  "fragmentAssemblyPixelIdentical": false,
+  "rasterizedRegistrationPixelIdentical": true,
+  "canonicalUsesOriginalSources": true
 }

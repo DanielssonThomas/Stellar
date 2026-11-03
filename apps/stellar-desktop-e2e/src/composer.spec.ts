@@ -221,9 +221,7 @@ async function wakeCapture(page: Page) {
           peak: active ? 0.1 : 0.001,
           clipped: false,
         });
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
-        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
         sink?.pcm?.({
           type: 'chunk',
           chunk: {
