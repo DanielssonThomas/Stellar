@@ -14,6 +14,29 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
   });
 
+  it('opens music controls with P but leaves typing, shortcuts and repeats alone', async () => {
+    const open = vi
+      .spyOn(fixture.componentInstance.musicControls(), 'open')
+      .mockImplementation(() => undefined);
+    const key = (options: KeyboardEventInit = {}) =>
+      new KeyboardEvent('keydown', {
+        key: 'p',
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      });
+    fixture.nativeElement.dispatchEvent(key());
+    expect(open).toHaveBeenCalledOnce();
+    fixture.nativeElement.dispatchEvent(key({ repeat: true }));
+    fixture.nativeElement.dispatchEvent(key({ ctrlKey: true }));
+    fixture.componentInstance.menu.toggle();
+    await fixture.whenStable();
+    fixture.nativeElement.querySelector('textarea').dispatchEvent(key());
+    expect(open).toHaveBeenCalledOnce();
+    fixture.nativeElement.dispatchEvent(key({ key: 'P', shiftKey: true }));
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+
   it('retains assembled presence between foreground turns until clear, while suspension still wins', async () => {
     expect(fixture.componentInstance.emblemPhase()).toBe('idle');
     fixture.componentRef.setInput('conversationActive', true);
@@ -102,8 +125,9 @@ describe('DesktopExperienceTemplate', () => {
     expect(action).toHaveBeenCalledWith({ type: 'dismiss' });
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
-    const input: HTMLInputElement =
-      fixture.nativeElement.querySelector('input');
+    const input: HTMLInputElement = fixture.nativeElement.querySelector(
+      '.motion-toggle input',
+    );
     input.checked = true;
     input.dispatchEvent(new Event('change'));
     expect(action).toHaveBeenCalledWith({
@@ -166,9 +190,9 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentRef.setInput('activityStatus', 'Quiet');
     await fixture.whenStable();
     expect(fixture.componentInstance.inputMeter()).toBe(33);
-    expect(fixture.nativeElement.querySelector('meter').value).toBeGreaterThan(
-      0,
-    );
+    expect(
+      fixture.nativeElement.querySelector('[data-desktop-menu] meter').value,
+    ).toBeGreaterThan(0);
     expect(fixture.nativeElement.textContent).toContain('Quiet');
     const select: HTMLSelectElement =
       fixture.nativeElement.querySelector('select');

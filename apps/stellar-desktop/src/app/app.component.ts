@@ -15,6 +15,7 @@ import {
   DesktopAdapterService,
   IvyAdapterService,
   WorkspaceToolsService,
+  MusicVisualizerService,
 } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
 import { PRESENTATION_DATA } from '@stellar/ui-molecules';
@@ -29,6 +30,7 @@ import { DesktopFaults } from './desktop-faults';
     DesktopAssistant,
     DesktopVoice,
     DesktopFaults,
+    MusicVisualizerService,
     { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
   ],
   selector: 'stellar-root',
@@ -46,6 +48,7 @@ export class AppComponent {
   readonly assistant = inject(DesktopAssistant);
   readonly voice = inject(DesktopVoice);
   readonly faults = inject(DesktopFaults);
+  readonly music = inject(MusicVisualizerService);
   readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);

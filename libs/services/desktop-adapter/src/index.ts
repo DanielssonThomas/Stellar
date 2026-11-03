@@ -70,3 +70,8 @@ export type {
   FinalizedPrompt,
   PromptPresentation,
 } from './lib/speech/prompt-presentation';
+export {
+  MusicVisualizerService,
+  MUSIC_TRANSPORT,
+} from './lib/services/music-visualizer.service';
+export type { MusicTransport } from './lib/music/music-transport';

@@ -5,6 +5,9 @@ mod cleanup_name;
 mod command_name;
 #[path = "src/ivy/command_names.rs"]
 mod ivy_names;
+#[allow(dead_code)]
+#[path = "src/music/command_names.rs"]
+mod music;
 #[path = "src/speech/command_names.rs"]
 mod speech_names;
 #[path = "src/telemetry/command_name.rs"]
@@ -13,6 +16,7 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        music::MUSIC_COMMAND,
         cleanup_name::CLEANUP_COMMAND,
         command_name::APP_INFO_COMMAND,
         "smoke_result",

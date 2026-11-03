@@ -18,6 +18,7 @@ chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "=2.0.1"
+wasapi = "=0.26.0"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

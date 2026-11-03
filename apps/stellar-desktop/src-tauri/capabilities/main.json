@@ -3,6 +3,7 @@
   "description": "The local desktop shell may read its versioned readiness contract.",
   "windows": ["main"],
   "permissions": [
+    "allow-music-set-enabled",
     "allow-shell-status",
     "allow-cleanup-refine",
     "allow-app-info",

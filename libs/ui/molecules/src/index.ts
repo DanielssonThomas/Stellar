@@ -28,3 +28,5 @@ export {
 export * from './lib/molecules/prompt-composer-molecule.component';
 export * from './lib/molecules/fault-log-molecule.component';
 export * from './lib/molecules/ivy-activity-molecule.component';
+export * from './lib/molecules/audio-visualizer-molecule.component';
+export type { EmblemMusicLevels } from './lib/molecules/emblem-music-motion';

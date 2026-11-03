@@ -73,6 +73,7 @@ if (action === 'smoke') {
             identifier: 'desktop-smoke',
             windows: ['main'],
             permissions: [
+              'allow-music-set-enabled',
               'allow-shell-status',
               'allow-cleanup-refine',
               'allow-app-info',

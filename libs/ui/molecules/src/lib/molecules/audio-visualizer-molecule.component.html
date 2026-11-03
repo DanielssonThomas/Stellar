@@ -1,0 +1,78 @@
+<dialog
+  #dialog
+  aria-labelledby="audio-visualizer-title"
+  class="visualizer-dialog"
+>
+  <div class="flex items-start justify-between gap-6">
+    <div>
+      <p class="text-xs uppercase tracking-widest text-stellar-muted">
+        Exploded emblem
+      </p>
+      <h2 id="audio-visualizer-title" class="mt-2 text-xl font-medium">
+        Music visualizer
+      </h2>
+    </div>
+    <button
+      type="button"
+      aria-label="Close music visualizer"
+      (click)="close()"
+      class="close-button"
+    >
+      ✕
+    </button>
+  </div>
+  @if (loading()) {
+    <stellar-skeleton-atom shape="text" />
+  } @else {
+    <p class="mt-3 text-sm text-stellar-muted">
+      Let the floating pieces follow the music playing on your computer.
+    </p>
+    <div class="my-6 flex items-center justify-between gap-4">
+      <p role="status" class="text-sm">{{ status() }}</p>
+      <button
+        type="button"
+        [attr.aria-pressed]="enabled()"
+        (click)="listeningChange.emit(!enabled())"
+        class="listen-button"
+      >
+        {{ enabled() ? 'Stop listening' : 'Listen to desktop audio' }}
+      </button>
+    </div>
+    <div class="grid gap-5">
+      @for (band of bands; track band.key) {
+        <div>
+          <div class="flex items-center justify-between gap-4">
+            <label [for]="'music-' + band.key" class="font-medium">{{
+              band.label
+            }}</label>
+            <output [for]="'music-' + band.key" class="text-sm tabular-nums"
+              >{{ (sensitivity()[band.key] * 100).toFixed(0) }}%</output
+            >
+          </div>
+          <p class="mt-1 text-xs text-stellar-muted">{{ band.detail }}</p>
+          <input
+            [id]="'music-' + band.key"
+            type="range"
+            min="0"
+            max="300"
+            step="5"
+            [value]="sensitivity()[band.key] * 100"
+            (input)="changeSensitivity(band.key, $event)"
+            class="mt-3 w-full"
+          />
+          <meter
+            min="0"
+            max="1"
+            [value]="levels()[band.key]"
+            [attr.aria-label]="band.label + ' level'"
+            class="mt-1 block h-1 w-full"
+          ></meter>
+        </div>
+      }
+    </div>
+    <p class="mt-6 text-xs leading-relaxed text-stellar-muted">
+      Audio stays on this computer. Music motion settles when an activity
+      starts, and respects reduced motion.
+    </p>
+  }
+</dialog>

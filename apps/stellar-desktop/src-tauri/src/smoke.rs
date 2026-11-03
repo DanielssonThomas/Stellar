@@ -39,6 +39,11 @@ fn check_page(window: Webview) {
                 try { const snapshot = await invoke('telemetry_snapshot'); telemetryOk = snapshot.schemaVersion === 1; }
                 catch (error) { telemetryOk = !__TELEMETRY_EXPECT_LIVE__ && ['unavailable', 'timeout', 'invalid'].includes(error); }
                 const reply = await invoke('shell_status', { request: { version: 1 } });
+                const music = await invoke('music_set_enabled', { request: { version: 1, enabled: false } });
+                let musicRejected = false;
+                try { await invoke('music_set_enabled', { request: { version: 2, enabled: true } }); }
+                catch (error) { musicRejected = error === 'unsupported_version'; }
+                const musicOk = musicRejected && music.status === 'idle' && Object.values(music.levels).every(value => value === 0);
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
@@ -93,7 +98,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { success: lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { success: musicOk && lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (_) { await invoke('smoke_result', { success: false }); }
         })();
@@ -115,6 +120,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::commands::shell_status,
+            crate::music::music_set_enabled,
             crate::cleanup::cleanup_refine,
             crate::app_info::app_info,
             crate::telemetry::telemetry_snapshot,

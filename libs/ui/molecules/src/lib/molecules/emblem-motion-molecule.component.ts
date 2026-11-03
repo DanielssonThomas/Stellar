@@ -19,6 +19,11 @@ import clsx from 'clsx';
 import { createEmblemLayerMotion } from './emblem-layer-motion';
 import { cameraTransform, idleMotionEnabled } from './emblem-camera';
 import { createEmblemAmbientMotion } from './emblem-ambient-motion';
+import {
+  musicTransform,
+  silentEmblemMusic,
+  type EmblemMusicLevels,
+} from './emblem-music-motion';
 import { emblemClipPath } from './emblem-clip';
 import { emblemImageSource } from './emblem-image-sources';
 import { createEmblemImagePreparation } from './emblem-image-preparation';
@@ -62,6 +67,7 @@ export class EmblemMotionMolecule {
   readonly faultFilterId = `${this.solMaskId}-fault`;
   readonly faultLightFilterId = `${this.solMaskId}-fault-light`;
   readonly audioLevel = input(0);
+  readonly musicLevels = input<EmblemMusicLevels>(silentEmblemMusic);
   readonly waiting = input(false);
   readonly solActive = input(false);
   readonly reducedMotion = input(false);
@@ -91,6 +97,8 @@ export class EmblemMotionMolecule {
   private readonly planes = viewChildren<ElementRef<HTMLElement>>('plane');
   private readonly camera = viewChild<ElementRef<HTMLElement>>('camera');
   private readonly artwork = viewChildren<ElementRef<HTMLElement>>('artwork');
+  private readonly musicPieces =
+    viewChildren<ElementRef<HTMLElement>>('musicPiece');
   private readonly images =
     viewChildren<ElementRef<HTMLImageElement>>('emblemImage');
   private readonly preparation = createEmblemImagePreparation(
@@ -315,6 +323,22 @@ export class EmblemMotionMolecule {
       this.assemblySources();
       this.imageSizes();
       this.prepareImages();
+    });
+    afterRenderEffect(() => {
+      const layers = this.layers();
+      const levels =
+        !this.fault() && idleMotionEnabled(this.posePhase(), this.paused())
+          ? this.musicLevels()
+          : silentEmblemMusic;
+      for (const [index, piece] of this.musicPieces().entries()) {
+        const layer = layers[index];
+        if (layer)
+          piece.nativeElement.style.transform = musicTransform(
+            layer,
+            index,
+            levels,
+          );
+      }
     });
   }
 

@@ -48,6 +48,7 @@
         assistantActive() && assistantWaiting() && !assistantNarrating()
       "
       [audioLevel]="level()"
+      [musicLevels]="musicLevels()"
       [reducedMotion]="state().reducedMotion"
       [loading]="loading()"
       [error]="assetError()"
@@ -81,6 +82,15 @@
       [loading]="loading()"
     />
   </stellar-stage-organism>
+  <stellar-audio-visualizer-molecule
+    [enabled]="musicEnabled()"
+    [status]="musicStatus()"
+    [levels]="musicLevels()"
+    [sensitivity]="musicSensitivity()"
+    [loading]="loading()"
+    (listeningChange)="toggleMusic.emit($event)"
+    (sensitivityChange)="musicSensitivityChange.emit($event)"
+  />
 
   <button
     #menuTrigger
@@ -103,6 +113,9 @@
     >
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      <button type="button" aria-keyshortcuts="P" (click)="openMusicControls()">
+        Music visualizer · P
+      </button>
       @if (faultEntries().length) {
         <button type="button" (click)="showFaults.emit(); menu.close()">
           Recent errors
