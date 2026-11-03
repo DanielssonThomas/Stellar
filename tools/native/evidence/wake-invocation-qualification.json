@@ -206,5 +206,66 @@
       "An initial packaging attempt overlapped frontend output writes and failed to read an asset; serial rebuilding and final native smoke passed.",
       "Only the latest transcript is retained in renderer memory. Prompt entry, cancellation and capture reset clear it; there is no added recording, transcript history, refinement or dispatch. Private synthetic receipts remain in ignored artifacts."
     ]
+  },
+  "englishRecognitionQualification": {
+    "purpose": "Fix desktop transcription to English instead of auto language guessing for short commands. Preserve exact wake/completion matching and existing VAD/confidence settings.",
+    "syntheticSpeech": true,
+    "method": "Compare the same cached CPU/int8 base model and confidence filter over 16 Kokoro-derived/silence/noise fixtures in auto, English, and English-plus-Ivy-hotword modes. Then run actual packaged native WebView/worker using controlled synthetic I think, Ivy and Im done audio.",
+    "workerSha256": "e18f7b0ba4ccd2c837dd10e54033b255a18f616d43829572159f6f3fe74ed626",
+    "diagnosticExecutableSha256": "31fc0fda81c737f53b7cbfe52eba19ac8cfcdd9e866d1724066ea1da43968bae",
+    "productionExecutableSha256": "455e74928a28861f6190d43553b225e78f68932ec39c93fd27494041b193b9e4",
+    "privateReceiptSha256": {
+      "comparison": "905c855288bcceba9b35ec763751402f5f5f91c148d1be3da14c83be84ce728b",
+      "native": "8356561fe7ddbc63eacae1302ba23c582e4fb95a3703ae371d8854bc1820af40"
+    },
+    "comparison": {
+      "auto": {
+        "fixtures": 16,
+        "negativeControls": 10,
+        "negativeWakeMatches": []
+      },
+      "english": {
+        "fixtures": 16,
+        "negativeControls": 10,
+        "negativeWakeMatches": []
+      },
+      "english-ivy": {
+        "fixtures": 16,
+        "negativeControls": 10,
+        "negativeWakeMatches": [
+          "similar"
+        ]
+      }
+    },
+    "selectedMode": "english",
+    "rejectedHotwordReason": "The Ivy vocabulary boost changed one full Ivory negative fixture into an exact leading Ivy match. No hotword or vocabulary prompt is added.",
+    "nativeObservations": {
+      "ordinaryIThinkStayedPassive": true,
+      "standaloneIvyActivatedForeground": true,
+      "imDoneRecognizedInEnglish": true,
+      "completionResetSucceeded": true,
+      "microphoneTracksAfterCompletion": 1,
+      "submissionsDuringControlOnlyFlow": 0
+    },
+    "automatedVerification": {
+      "frontendTests": {
+        "adapter": 201,
+        "desktop": 52
+      },
+      "speechWorkerPythonTests": 11,
+      "allNativePythonTests": 34,
+      "rustTestsPassed": 102,
+      "rustTestsIgnored": 3,
+      "nativeChecks": "Formatting, Clippy with warnings denied, native tests, binding drift, Rust size policy and production WebView/IPC smoke passed.",
+      "documentation": "Documentation validator passed.",
+      "voiceBrowserTests": "10/10 composer and voice acceptance tests passed."
+    },
+    "limitations": [
+      "The clean synthetic clips were already correctly recognized in auto mode; these runs do not reproduce or prove correction of the reported physical I think/Und dann errors.",
+      "Fixed English removes language autodetection; it does not guarantee correct recognition for a particular speaker or prohibit every foreign-looking output token.",
+      "The comparison reuses one warm model, so its timings are not packaged-app latency measurements.",
+      "There is no alias from I think to Ivy or from Und dann to Im done. No shared Hermes configuration, model, VAD/confidence threshold or IPC contract is changed.",
+      "Receipts contain only synthetic fixture text; no physical user recording is included."
+    ]
   }
 }

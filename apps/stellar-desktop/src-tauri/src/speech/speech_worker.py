@@ -132,7 +132,7 @@ def validate_stt_config(config):
         if type(local.get(key)) is not type(value) or local[key] != value:
             reject('unavailable')
     for section in (stt, local):
-        if section.get('language') not in (None, '', 'auto'):
+        if section.get('language') not in (None, '', 'auto', 'en'):
             reject('unavailable')
     return stt
 
@@ -157,8 +157,10 @@ def transcribe(req, protocol):
         build_local_transcribe_kwargs, _join_confident_segments,
     )
     kwargs = build_local_transcribe_kwargs(stt)
-    if kwargs.get('language') or kwargs.get('vad_filter') is not True:
+    if kwargs.get('vad_filter') is not True:
         reject('unavailable')
+    # Short English commands cannot reliably identify their own language.
+    kwargs['language'] = 'en'
     emit(protocol, {'state': 'transcribing'})
     try:
         model = WhisperModel('base', device='cpu', compute_type='int8',

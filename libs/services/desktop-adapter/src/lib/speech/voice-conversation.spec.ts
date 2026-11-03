@@ -1757,6 +1757,8 @@ describe('spoken prompt composition', () => {
       'I am done with this part',
       'alright im done with this part',
       'explain alright im done',
+      'Und dann',
+      'I think.',
     ])
       expect(voiceCommand(text)).toBeNull();
   });

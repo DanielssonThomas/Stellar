@@ -9,6 +9,8 @@ describe('exact Ivy invocation', () => {
     'clear',
     'ivory',
     'I have a request',
+    'I think.',
+    'Und dann',
     'Ivybridge',
     "Ivy's leaves",
     'poison ivy',
