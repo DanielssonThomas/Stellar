@@ -5,6 +5,7 @@ import {
 } from '@stellar/desktop-contracts';
 
 export interface SpeechTransport {
+  readonly keywordsAvailable?: boolean;
   invoke<K extends keyof SpeechCommands>(
     command: K,
     args: { request: SpeechCommands[K] },
@@ -32,6 +33,7 @@ export interface SpeechNativeApi {
 
 export function nativeSpeechTransport(api: SpeechNativeApi): SpeechTransport {
   return {
+    keywordsAvailable: true,
     invoke: (command, args) => api.core.invoke(command, args),
     listen: (event, callback) =>
       api.event.listen(event, (envelope) => callback(envelope.payload)),

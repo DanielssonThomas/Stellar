@@ -13,6 +13,49 @@ async function flush() {
 }
 
 describe('draft recognition scheduling', () => {
+  it('waits for a warm preview before the final without restarting shared recognizers', async () => {
+    const partial = deferred<{
+      version: number;
+      utterance_id: string;
+      text: string;
+    }>();
+    const collect = vi
+      .fn()
+      .mockReturnValueOnce(partial.promise)
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: 'final',
+        text: 'retained complete dictation',
+      });
+    const stop = vi.fn(async () => undefined),
+      completed = vi.fn();
+    const queue = new DraftRecognition(
+      collect,
+      stop,
+      completed,
+      vi.fn(),
+      false,
+    );
+    const preview = new Int16Array([1]),
+      final = new Int16Array([2]);
+    queue.offer(preview, 'preview', false);
+    queue.offer(final, 'final', true);
+    expect(collect).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
+    partial.resolve({ version: 1, utterance_id: 'preview', text: 'partial' });
+    await flush();
+    expect(completed).toHaveBeenLastCalledWith(
+      'retained complete dictation',
+      'final',
+      true,
+      true,
+      true,
+    );
+    expect(collect).toHaveBeenCalledTimes(2);
+    expect(stop).not.toHaveBeenCalled();
+    expect([...preview, ...final]).toEqual([0, 0]);
+  });
+
   it('keeps initial wake eligibility separate from capped command eligibility', async () => {
     const completed = vi.fn();
     const queue = new DraftRecognition(

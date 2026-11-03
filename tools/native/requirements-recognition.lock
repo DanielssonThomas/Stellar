@@ -1,0 +1,6 @@
+# CPython 3.12, Windows x64 wheels. Benchmark/provision dependencies included.
+sherpa-onnx==1.12.40 --hash=sha256:a98c08848433af34ba0c81015f4ec1290f627d8ceec3d6d9df3380082cac408f
+sherpa-onnx-core==1.12.40 --hash=sha256:506aa30d7af5e182cc90fcabe841d1abc842c195ec19dfd3cb9aec3562b9c1e0
+numpy==2.2.6 --hash=sha256:c1f9540be57940698ed329904db803cf7a402f3fc200bfe599334c9bd84a40b2
+sentencepiece==0.2.1 --hash=sha256:4cdc7c36234fda305e85c32949c5211faaf8dd886096c7cea289ddc12a2d02de
+psutil==7.1.3 --hash=sha256:f39c2c19fe824b47484b96f9692932248a54c43799a84282cfe58d05a6449efd

@@ -78,10 +78,16 @@ export type {
   SpeechSpeakRequest,
   SpeechSnapshot,
   SpeechCommands,
+  KeywordMode,
+  KeywordCommand,
+  KeywordRequest,
+  KeywordDetection,
+  KeywordReply,
 } from './generated';
 export {
   speechTranscribeCommand,
   speechCollectCommand,
+  speechKeywordsCommand,
   speechSpeakCommand,
   speechStopCommand,
   speechSnapshotCommand,
@@ -96,6 +102,7 @@ export {
   decodeSpeechSnapshot,
   decodeSpeechError,
 } from './lib/speech-codec';
+export { decodeKeywordRequest, decodeKeywordReply } from './lib/keyword-codec';
 
 export type { CleanupRequest, CleanupReply } from './generated';
 export type { SpeechTiming, SpeechTimingStage } from './generated';

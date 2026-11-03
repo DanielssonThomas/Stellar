@@ -30,6 +30,29 @@ function fixture() {
 }
 
 describe('bounded local utterance assembly', () => {
+  it('configures ordinary silence independently and retains a pending onset at its boundary', () => {
+    const assembler = createUtteranceAssembler({
+      silenceMs: 800,
+      draftSilenceMs: 540,
+    });
+    let sequence = 0;
+    const push = (active: boolean, starting = false) =>
+      assembler.push(
+        {
+          sampleRate: 16000,
+          sequence: sequence++,
+          samples: new Int16Array(640).fill(active ? 7 : 0),
+        },
+        { active, starting, calibrating: false },
+      );
+    for (let i = 0; i < 5; i++) push(true);
+    for (let i = 0; i < 19; i++) expect(push(false)).toBeNull();
+    expect(push(false, true)).toBeNull();
+    for (let i = 0; i < 19; i++) expect(push(false)).toBeNull();
+    expect(push(false)).not.toBeNull();
+    for (const value of [0, 239, 3001, NaN, Infinity])
+      expect(() => createUtteranceAssembler({ silenceMs: value })).toThrow();
+  });
   it('keeps a detector-pending onset in the same draft across the quiet boundary', () => {
     const detector = new ActivityDetector();
     const assembler = createUtteranceAssembler();

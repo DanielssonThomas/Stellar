@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { VoiceInvocation, cancelsPrompt } from './voice-invocation';
 
 describe('exact Ivy invocation', () => {
+  it('carries an acoustic wake into one following request without a transcribed wake spelling', () => {
+    const gate = new VoiceInvocation();
+    gate.activateAcoustically();
+    expect(gate.active()).toBe(true);
+    expect(gate.accept('prompt write a note', false)).toEqual({
+      text: 'prompt write a note',
+      invoked: true,
+    });
+    expect(gate.accept('another sentence', false)?.invoked).toBe(false);
+    gate.activateAcoustically();
+    gate.reset();
+    expect(gate.accept('prompt write a note', false)).toBeNull();
+  });
   it.each([
     'hello',
     'prompt',

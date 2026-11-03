@@ -1,20 +1,16 @@
 use super::{
     contracts::SpeechError,
     frames,
-    process::{self, ChildSlot, Frames},
+    process::{self, ChildSlot},
     state::Operation,
 };
 use std::{
-    io::Write,
     process::Command,
     sync::{Arc, Mutex, mpsc},
     time::Instant,
 };
 
-struct Transport {
-    input: mpsc::SyncSender<Vec<u8>>,
-    frames: Frames,
-}
+type Transport = process::PersistentTransport;
 
 /// One serial speech operation owns the transport; stop can reap its child without this lock.
 pub(super) struct WarmVoice {
@@ -32,6 +28,14 @@ impl Default for WarmVoice {
 }
 
 impl WarmVoice {
+    pub fn stop(&self) -> Result<(), SpeechError> {
+        process::stop(&self.child)?;
+        if let Ok(mut transport) = self.transport.try_lock() {
+            *transport = None;
+        }
+        Ok(())
+    }
+
     pub fn run(
         &self,
         operation: &Operation,
@@ -106,41 +110,13 @@ impl WarmVoice {
     }
 }
 
-fn start(mut command: Command) -> Result<(std::process::Child, Transport), SpeechError> {
-    process::configure(&mut command);
-    let mut child = command.spawn().map_err(|_| SpeechError::Unavailable)?;
-    let Some(mut stdin) = child.stdin.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(SpeechError::Unavailable);
-    };
-    let Some(stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(SpeechError::Unavailable);
-    };
-    let (send, frames) = mpsc::sync_channel(8);
-    let (input, pending) = mpsc::sync_channel::<Vec<u8>>(1);
-    let errors = send.clone();
-    std::thread::spawn(move || {
-        while let Ok(payload) = pending.recv() {
-            if stdin
-                .write_all(&payload)
-                .and_then(|_| stdin.flush())
-                .is_err()
-            {
-                let _ = errors.send(Err(SpeechError::Unavailable));
-                break;
-            }
-        }
-    });
-    process::read_frames(stdout, send);
-    Ok((child, Transport { input, frames }))
+fn start(command: Command) -> Result<(process::Child, Transport), SpeechError> {
+    process::start_persistent(command, 8)
 }
 
 impl Drop for WarmVoice {
     fn drop(&mut self) {
-        let _ = process::stop(&self.child);
+        let _ = self.stop();
     }
 }
 

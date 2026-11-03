@@ -34,6 +34,7 @@ export class DraftRecognition {
       wakeAllowed: boolean,
     ) => void | Promise<void>,
     private readonly failed: () => void,
+    private readonly interruptPreviews = true,
   ) {}
 
   canPreview(): boolean {
@@ -81,6 +82,7 @@ export class DraftRecognition {
       this.preview = undefined;
       // Let the first wake hit activate presence even when settlement queues a final.
       if (
+        this.interruptPreviews &&
         this.running &&
         !this.running.final &&
         this.running.purpose !== 'wake'

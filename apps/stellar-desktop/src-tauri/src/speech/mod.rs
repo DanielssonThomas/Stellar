@@ -1,13 +1,28 @@
 pub mod contracts;
 mod frames;
 mod host;
+mod keywords;
+mod owned_child;
 mod process;
 mod scratch;
 mod state;
 mod validation;
 mod warm;
+mod warm_worker;
 use contracts::*;
 pub use host::SpeechHost;
+
+#[tauri::command]
+pub async fn speech_keywords(
+    host: tauri::State<'_, SpeechHost>,
+    request: Option<serde_json::Value>,
+) -> Result<KeywordReply, SpeechError> {
+    let request: KeywordRequest = validation::decode(request)?;
+    let host = host.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || host.keywords(request))
+        .await
+        .map_err(|_| SpeechError::Unavailable)?
+}
 
 #[tauri::command]
 pub fn speech_snapshot(

@@ -1,0 +1,2145 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-03",
+  "issue": 253,
+  "targetBase": "640c34d5b4174fcff78fb3d2c532a47cce7be894",
+  "candidate": true,
+  "merged": false,
+  "independentReview": "Pending; repository paid review dispatcher remains disabled",
+  "scope": "Synthetic offline CPU replay and Rust-owned Windows worker lifecycle; live speech acceptance remains open",
+  "microphoneUsed": false,
+  "llmRequests": 0,
+  "recognitionApiRequests": 0,
+  "gpuInference": false,
+  "hardware": {
+    "os": "Windows x64",
+    "cpu": "Intel Core i7-14700K",
+    "physicalCores": 20,
+    "logicalProcessors": 28
+  },
+  "source": {
+    "workerSha256Lf": "e353e5c80e762cefac0140c7747574a3b59024abb9f7bc80d99682453aa63437",
+    "measuredWorkerSha256": "4d945d1199a98e1aeee391c395a3807f7165fc933082c65261aa93a437a833d0",
+    "lineEndingNote": "Measured Windows CRLF bytes and canonical Git LF source are equivalent"
+  },
+  "selection": {
+    "runtime": "sherpa-onnx/core 1.12.40 Windows CPython 3.12, native CPU ONNX implementation behind isolated Python boundary",
+    "keywords": "English GigaSpeech 3.3M INT8 chunk16 plus zh-en 3M FP32 chunk8; English-only graphs; complementary Ivy graphs, phoneme controls; 8 active command paths",
+    "transcriber": "English-only Parakeet TDT 0.6B v2 INT8, 2 CPU threads",
+    "rationale": "Parakeet has substantially lower measured warm compute latency than cached Whisper Base. This synthetic corpus shows 7 versus 6 word errors, so no accuracy improvement is claimed; retain draft status pending representative real speech qualification.",
+    "alternatives": "Exploratory English BPE-only controls and either single wake graph exposed misses. Full NeMo/PyTorch is unnecessary for this supported native ONNX model. openWakeWord has no supplied Ivy classifier; custom training and holdout recordings remain a possible follow-up, not a qualified model.",
+    "licenses": {
+      "sherpaAndKws": "Apache-2.0; model author/maintainer clarification in sherpa-onnx issue 3802",
+      "parakeet": "CC-BY-4.0; attribution, license link and ONNX conversion/quantization notice required on redistribution",
+      "processWrapAndWindows": "MIT OR Apache-2.0; safe suspended Windows Job Object API; no handwritten unsafe code"
+    },
+    "sources": [
+      "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2",
+      "https://github.com/k2-fsa/sherpa-onnx/issues/3802",
+      "https://k2-fsa.github.io/sherpa/onnx/pretrained_models/offline-transducer/nemo-transducer-models.html",
+      "https://github.com/dscripka/openWakeWord",
+      "https://docs.rs/process-wrap/10.0.1/process_wrap/std/struct.JobObject.html"
+    ],
+    "diskMiB": {
+      "recognitionVenvExcludingBasePython": 113.0,
+      "englishKwsExtracted": 19.2,
+      "phonemeKwsExtracted": 38.9,
+      "parakeetExtracted": 630.8,
+      "archivesNotNeededAtRuntime": 508.3
+    },
+    "packaging": "Explicit SHA-checked archives and hash-pinned wheels; application never installs/downloads. Current desktop installer remains disabled; weights are outside tracked source.",
+    "searchWidthQualification": {
+      "selectedActivePaths": 8,
+      "selectedMissesPer54Positives": 9,
+      "sixteenActivePathsMissesPer54Positives": 12,
+      "negativeFalseActivationsPer90Trials": 0,
+      "scope": "Same fixed synthetic corpus; no live accuracy claim"
+    }
+  },
+  "method": {
+    "phrasesPerVoice": 24,
+    "voices": ["af_heart", "bf_emma"],
+    "speedFactors": [0.85, 1, 1.2],
+    "speedLimit": "Resampling changes pitch as well as speed; these are not independent natural pronunciations",
+    "latencyReference": "Last PCM sample above absolute amplitude 262; wake-request keyword end is unannotated",
+    "latencyLimit": "Audio-time replay availability excludes renderer/native IPC, scheduling and physical microphone delay. Post-Ivy request keyword ends are not annotated and have null latency.",
+    "wordErrors": "Case/punctuation normalized word edit distance on 48 normal-speed clips, 202 reference words",
+    "baselineLimit": "One-request Whisper includes interpreter/model startup. Cached Whisper separately removes repeated model loading; Parakeet replay includes PCM conversion and warm model execution."
+  },
+  "summary": {
+    "totalTrials": 144,
+    "passedTrials": 135,
+    "positiveTrials": 54,
+    "falseNegativeTrials": 9,
+    "wakeTrials": 12,
+    "wakeMisses": 0,
+    "controlTrials": 42,
+    "controlMisses": 9,
+    "negativeTrials": 90,
+    "falsePositiveTrials": 0,
+    "standaloneWakeLatencyMs": {
+      "n": 6,
+      "min": 332,
+      "median": 466.5,
+      "p95NearestRank": 564,
+      "max": 564
+    },
+    "successfulControlLatencyMs": {
+      "n": 33,
+      "min": 15,
+      "median": 252,
+      "p95NearestRank": 382,
+      "max": 413
+    },
+    "target250ms": "Not consistently achieved; decoder chunk/lookahead and phrase settlement add material delay",
+    "parakeetWarmReplayMs": {
+      "n": 48,
+      "min": 54,
+      "median": 79.5,
+      "p95NearestRank": 181,
+      "max": 561
+    },
+    "whisperOneRequestMs": {
+      "n": 48,
+      "min": 1974,
+      "median": 2107.5,
+      "p95NearestRank": 2341,
+      "max": 2686
+    },
+    "parakeetWordErrors": 7,
+    "whisperWordErrors": 6,
+    "referenceWords": 202,
+    "fallbackLimit": "Active-session misses may use the slower exact finalized-STT command route. They are still fast-path misses; no complete fallback success rate is claimed. Passive misses remain passive."
+  },
+  "replay": [
+    {
+      "syntheticVoice": "af_heart",
+      "engineConstructionMs": {
+        "keywords": 1046,
+        "parakeet": 1452
+      },
+      "rawReplayWorkerSha256": "4d945d1199a98e1aeee391c395a3807f7165fc933082c65261aa93a437a833d0",
+      "fixtures": {
+        "wake": {
+          "expected": "ivy",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["ivy"],
+              "endLatencyMs": [473],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["ivy"],
+              "endLatencyMs": [564],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["ivy"],
+              "endLatencyMs": [343],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 62,
+            "oneRequestWhisperMs": 2686,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "wake-request": {
+          "expected": "ivy",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 114,
+            "oneRequestWhisperMs": 2242,
+            "referenceWords": 4,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          },
+          "normalSpeedWakeTailWordErrors": {
+            "errors": 0,
+            "referenceWords": 3
+          }
+        },
+        "done": {
+          "expected": "done",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["done"],
+              "endLatencyMs": [274],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["done"],
+              "endLatencyMs": [268],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 86,
+            "oneRequestWhisperMs": 2243,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "im-done": {
+          "expected": "done",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["done"],
+              "endLatencyMs": [228],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["done"],
+              "endLatencyMs": [304],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["done"],
+              "endLatencyMs": [413],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 75,
+            "oneRequestWhisperMs": 2193,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "clear": {
+          "expected": "clear",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["clear"],
+              "endLatencyMs": [231],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["clear"],
+              "endLatencyMs": [283],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["clear"],
+              "endLatencyMs": [249],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 75,
+            "oneRequestWhisperMs": 1974,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prompt": {
+          "expected": "prompt",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["prompt"],
+              "endLatencyMs": [256],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["prompt"],
+              "endLatencyMs": [354],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["prompt"],
+              "endLatencyMs": [295],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 70,
+            "oneRequestWhisperMs": 2160,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "cancel": {
+          "expected": "prompt cancel",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["prompt cancel"],
+              "endLatencyMs": [238],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["prompt cancel"],
+              "endLatencyMs": [235],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["prompt cancel"],
+              "endLatencyMs": [382],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 79,
+            "oneRequestWhisperMs": 2156,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "reset": {
+          "expected": "new session",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["new session"],
+              "endLatencyMs": [223],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["new session"],
+              "endLatencyMs": [358],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["new session"],
+              "endLatencyMs": [325],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 88,
+            "oneRequestWhisperMs": 2271,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "reload": {
+          "expected": "reload mcp",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["reload mcp"],
+              "endLatencyMs": [226],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["reload mcp"],
+              "endLatencyMs": [238],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["reload mcp"],
+              "endLatencyMs": [279],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 115,
+            "oneRequestWhisperMs": 2151,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 105,
+            "oneRequestWhisperMs": 2359,
+            "referenceWords": 6,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-done": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 181,
+            "oneRequestWhisperMs": 2341,
+            "referenceWords": 11,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prefix-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 117,
+            "oneRequestWhisperMs": 2234,
+            "referenceWords": 5,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "near-wake": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 137,
+            "oneRequestWhisperMs": 2042,
+            "referenceWords": 5,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "near-wake-mean": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 79,
+            "oneRequestWhisperMs": 2131,
+            "referenceWords": 5,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-wake": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 90,
+            "oneRequestWhisperMs": 2041,
+            "referenceWords": 8,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "cancel-idle": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 67,
+            "oneRequestWhisperMs": 2020,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "short-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 58,
+            "oneRequestWhisperMs": 1985,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "short-done": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 60,
+            "oneRequestWhisperMs": 1994,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "short-prompt": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 61,
+            "oneRequestWhisperMs": 1989,
+            "referenceWords": 2,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 1
+          }
+        },
+        "prefix-clear-short": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 66,
+            "oneRequestWhisperMs": 2026,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prefix-prompt-short": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 71,
+            "oneRequestWhisperMs": 2000,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "suffix-reset": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 76,
+            "oneRequestWhisperMs": 2039,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "suffix-reload": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 86,
+            "oneRequestWhisperMs": 2012,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "long": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 344,
+            "oneRequestWhisperMs": 2156,
+            "referenceWords": 26,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        }
+      }
+    },
+    {
+      "syntheticVoice": "bf_emma",
+      "engineConstructionMs": {
+        "keywords": 1012,
+        "parakeet": 1445
+      },
+      "rawReplayWorkerSha256": "4d945d1199a98e1aeee391c395a3807f7165fc933082c65261aa93a437a833d0",
+      "fixtures": {
+        "wake": {
+          "expected": "ivy",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["ivy"],
+              "endLatencyMs": [460],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["ivy"],
+              "endLatencyMs": [558],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["ivy"],
+              "endLatencyMs": [332],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 54,
+            "oneRequestWhisperMs": 2029,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "wake-request": {
+          "expected": "ivy",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["ivy"],
+              "endLatencyMs": [null],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 97,
+            "oneRequestWhisperMs": 2160,
+            "referenceWords": 4,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          },
+          "normalSpeedWakeTailWordErrors": {
+            "errors": 0,
+            "referenceWords": 3
+          }
+        },
+        "done": {
+          "expected": "done",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["done"],
+              "endLatencyMs": [15],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 65,
+            "oneRequestWhisperMs": 2205,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "im-done": {
+          "expected": "done",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["done"],
+              "endLatencyMs": [236],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["done"],
+              "endLatencyMs": [290],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 87,
+            "oneRequestWhisperMs": 2152,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "clear": {
+          "expected": "clear",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": ["clear"],
+              "endLatencyMs": [234],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["clear"],
+              "endLatencyMs": [217],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["clear"],
+              "endLatencyMs": [315],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 72,
+            "oneRequestWhisperMs": 2070,
+            "referenceWords": 1,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prompt": {
+          "expected": "prompt",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["prompt"],
+              "endLatencyMs": [241],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 65,
+            "oneRequestWhisperMs": 2153,
+            "referenceWords": 1,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 1
+          }
+        },
+        "cancel": {
+          "expected": "prompt cancel",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["prompt cancel"],
+              "endLatencyMs": [254],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["prompt cancel"],
+              "endLatencyMs": [232],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 124,
+            "oneRequestWhisperMs": 2145,
+            "referenceWords": 2,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 1
+          }
+        },
+        "reset": {
+          "expected": "new session",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["new session"],
+              "endLatencyMs": [220],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["new session"],
+              "endLatencyMs": [252],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 79,
+            "oneRequestWhisperMs": 2122,
+            "referenceWords": 2,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 0
+          }
+        },
+        "reload": {
+          "expected": "reload mcp",
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": false
+            },
+            {
+              "speed": 1.0,
+              "recognized": ["reload mcp"],
+              "endLatencyMs": [224],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": ["reload mcp"],
+              "endLatencyMs": [264],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 94,
+            "oneRequestWhisperMs": 2087,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 154,
+            "oneRequestWhisperMs": 2161,
+            "referenceWords": 6,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-done": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 100,
+            "oneRequestWhisperMs": 2062,
+            "referenceWords": 11,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prefix-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 99,
+            "oneRequestWhisperMs": 2067,
+            "referenceWords": 5,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "near-wake": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 90,
+            "oneRequestWhisperMs": 2030,
+            "referenceWords": 5,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "near-wake-mean": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 74,
+            "oneRequestWhisperMs": 2059,
+            "referenceWords": 5,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 0
+          }
+        },
+        "embedded-wake": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 99,
+            "oneRequestWhisperMs": 2016,
+            "referenceWords": 8,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "cancel-idle": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 71,
+            "oneRequestWhisperMs": 2026,
+            "referenceWords": 2,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 1
+          }
+        },
+        "short-clear": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 64,
+            "oneRequestWhisperMs": 2036,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "short-done": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 72,
+            "oneRequestWhisperMs": 2013,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "short-prompt": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 70,
+            "oneRequestWhisperMs": 2123,
+            "referenceWords": 2,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "prefix-clear-short": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 80,
+            "oneRequestWhisperMs": 2071,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 1
+          }
+        },
+        "prefix-prompt-short": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 73,
+            "oneRequestWhisperMs": 2093,
+            "referenceWords": 2,
+            "parakeetWordErrors": 1,
+            "whisperWordErrors": 1
+          }
+        },
+        "suffix-reset": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 157,
+            "oneRequestWhisperMs": 2251,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "suffix-reload": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 176,
+            "oneRequestWhisperMs": 2242,
+            "referenceWords": 3,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        },
+        "long": {
+          "expected": null,
+          "trials": [
+            {
+              "speed": 0.85,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.0,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            },
+            {
+              "speed": 1.2,
+              "recognized": [],
+              "endLatencyMs": [],
+              "pass": true
+            }
+          ],
+          "normalSpeedStt": {
+            "parakeetMs": 561,
+            "oneRequestWhisperMs": 2250,
+            "referenceWords": 26,
+            "parakeetWordErrors": 0,
+            "whisperWordErrors": 0
+          }
+        }
+      }
+    }
+  ],
+  "nativeWorker": {
+    "keywordDetections": ["ivy"],
+    "keywordFirstChunkMs": 1276.3337,
+    "keywordRssMiB": 121.62890625,
+    "keywordWarmMaxChunkMs": 10.1777,
+    "llmRequests": 0,
+    "microphoneUsed": false,
+    "processReuseVerified": true,
+    "recoveryMs": 2008.0328,
+    "resourceScope": "Sum of root launcher and all recursive descendants; RSS may double-count shared pages",
+    "scope": "Rust-owned persistent CPU workers; no WebView IPC or live microphone",
+    "stopReapedBothWorkersAndDescendants": true,
+    "streamedSilenceCpuPercentOneCore": 1.2163793004627943,
+    "streamedSilenceSeconds": 5,
+    "sttFirstRssMiB": 792.35546875,
+    "sttMs": [
+      2108.9824, 374.8471, 350.2518, 350.777, 349.856, 354.8127, 362.1664,
+      355.8327, 361.69259999999997, 350.2081, 351.4523, 355.0878, 356.1902,
+      348.1985, 345.1672, 349.3386, 370.46119999999996, 351.11949999999996,
+      350.0894, 348.21049999999997, 354.79, 351.2176, 349.1637,
+      353.04249999999996, 349.1343, 345.60990000000004, 354.4421, 355.7343,
+      356.9279, 355.2948, 348.3574
+    ],
+    "sttRssMiB": 863.8515625,
+    "sttRssSamplesMiB": [
+      792.35546875, 858.6953125, 858.28125, 859.89453125, 860.2265625,
+      860.421875, 860.98046875, 861.0, 861.0234375, 861.16796875, 862.46484375,
+      861.33203125, 861.03515625, 862.03515625, 862.0078125, 861.78125,
+      861.7734375, 860.84765625, 860.83984375, 860.84375, 860.80859375,
+      860.83203125, 862.0078125, 862.30078125, 861.984375, 862.97265625,
+      862.12109375, 863.84765625, 863.8515625, 863.875, 863.8515625
+    ],
+    "synthetic": true,
+    "fixture": {
+      "voice": "bf_emma",
+      "longPcmSamples": 154464,
+      "longSeconds": 9.654,
+      "kind": "Previously generated fixed synthetic probe; 31 repeated identical requests"
+    },
+    "warmSttMs": {
+      "n": 30,
+      "min": 345.17,
+      "median": 351.33,
+      "p95NearestRank": 370.46,
+      "max": 374.85
+    },
+    "memoryLimitations": "Allocator/RSS grows after cold request and remains about 859-864 MiB over 30 warm requests. This finite run does not prove absence of leaks."
+  },
+  "warmWhisperComparator": {
+    "synthetic": true,
+    "microphoneUsed": false,
+    "llmRequests": 0,
+    "gpuUsed": false,
+    "modelLoadMs": 594.5,
+    "rssMiB": 264.9,
+    "workerSha256Lf": "53d56a8dd50c13807fb1aa56d70cd6f26968324e58d066629dacc11cb620e1d4",
+    "scope": "Existing worker/configuration with one cached Whisper Base CPU INT8 model; no process/IPC cost",
+    "rows": [
+      {
+        "voice": "af_heart",
+        "fixture": "wake",
+        "ms": 1738.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": true
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "wake-request",
+        "ms": 772.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 4
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "done",
+        "ms": 735.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "im-done",
+        "ms": 724.1,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "clear",
+        "ms": 751.5,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "prompt",
+        "ms": 740.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "cancel",
+        "ms": 732.6,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "reset",
+        "ms": 744.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "reload",
+        "ms": 742.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "embedded-clear",
+        "ms": 750.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 6
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "embedded-done",
+        "ms": 779.5,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 11
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "prefix-clear",
+        "ms": 733.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "near-wake",
+        "ms": 750.1,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "near-wake-mean",
+        "ms": 770.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "embedded-wake",
+        "ms": 769.2,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 8
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "cancel-idle",
+        "ms": 741.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "short-clear",
+        "ms": 732.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "short-done",
+        "ms": 716.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "short-prompt",
+        "ms": 736.0,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "prefix-clear-short",
+        "ms": 711.4,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "prefix-prompt-short",
+        "ms": 706.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "suffix-reset",
+        "ms": 760.8,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "suffix-reload",
+        "ms": 720.6,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "af_heart",
+        "fixture": "long",
+        "ms": 916.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 26
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "wake",
+        "ms": 702.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "wake-request",
+        "ms": 825.9,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 4
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "done",
+        "ms": 840.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "im-done",
+        "ms": 736.2,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "clear",
+        "ms": 828.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "prompt",
+        "ms": 790.4,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 1
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "cancel",
+        "ms": 769.1,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "reset",
+        "ms": 729.9,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "reload",
+        "ms": 759.3,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "embedded-clear",
+        "ms": 740.9,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 6
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "embedded-done",
+        "ms": 762.2,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 11
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "prefix-clear",
+        "ms": 728.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "near-wake",
+        "ms": 763.1,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "near-wake-mean",
+        "ms": 951.6,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 5
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "embedded-wake",
+        "ms": 912.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 8
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "cancel-idle",
+        "ms": 775.0,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "short-clear",
+        "ms": 759.8,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "short-done",
+        "ms": 723.7,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "short-prompt",
+        "ms": 756.5,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "prefix-clear-short",
+        "ms": 743.4,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "prefix-prompt-short",
+        "ms": 745.7,
+        "wordErrors": {
+          "errors": 1,
+          "referenceWords": 2
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "suffix-reset",
+        "ms": 757.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "suffix-reload",
+        "ms": 742.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 3
+        },
+        "coldModel": false
+      },
+      {
+        "voice": "bf_emma",
+        "fixture": "long",
+        "ms": 881.0,
+        "wordErrors": {
+          "errors": 0,
+          "referenceWords": 26
+        },
+        "coldModel": false
+      }
+    ]
+  },
+  "verification": {
+    "frontend": "nx run-many -t lint,test -p stellar-desktop,service-desktop-adapter,desktop-contracts,service-audio-activity; nx build stellar-desktop; nx e2e stellar-desktop-e2e",
+    "native": "node tools/native/cargo.mjs test, clippy, fmt, contract-check, size, smoke (separate invocations)",
+    "installedEngines": "cargo test --locked -p stellar-desktop --bin stellar-desktop speech::warm_worker::tests::installed_offline_engines_reuse_processes_and_recover_after_stop -- --ignored --exact",
+    "nativeWebViewSpeechIpc": "Not run: automatic approval review rejected the remote-debug native launch with reason blocked by policy",
+    "standardNativeSmoke": "Passed; embedded WebView shell and versioned IPC only, not new speech IPC/device qualification",
+    "earlierFailures": "TTS startup fixtures exceeded 3-second deadlines during concurrent frontend load; isolated and complete quiet native reruns passed. An earlier workspace cancellation timing test also passed on rerun. Initial PR quality CI caught an omitted keyword permission in the native JavaScript expected allowlist; the assertion was updated and the complete 22-test suite passed locally.",
+    "nativeJavaScript": "node --test tools/native/*.spec.mjs: 22 passed, including explicit keyword command capability allowlist"
+  },
+  "unqualified": [
+    "Actual user pronunciation and physical microphone/device lifecycle",
+    "Real background conversation/media false activations per hour",
+    "Live quiet-pause and long-dictation accuracy",
+    "Matched physical end-of-speech-to-transcript latency",
+    "Native WebView speech IPC replay and emblem frame timing",
+    "VRAM telemetry and GPU contention",
+    "Long-duration/varied-utterance memory stability",
+    "Independent critical review",
+    "Distribution installer/attribution packaging"
+  ],
+  "followUpEvidence": "recognition-reliability.json (coordinator reliability and approved restricted native qualification; historical measurements here retained)"
+}

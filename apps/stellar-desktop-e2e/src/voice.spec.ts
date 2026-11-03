@@ -112,6 +112,17 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
             if (command === 'ivy_select_session')
               return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
+            if (command === 'speech_keywords')
+              return {
+                sequence: request['sequence'],
+                detection:
+                  request['mode'] === 'passive' &&
+                  (request['pcm'] as number[]).some(
+                    (value) => Math.abs(value) > 500,
+                  )
+                    ? { command: 'ivy', end_sample: 0 }
+                    : null,
+              };
             if (command === 'speech_collect') {
               results.transcribeActive = results.activeTracks;
               results.speechId = String(request['utterance_id']);

@@ -1,6 +1,7 @@
 /** Wake spellings only at an utterance prefix, never inside dictation. */
 export class VoiceInvocation {
   private invoked = false;
+  private acoustic = false;
 
   active(): boolean {
     return this.invoked;
@@ -8,10 +9,17 @@ export class VoiceInvocation {
 
   activate(): void {
     this.invoked = true;
+    this.acoustic = false;
+  }
+
+  activateAcoustically(): void {
+    this.invoked = true;
+    this.acoustic = true;
   }
 
   reset(): void {
     this.invoked = false;
+    this.acoustic = false;
   }
 
   accept(
@@ -28,8 +36,9 @@ export class VoiceInvocation {
       return { text: text.slice(wake[0].length), invoked: true };
     }
     if (!this.active() && !composing) return null;
+    const invoked = this.acoustic;
     this.activate();
-    return { text, invoked: false };
+    return { text, invoked };
   }
 }
 

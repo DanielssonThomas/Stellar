@@ -1,13 +1,87 @@
 use super::contracts::SpeechError;
+pub(super) use super::owned_child::OwnedChild as Child;
 use serde_json::Value;
 use std::{
     io::{BufRead, BufReader, Read, Write},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
     sync::{Arc, Mutex, mpsc},
 };
 
 pub type ChildSlot = Arc<Mutex<Option<Child>>>;
 pub type Frames = mpsc::Receiver<Result<Value, SpeechError>>;
+
+pub(super) struct PersistentTransport {
+    pub(super) input: mpsc::SyncSender<Vec<u8>>,
+    pub(super) frames: Frames,
+}
+
+pub(super) fn start_persistent(
+    mut command: Command,
+    capacity: usize,
+) -> Result<(Child, PersistentTransport), SpeechError> {
+    configure(&mut command);
+    let mut child = Child::spawn(command).map_err(|_| SpeechError::Unavailable)?;
+    let Some(mut stdin) = child.stdin.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(SpeechError::Unavailable);
+    };
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(SpeechError::Unavailable);
+    };
+    let (send, frames) = mpsc::sync_channel(capacity);
+    let (input, pending) = mpsc::sync_channel::<Vec<u8>>(1);
+    let errors = send.clone();
+    std::thread::spawn(move || {
+        while let Ok(payload) = pending.recv() {
+            if stdin
+                .write_all(&payload)
+                .and_then(|_| stdin.flush())
+                .is_err()
+            {
+                let _ = errors.send(Err(SpeechError::Unavailable));
+                break;
+            }
+        }
+    });
+    read_frames(stdout, send);
+    Ok((child, PersistentTransport { input, frames }))
+}
+
+pub(super) fn recognition_command(mode: &str) -> Command {
+    let mut command = Command::new(r"D:\Hermes\profiles\ivy\recognition\.venv\Scripts\python.exe");
+    command.args([
+        "-I",
+        "-u",
+        "-c",
+        include_str!("recognition_worker.py"),
+        mode,
+    ]);
+    sanitize(&mut command);
+    command
+}
+
+fn sanitize(command: &mut Command) {
+    for (key, _) in std::env::vars_os() {
+        let upper = key.to_string_lossy().to_uppercase();
+        if [
+            "KEY",
+            "TOKEN",
+            "SECRET",
+            "PASSWORD",
+            "AUTH",
+            "COOKIE",
+            "PYTHONPATH",
+        ]
+        .iter()
+        .any(|part| upper.contains(part))
+        {
+            command.env_remove(key);
+        }
+    }
+}
 
 pub fn stop(slot: &ChildSlot) -> Result<(), SpeechError> {
     let mut owned = slot.lock().map_err(|_| SpeechError::Unavailable)?;
@@ -31,23 +105,7 @@ pub(super) fn command(mode: &str) -> Result<Command, SpeechError> {
     };
     let mut command = Command::new(python);
     command.args(["-I", "-u", "-c", include_str!("speech_worker.py"), mode]);
-    for (key, _) in std::env::vars_os() {
-        let upper = key.to_string_lossy().to_uppercase();
-        if [
-            "KEY",
-            "TOKEN",
-            "SECRET",
-            "PASSWORD",
-            "AUTH",
-            "COOKIE",
-            "PYTHONPATH",
-        ]
-        .iter()
-        .any(|part| upper.contains(part))
-        {
-            command.env_remove(key);
-        }
-    }
+    sanitize(&mut command);
     Ok(command)
 }
 
@@ -69,7 +127,7 @@ pub(super) fn spawn(
     payload: Vec<u8>,
 ) -> Result<Frames, SpeechError> {
     configure(&mut command);
-    let mut child = command.spawn().map_err(|_| SpeechError::Unavailable)?;
+    let mut child = Child::spawn(command).map_err(|_| SpeechError::Unavailable)?;
     let input = child.stdin.take();
     let output = child.stdout.take();
     *slot.lock().map_err(|_| SpeechError::Unavailable)? = Some(child);
