@@ -132,19 +132,19 @@
       "fragments": 15,
       "visiblePixels": [
         2601,
-        873,
+        1518,
         1895,
-        645,
+        584,
         1090,
         1515,
         1702,
         1621,
-        2859,
+        2274,
         704,
         1055,
         1286,
         1182,
-        988,
+        989,
         1665
       ],
       "pixelIdentical": true
@@ -187,7 +187,7 @@
   ],
   "svgLayers": 5,
   "zeroPose": "All assembled poses are zero; canonical pixels are a deterministic composition of these exact registered files.",
-  "runtimeBytes": 6914416,
+  "runtimeBytes": 6914513,
   "budgetBytes": 8388608,
   "activeSvgContent": false,
   "fragmentAssemblyPixelIdentical": true

@@ -654,7 +654,7 @@
         "index": 1,
         "count": 15
       },
-      "centroid": { "x": 672.51, "y": 363.74 }
+      "centroid": { "x": 674.27, "y": 373.54 }
     },
     {
       "id": "gold-ornament-3",
@@ -684,7 +684,7 @@
         "index": 3,
         "count": 15
       },
-      "centroid": { "x": 676.6, "y": 386.54 }
+      "centroid": { "x": 755.49, "y": 465.18 }
     },
     {
       "id": "gold-ornament-5",
@@ -759,7 +759,7 @@
         "index": 8,
         "count": 15
       },
-      "centroid": { "x": 767.52, "y": 449.91 }
+      "centroid": { "x": 770.48, "y": 446.17 }
     },
     {
       "id": "gold-ornament-10",
@@ -834,7 +834,7 @@
         "index": 13,
         "count": 15
       },
-      "centroid": { "x": 724.91, "y": 461.16 }
+      "centroid": { "x": 724.91, "y": 461.14 }
     },
     {
       "id": "gold-ornament-15",

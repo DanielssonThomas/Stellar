@@ -83,7 +83,15 @@ export async function exportStrands(page, root, size, registration) {
       'data:image/png;base64,' +
       fs.readFileSync(path.join(root, file)).toString('base64');
     const result = await page.evaluate(
-      async ({ source, segmentation, palette, size, registration, kind }) => {
+      async ({
+        source,
+        segmentation,
+        palette,
+        size,
+        registration,
+        color,
+        kind,
+      }) => {
         const load = async (src) => {
           const img = new Image();
           img.src = src;
@@ -122,6 +130,19 @@ export async function exportStrands(page, root, size, registration) {
               labels[index] = label;
             }
           });
+          if (color === 'gold' && kind === 'ornament') {
+            // Join the two map colors covering the upper-left leaf, then
+            // reuse the spare label for the second lower-right leaf.
+            if (labels[index] === 3) labels[index] = 1;
+            if (labels[index] === 8) {
+              const x =
+                ((index % size) + 0.5 - registration.x) / registration.scale;
+              const y =
+                (Math.floor(index / size) + 0.5 - registration.y) /
+                registration.scale;
+              if (y > 700 + 0.6 * (x - 725)) labels[index] = 3;
+            }
+          }
           queue[end++] = index;
         }
         // Extend the nearest label into any silhouette drift in the authored map.
@@ -238,6 +259,7 @@ export async function exportStrands(page, root, size, registration) {
         source: dataUrl(`layers/${color}-${kind}.png`),
         segmentation: dataUrl(`sources/${color}-${kind}-segmentation-v2.png`),
         palette: palette.slice(0, count),
+        color,
         kind,
         registration:
           kind === 'ornament'
