@@ -160,6 +160,7 @@ class AccessTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await approvals.native_consent({'command': attack}), 'once')
         self.assertNotIn(attack, ' '.join(invocations[0]))
         self.assertIn(attack, json.loads(process.data)['text'])
+        self.assertEqual(json.loads(process.data)['owner_pid'], os.getpid())
 
         async def cancelled(data):
             raise asyncio.CancelledError()

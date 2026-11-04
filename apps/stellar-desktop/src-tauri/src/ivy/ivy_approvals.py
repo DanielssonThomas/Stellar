@@ -46,6 +46,7 @@ DIALOG = r'''
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$owner = [Diagnostics.Process]::GetProcessById([int]$request.owner_pid)
 Add-Type -AssemblyName System.Windows.Forms
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Stellar - Ivy approval'
@@ -76,10 +77,25 @@ $form.Controls.Add($text)
 $form.Controls.Add($buttons)
 $form.AcceptButton = $deny
 $form.CancelButton = $deny
+$elapsed = [Diagnostics.Stopwatch]::StartNew()
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 250
+$timer.Add_Tick({
+    if ($owner.HasExited -or $elapsed.Elapsed.TotalSeconds -ge 90) {
+        $form.DialogResult = 'Cancel'
+        $form.Close()
+    }
+})
+$timer.Start()
 try {
     if ($form.ShowDialog() -eq 'OK') { [Console]::Write('once') }
     else { [Console]::Write('deny') }
-} finally { $form.Dispose() }
+} finally {
+    $timer.Stop()
+    $timer.Dispose()
+    $form.Dispose()
+    $owner.Dispose()
+}
 '''
 
 
@@ -103,7 +119,7 @@ async def native_consent(payload):
         stderr=asyncio.subprocess.DEVNULL, creationflags=0x08000000)
     try:
         output, _ = await asyncio.wait_for(process.communicate(
-            json.dumps({'text': text}, ensure_ascii=False).encode('utf-8')), 90)
+            json.dumps({'text': text, 'owner_pid': os.getpid()}, ensure_ascii=False).encode('utf-8')), 90)
         return 'once' if process.returncode == 0 and output == b'once' else 'deny'
     finally:
         if process.returncode is None:
