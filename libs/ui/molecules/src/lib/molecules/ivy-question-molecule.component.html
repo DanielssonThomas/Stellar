@@ -12,26 +12,26 @@
     <h2 id="ivy-question-title">Could you check this out?</h2>
     @if (loading()) {
       <stellar-skeleton-atom shape="text" />
-    } @else if (question(); as question) {
-      <p id="ivy-question-text" class="question-text">{{ question.text }}</p>
+    } @else if (promptId()) {
+      <p id="ivy-question-text" class="question-text">{{ text() }}</p>
       <div
         class="choices"
         [attr.aria-label]="
-          question.multi_select ? 'Choose any that apply' : 'Choose an option'
+          multiSelect() ? 'Choose any that apply' : 'Choose an option'
         "
       >
-        @for (choice of question.choices; track $index) {
+        @for (choice of choices(); track $index) {
           <button
             type="button"
             class="choice"
             [disabled]="disabled()"
             [attr.aria-pressed]="
-              question.multi_select ? selected().includes($index) : null
+              multiSelect() ? selected().includes($index) : null
             "
             (click)="choose($index)"
           >
             <span class="choice-marker" aria-hidden="true">{{
-              question.multi_select
+              multiSelect()
                 ? selected().includes($index)
                   ? '✓'
                   : '◇'
@@ -43,9 +43,7 @@
       </div>
       <form (submit)="submit($event)">
         <label for="ivy-question-answer">{{
-          question.choices.length
-            ? 'Or tell me in your own words'
-            : 'Your answer'
+          choices().length ? 'Or tell me in your own words' : 'Your answer'
         }}</label>
         <textarea
           id="ivy-question-answer"
@@ -54,14 +52,18 @@
           [value]="draft()"
           [disabled]="disabled()"
           (input)="edit($event)"
+          [attr.aria-describedby]="error() ? 'ivy-question-error' : null"
           placeholder="Type your answer…"
         ></textarea>
+        @if (error()) {
+          <p id="ivy-question-error" role="status">{{ error() }}</p>
+        }
         <div class="actions">
           <button
             type="button"
             class="quiet"
             [disabled]="disabled()"
-            (click)="respond({ kind: 'cancel' })"
+            (click)="cancel()"
           >
             Cancel question
           </button>
@@ -69,7 +71,7 @@
             type="button"
             class="quiet"
             [disabled]="disabled()"
-            (click)="respond({ kind: 'skip' })"
+            (click)="skip()"
           >
             Skip
           </button>
@@ -77,7 +79,7 @@
             type="submit"
             [disabled]="disabled() || (!draft().trim() && !selected().length)"
           >
-            {{ question.answering || submitted() ? 'Sending…' : 'Send answer' }}
+            {{ answering() || submitted() ? 'Sending…' : 'Send answer' }}
           </button>
         </div>
       </form>

@@ -11,10 +11,6 @@ import {
   viewChild,
 } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
-import type {
-  IvyQuestion,
-  IvyQuestionAction,
-} from '@stellar/desktop-contracts';
 
 @Component({
   selector: 'stellar-ivy-question-molecule',
@@ -28,14 +24,22 @@ import type {
   },
 })
 export class IvyQuestionMolecule {
-  readonly question = input<IvyQuestion | null>(null);
+  readonly promptId = input('');
+  readonly text = input('');
+  readonly choices = input<readonly string[]>([]);
+  readonly multiSelect = input(false);
+  readonly ready = input(false);
+  readonly answering = input(false);
   readonly loading = input(false);
   readonly reducedMotion = input(false);
   readonly shown = output<string>();
-  readonly answer = output<IvyQuestionAction>();
+  readonly answer = output<string>();
+  readonly skipped = output<void>();
+  readonly cancelled = output<void>();
   readonly draft = signal('');
   readonly selected = signal<readonly number[]>([]);
   readonly submitted = signal(false);
+  readonly error = signal('');
   private readonly dialog =
     viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   private readonly document = inject(DOCUMENT);
@@ -52,11 +56,11 @@ export class IvyQuestionMolecule {
       this.document.removeEventListener('visibilitychange', visibility),
     );
     afterRenderEffect(() => {
-      const question = this.question();
+      const id = this.promptId();
       const dialog = this.dialog().nativeElement;
-      if (!question || !this.visible()) return;
+      if (!id || !this.visible()) return;
       if (!dialog.open) dialog.showModal();
-      if (question.shown && this.document.activeElement === dialog)
+      if (this.ready() && this.document.activeElement === dialog)
         dialog
           .querySelector<HTMLElement>(
             'button:not(:disabled), textarea:not(:disabled)',
@@ -65,61 +69,70 @@ export class IvyQuestionMolecule {
       if (
         !this.loading() &&
         dialog.getClientRects().length &&
-        this.acknowledged !== question.id
+        this.acknowledged !== id
       ) {
-        this.acknowledged = question.id;
-        this.shown.emit(question.id);
+        this.acknowledged = id;
+        this.shown.emit(id);
       }
     });
   }
 
   disabled() {
     return (
-      this.loading() ||
-      !this.question()?.shown ||
-      this.question()?.answering ||
-      this.submitted()
+      this.loading() || !this.ready() || this.answering() || this.submitted()
     );
   }
 
   choose(index: number) {
     if (this.disabled()) return;
-    const question = this.question();
-    if (!question || !question.choices[index]) return;
-    if (question.multi_select) {
+    this.error.set('');
+    const choice = this.choices()[index];
+    if (!choice) return;
+    if (this.multiSelect()) {
       this.selected.update((rows) =>
         rows.includes(index)
           ? rows.filter((row) => row !== index)
           : [...rows, index],
       );
-    } else this.respond({ kind: 'answer', answer: question.choices[index] });
+    } else this.respond(choice);
   }
 
   edit(event: Event) {
+    this.error.set('');
     if (event.target instanceof HTMLTextAreaElement)
       this.draft.set(event.target.value);
   }
 
   submit(event: Event) {
     event.preventDefault();
-    const question = this.question();
     const typed = this.draft().trim();
     const selected = this.selected()
-      .map((index) => question?.choices[index])
+      .map((index) => this.choices()[index])
       .filter((choice): choice is string => Boolean(choice));
     const answer = typed || (selected.length ? JSON.stringify(selected) : '');
-    if (answer && new TextEncoder().encode(answer).length <= 16384)
-      this.respond({ kind: 'answer', answer });
+    if (new TextEncoder().encode(answer).length > 16384) {
+      this.error.set('Please shorten your answer or choose fewer options.');
+      return;
+    }
+    if (answer) this.respond(answer);
   }
 
-  respond(action: IvyQuestionAction) {
+  respond(answer: string) {
     if (this.disabled()) return;
     this.submitted.set(true);
-    this.answer.emit(action);
+    this.answer.emit(answer);
   }
 
-  cancel(event: Event) {
-    event.preventDefault();
-    this.respond({ kind: 'cancel' });
+  skip() {
+    if (this.disabled()) return;
+    this.submitted.set(true);
+    this.skipped.emit();
+  }
+
+  cancel(event?: Event) {
+    event?.preventDefault();
+    if (this.disabled()) return;
+    this.submitted.set(true);
+    this.cancelled.emit();
   }
 }
