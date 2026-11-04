@@ -16,6 +16,10 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        "reflex_infer",
+        "reflex_cancel",
+        "reflex_media_snapshot",
+        "reflex_media_execute",
         music::MUSIC_COMMAND,
         "workspace_browser",
         "workspace_image",

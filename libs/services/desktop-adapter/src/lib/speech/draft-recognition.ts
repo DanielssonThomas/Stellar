@@ -35,6 +35,9 @@ export class DraftRecognition {
     ) => void | Promise<void>,
     private readonly failed: () => void,
     private readonly interruptPreviews = true,
+    private readonly timing?: (
+      stage: 'queued' | 'started' | 'completed',
+    ) => void,
   ) {}
 
   canPreview(): boolean {
@@ -71,6 +74,7 @@ export class DraftRecognition {
       revision: ++this.previewRevision,
     };
     if (final) {
+      this.timing?.('queued');
       if (this.finals.length >= 3) {
         pcm.fill(0);
         this.reset();
@@ -128,8 +132,11 @@ export class DraftRecognition {
     if (!work) return;
     if (this.preview === work) this.preview = undefined;
     this.running = work;
+    if (work.final) this.timing?.('started');
     void this.collect(work.pcm, work.id)
       .then(async (result) => {
+        if (work.final && work.generation === this.generation)
+          this.timing?.('completed');
         if (
           work.generation === this.generation &&
           result.utterance_id === work.id &&

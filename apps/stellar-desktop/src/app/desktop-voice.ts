@@ -12,6 +12,7 @@ import {
   SpeechAdapterService,
   PromptCleanupService,
   IvyAdapterService,
+  IvyReflexService,
   VoiceConversation,
   type VoiceComposition,
   type PromptPresentation,
@@ -27,6 +28,7 @@ export class DesktopVoice {
   private readonly speech = inject(SpeechAdapterService);
   private readonly cleanup = inject(PromptCleanupService);
   private readonly ivy = inject(IvyAdapterService);
+  private readonly reflex = inject(IvyReflexService);
   private readonly assistant = inject(DesktopAssistant);
   private readonly experience = inject(DesktopExperience);
   private readonly zone = inject(NgZone);
@@ -82,6 +84,9 @@ export class DesktopVoice {
     refinePrompt: async (raw, signal) =>
       (await this.cleanup.refine(raw, signal)).text,
     submit: (text, id) => this.assistant.submit(text, id),
+    reflex: (text, id, signal, point) =>
+      this.reflex.run(text, id, signal, point),
+    cancelReflex: () => this.reflex.cancel(),
     speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
     onForegroundEnd: () => this.foregroundCleared?.('clear'),
@@ -150,8 +155,21 @@ export class DesktopVoice {
   }
 
   submitText(text: string): Promise<boolean> {
-    return this.conversation.withCaptureReleased(async () => {
+    return this.conversation.withCaptureReleased(async (signal) => {
       try {
+        if (
+          this.composition().status === 'idle' &&
+          this.composition().model === 'terra'
+        ) {
+          const local = await this.reflex.run(
+            text,
+            crypto.randomUUID(),
+            signal,
+          );
+          if (signal.aborted) return false;
+          if (local.handled) return local.outcome !== 'cancelled';
+        }
+        this.reflex.reply.set('');
         return await this.assistant.submit(text);
       } finally {
         this.updateContext();
@@ -164,6 +182,7 @@ export class DesktopVoice {
       audio: this.audio.state(),
       speech: this.speech.state(),
       assistant: this.assistant.state(),
+      localAvailable: this.reflex.localAvailable,
       available:
         this.sessionKnown() &&
         !this.sessionError() &&
@@ -225,7 +244,8 @@ export class DesktopVoice {
   private async readSession(): Promise<VoiceModel> {
     const snapshot = await this.ivy.snapshot();
     if (
-      snapshot.error ||
+      (snapshot.error &&
+        !(this.reflex.localAvailable && snapshot.error === 'unavailable')) ||
       ['submitting', 'admitted', 'uncertain'].includes(snapshot.turn)
     )
       throw new Error('Conversation state is not settled');

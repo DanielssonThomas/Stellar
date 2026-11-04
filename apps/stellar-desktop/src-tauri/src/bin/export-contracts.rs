@@ -20,6 +20,9 @@ mod media;
 mod music;
 #[path = "../music/command_names.rs"]
 mod music_names;
+#[allow(dead_code)]
+#[path = "../reflex/contracts.rs"]
+mod reflex;
 #[path = "../speech/contracts.rs"]
 mod speech;
 #[path = "../speech/command_names.rs"]
@@ -52,6 +55,16 @@ fn main() {
         music::MusicError::decl(&config),
         cleanup::CleanupRequest::decl(&config),
         cleanup::CleanupReply::decl(&config),
+        reflex::ReflexChoice::decl(&config),
+        reflex::ReflexMode::decl(&config),
+        reflex::ReflexRequest::decl(&config),
+        reflex::ReflexRoute::decl(&config),
+        reflex::ReflexPlan::decl(&config),
+        reflex::ReflexReply::decl(&config),
+        reflex::ReflexMediaAction::decl(&config),
+        reflex::ReflexMediaRequest::decl(&config),
+        reflex::ReflexMediaState::decl(&config),
+        reflex::ReflexMediaResult::decl(&config),
         media::BrowserBounds::decl(&config),
         media::BrowserAction::decl(&config),
         media::BrowserRequest::decl(&config),

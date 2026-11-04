@@ -1,0 +1,60 @@
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::{io::Read, path::Path};
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Provenance {
+    source: String,
+    revision: String,
+    sha256: String,
+    license: String,
+}
+
+pub fn verify(model: &Path) -> Option<()> {
+    let mut raw = Vec::new();
+    std::fs::File::open(model.with_extension("provenance.json"))
+        .ok()?
+        .take(2049)
+        .read_to_end(&mut raw)
+        .ok()?;
+    if raw.len() > 2048 {
+        return None;
+    }
+    let p: Provenance = serde_json::from_slice(&raw).ok()?;
+    let pinned = matches!(
+        (p.source.as_str(), p.revision.as_str(), p.sha256.as_str()),
+        (
+            "Qwen/Qwen3-1.7B-GGUF",
+            "90862c4b9d2787eaed51d12237eafdfe7c5f6077",
+            "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a"
+        ) | (
+            "Qwen/Qwen3-4B-GGUF",
+            "bc640142c66e1fdd12af0bd68f40445458f3869b",
+            "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
+        )
+    );
+    if !pinned || p.license != "Apache-2.0" {
+        return None;
+    }
+    let mut file = std::fs::File::open(model).ok()?;
+    if file.metadata().ok()?.len() > 3_000_000_000 {
+        return None;
+    }
+    let mut hash = Sha256::new();
+    let mut buffer = [0; 65536];
+    loop {
+        let count = file.read(&mut buffer).ok()?;
+        if count == 0 {
+            break;
+        }
+        hash.update(&buffer[..count]);
+    }
+    (format!("{:x}", hash.finalize()) == p.sha256.to_lowercase()).then_some(())
+}
+
+pub fn token() -> Option<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).ok()?;
+    Some(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}

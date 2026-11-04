@@ -18,13 +18,17 @@ tokio = { version = "=1.54.1", features = ["net", "io-util", "sync", "time", "rt
 base64 = "=0.23.1"
 image = { version = "=0.25.9", default-features = false, features = ["png", "jpeg", "webp"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+getrandom = "=0.3.4"
+sha2 = "=0.10.9"
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "=2.0.1"
+windows-future = "=0.3.2"
+windows-core = "=0.62.2"
 wasapi = "=0.26.0"
 webview2-com = "=0.39.1"
 process-wrap = { version = "=10.0.1", default-features = false, features = ["std", "creation-flags", "job-object"] }
-windows = { version = "=0.62.2", features = ["Win32_System_Threading"] }
+windows = { version = "=0.62.2", features = ["Win32_System_Threading", "Media_Control", "Foundation", "Win32_Media_Audio_Endpoints", "Win32_System_Com"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

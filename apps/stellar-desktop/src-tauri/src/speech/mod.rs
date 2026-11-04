@@ -2,7 +2,7 @@ pub mod contracts;
 mod frames;
 mod host;
 mod keywords;
-mod owned_child;
+use crate::owned_child;
 mod process;
 mod scratch;
 mod state;

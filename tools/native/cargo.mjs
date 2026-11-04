@@ -74,6 +74,10 @@ if (action === 'smoke') {
             webviews: ['main'],
             permissions: [
               'allow-music-set-enabled',
+              'allow-reflex-media-snapshot',
+              'allow-reflex-media-execute',
+              'allow-reflex-infer',
+              'allow-reflex-cancel',
               'allow-shell-status',
               'allow-workspace-browser',
               'allow-workspace-image',

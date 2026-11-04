@@ -17,6 +17,7 @@ import {
   WorkspaceToolsService,
   MusicVisualizerService,
   createNativeMediaWorkspace,
+  IvyReflexService,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
 import { capabilityLabel } from '@stellar/desktop-contracts';
@@ -26,6 +27,7 @@ import {
 } from '@stellar/ui-molecules';
 import { desktopPresentationData } from './desktop-presentation-data';
 import { desktopWorkspace } from './desktop-workspace';
+import { desktopReflex } from './desktop-reflex';
 import { DesktopFaults } from './desktop-faults';
 
 @Component({
@@ -65,6 +67,7 @@ export class AppComponent {
   readonly voice = inject(DesktopVoice);
   readonly faults = inject(DesktopFaults);
   readonly music = inject(MusicVisualizerService);
+  readonly reflex = inject(IvyReflexService);
   readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
@@ -159,7 +162,18 @@ export class AppComponent {
         }),
       );
       destroy.onDestroy(unbind);
+      this.reflex.bind(
+        desktopReflex({
+          stage: this.view().stage(),
+          present: (command) => this.experience.present(command),
+          available: () =>
+            !['suspended', 'shutdown'].includes(this.experience.state().phase),
+        }),
+        () =>
+          `${this.assistant.state().workspace_epoch}:${this.assistant.state().reset_id}:${this.assistant.state().model}:${this.experience.state().phase === 'suspended' || this.experience.state().phase === 'shutdown'}`,
+      );
       this.voice.bindForegroundClear((reason) => {
+        this.reflex.clear();
         this.view().stage().closePresentations();
         if (reason === 'new_session') {
           this.view().draft.set('');

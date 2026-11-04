@@ -19,7 +19,10 @@ child=subprocess.Popen([sys.executable,'-I','-c','import time;time.sleep(30)'],s
 print(child.pid,flush=True)
 if not {exit_parent}: time.sleep(30)
 "#, exit_parent=if exit_parent {"True"} else {"False"})]);
-        crate::speech::process::configure(&mut command);
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
         let mut child = OwnedChild::spawn(command).unwrap();
         let mut line = String::new();
         BufReader::new(child.stdout.take().unwrap())
@@ -36,7 +39,10 @@ if not {exit_parent}: time.sleep(30)
 fn dropping_an_owned_group_terminates_its_descendants() {
     let mut command = Command::new("python");
     command.args(["-I", "-u", "-c", "import subprocess,sys,time; p=subprocess.Popen([sys.executable,'-I','-c','import time;time.sleep(30)'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); print(p.pid,flush=True); time.sleep(30)"]);
-    crate::speech::process::configure(&mut command);
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
     let mut child = OwnedChild::spawn(command).unwrap();
     let mut line = String::new();
     BufReader::new(child.stdout.take().unwrap())

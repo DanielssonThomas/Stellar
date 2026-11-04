@@ -5,6 +5,10 @@ type Stage =
   | 'vad_finalized'
   | 'stt_request'
   | 'stt_completed'
+  | 'inference_start'
+  | 'inference_complete'
+  | 'action_dispatch'
+  | 'action_complete'
   | 'hermes_submit'
   | 'first_model_delta'
   | 'hermes_admitted'
@@ -90,6 +94,13 @@ export class VoiceLatency {
             'speech_end_observed',
           ),
           stt: difference('stt_completed', 'stt_request'),
+          local_inference: difference('inference_complete', 'inference_start'),
+          local_action: difference('action_complete', 'action_dispatch'),
+          transcript_to_action: difference('action_complete', 'stt_completed'),
+          speech_end_to_action: difference(
+            'action_complete',
+            'speech_end_observed',
+          ),
           prompt_preparation: difference('hermes_submit', 'stt_completed'),
           admission: difference('hermes_admitted', 'hermes_submit'),
           validated_model_text: difference(
