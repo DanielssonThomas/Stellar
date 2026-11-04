@@ -19,6 +19,10 @@ mod process;
 mod prompt;
 #[path = "../reflex/qualification.rs"]
 mod qualification;
+#[path = "../reflex/scope.rs"]
+mod scope;
+#[path = "../reflex/scope_text.rs"]
+mod scope_text;
 #[path = "../reflex/setup.rs"]
 mod setup;
 use serde_json::{Value, json};

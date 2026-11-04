@@ -87,3 +87,4 @@ export {
 export type { MusicTransport } from './lib/music/music-transport';
 export { createNativeMediaWorkspace } from './lib/media/media-workspace';
 export type { MediaNativeApi } from './lib/media/browser-pane';
+export type { RequestTrace, RequestStep } from './lib/reflex/request-timeline';

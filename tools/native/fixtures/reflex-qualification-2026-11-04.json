@@ -2,7 +2,7 @@
   "schema_version": 1,
   "date": "2026-11-04",
   "base_revision": "305d3a68a2dba7c02962e9f5cc7881e6e9fcf358",
-  "status": "experimental opt-in; draft PR; physical voice/audio qualification incomplete",
+  "status": "opt-out beta in develop; experimental limitations retained; physical voice/audio qualification incomplete",
   "hardware": {
     "cpu": "Intel Core i7-14700K",
     "physical_cores": 20,
@@ -304,9 +304,108 @@
         "p95": null
       },
       "identity_capture_complete": true
+    },
+    {
+      "label": "Issue 275 conservative scope routing, Qwen3-4B Q4_K_M GPU, debug native host",
+      "local_artifact_directory": "tmp/routing-qualification",
+      "summary": {
+        "cold_ms": 33598.1851,
+        "correct": 218,
+        "count": 219,
+        "distinct_replies": 116,
+        "gpu_layers": "36",
+        "p50_ms_including_failures": 351.9998,
+        "p95_ms_including_failures": 462.14480000000003,
+        "scope": "inference and safe mocked native media registry; no microphone, real actions or acknowledgment audio",
+        "total_seconds": 87.2791345,
+        "unavailable": 0
+      },
+      "resources": {
+        "model_sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+        "llama_sha256": "c05b7e1ad9f612ebd89eab965669a8d8b8a9a89c81e4a49339105f9137125892",
+        "binary_sha256": "9a3262fdf1237a40c8c244c4c547328a95b16941a6c41b8e1373de24416a1602",
+        "corpus_sha256": "ef36a34c8bae2ae0bc268f3ff692be47ee01be2d5018333305278c16128364ed",
+        "prompt_sha256": "62dbc50136c7d70356fb7a9734fa36f24a85c2d0fade9ce6de2c1a128b1e06fb",
+        "driver_sha256": "d61431b331a53495808faf2c29b935b70d12327665f2a314c1c14ac09315ee66",
+        "git_head": "c32fe5ba3f53dc67f6ebbde900fb8e30105f6825",
+        "model_rss_bytes": 3045085184,
+        "recognition_rss_bytes": 888229888,
+        "gpu_total_used_mib": 8542,
+        "layers": 36,
+        "microphone": false,
+        "desktop_actions": false,
+        "recognition_input": "synthetic silence, not command accuracy qualification",
+        "worker_errors": [],
+        "recognition_ms": {
+          "keywords": {
+            "count": 1849,
+            "p50": 0.4726000006485265,
+            "p95": 10.347199997340795
+          },
+          "transcribe": {
+            "count": 43,
+            "p50": 70.26240000050166,
+            "p95": 125.20650000078604
+          }
+        }
+      },
+      "source_note": "Measured issue-275 working tree on base c32fe5b before commit; source hashes identify changed native modules. Native smoke compilation and fixture browser verification also ran during this replay; not a controlled latency comparison.",
+      "source_sha256": {
+        "scope.rs": "72f48b9f9df9047f1892114b716a798244729a837b6b6613caafa2bbd38dbe60",
+        "scope_text.rs": "cc118679fa525c7c6c39600edce456087bca79b9bfbc42fb64a57b4de90a60ce",
+        "admission.rs": "42ef58637a5be0f5303fd9e2bf112267ccf0322c62b02bb20fb01f973b038de7",
+        "model.rs": "261dd115d19a82ae4b1d4b3374a4c973fea3c54e4609badcedfdc2a9f40e6fd4"
+      },
+      "warm_all_route_ms": {
+        "count": 218,
+        "p50": 351.65639999999996,
+        "p95": 456.6395
+      },
+      "confirmed_media_ms": {
+        "count": 93,
+        "p50": 374.5371,
+        "p95": 480.5818
+      },
+      "new_substantive_native_delegation_ms": {
+        "count": 50,
+        "p50": 0.0387,
+        "p95": 0.11069999999999999
+      },
+      "new_substantive_correct": 50,
+      "errors": [
+        {
+          "case": "case-108",
+          "mock_media_dispatch_confirmed": null,
+          "ms": 371.24469999999997,
+          "passed": false,
+          "plan": {
+            "action_id": "pane.0.restore",
+            "reply": "Panel restored to full size.",
+            "route": "action"
+          },
+          "request": {
+            "id": "case-108",
+            "text": "Expand this panel to full size.",
+            "scenario": "playing",
+            "expected": {
+              "route": "action",
+              "action_id": "pane.0.maximize"
+            }
+          }
+        }
+      ],
+      "identity_capture_complete": true
     }
   ],
-  "remaining_intent_errors": [],
+  "remaining_intent_errors": [
+    {
+      "case": "case-108",
+      "text": "Expand this panel to full size.",
+      "expected": "pane.0.maximize",
+      "actual": "pane.0.restore",
+      "note": "Known beta interpretation limitation; mocked pane action only. No uncontrolled real pane/device action occurred."
+    }
+  ],
   "qualification_limits": [
     "No live microphone capture, uncontrolled desktop effects, real speaker playback, physical first-audio or speech-end-to-action measurements.",
     "Silence keyword frames return before keyword decoding; keyword round-trip timings measure protocol overhead, not active recognition performance.",

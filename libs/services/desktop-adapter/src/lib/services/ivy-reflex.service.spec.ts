@@ -23,6 +23,7 @@ function fixture(
     infer?: (id: unknown) => Promise<unknown>;
     setting?: (enabled: boolean) => Promise<void>;
     prepare?: () => Promise<unknown>;
+    route?: (text: string) => boolean;
   } = {},
 ) {
   const execute = vi.fn(async () => 'confirmed' as const);
@@ -37,6 +38,13 @@ function fixture(
           ? options.prepare()
           : { version: 1, configured: true };
       if (command === 'reflex_media_snapshot') throw Error('No media device');
+      if (command === 'reflex_route')
+        return {
+          version: 1,
+          local:
+            options.route?.((args?.['request'] as { text: string }).text) ??
+            true,
+        };
       if (command === 'reflex_cancel') return;
       if (command === 'reflex_infer') {
         const id = (args?.['request'] as { input_id: string }).input_id;
@@ -131,6 +139,7 @@ describe('Ivy Reflex beta preference and admission', () => {
       (await rejected.service.run('Focus it', 'settings-failed')).handled,
     ).toBe(false);
     expect(rejected.invoke.mock.calls.map(([name]) => name)).toEqual([
+      'reflex_route',
       'reflex_set_enabled',
     ]);
   });
@@ -224,6 +233,7 @@ describe('Ivy Reflex beta preference and admission', () => {
     expect((await service.run('Skip it', 'missing')).handled).toBe(false);
     expect(service.status()).toBe('Unavailable');
     expect(invoke.mock.calls.map(([name]) => name)).toEqual([
+      'reflex_route',
       'reflex_set_enabled',
       'reflex_status',
     ]);
@@ -340,5 +350,42 @@ describe('Ivy Reflex beta preference and admission', () => {
     expect(service.diagnosticNotice()).toBe(
       'Clipboard unavailable. Try again.',
     );
+  });
+  it('delegates substantive requests before warm-up completes without reading media or inferring', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+      route: () => false,
+    });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('reflex_prepare'),
+    );
+    for (const text of [
+      'Please show me my latest github issue',
+      'Ivy, how are we doing today?',
+    ]) {
+      expect(await service.run(text, text)).toMatchObject({
+        handled: false,
+        outcome: 'hermes',
+      });
+      expect(invoke).toHaveBeenCalledWith('reflex_route', {
+        request: expect.objectContaining({ text }),
+      });
+    }
+    expect(
+      invoke.mock.calls.some(([c]) =>
+        [
+          'reflex_infer',
+          'reflex_media_snapshot',
+          'reflex_media_execute',
+        ].includes(c),
+      ),
+    ).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+    expect(service.requests().at(-1)).toMatchObject({
+      route: 'Terra',
+      outcome: 'pending',
+    });
+    ready.resolve({ version: 1, configured: true });
   });
 });

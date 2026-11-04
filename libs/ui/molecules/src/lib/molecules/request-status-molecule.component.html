@@ -1,0 +1,65 @@
+<section
+  [class]="classes()"
+  aria-label="Ivy status and request timeline"
+  data-request-status
+>
+  <header>
+    <svg class="orbit" viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="17" />
+      <ellipse cx="24" cy="24" rx="10" ry="21" transform="rotate(42 24 24)" />
+      <path d="M24 16 26 22 32 24 26 26 24 32 22 26 16 24 22 22Z" />
+      <circle class="satellite" cx="24" cy="7" r="1.7" />
+    </svg>
+    <div class="heading">
+      <span class="eyebrow">Ivy · status</span>
+      <p>
+        Reflex {{ localStatus() }} <span>·</span> {{ cloudLabel() }}
+        {{ cloudStatus() }}
+      </p>
+    </div>
+    <button
+      type="button"
+      class="dismiss"
+      aria-label="Hide request status"
+      title="Hide status · S"
+      (click)="dismiss.emit()"
+    >
+      ×
+    </button>
+  </header>
+  <p class="voice-state">{{ voiceStatus() }}</p>
+  @if (loading()) {
+    <stellar-skeleton-atom shape="text" />
+  } @else if (latest(); as request) {
+    <div class="request-heading">
+      <span
+        >{{ request.route }}
+        <span class="source">· {{ request.source }}</span></span
+      ><time aria-hidden="true">{{ duration(elapsed()) }}</time>
+    </div>
+    <p class="request-preview">{{ request.preview }}</p>
+    <p class="sr-only" role="status" aria-live="polite">
+      {{ request.route }} · {{ request.steps.at(-1)?.label }}
+    </p>
+    <ol class="constellation">
+      @for (step of steps(); track step.key; let last = $last) {
+        <li [attr.data-current]="last && active()">
+          <span class="star" aria-hidden="true">✦</span
+          ><span>{{ step.label }}</span
+          ><time>{{ duration(step.elapsed) }}</time>
+        </li>
+      }
+    </ol>
+    @for (past of previous(); track past.id) {
+      <p class="previous">
+        <span aria-hidden="true">·</span><span>{{ past.preview }}</span
+        ><span>{{ past.route }} · {{ past.outcome }}</span>
+      </p>
+    }
+  } @else {
+    <p class="awaiting">
+      Awaiting a request<span aria-hidden="true"> · ✦</span>
+    </p>
+  }
+  <footer>S to hide</footer>
+</section>

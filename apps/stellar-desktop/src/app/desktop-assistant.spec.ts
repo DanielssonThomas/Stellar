@@ -45,6 +45,58 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('shows an authoritative recovered cloud receipt after uncertainty and ignores stale terminal events', async () => {
+    const { assistant, adapter, state } = setup();
+    await assistant.submit('Show my issue');
+    const id = adapter.submit.mock.calls[0][1];
+    const reflex = TestBed.inject(IvyReflexService);
+    state.set({ ...state(), revision: '2', turn_id: id, turn: 'uncertain' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)?.outcome).toBe('uncertain');
+    state.set({ ...state(), revision: '3', turn: 'completed' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)).toMatchObject({ outcome: 'completed' });
+    expect(reflex.requests().at(-1)?.steps.at(-1)?.label).toBe(
+      'Response recovered',
+    );
+    state.set({ ...state(), revision: '2', turn: 'failed' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)?.outcome).toBe('completed');
+    expect(adapter.submit).toHaveBeenCalledOnce();
+  });
+  it('records observed cloud stages under the original request and fences stale or terminal updates', async () => {
+    const { assistant, state } = setup();
+    const reflex = TestBed.inject(IvyReflexService);
+    await assistant.submit(
+      'Please show me my latest github issue',
+      '11111111-1111-4111-8111-111111111111',
+      'voice',
+    );
+    state.set({
+      ...state(),
+      revision: '1',
+      turn_id: '11111111-1111-4111-8111-111111111111',
+      turn: 'admitted',
+    });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)).toMatchObject({
+      route: 'Terra',
+      outcome: 'pending',
+      source: 'voice',
+    });
+    expect(reflex.requests().at(-1)?.steps.at(-1)?.label).toBe(
+      'Reasoning and tools',
+    );
+    state.set({ ...state(), revision: '2', turn: 'cancelled' });
+    TestBed.tick();
+    state.set({ ...state(), revision: '1', turn: 'completed' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)?.outcome).toBe('cancelled');
+    reflex.clear();
+    state.set({ ...state(), revision: '3', turn: 'completed' });
+    TestBed.tick();
+    expect(reflex.requests()).toEqual([]);
+  });
   it('preserves blank and 8 KiB user input boundaries when local events are pending', async () => {
     const { assistant, adapter } = setup();
     const reflex = TestBed.inject(IvyReflexService);

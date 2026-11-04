@@ -99,6 +99,45 @@ describe('DesktopExperienceTemplate', () => {
     }
   });
 
+  it('toggles the request constellation with S while preserving typing, modifiers and lifecycle guards', async () => {
+    const key = (options: KeyboardEventInit = {}) =>
+      new KeyboardEvent('keydown', {
+        key: 's',
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      });
+    const view = fixture.componentInstance;
+    for (const options of [
+      { repeat: true },
+      { ctrlKey: true },
+      { metaKey: true },
+      { altKey: true },
+      { isComposing: true },
+    ])
+      fixture.nativeElement.dispatchEvent(key(options));
+    const prevented = key();
+    prevented.preventDefault();
+    fixture.nativeElement.dispatchEvent(prevented);
+    fixture.nativeElement.querySelector('textarea').dispatchEvent(key());
+    expect(view.statusVisible()).toBe(false);
+    fixture.nativeElement.dispatchEvent(key());
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector('[data-request-status]'),
+    ).not.toBeNull();
+    fixture.nativeElement
+      .querySelector('[aria-label="Hide request status"]')
+      .click();
+    expect(view.statusVisible()).toBe(false);
+    for (const phase of ['suspended', 'shutdown']) {
+      fixture.componentRef.setInput('state', { ...initialState, phase });
+      await fixture.whenStable();
+      fixture.nativeElement.dispatchEvent(key());
+      expect(view.statusVisible()).toBe(false);
+    }
+  });
+
   it('closes controls on Connect Ivy so its result cannot be covered by the menu', async () => {
     const menu = fixture.componentInstance.menu;
     const retry = vi.spyOn(fixture.componentInstance.retryIvy, 'emit');

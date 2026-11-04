@@ -3,6 +3,7 @@ import type {
   ReflexMediaState,
   ReflexMediaResult,
   ReflexAvailability,
+  ReflexRouting,
 } from '../generated';
 
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -22,6 +23,17 @@ export function decodeReflexAvailability(v: unknown): ReflexAvailability {
   )
     throw new Error('Invalid Reflex availability');
   return v as unknown as ReflexAvailability;
+}
+
+export function decodeReflexRouting(v: unknown): ReflexRouting {
+  if (
+    !record(v) ||
+    !keys(v, ['version', 'local']) ||
+    v['version'] !== 1 ||
+    typeof v['local'] !== 'boolean'
+  )
+    throw new Error('Invalid Reflex routing');
+  return v as unknown as ReflexRouting;
 }
 
 export function decodeReflexReply(v: unknown, inputId: string): ReflexReply {

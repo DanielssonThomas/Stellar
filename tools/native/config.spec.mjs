@@ -112,6 +112,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
   assert.deepEqual(config.app.security.capabilities, ['desktop-main']);
   assert.deepEqual(capability.permissions, [
     'allow-reflex-infer',
+    'allow-reflex-route',
     'allow-reflex-prepare',
     'allow-reflex-status',
     'allow-reflex-set-enabled',

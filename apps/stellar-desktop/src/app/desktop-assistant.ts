@@ -158,6 +158,7 @@ export class DesktopAssistant {
   async submit(
     text: string,
     inputId: string = crypto.randomUUID(),
+    source: 'typed' | 'voice' = 'typed',
   ): Promise<boolean> {
     const value = text.trim();
     if (
@@ -165,8 +166,14 @@ export class DesktopAssistant {
       new TextEncoder().encode(value).length > 8192 ||
       this.busy() ||
       this.uncertain()
-    )
+    ) {
+      this.reflex.timeline.finish(
+        inputId,
+        'rejected',
+        'Request was not admitted',
+      );
       return false;
+    }
     const events = [...this.reflex.events()];
     let submitted = value;
     while (events.length) {
@@ -185,6 +192,11 @@ export class DesktopAssistant {
       });
     } catch {
       this.inputError.set(true);
+      this.reflex.timeline.finish(
+        inputId,
+        'rejected',
+        'Request validation failed',
+      );
       return false;
     }
     if (this.submittedTurns.has(inputId)) return false;
@@ -192,6 +204,12 @@ export class DesktopAssistant {
     this.presentationError.set(false);
     this.cancelRequested.set(false);
     this.submittedTurns.add(inputId);
+    this.reflex.beginTrace(inputId, value, source);
+    this.reflex.timeline.route(
+      inputId,
+      this.state().model === 'sol' ? 'Sol' : 'Terra',
+    );
+    this.reflex.timeline.step(inputId, 'hermes-submit', 'Submitting request');
     this.closeTargets.set(inputId, [...this.activityIds()]);
     if (this.submittedTurns.size > 64) {
       const expired = this.submittedTurns.values().next().value as string;
@@ -200,10 +218,17 @@ export class DesktopAssistant {
     }
     try {
       await this.adapter.submit(submitted, inputId);
+      const current = this.state();
+      if (current.turn_id === inputId) this.recordProgress(current);
       this.reflex.acknowledgeEvents(events);
       this.reflex.reply.set('');
       return true;
     } catch {
+      this.reflex.timeline.finish(
+        inputId,
+        'failed',
+        'Request admission failed',
+      );
       return false;
     }
   }
@@ -290,6 +315,7 @@ export class DesktopAssistant {
     const revision = BigInt(snapshot.revision);
     if (revision <= this.highestRevision) return;
     this.highestRevision = revision;
+    this.recordProgress(snapshot);
     if (
       snapshot.turn !== 'completed' ||
       !snapshot.turn_id ||
@@ -332,5 +358,42 @@ export class DesktopAssistant {
       if (result?.status === 'rejected') this.presentationError.set(true);
     }
     this.closeTargets.delete(snapshot.turn_id);
+  }
+  private recordProgress(snapshot: IvySnapshot) {
+    const id = snapshot.turn_id;
+    if (!id || !this.submittedTurns.has(id)) return;
+    if (snapshot.turn === 'admitted') {
+      this.reflex.timeline.step(id, 'hermes-admitted', 'Request admitted');
+      this.reflex.timeline.step(id, 'hermes-reasoning', 'Reasoning and tools');
+    }
+    if (snapshot.first_text_observed)
+      this.reflex.timeline.step(id, 'text-observed', 'Response text available');
+    const labels = {
+      completed: 'Response complete',
+      failed: 'Request failed',
+      cancelled: 'Request cancelled',
+      uncertain: 'Result uncertain',
+    } as const;
+    if (snapshot.turn in labels) {
+      this.reflex.timeline.finish(
+        id,
+        snapshot.turn as keyof typeof labels,
+        labels[snapshot.turn as keyof typeof labels],
+      );
+      if (
+        snapshot.turn === 'completed' ||
+        snapshot.turn === 'failed' ||
+        snapshot.turn === 'cancelled'
+      )
+        this.reflex.timeline.reconcile(
+          id,
+          snapshot.turn,
+          {
+            completed: 'Response recovered',
+            failed: 'Failure confirmed',
+            cancelled: 'Cancellation confirmed',
+          }[snapshot.turn],
+        );
+    }
   }
 }

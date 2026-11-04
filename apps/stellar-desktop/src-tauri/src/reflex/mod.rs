@@ -4,6 +4,8 @@ mod media_host;
 mod model;
 mod process;
 mod prompt;
+mod scope;
+mod scope_text;
 mod setup;
 #[cfg(windows)]
 mod windows_media;
@@ -12,6 +14,14 @@ mod windows_volume;
 use contracts::*;
 pub use media_host::MediaHost;
 pub use model::ReflexHost;
+
+#[tauri::command]
+pub fn reflex_route(request: ReflexRequest) -> ReflexRouting {
+    ReflexRouting {
+        version: 1,
+        local: prompt::valid_request(&request) && admission::delegation(&request).is_none(),
+    }
+}
 
 #[tauri::command]
 pub async fn reflex_prepare(host: tauri::State<'_, ReflexHost>) -> Result<ReflexAvailability, ()> {
@@ -113,3 +123,7 @@ pub async fn reflex_media_execute(
 #[cfg(test)]
 #[path = "prompt_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "scope_tests.rs"]
+mod scope_tests;

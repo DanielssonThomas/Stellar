@@ -79,6 +79,8 @@ fn check_page(window: Webview) {
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
                 const reflexMedia = await invoke('reflex_media_snapshot');
+                const reflexRoute = await invoke('reflex_route',{request:{version:1,input_id:'smoke-substantive',text:'Please show me my latest github issue',mode:'professional',context:'{}',history:[],actions:[]}});
+                if(reflexRoute.version!==1 || reflexRoute.local!==false) throw Error('Substantive request did not delegate');
                 const reflexStatus = await invoke('reflex_status');
                 if(reflexStatus.version!==1 || typeof reflexStatus.configured!=='boolean') throw Error('Reflex readiness contract failed');
                 await invoke('reflex_set_enabled',{enabled:false});
@@ -221,6 +223,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::reflex::reflex_media_snapshot,
             crate::reflex::reflex_media_execute,
             crate::reflex::reflex_infer,
+            crate::reflex::reflex_route,
             crate::reflex::reflex_prepare,
             crate::reflex::reflex_status,
             crate::reflex::reflex_set_enabled,

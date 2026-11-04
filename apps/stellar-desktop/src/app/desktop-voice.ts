@@ -39,6 +39,7 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
+  private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
   readonly state = computed(() =>
     this.sessionError()
@@ -83,12 +84,45 @@ export class DesktopVoice {
     collect: (pcm, id) => this.speech.collect(pcm, id),
     refinePrompt: async (raw, signal) =>
       (await this.cleanup.refine(raw, signal)).text,
-    submit: (text, id) => this.assistant.submit(text, id),
+    submit: (text, id) => this.assistant.submit(text, id, 'voice'),
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: (text, id) => this.speech.speak(text, id),
-    stop: () => this.speech.stop(),
+    speak: (text, id) => {
+      const before = this.speech.state();
+      this.narration = {
+        id,
+        revision: BigInt(before.revision),
+        epoch: before.epoch,
+      };
+      this.reflex.timeline.speech(id, 'synthesis');
+      return this.speech
+        .speak(text, id)
+        .then((snapshot) => {
+          if (this.narration?.id === id) {
+            const observed = this.speech.state();
+            if (snapshot.state === 'unavailable')
+              this.finishNarration('failed');
+            else if (
+              snapshot.state === 'idle' ||
+              (observed.state === 'idle' &&
+                BigInt(observed.revision) >= BigInt(snapshot.revision))
+            )
+              this.finishNarration('completed');
+            else if (snapshot.state === 'speaking')
+              this.reflex.timeline.speech(id, 'playing');
+          }
+          return snapshot;
+        })
+        .catch((error) => {
+          if (this.narration?.id === id) this.finishNarration('failed');
+          throw error;
+        });
+    },
+    stop: () => {
+      this.finishNarration('cancelled');
+      return this.speech.stop();
+    },
     onForegroundEnd: () => this.foregroundCleared?.('clear'),
     selectSession: (model) => this.ivy.selectSession(model),
     clearConversation: async () => {
@@ -156,21 +190,18 @@ export class DesktopVoice {
 
   submitText(text: string): Promise<boolean> {
     return this.conversation.withCaptureReleased(async (signal) => {
+      const inputId = crypto.randomUUID();
       try {
         if (
           this.composition().status === 'idle' &&
           this.composition().model === 'terra'
         ) {
-          const local = await this.reflex.run(
-            text,
-            crypto.randomUUID(),
-            signal,
-          );
+          const local = await this.reflex.run(text, inputId, signal);
           if (signal.aborted) return false;
           if (local.handled) return local.outcome !== 'cancelled';
         }
         this.reflex.reply.set('');
-        return await this.assistant.submit(text);
+        return await this.assistant.submit(text, inputId);
       } finally {
         this.updateContext();
       }
@@ -178,6 +209,18 @@ export class DesktopVoice {
   }
 
   private updateContext() {
+    const speech = this.speech.state();
+    const narration = this.narration;
+    if (narration && BigInt(speech.revision) > narration.revision) {
+      if (speech.epoch !== narration.epoch) this.finishNarration('cancelled');
+      else if (speech.state === 'idle') this.finishNarration('completed');
+      else if (speech.state === 'unavailable') this.finishNarration('failed');
+      else if (
+        speech.operation_id === narration.id &&
+        speech.state === 'speaking'
+      )
+        this.reflex.timeline.speech(narration.id, 'playing');
+    }
     this.conversation.update({
       audio: this.audio.state(),
       speech: this.speech.state(),
@@ -188,6 +231,11 @@ export class DesktopVoice {
         !this.sessionError() &&
         !['suspended', 'shutdown'].includes(this.experience.state().phase),
     });
+  }
+  private finishNarration(stage: 'completed' | 'failed' | 'cancelled') {
+    if (!this.narration) return;
+    this.reflex.timeline.speech(this.narration.id, stage);
+    this.narration = undefined;
   }
   stop() {
     this.conversation.stopVoice();

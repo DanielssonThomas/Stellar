@@ -1,0 +1,231 @@
+:host {
+  display: block;
+}
+:host {
+  position: absolute;
+  top: 1.2rem;
+  left: 1.2rem;
+  z-index: 8;
+  width: min(24rem, calc(100% - 2.4rem));
+  pointer-events: none;
+  color: var(--stellar-color-primary);
+}
+.request-status {
+  position: relative;
+  padding: 0.35rem 0.5rem 0.65rem;
+  animation: arrive 220ms ease-out both;
+}
+.request-status::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -2rem -3rem;
+  background: radial-gradient(
+    ellipse at 35% 35%,
+    color-mix(
+      in srgb,
+      var(--stellar-color-canvas) 90%,
+      var(--stellar-color-primary) 6%
+    ),
+    transparent 72%
+  );
+  filter: blur(14px);
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.orbit {
+  width: 2.4rem;
+  height: 2.4rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.6;
+  flex: none;
+  opacity: 0.7;
+}
+.orbit path,
+.satellite {
+  fill: currentColor;
+}
+.is-active .orbit {
+  animation: orbit 18s linear infinite;
+}
+.heading {
+  flex: 1;
+  min-width: 0;
+}
+.eyebrow {
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+.heading p {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+}
+.heading p span {
+  opacity: 0.4;
+  padding: 0 0.15rem;
+}
+.dismiss {
+  pointer-events: auto;
+  padding: 0.35rem;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.1rem;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.dismiss:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+.voice-state {
+  margin: 0.25rem 0 1rem 2.9rem;
+  font-size: 0.66rem;
+  opacity: 0.65;
+}
+.request-heading {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  letter-spacing: 0.035em;
+}
+.source {
+  opacity: 0.6;
+}
+time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.65rem;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+.request-preview {
+  margin: 0.45rem 0 0.7rem;
+  line-height: 1.4;
+  font-size: 0.83rem;
+  color: var(--stellar-color-foreground);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.constellation {
+  margin: 0 0 0.9rem 0.25rem;
+  padding: 0;
+  list-style: none;
+  position: relative;
+}
+.constellation::before {
+  content: '';
+  position: absolute;
+  left: 0.23rem;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  width: 1px;
+  background: linear-gradient(
+    transparent,
+    color-mix(in srgb, currentColor 35%, transparent) 15%,
+    color-mix(in srgb, currentColor 35%, transparent) 85%,
+    transparent
+  );
+}
+li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.6rem 1fr auto;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-height: 1.55rem;
+  font-size: 0.72rem;
+  opacity: 0.65;
+  animation: arrive 200ms ease-out both;
+}
+.star {
+  font-size: 0.6rem;
+}
+li[data-current='true'] {
+  opacity: 1;
+}
+.is-active li[data-current='true'] .star {
+  animation: glow 2s ease-in-out infinite;
+}
+.previous {
+  display: grid;
+  grid-template-columns: 0.35rem 1fr auto;
+  gap: 0.4rem;
+  font-size: 0.6rem;
+  opacity: 0.42;
+  margin: 0.35rem 0;
+}
+.previous span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+footer {
+  font-size: 0.57rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.35;
+  margin-top: 0.7rem;
+}
+.awaiting {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes glow {
+  50% {
+    opacity: 0.3;
+  }
+}
+.motion-reduced,
+.motion-reduced .orbit,
+.motion-reduced li,
+.motion-reduced .star {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .request-status,
+  .orbit,
+  li,
+  .star {
+    animation: none !important;
+  }
+}
+@media (max-width: 600px), (max-height: 500px) {
+  :host {
+    top: 0.6rem;
+    left: 0.6rem;
+    width: min(21rem, calc(100% - 1.2rem));
+  }
+  .previous {
+    display: none;
+  }
+  li {
+    min-height: 1.3rem;
+  }
+  .voice-state {
+    margin-bottom: 0.5rem;
+  }
+}
