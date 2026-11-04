@@ -23,6 +23,9 @@ fn write_receipt(
     state: &ReflexMediaState,
     outcome: &ReflexMediaResult,
 ) -> std::io::Result<()> {
+    if matches!(r.action, super::contracts::ReflexMediaAction::Inspect) {
+        return Ok(());
+    }
     if fs::read(folder.join("enabled")).ok().as_deref() != Some(b"ivy-notebook-reflex-v1\n") {
         return Ok(());
     }
@@ -51,14 +54,29 @@ fn write_receipt(
     if destination.exists() {
         return Ok(());
     }
+    let playback_control = matches!(
+        r.action,
+        super::contracts::ReflexMediaAction::Play
+            | super::contracts::ReflexMediaAction::Pause
+            | super::contracts::ReflexMediaAction::Next
+            | super::contracts::ReflexMediaAction::Previous
+    );
     let data = serde_json::to_vec(&Receipt {
         version: 1,
         captured_unix_ms: timestamp,
         input_id: &r.input_id,
         action: &r.action,
         outcome,
-        context_title: state.title.as_ref().map(|s| s.chars().take(200).collect()),
-        player: state.player.as_ref().map(|s| s.chars().take(100).collect()),
+        context_title: state
+            .title
+            .as_ref()
+            .filter(|_| playback_control)
+            .map(|s| s.chars().take(200).collect()),
+        player: state
+            .player
+            .as_ref()
+            .filter(|_| playback_control)
+            .map(|s| s.chars().take(100).collect()),
     })?;
     let temp = spool.join(format!("{id}.tmp"));
     let mut file = fs::OpenOptions::new()
@@ -87,6 +105,9 @@ fn persist_and_wake(
 }
 
 pub fn record(r: &ReflexMediaRequest, state: &ReflexMediaState, outcome: &ReflexMediaResult) {
+    if matches!(r.action, super::contracts::ReflexMediaAction::Inspect) {
+        return;
+    }
     let (r, state, outcome) = (r.clone(), state.clone(), outcome.clone());
     // One bounded receipt for an explicit dispatch; no snapshot subscription or playback polling.
     let _ = std::thread::Builder::new()

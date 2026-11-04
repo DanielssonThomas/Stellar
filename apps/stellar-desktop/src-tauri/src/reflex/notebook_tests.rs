@@ -107,3 +107,24 @@ fn disabled_capture_writes_nothing_and_capacity_never_evicts() {
     assert_eq!(fs::read_dir(folder.join("reflex")).unwrap().count(), 256);
     fs::remove_dir_all(folder.parent().unwrap()).unwrap();
 }
+
+#[test]
+fn inspection_and_system_volume_do_not_capture_unrelated_playback() {
+    let (folder, mut request, state) = fixture();
+    fs::write(folder.join("enabled"), b"ivy-notebook-reflex-v1\n").unwrap();
+    request.action = ReflexMediaAction::Inspect;
+    write_receipt(&folder, &request, &state, &ReflexMediaResult::Confirmed).unwrap();
+    assert!(!folder.join("reflex").exists());
+    request.action = ReflexMediaAction::VolumeUp;
+    write_receipt(&folder, &request, &state, &ReflexMediaResult::Confirmed).unwrap();
+    let path = fs::read_dir(folder.join("reflex"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let data: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert!(data["context_title"].is_null());
+    assert!(data["player"].is_null());
+    fs::remove_dir_all(folder.parent().unwrap()).unwrap();
+}
