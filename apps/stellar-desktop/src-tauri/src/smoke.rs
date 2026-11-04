@@ -82,6 +82,8 @@ fn check_page(window: Webview) {
                 const reflexStatus = await invoke('reflex_status');
                 if(reflexStatus.version!==1 || typeof reflexStatus.configured!=='boolean') throw Error('Reflex readiness contract failed');
                 await invoke('reflex_set_enabled',{enabled:false});
+                const reflexCold = await invoke('reflex_prepare');
+                if(reflexCold.version!==1 || reflexCold.configured!==false) throw Error('Disabled Reflex started');
                 await invoke('reflex_set_enabled',{enabled:true});
                 const reflexRejected = await invoke('reflex_media_execute', {request:{version:1,input_id:'smoke-invalid-ticket',ticket:'never-issued',action:'next'}});
                 if(!/^\d+$/.test(reflexMedia.ticket) || !Array.isArray(reflexMedia.actions) || reflexRejected !== 'rejected') throw Error('Reflex native read-only probe failed');
@@ -219,6 +221,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::reflex::reflex_media_snapshot,
             crate::reflex::reflex_media_execute,
             crate::reflex::reflex_infer,
+            crate::reflex::reflex_prepare,
             crate::reflex::reflex_status,
             crate::reflex::reflex_set_enabled,
             crate::reflex::reflex_cancel,

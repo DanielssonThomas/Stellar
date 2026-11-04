@@ -7,11 +7,14 @@ mod contracts;
 #[allow(dead_code)]
 #[path = "../reflex/media_host.rs"]
 mod media_host;
+#[allow(dead_code)]
 #[path = "../reflex/model.rs"]
 mod model;
 #[allow(dead_code)]
 #[path = "../owned_child.rs"]
 mod owned_child;
+#[path = "../reflex/process.rs"]
+mod process;
 #[path = "../reflex/prompt.rs"]
 mod prompt;
 #[path = "../reflex/qualification.rs"]

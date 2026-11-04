@@ -1,7 +1,6 @@
 use super::{contracts::*, prompt};
 use crate::owned_child::OwnedChild;
 use std::{
-    process::{Command, Stdio},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -73,20 +72,47 @@ impl ReflexHost {
         let response = self.run(request, generation).await;
         let transport_failed = response.is_none();
         let result = response.flatten();
-        if let Ok(mut s) = self.0.lock() {
-            if s.generation != generation {
-                return None;
-            }
-            s.busy = None;
-            s.touched = Some(Instant::now());
-            if transport_failed {
-                stop(&mut s);
-            }
-        }
-        result
+        self.settle(generation, transport_failed)
+            .then_some(result)
+            .flatten()
     }
 
-    async fn run(&self, request: &ReflexRequest, generation: u64) -> Option<Option<ReflexPlan>> {
+    fn settle(&self, generation: u64, failed: bool) -> bool {
+        let Ok(mut s) = self.0.lock() else {
+            return false;
+        };
+        if s.closed || s.disabled || s.generation != generation {
+            return false;
+        }
+        s.busy = None;
+        s.touched = Some(Instant::now());
+        if failed {
+            stop(&mut s);
+        }
+        true
+    }
+
+    fn install(&self, generation: u64, child: OwnedChild, key: String) -> Option<()> {
+        let mut s = self.0.lock().ok()?;
+        if s.closed || s.disabled || s.generation != generation {
+            return None;
+        }
+        s.key = key;
+        s.child = Some(child);
+        Some(())
+    }
+
+    fn cancel_generation(&self, generation: u64) {
+        if let Ok(mut s) = self.0.lock()
+            && s.generation == generation
+        {
+            s.generation = s.generation.saturating_add(1);
+            s.busy = None;
+            stop(&mut s);
+        }
+    }
+
+    async fn ready(&self, generation: u64) -> Option<(reqwest::Client, String)> {
         let host = self.clone();
         let (started, key) = tauri::async_runtime::spawn_blocking(move || {
             {
@@ -105,13 +131,8 @@ impl ReflexHost {
                 }
             }
             let key = super::setup::token()?;
-            let child = launch(&key, &|| host.current(generation))?;
-            let mut s = host.0.lock().ok()?;
-            if s.closed || s.generation != generation {
-                return None;
-            }
-            s.key = key.clone();
-            s.child = Some(child);
+            let child = super::process::launch(&key, &|| host.current(generation))?;
+            host.install(generation, child, key.clone())?;
             Some((true, key))
         })
         .await
@@ -166,11 +187,16 @@ impl ReflexHost {
                 break;
             }
             if start.elapsed() > Duration::from_secs(20) {
-                self.cancel(Some(&request.input_id));
+                self.cancel_generation(generation);
                 return None;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
+        Some((client, key))
+    }
+
+    async fn run(&self, request: &ReflexRequest, generation: u64) -> Option<Option<ReflexPlan>> {
+        let (client, key) = self.ready(generation).await?;
         let mut response = client
             .post("http://127.0.0.1:18439/v1/chat/completions")
             .bearer_auth(key)
@@ -212,61 +238,13 @@ impl Drop for State {
     }
 }
 
-fn launch(key: &str, current: &dyn Fn() -> bool) -> Option<OwnedChild> {
-    // Only explicitly configured, already installed files. Never download or reuse Hermes' GPU server.
-    let (model, binary, layers) = super::setup::configuration()?;
-    if !current() {
-        return None;
-    }
-    // Refuse an occupied endpoint rather than borrowing an unrelated local process.
-    let socket = std::net::TcpListener::bind("127.0.0.1:18439").ok()?;
-    let mut command = Command::new(binary);
-    command
-        .arg("-m")
-        .arg(model)
-        .args([
-            "--alias",
-            "ivy-reflex",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "18439",
-            "-c",
-            "4096",
-            "-np",
-            "1",
-            "-t",
-            "4",
-            "-tb",
-            "4",
-            "--prio",
-            "-1",
-            "-ngl",
-            &layers.to_string(),
-            "--jinja",
-            "--reasoning",
-            "off",
-            "--chat-template-kwargs",
-            "{\"enable_thinking\":false}",
-            "--no-webui",
-            "--api-key",
-            key,
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    if layers == 0 {
-        command.args(["--device", "none", "--no-kv-offload"]);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000 | 0x00004000);
-    }
-    drop(socket);
-    OwnedChild::spawn(command).ok()
-}
-
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod settings_tests;
+
+#[cfg(all(test, windows))]
+#[path = "preparation_tests.rs"]
+mod preparation_tests;
+
+#[path = "preparation.rs"]
+mod preparation;

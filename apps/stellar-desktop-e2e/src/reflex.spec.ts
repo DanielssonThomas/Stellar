@@ -92,6 +92,8 @@ async function reflexFlow(
               if (command === 'reflex_set_enabled') return;
               if (command === 'reflex_status')
                 return { version: 1, configured: scenario !== 'unavailable' };
+              if (command === 'reflex_prepare')
+                return { version: 1, configured: true };
               if (command === 'speech_snapshot') return currentSpeech;
               if (command === 'speech_stop') return speech('idle', null);
               if (command === 'speech_keywords')
@@ -210,6 +212,13 @@ async function reflexFlow(
     );
   await page.goto('/');
   await page.keyboard.press('m');
+  if (scenario !== 'unavailable') {
+    await expect
+      .poll(async () => (await fixture()).calls)
+      .toContain('reflex_prepare');
+    expect((await fixture()).calls).not.toContain('reflex_infer');
+    expect((await fixture()).action).toBe('');
+  }
   if (scenario === 'disabled') {
     const toggle = page.getByRole('switch', {
       name: 'Ivy Reflex',
@@ -224,6 +233,7 @@ async function reflexFlow(
       page.getByRole('switch', { name: 'Ivy Reflex', exact: true }),
     ).not.toBeChecked();
     await expect(page.locator('#ivy-reflex-status')).toContainText('Disabled');
+    expect((await fixture()).calls).not.toContain('reflex_prepare');
   }
   if (input === 'typed') {
     await page

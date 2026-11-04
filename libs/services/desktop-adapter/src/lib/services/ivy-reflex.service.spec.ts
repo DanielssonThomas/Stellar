@@ -22,6 +22,7 @@ function fixture(
     configured?: boolean;
     infer?: (id: unknown) => Promise<unknown>;
     setting?: (enabled: boolean) => Promise<void>;
+    prepare?: () => Promise<unknown>;
   } = {},
 ) {
   const execute = vi.fn(async () => 'confirmed' as const);
@@ -31,6 +32,10 @@ function fixture(
         return options.setting?.(args?.['enabled'] as boolean);
       if (command === 'reflex_status')
         return { version: 1, configured: options.configured ?? true };
+      if (command === 'reflex_prepare')
+        return options.prepare
+          ? options.prepare()
+          : { version: 1, configured: true };
       if (command === 'reflex_media_snapshot') throw Error('No media device');
       if (command === 'reflex_cancel') return;
       if (command === 'reflex_infer') {
@@ -65,6 +70,90 @@ describe('Ivy Reflex beta preference and admission', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     localStorage.removeItem(key);
+  });
+  it('warms the enabled model on construction without a request or action', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('reflex_prepare'),
+    );
+    expect(service.status()).toBe('Starting');
+    expect(
+      invoke.mock.calls.some(
+        ([c]) => c === 'reflex_infer' || c === 'reflex_media_snapshot',
+      ),
+    ).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+    ready.resolve({ version: 1, configured: true });
+    await vi.waitFor(() => expect(service.status()).toBe('Ready'));
+  });
+  it('switches Off immediately while startup is pending and ignores late readiness', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('reflex_prepare'),
+    );
+    const request = service.run('Focus this pane', 'during-startup');
+    service.setEnabled(false);
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('reflex_set_enabled', {
+        enabled: false,
+      }),
+    );
+    expect(service.status()).toBe('Disabled');
+    ready.resolve({ version: 1, configured: true });
+    expect(await request).toMatchObject({
+      handled: true,
+      outcome: 'cancelled',
+    });
+    expect(service.status()).toBe('Disabled');
+    expect(execute).not.toHaveBeenCalled();
+  });
+  it('falls back when model warm-up fails and does not start after a rejected settings write', async () => {
+    const failed = fixture({
+      prepare: async () => ({ version: 1, configured: false }),
+    });
+    expect(
+      (await failed.service.run('Focus it', 'warmup-failed')).handled,
+    ).toBe(false);
+    expect(failed.service.status()).toBe('Unavailable');
+    TestBed.resetTestingModule();
+    const rejected = fixture({
+      setting: async () => {
+        throw Error('Unavailable');
+      },
+    });
+    expect(
+      (await rejected.service.run('Focus it', 'settings-failed')).handled,
+    ).toBe(false);
+    expect(rejected.invoke.mock.calls.map(([name]) => name)).toEqual([
+      'reflex_set_enabled',
+    ]);
+  });
+  it('does not reinterpret a stale pane target or session after waiting for startup', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    let pane = 'first',
+      epoch = 'one';
+    service.bind(
+      () => ({ context: JSON.stringify({ pane }), actions: [] }),
+      () => epoch,
+    );
+    const request = service.run('Close that pane', 'stale-startup');
+    pane = 'second';
+    ready.resolve({ version: 1, configured: true });
+    expect((await request).outcome).toBe('rejected');
+    expect(invoke.mock.calls.some(([c]) => c === 'reflex_infer')).toBe(false);
+    const next = service.run('Close that pane', 'old-session');
+    epoch = 'two';
+    expect((await next).outcome).toBe('cancelled');
+    expect(execute).not.toHaveBeenCalled();
   });
   it('defaults on for validated configuration and confirms a local action', async () => {
     const { service, execute } = fixture();
