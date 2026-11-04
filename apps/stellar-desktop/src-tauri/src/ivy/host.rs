@@ -305,3 +305,7 @@ mod recovery_tests;
 #[cfg(test)]
 #[path = "host_lifecycle_tests.rs"]
 mod lifecycle_tests;
+
+#[cfg(test)]
+#[path = "host_capture_tests.rs"]
+mod capture_tests;

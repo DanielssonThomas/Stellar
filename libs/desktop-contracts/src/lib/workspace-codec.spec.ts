@@ -20,6 +20,27 @@ const envelope = {
 };
 
 describe('workspace tool contract', () => {
+  it('validates native monitor targets without permitting renderer capture replies', () => {
+    for (const operation of [
+      { kind: 'list_displays' },
+      { kind: 'capture_foreground' },
+      { kind: 'capture_display', display_id: null },
+      { kind: 'capture_display', display_id: '\\\\.\\DISPLAY1' },
+    ]) {
+      const request = decodeWorkspaceToolRequest({ ...envelope, operation });
+      expect(request.operation).toEqual(operation);
+      expect(() =>
+        decodeWorkspaceToolOutcome({ kind: 'applied' }, request),
+      ).toThrow();
+    }
+    for (const display_id of ['', 'x'.repeat(129), '\0bad', 1])
+      expect(() =>
+        decodeWorkspaceToolRequest({
+          ...envelope,
+          operation: { kind: 'capture_display', display_id },
+        }),
+      ).toThrow();
+  });
   it('rejects extra authority, invalid surfaces and over-budget content', () => {
     expect(decodeWorkspaceToolRequest(envelope)).toEqual(envelope);
     for (const value of [

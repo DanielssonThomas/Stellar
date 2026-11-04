@@ -17,6 +17,41 @@ fn open(payload: &str) -> WorkspaceToolRequest {
 }
 
 #[test]
+fn native_screen_requests_are_bounded_and_cannot_be_answered_by_the_renderer() {
+    let mut request = open("{}");
+    for operation in [
+        WorkspaceToolOperation::ListDisplays,
+        WorkspaceToolOperation::CaptureForeground,
+        WorkspaceToolOperation::CaptureDisplay { display_id: None },
+        WorkspaceToolOperation::CaptureDisplay {
+            display_id: Some("\\\\.\\DISPLAY1".into()),
+        },
+    ] {
+        request.operation = operation;
+        assert!(workspace_validate::request(&request));
+        let reply = WorkspaceToolReply {
+            version: 1,
+            request_id: request.request_id.clone(),
+            epoch: request.epoch.clone(),
+            turn_id: request.turn_id.clone(),
+            outcome: WorkspaceToolOutcome::Displays { displays: vec![] },
+        };
+        assert!(!workspace_validate::reply(&request, &reply));
+        let json = serde_json::to_string(&request).unwrap();
+        assert_eq!(
+            serde_json::from_str::<WorkspaceToolRequest>(&json).unwrap(),
+            request
+        );
+    }
+    for id in ["", "bad\0id", &"x".repeat(129)] {
+        request.operation = WorkspaceToolOperation::CaptureDisplay {
+            display_id: Some(id.into()),
+        };
+        assert!(!workspace_validate::request(&request));
+    }
+}
+
+#[test]
 fn validates_bounded_json_and_fences_duplicate_keys_at_all_depths() {
     assert!(workspace_validate::request(&open(
         r#"{"text":"hello","items":[1,2]}"#

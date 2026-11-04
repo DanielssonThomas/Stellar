@@ -143,7 +143,12 @@ export class WorkspaceToolsService {
       if (
         this.isCurrent(request) &&
         this.handler &&
-        request.operation.kind !== 'capture_window'
+        ![
+          'capture_window',
+          'capture_display',
+          'capture_foreground',
+          'list_displays',
+        ].includes(request.operation.kind)
       )
         outcome = decodeWorkspaceToolOutcome(this.handler(request), request);
     } catch {

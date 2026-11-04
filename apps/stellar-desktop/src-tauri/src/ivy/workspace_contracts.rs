@@ -70,6 +70,22 @@ pub enum WorkspaceToolOperation {
     Clear,
     Inspect,
     CaptureWindow,
+    ListDisplays,
+    CaptureDisplay {
+        display_id: Option<String>,
+    },
+    CaptureForeground,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(deny_unknown_fields)]
+pub struct WorkspaceDisplay {
+    pub id: String,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub primary: bool,
+    pub foreground: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -133,6 +149,9 @@ pub struct WorkspacePaneLayout {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkspaceToolOutcome {
+    Displays {
+        displays: Vec<WorkspaceDisplay>,
+    },
     Applied,
     Rejected,
     Inspection {

@@ -95,9 +95,14 @@ pub fn request(value: &WorkspaceToolRequest) -> bool {
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
         WorkspaceToolOperation::Clear
+        | WorkspaceToolOperation::ListDisplays
+        | WorkspaceToolOperation::CaptureForeground
         | WorkspaceToolOperation::RestoreLayout
         | WorkspaceToolOperation::Inspect
         | WorkspaceToolOperation::CaptureWindow => true,
+        WorkspaceToolOperation::CaptureDisplay { display_id } => {
+            display_id.as_deref().is_none_or(display_id_valid)
+        }
     }
 }
 
@@ -111,7 +116,13 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
         return false;
     }
     match (&request.operation, &reply.outcome) {
-        (WorkspaceToolOperation::CaptureWindow, _) => false,
+        (
+            WorkspaceToolOperation::CaptureWindow
+            | WorkspaceToolOperation::CaptureForeground
+            | WorkspaceToolOperation::CaptureDisplay { .. }
+            | WorkspaceToolOperation::ListDisplays,
+            _,
+        ) => false,
         (_, WorkspaceToolOutcome::Rejected) => true,
         (WorkspaceToolOperation::Inspect, WorkspaceToolOutcome::Inspection { panes }) => {
             panes.len() <= MAX_PANES
@@ -153,6 +164,10 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
         (_, WorkspaceToolOutcome::Applied) => true,
         _ => false,
     }
+}
+
+pub fn display_id_valid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 
 struct StrictJson {

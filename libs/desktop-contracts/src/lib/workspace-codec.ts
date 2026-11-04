@@ -59,10 +59,30 @@ function operation(value: unknown): WorkspaceToolOperation {
     kind === 'clear' ||
     kind === 'inspect' ||
     kind === 'capture_window' ||
+    kind === 'capture_foreground' ||
+    kind === 'list_displays' ||
     kind === 'restore_layout'
   ) {
     record(value, ['kind']);
     return { kind };
+  }
+  if (kind === 'capture_display') {
+    const data = record(value, ['kind', 'display_id']);
+    const display_id =
+      data['display_id'] === null
+        ? null
+        : boundedString(data['display_id'], 128);
+    if (
+      display_id !== null &&
+      (!display_id ||
+        Array.from(display_id).some(
+          (char) =>
+            char.charCodeAt(0) < 32 ||
+            (char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159),
+        ))
+    )
+      throw new DesktopContractError('malformed');
+    return { kind, display_id };
   }
   if (
     kind === 'focus' ||
@@ -196,7 +216,12 @@ export function decodeWorkspaceToolOutcome(
     kind === 'rejected' ||
     (kind === 'applied' &&
       request.operation.kind !== 'inspect' &&
-      request.operation.kind !== 'capture_window')
+      ![
+        'capture_window',
+        'capture_display',
+        'capture_foreground',
+        'list_displays',
+      ].includes(request.operation.kind))
   ) {
     record(value, ['kind']);
     return { kind };

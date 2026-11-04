@@ -35,7 +35,15 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
     if (!port.available() || !port.isCurrent(request))
       return { kind: 'rejected' };
     const operation = request.operation;
-    if (operation.kind === 'capture_window') return { kind: 'rejected' };
+    if (
+      [
+        'capture_window',
+        'capture_display',
+        'capture_foreground',
+        'list_displays',
+      ].includes(operation.kind)
+    )
+      return { kind: 'rejected' };
     if (operation.kind === 'inspect') {
       const panes = port.stage.inspectPresentations();
       if (panes.some((pane) => !supported(pane.surface)))

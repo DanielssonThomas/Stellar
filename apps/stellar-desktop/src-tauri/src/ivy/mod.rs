@@ -40,8 +40,10 @@ pub use host::IvyHost;
 
 #[cfg(test)]
 mod text_timing_tests;
-#[cfg(windows)]
+#[cfg(all(windows, feature = "native-smoke"))]
 pub use workspace_capture::capture as capture_workspace_window;
+#[cfg(windows)]
+pub use workspace_capture::capture_operation as capture_workspace_operation;
 
 fn validate(request: Option<serde_json::Value>) -> Result<(), IvyErrorCode> {
     let request: IvyRequest =

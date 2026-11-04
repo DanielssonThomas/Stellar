@@ -51,13 +51,17 @@ fn smoke_hold_ivy(
 #[cfg(windows)]
 #[tauri::command]
 async fn smoke_capture_window(app: tauri::AppHandle) -> bool {
-    tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
-        .await
-        .is_ok_and(|result| {
-            result.is_ok_and(|image| {
-                image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
-            })
-        })
+    println!("STELLAR_SMOKE_STAGE capture-window-start");
+    let captured =
+        tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
+            .await
+            .is_ok_and(|result| {
+                result.is_ok_and(|image| {
+                    image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
+                })
+            });
+    println!("STELLAR_SMOKE_STAGE capture-window-end");
+    captured
 }
 
 fn check_page(window: Webview) {
