@@ -1,6 +1,21 @@
 use super::*;
 
 #[test]
+fn maximum_monitor_metadata_fits_the_native_control_frame() {
+    let display = WorkspaceDisplay {
+        id: "\\".repeat(128),
+        name: display_name(&"🪐".repeat(300)),
+        width: 32768,
+        height: 32768,
+        primary: true,
+        foreground: true,
+    };
+    let frame = serde_json::json!({"control":"workspace_reply","reply":{"version":1,"request_id":"r".repeat(32),"epoch":"0".repeat(20),"turn_id":"t".repeat(36),"outcome":{"kind":"displays","displays":vec![display;16]}}});
+    assert!(serde_json::to_vec(&frame).unwrap().len() < 16384);
+    assert_eq!(display_name("\0\n"), "Display");
+}
+
+#[test]
 fn display_selection_prefers_current_view_and_never_substitutes_an_explicit_target() {
     let mut displays = vec![
         WorkspaceDisplay {

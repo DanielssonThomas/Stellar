@@ -25,12 +25,7 @@ pub(super) fn list() -> Result<Vec<WorkspaceDisplay>, IvyErrorCode> {
             }
             Ok(WorkspaceDisplay {
                 id,
-                name: monitor
-                    .name()
-                    .unwrap_or_else(|_| "Display".into())
-                    .chars()
-                    .take(240)
-                    .collect(),
+                name: display_name(&monitor.name().unwrap_or_default()),
                 width: monitor.width().map_err(|_| IvyErrorCode::Unavailable)?,
                 height: monitor.height().map_err(|_| IvyErrorCode::Unavailable)?,
                 primary: Some(monitor) == primary,
@@ -38,6 +33,19 @@ pub(super) fn list() -> Result<Vec<WorkspaceDisplay>, IvyErrorCode> {
             })
         })
         .collect()
+}
+
+fn display_name(value: &str) -> String {
+    let name: String = value
+        .chars()
+        .filter(|char| !char.is_control())
+        .take(120)
+        .collect();
+    if name.trim().is_empty() {
+        "Display".into()
+    } else {
+        name
+    }
 }
 
 pub(super) fn display(id: Option<&str>) -> Result<Vec<u8>, IvyErrorCode> {

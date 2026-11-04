@@ -157,6 +157,11 @@ describe('native workspace composition', () => {
     ).toEqual({ kind: 'rejected' });
     const calls = present.mock.calls.length;
     expect(call({ kind: 'capture_window' })).toEqual({ kind: 'rejected' });
+    expect(call({ kind: 'capture_foreground' })).toEqual({ kind: 'rejected' });
+    expect(call({ kind: 'capture_display', display_id: null })).toEqual({
+      kind: 'rejected',
+    });
+    expect(call({ kind: 'list_displays' })).toEqual({ kind: 'rejected' });
     expect(present).toHaveBeenCalledTimes(calls);
     expect(registry.snapshot()).toEqual([]);
   });

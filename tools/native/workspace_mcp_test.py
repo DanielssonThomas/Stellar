@@ -316,6 +316,7 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
             ('inspect_content', {'instance_id': 'pane'}, 'inspect_content'),
             ('arrange_panes', {'instance_ids': ['pane']}, 'arrange'),
             ('inspect_panes', {}, 'inspect'),
+            ('list_displays', {}, 'list_displays'),
             ('remove_pane', {'instance_id': 'pane'}, 'remove'),
             ('clear_panes', {}, 'clear'),
         ]
@@ -333,6 +334,8 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(request['operation']['kind'], expected)
                         reply = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
                         outcome = {'kind': 'inspection', 'panes': []} if expected == 'inspect' else {'kind': 'content','instance_id': 'pane','surface':'rich-text','revision':2,'payload_json':'{}'} if expected == 'inspect_content' else {'kind': 'applied'}
+                        if expected == 'list_displays':
+                            outcome = {'kind': 'displays', 'displays': [{'id':'monitor1','name':'Left','width':3840,'height':2160,'primary':True,'foreground':False}]}
                         self.gate.reply({**reply, 'outcome': outcome})
                         result = await asyncio.wait_for(task, 5)
                         self.assertFalse(result.is_error)

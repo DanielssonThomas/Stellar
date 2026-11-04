@@ -1,8 +1,19 @@
+#![cfg(windows)]
 use super::tests::fixture;
 use super::*;
 #[cfg(windows)]
 #[test]
-fn early_window_capture_uses_private_binary_reply_during_admission() {
+fn early_screen_captures_use_the_private_binary_reply_during_admission() {
+    for operation in [
+        r#"{"kind":"capture_window"}"#,
+        r#"{"kind":"capture_foreground"}"#,
+        r#"{"kind":"capture_display","display_id":null}"#,
+    ] {
+        capture_binary_reply(operation);
+    }
+}
+
+fn capture_binary_reply(operation: &str) {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let (host, _receiver) = fixture();
@@ -28,21 +39,20 @@ $null=[Console]::ReadLine()
 [Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"capture_window"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
 $reply=[Console]::ReadLine() | ConvertFrom-Json
 if ($reply.control -eq 'test_ack') { [Console]::WriteLine('{"id":1,"result":{"captured":true}}') }
-"#;
+"#.replace(r#"{"kind":"capture_window"}"#, operation);
     let mut command = Command::new("powershell.exe");
     command
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .creation_flags(0x08000000);
     let mut broker = Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap();
     host.workspace.set_input(Some(broker.input()));
-    host.set_workspace_capture(Arc::new(|operation| {
-        assert!(matches!(
-            operation,
-            super::super::workspace_contracts::WorkspaceToolOperation::CaptureWindow
-        ));
+    let expected: super::super::workspace_contracts::WorkspaceToolOperation =
+        serde_json::from_str(operation).unwrap();
+    host.set_workspace_capture(Arc::new(move |operation| {
+        assert_eq!(operation, &expected);
         Ok(super::super::workspace_capture::Captured::Image(
             b"\x89PNG\r\n\x1a\nx".to_vec(),
         ))
@@ -74,4 +84,59 @@ if ($reply.control -eq 'test_ack') { [Console]::WriteLine('{"id":1,"result":{"ca
         json!({"captured":true})
     );
     image_receiver.join().unwrap();
+}
+
+#[test]
+fn display_metadata_comes_from_the_native_owner_without_a_renderer_round_trip() {
+    use std::{
+        os::windows::process::CommandExt,
+        process::{Command, Stdio},
+    };
+    let (host, _receiver) = fixture();
+    let host = Arc::new(host);
+    host.shared.update(0, |view| {
+        view.connection = IvyConnectionState::Ready;
+        view.turn = IvyTurnState::Admitted;
+        view.turn_id = Some("00000000-0000-4000-8000-000000000001".into());
+    });
+    let script = r#"
+$null=[Console]::ReadLine()
+[Console]::WriteLine('{"event":"workspace_tool","data":{"version":1,"request_id":"0123456789abcdef0123456789abcdef","issued_at_ms":"1700000000000","epoch":"0","turn_id":"00000000-0000-4000-8000-000000000001","operation":{"kind":"list_displays"}}}'.Replace('1700000000000', [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
+$reply=[Console]::ReadLine() | ConvertFrom-Json
+if ($reply.control -eq 'workspace_reply') { [Console]::WriteLine((@{id=1;result=@{display=$reply.reply.outcome.displays[0].id}} | ConvertTo-Json -Compress -Depth 4)) }
+"#;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(0x08000000);
+    let mut broker = Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap();
+    host.workspace.set_input(Some(broker.input()));
+    host.set_workspace_capture(Arc::new(|operation| {
+        assert!(matches!(
+            operation,
+            super::super::workspace_contracts::WorkspaceToolOperation::ListDisplays
+        ));
+        Ok(super::super::workspace_capture::Captured::Displays(vec![
+            super::super::workspace_contracts::WorkspaceDisplay {
+                id: "monitor1".into(),
+                name: "Left".into(),
+                width: 3840,
+                height: 2160,
+                primary: true,
+                foreground: false,
+            },
+        ]))
+    }));
+    let hub = host.workspace.clone();
+    broker.set_workspace(
+        Arc::new(move |frame| hub.handle(frame)),
+        host.workspace.image_endpoint(),
+    );
+    assert_eq!(
+        broker.call("ping", json!({}), &mut vec![]).unwrap(),
+        json!({"display":"monitor1"})
+    );
 }
