@@ -297,19 +297,49 @@ async def read_requests(queue, workspace):
         await queue.put(error)
 
 
-async def requests_with_workspace(conn, workspace):
+async def requests_with_workspace(conn, workspace, approvals=None):
     queue = asyncio.Queue(maxsize=4)
     reader = asyncio.create_task(read_requests(queue, workspace))
     try:
-        await request_worker(conn, workspace, queue)
+        await request_worker(conn, workspace, queue, approvals)
     finally:
         reader.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await reader
 
 
-async def request_worker(conn, workspace, queue):
+async def settle_receipt(conn, workspace, params, receipt, approvals=None):
+    active = conn.active
+    generation = receipt.get('execution_generation')
+    if (type(active) is not dict or type(generation) is not int
+            or generation < 0
+            or active.get('session_id') != params['session_id']
+            or active.get('admission_id') != params['admission_id']
+            or receipt.get('admission_id') != params['admission_id']
+            or receipt.get('ref', {}).get('session_id') != params['session_id']):
+        return
+    known = active.get('execution_generation')
+    if known is not None and known != generation:
+        return
+    active['execution_generation'] = generation
+    if (receipt.get('status') != 'terminal'
+            or receipt.get('outcome') not in {'completed', 'failed', 'cancelled', 'interrupted'}):
+        return
+    if (receipt['outcome'] == 'completed'
+            and type(receipt.get('result', {}).get('final_response')) is not str):
+        return
+    conn.active = None
+    conn.lease.release(settled=True)
+    if workspace is not None:
+        workspace.gate.disarm()
+    if approvals is not None:
+        await approvals.cancel(params['session_id'])
+
+
+async def request_worker(conn, workspace, queue, approvals=None):
     from stellar_ivy_controls import control, Refused
+    from stellar_ivy_edit_policy import synchronize
+    access = approvals.access if approvals is not None else {}
     while True:
         request = await queue.get()
         if request is None:
@@ -317,6 +347,10 @@ async def request_worker(conn, workspace, queue):
         if isinstance(request, Exception):
             raise Closed() from None
         rid, method, params = request
+        resuming = method == 'session.resume' and approvals is not None
+        if resuming:
+            conn.selected_session = None
+            approvals.begin_resume(params['session_id'])
         try:
             if method in {'session.new', 'integrations.reload'}:
                 result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
@@ -358,12 +392,20 @@ async def request_worker(conn, workspace, queue):
                     raise Closed()
                 if options and not workspace.verifies(info):
                     raise Closed()
+                if options:
+                    result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                    info = result.get('info', {})
+                    if info.get('model') != params['model'] or not workspace.verifies(info):
+                        raise Closed()
                 result = {'session_id': sid, 'model': info['model']}
             elif method == 'session.resume' and workspace is not None and workspace.task is not None:
                 description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
                 if 'acp-session-mcp-v1' not in description.get('capabilities', []):
                     raise Closed()
                 result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+                if not workspace.verifies(result.get('info', {})):
+                    raise Closed()
+                result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
             elif method == 'prompt.submit' and workspace is not None and workspace.task is not None:
                 if workspace.owner_session != params['session_id'] or 'workspace_epoch' not in params:
                     raise Closed()
@@ -378,6 +420,10 @@ async def request_worker(conn, workspace, queue):
             else:
                 params.pop('workspace_epoch', None)
                 result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+            if method == 'prompt.submit' and getattr(conn, 'active', None) is not None:
+                conn.active['execution_generation'] = result.get('execution_generation')
+            if method == 'prompt.receipt':
+                await settle_receipt(conn, workspace, params, result, approvals)
             if method == 'workspace.setup':
                 pass
             elif method == 'runtime.describe':
@@ -410,6 +456,8 @@ async def request_worker(conn, workspace, queue):
                 result = projected
             if method in {'session.create', 'session.resume'}:
                 conn.selected_session = result.get('session_id')
+            if resuming:
+                approvals.finish_resume(True)
             emit({'id': rid, 'result': result})
         except asyncio.TimeoutError:
             if workspace is not None:
@@ -428,6 +476,9 @@ async def request_worker(conn, workspace, queue):
             # Never retry: even a transport exception may follow admission.
             emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
             raise Closed() from None
+        finally:
+            if resuming:
+                approvals.finish_resume(False)
 
 
 async def serve():
@@ -458,7 +509,7 @@ async def serve():
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
-            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace))]
+            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals))]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
