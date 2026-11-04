@@ -24,7 +24,10 @@ import {
   imports: [SkeletonAtom],
   templateUrl: './presentation-media-molecule.component.html',
   styleUrl: './presentation-media-molecule.component.css',
-  host: { '[attr.aria-busy]': 'pending()' },
+  host: {
+    '[attr.aria-busy]': 'pending()',
+    '[attr.data-render-state]': 'renderState()',
+  },
 })
 export class PresentationMediaMolecule {
   readonly payload = input<PresentationMediaPayload | null>(null);
@@ -63,6 +66,13 @@ export class PresentationMediaMolecule {
       (!!this.image() && !this.loaded() && !this.failed()) ||
       !!this.browserState()?.pending,
   );
+  readonly renderState = computed(() => {
+    if (this.failed() || this.browserState()?.error) return 'error';
+    if (this.pending()) return 'loading';
+    if (this.payload()?.kind === 'browser' && !this.browserState())
+      return 'loading';
+    return this.payload() ? 'ready' : 'unavailable';
+  });
 
   constructor() {
     afterRenderEffect(() => {

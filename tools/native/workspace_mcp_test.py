@@ -30,6 +30,7 @@ service = load('workspace_service')
 credentials = load('workspace_credentials')
 bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
+sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
 
 
 class MemoryCredentials:
@@ -60,7 +61,11 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
             if frame.get('event') == 'workspace_tool':
                 data = frame['data']
                 reply = {key: data[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
-                pipe.send({'control': 'workspace_reply', 'reply': {**reply, 'outcome': {'kind': 'applied'}}})
+                if data['operation']['kind'] == 'capture_window':
+                    pipe.send({'control': 'workspace_capture_failed', 'header': reply})
+                else:
+                    outcome = {'kind': 'inspection', 'panes': []} if data['operation']['kind'] == 'inspect' else {'kind': 'applied'}
+                    pipe.send({'control': 'workspace_reply', 'reply': {**reply, 'outcome': outcome}})
             elif frame.get('id') == 1:
                 pipe.lines.put(b'')
         gate = protocol.WorkspaceGate(emit)
@@ -213,6 +218,27 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
+    async def next_request(self):
+        for _ in range(200):
+            if self.frames:
+                return self.frames.pop(0)['data']
+            await asyncio.sleep(.01)
+        self.fail('Workspace request did not arrive')
+
+    async def feedback(self, capture=True):
+        inspection = await self.next_request()
+        self.assertEqual(inspection['operation']['kind'], 'inspect')
+        header = {key: inspection[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+        self.gate.reply({**header, 'outcome': {'kind': 'inspection', 'panes': []}})
+        request = await self.next_request()
+        self.assertEqual(request['operation']['kind'], 'capture_window')
+        self.assertNotEqual(request['request_id'], inspection['request_id'])
+        header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+        if capture:
+            self.gate.reply_image(header, b'\x89PNG\r\n\x1a\n' + b'fixture')
+        else:
+            self.gate.reject_image(header)
+
     async def asyncSetUp(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind(('127.0.0.1', 0))
@@ -264,20 +290,22 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertEqual(names, {'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
                                              'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window', 'capture_display', 'capture_foreground', 'list_displays',
-                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content'})
+                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace'})
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
                     for _ in range(200):
                         if self.frames:
                             break
                         await asyncio.sleep(.01)
                     self.assertEqual(len(self.frames), 1)
-                    request = self.frames[0]['data']
+                    request = self.frames.pop(0)['data']
                     self.assertNotIn(token, str(request))
                     reply = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
                     self.gate.reply({**reply, 'outcome': {'kind': 'applied'}})
+                    await self.feedback()
                     result = await asyncio.wait_for(task, 5)
                     self.assertFalse(result.is_error)
-                    self.assertEqual(json.loads(result.content[0].text), {'kind': 'applied'})
+                    self.assertEqual(json.loads(result.content[0].text), {'outcome': {'kind': 'applied'}, 'workspace': {'kind': 'inspection', 'panes': []}, 'snapshot': 'captured'})
+                    self.assertEqual(result.content[1].type, 'image')
 
     async def test_large_private_capture_result_reaches_real_mcp_client(self):
         token = self.gate.arm('1', 'turn-one')
@@ -337,9 +365,38 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                         if expected == 'list_displays':
                             outcome = {'kind': 'displays', 'displays': [{'id':'monitor1','name':'Left','width':3840,'height':2160,'primary':True,'foreground':False}]}
                         self.gate.reply({**reply, 'outcome': outcome})
+                        mutation = expected not in ('inspect', 'inspect_content', 'list_displays')
+                        if mutation:
+                            await self.feedback()
                         result = await asyncio.wait_for(task, 5)
                         self.assertFalse(result.is_error)
-                        self.assertEqual(json.loads(result.content[0].text), outcome)
+                        observed = json.loads(result.content[0].text)
+                        self.assertEqual(observed['outcome'] if mutation else observed, outcome)
+
+    async def test_snapshot_and_capture_failure_preserve_applied_without_replay(self):
+        token = self.gate.arm('1', 'turn-one')
+        async with httpx2.AsyncClient(headers={'Authorization': 'Bearer ' + self.bearer}, trust_env=False) as http:
+            async with streamable_http_client(self.url, http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    for outcome in ('applied', 'rejected'):
+                        task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
+                        request = await self.next_request()
+                        self.assertEqual(request['operation']['kind'], 'clear')
+                        header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                        self.gate.reply({**header, 'outcome': {'kind': outcome}})
+                        await self.feedback(capture=False)
+                        result = await asyncio.wait_for(task, 5)
+                        self.assertFalse(result.is_error)
+                        report = json.loads(result.content[0].text)
+                        self.assertEqual(report['outcome'], {'kind': outcome})
+                        self.assertEqual(report['snapshot'], 'unavailable')
+                        self.assertFalse(self.frames)
+                    task = asyncio.create_task(session.call_tool('snapshot_workspace', {'turn_token': token}))
+                    await self.feedback()
+                    result = await asyncio.wait_for(task, 5)
+                    self.assertEqual(result.content[1].type, 'image')
+                    self.assertNotIn('outcome', json.loads(result.content[0].text))
 
 
 if __name__ == '__main__':

@@ -107,9 +107,21 @@ pub struct WorkspacePaneMetadata {
     pub prominence: WorkspaceProminence,
     pub minimized: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub render_state: Option<WorkspaceRenderState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<WorkspacePaneLayout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<WorkspacePaneOperation>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceRenderState {
+    Ready,
+    Loading,
+    Error,
+    Hidden,
+    Unavailable,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]

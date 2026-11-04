@@ -36,6 +36,15 @@ export function desktopReflex(port: Port) {
         },
       });
     };
+    const visible = panes.filter(
+      (pane) => !pane.minimized && pane.rect !== null,
+    );
+    if (visible.length === 2)
+      add('pane.swap_pair', 'Swap the two visible pane positions', {
+        action: 'swap',
+        instanceId: visible[0].instanceId,
+        otherId: visible[1].instanceId,
+      });
     for (const pane of panes.slice(0, 8)) {
       const id = pane.instanceId;
       for (const action of [

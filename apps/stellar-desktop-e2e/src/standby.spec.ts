@@ -80,7 +80,7 @@ for (const { reducedMotion, className, animated, model, turn } of [
     await expect(
       page.getByRole('dialog', { name: 'Experience controls' }),
     ).toBeHidden();
-    await expect(page.locator('.waiting-ring')).toHaveCount(0);
+    await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCount(0);
     for (const size of [
       { width: 1100, height: 760 },
       { width: 480, height: 360 },

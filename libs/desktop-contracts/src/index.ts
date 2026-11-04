@@ -73,6 +73,7 @@ export type {
   WorkspaceDisplay,
   WorkspaceToolRequest,
   WorkspacePaneMetadata,
+  WorkspaceRenderState,
   WorkspaceToolOutcome,
   WorkspaceToolReply,
 } from './generated';

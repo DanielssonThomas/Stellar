@@ -39,24 +39,27 @@
         </filter>
       </defs>
     </svg>
-    @if (showWaiting()) {
-      <svg class="waiting-ring" viewBox="0 0 512 512" aria-hidden="true">
-        <circle cx="256" cy="256" r="238" />
-        <circle class="ring-accent" cx="256" cy="256" r="230" />
-        <path
-          d="M256 2 L260 14 L272 18 L260 22 L256 34 L252 22 L240 18 L252 14 Z"
-        />
-        <path
-          d="M494 240 L498 252 L510 256 L498 260 L494 272 L490 260 L478 256 L490 252 Z"
-        />
-        <path
-          d="M256 478 L260 490 L272 494 L260 498 L256 510 L252 498 L240 494 L252 490 Z"
-        />
-        <path
-          d="M18 240 L22 252 L34 256 L22 260 L18 272 L14 260 L2 256 L14 252 Z"
-        />
-      </svg>
-    }
+    <svg
+      class="waiting-ring"
+      [class.waiting-visible]="showWaiting()"
+      viewBox="0 0 512 512"
+      aria-hidden="true"
+    >
+      <circle cx="256" cy="256" r="238" />
+      <circle class="ring-accent" cx="256" cy="256" r="230" />
+      <path
+        d="M256 2 L260 14 L272 18 L260 22 L256 34 L252 22 L240 18 L252 14 Z"
+      />
+      <path
+        d="M494 240 L498 252 L510 256 L498 260 L494 272 L490 260 L478 256 L490 252 Z"
+      />
+      <path
+        d="M256 478 L260 490 L272 494 L260 498 L256 510 L252 498 L240 494 L252 490 Z"
+      />
+      <path
+        d="M18 240 L22 252 L34 256 L22 260 L18 272 L14 260 L2 256 L14 252 Z"
+      />
+    </svg>
     @if (environment()) {
       <div class="ambience" aria-hidden="true"></div>
     }

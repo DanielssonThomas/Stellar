@@ -10,6 +10,15 @@ spec.loader.exec_module(workspace)
 
 
 class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
+    def test_render_observations_preserve_terminal_and_pending_states(self):
+        pane = {'instance_id': 'pane', 'surface': 'image', 'prominence': 'primary', 'minimized': False}
+        for state in ('ready', 'loading', 'error', 'hidden', 'unavailable', None):
+            outcome = {'kind': 'inspection', 'panes': [{**pane, 'render_state': state}]}
+            self.assertEqual(workspace.validate_outcome(outcome, 'inspect'), outcome)
+        for state in ('success', True, [], {}):
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_outcome({'kind': 'inspection', 'panes': [{**pane, 'render_state': state}]}, 'inspect')
+
     async def test_screen_targets_and_monitor_metadata_are_bounded_and_cancelled_images_are_rejected(self):
         display = {'id': 'monitor1', 'name': 'Left', 'width': 3840, 'height': 2160, 'primary': True, 'foreground': True}
         self.assertEqual(workspace.validate_outcome({'kind': 'displays', 'displays': [display]}, 'list_displays')['displays'], [display])
