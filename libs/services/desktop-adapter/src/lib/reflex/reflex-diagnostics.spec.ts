@@ -1,6 +1,11 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it } from 'vitest';
 import { captureReflexDiagnostics } from './reflex-diagnostics';
-afterEach(() => performance.clearMeasures('stellar.reflex.latency'));
+const clearHistory = () => {
+  performance.clearMeasures('stellar.reflex.latency');
+  performance.clearMeasures('stellar.voice.latency');
+};
+beforeEach(clearHistory);
+afterEach(clearHistory);
 it('exports bounded timings and outcomes without conversation content or paths', () => {
   performance.measure('stellar.reflex.latency', {
     start: 0,
