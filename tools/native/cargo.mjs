@@ -96,6 +96,7 @@ if (action === 'smoke') {
               'allow-ivy-clear-conversation',
               'allow-ivy-new-session',
               'allow-ivy-reload-mcp',
+              'allow-ivy-question-reply',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
               'allow-smoke-hold-ivy',

@@ -1,5 +1,24 @@
 use super::*;
 
+#[test]
+fn maximum_question_answers_fit_the_json_envelope_without_widening_prompt_limits() {
+    let params = json!({"session_id":"s".repeat(512),"execution_generation":u64::MAX,"prompt_id":"q".repeat(512),"answer":"\"".repeat(16384)});
+    let line = request_line(u64::MAX, "clarify.respond", &params).unwrap();
+    assert!(line.len() > 16384 && line.len() <= 65536);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&line).unwrap()["params"],
+        params
+    );
+    assert_eq!(
+        request_line(1, "prompt.submit", &params),
+        Err(IvyErrorCode::MalformedRequest)
+    );
+    assert_eq!(
+        request_line(1, "clarify.respond", &json!({"answer":"\"".repeat(65536)})),
+        Err(IvyErrorCode::MalformedRequest)
+    );
+}
+
 fn fixture(script: &str) -> Broker {
     let mut command = Command::new("powershell.exe");
     command.args(["-NoProfile", "-NonInteractive", "-Command", script]);

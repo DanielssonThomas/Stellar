@@ -146,7 +146,7 @@ fn check_page(window: Webview) {
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
                 let lifecycleRejected = 0;
-                for (const name of ['ivy_new_session', 'ivy_reload_mcp']) {
+                for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
                     try { await invoke(name, { request: { version: 2 } }); }
                     catch (error) { if (error === 'malformed_request') lifecycleRejected++; }
                 }
@@ -191,7 +191,7 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===2,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
@@ -240,6 +240,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_clear_conversation,
             crate::ivy::ivy_new_session,
             crate::ivy::ivy_reload_mcp,
+            crate::ivy::ivy_question_reply,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
             smoke_hold_ivy,
