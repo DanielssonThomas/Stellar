@@ -41,6 +41,7 @@
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
     [composing]="composing() || faultVisible()"
+    [showPaneControls]="paneControlsVisible()"
     [dismissOnClose]="false"
     [focusFallback]="focusFallback"
     (retainedPresentations)="requestedContent.set($event)"
@@ -117,6 +118,7 @@
       class="absolute bottom-4 left-4 z-2 max-w-[calc(100%-2rem)]"
       [text]="voiceInputText()"
       [loading]="loading()"
+      [reducedMotion]="state().reducedMotion"
     />
   }
 
@@ -298,6 +300,16 @@
       <label class="motion-toggle">
         <input
           type="checkbox"
+          id="desktop-pane-controls"
+          [checked]="paneControlsVisible()"
+          (change)="setPaneControls($event)"
+        />
+        <span>Show pane controls</span>
+      </label>
+      <label class="motion-toggle">
+        <input
+          type="checkbox"
+          id="desktop-reduce-motion"
           [checked]="state().reducedMotion"
           (change)="setReduced($event)"
         />

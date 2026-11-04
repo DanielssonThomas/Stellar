@@ -47,6 +47,27 @@ describe('DesktopExperienceTemplate', () => {
     expect(change).toHaveBeenCalledWith(false);
   });
 
+  it('routes the pane controls checkbox to Stage and retains it when the menu reopens', async () => {
+    const view = fixture.componentInstance;
+    view.menu.toggle();
+    await fixture.whenStable();
+    const toggle: HTMLInputElement = fixture.nativeElement.querySelector(
+      '#desktop-pane-controls',
+    );
+    expect(toggle.checked).toBe(false);
+    expect(view.stage().showPaneControls()).toBe(false);
+    toggle.click();
+    await fixture.whenStable();
+    expect(view.stage().showPaneControls()).toBe(true);
+    view.menu.close();
+    view.menu.toggle();
+    await fixture.whenStable();
+    expect(toggle.checked).toBe(true);
+    toggle.click();
+    await fixture.whenStable();
+    expect(view.stage().showPaneControls()).toBe(false);
+  });
+
   it('opens controls with M, preserves typing and switches dialogs without stacking', async () => {
     const view = fixture.componentInstance;
     const key = (options: KeyboardEventInit = {}) =>
@@ -311,7 +332,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
     const input: HTMLInputElement = fixture.nativeElement.querySelector(
-      '.motion-toggle input',
+      '#desktop-reduce-motion',
     );
     input.checked = true;
     input.dispatchEvent(new Event('change'));

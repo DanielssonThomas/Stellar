@@ -52,70 +52,72 @@
       animate.enter="pane-enter"
       (animate.leave)="retire($event)"
     >
-      <nav
-        class="pane-controls"
-        [attr.aria-label]="surface.title + ' controls'"
-      >
-        <button
-          type="button"
-          aria-label="Focus pane"
-          (click)="control('focus', surface.instanceId)"
+      @if (showPaneControls()) {
+        <nav
+          class="pane-controls"
+          [attr.aria-label]="surface.title + ' controls'"
         >
-          ◎
-        </button>
-        <button
-          type="button"
-          aria-label="Move pane earlier"
-          (click)="movePane(surface.instanceId, -1)"
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          aria-label="Move pane later"
-          (click)="movePane(surface.instanceId, 1)"
-        >
-          →
-        </button>
-        <button
-          type="button"
-          aria-label="Restore previous layout"
-          (click)="restoreLayout()"
-        >
-          ↶
-        </button>
-        @if (layoutState().maximizedId === surface.instanceId) {
           <button
             type="button"
-            aria-label="Restore layout"
+            aria-label="Focus pane"
+            (click)="control('focus', surface.instanceId)"
+          >
+            ◎
+          </button>
+          <button
+            type="button"
+            aria-label="Move pane earlier"
+            (click)="movePane(surface.instanceId, -1)"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            aria-label="Move pane later"
+            (click)="movePane(surface.instanceId, 1)"
+          >
+            →
+          </button>
+          <button
+            type="button"
+            aria-label="Restore previous layout"
             (click)="restoreLayout()"
           >
-            ↙
+            ↶
           </button>
-        } @else {
+          @if (layoutState().maximizedId === surface.instanceId) {
+            <button
+              type="button"
+              aria-label="Restore layout"
+              (click)="restoreLayout()"
+            >
+              ↙
+            </button>
+          } @else {
+            <button
+              type="button"
+              aria-label="Maximize pane"
+              (click)="control('maximize', surface.instanceId)"
+            >
+              ↗
+            </button>
+          }
           <button
             type="button"
-            aria-label="Maximize pane"
-            (click)="control('maximize', surface.instanceId)"
+            aria-label="Minimize pane"
+            (click)="control('minimize', surface.instanceId)"
           >
-            ↗
+            −
           </button>
-        }
-        <button
-          type="button"
-          aria-label="Minimize pane"
-          (click)="control('minimize', surface.instanceId)"
-        >
-          −
-        </button>
-        <button
-          type="button"
-          aria-label="Close pane"
-          (click)="control('close', surface.instanceId)"
-        >
-          ×
-        </button>
-      </nav>
+          <button
+            type="button"
+            aria-label="Close pane"
+            (click)="control('close', surface.instanceId)"
+          >
+            ×
+          </button>
+        </nav>
+      }
       <div
         class="surface-content"
         tabindex="0"
