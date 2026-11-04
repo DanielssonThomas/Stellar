@@ -66,14 +66,38 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         for change in ({'execution_generation': 5}, {'admission_id': 'foreign'},
                        {'ref': {'session_id': 'foreign'}}, {'status': 'started'}, {'result': {}}):
             conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': 4}
-            bridge.settle_receipt(conn, None, params, {**receipt, **change})
+            await bridge.settle_receipt(conn, None, params, {**receipt, **change})
             self.assertIsNotNone(conn.active)
             self.assertFalse(conn.lease.released)
-        bridge.settle_receipt(conn, None, params, receipt)
+        await bridge.settle_receipt(conn, None, params, receipt)
         self.assertIsNone(conn.active)
         self.assertEqual(conn.lease.released, [True])
-        bridge.settle_receipt(conn, None, params, receipt)
+        await bridge.settle_receipt(conn, None, params, receipt)
         self.assertEqual(conn.lease.released, [True])
+
+    async def test_queued_admission_learns_generation_and_cancels_its_pending_dialogs(self):
+        conn = Connection()
+        conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': None}
+        params = {'session_id': 's', 'admission_id': 'a'}
+        receipt = {'ref': {'session_id': 's'}, 'admission_id': 'a', 'execution_generation': 4, 'status': 'running'}
+        cancelled = []
+        class Handler:
+            async def cancel(self, sid):
+                cancelled.append(sid)
+        await bridge.settle_receipt(conn, None, params, {**receipt, 'admission_id': 'foreign'}, Handler())
+        self.assertIsNone(conn.active['execution_generation'])
+        await bridge.settle_receipt(conn, None, params, receipt, Handler())
+        self.assertEqual(conn.active['execution_generation'], 4)
+        self.assertFalse(cancelled)
+        await bridge.settle_receipt(conn, None, params, {**receipt, 'status': 'terminal', 'outcome': 'cancelled'}, Handler())
+        self.assertIsNone(conn.active)
+        self.assertEqual(cancelled, ['s'])
+        self.assertEqual(conn.lease.released, [True])
+        conn.active = {'session_id': 's', 'admission_id': 'b', 'execution_generation': None}
+        await bridge.settle_receipt(conn, None, {'session_id': 's', 'admission_id': 'b'},
+            {**receipt, 'admission_id': 'b', 'status': 'terminal', 'outcome': 'failed'}, Handler())
+        self.assertIsNone(conn.active)
+        self.assertEqual(cancelled, ['s', 's'])
 
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()

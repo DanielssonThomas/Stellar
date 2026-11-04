@@ -308,16 +308,21 @@ async def requests_with_workspace(conn, workspace, approvals=None):
             await reader
 
 
-def settle_receipt(conn, workspace, params, receipt):
+async def settle_receipt(conn, workspace, params, receipt, approvals=None):
     active = conn.active
     generation = receipt.get('execution_generation')
     if (type(active) is not dict or type(generation) is not int
-            or active.get('execution_generation') != generation
+            or generation < 0
             or active.get('session_id') != params['session_id']
             or active.get('admission_id') != params['admission_id']
             or receipt.get('admission_id') != params['admission_id']
-            or receipt.get('ref', {}).get('session_id') != params['session_id']
-            or receipt.get('status') != 'terminal'
+            or receipt.get('ref', {}).get('session_id') != params['session_id']):
+        return
+    known = active.get('execution_generation')
+    if known is not None and known != generation:
+        return
+    active['execution_generation'] = generation
+    if (receipt.get('status') != 'terminal'
             or receipt.get('outcome') not in {'completed', 'failed', 'cancelled', 'interrupted'}):
         return
     if (receipt['outcome'] == 'completed'
@@ -327,6 +332,8 @@ def settle_receipt(conn, workspace, params, receipt):
     conn.lease.release(settled=True)
     if workspace is not None:
         workspace.gate.disarm()
+    if approvals is not None:
+        await approvals.cancel(params['session_id'])
 
 
 async def request_worker(conn, workspace, queue, approvals=None):
@@ -416,7 +423,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
             if method == 'prompt.submit' and getattr(conn, 'active', None) is not None:
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
-                settle_receipt(conn, workspace, params, result)
+                await settle_receipt(conn, workspace, params, result, approvals)
             if method == 'workspace.setup':
                 pass
             elif method == 'runtime.describe':
