@@ -1,3 +1,68 @@
 :host {
   display: block;
+  color: color-mix(
+    in srgb,
+    var(--stellar-color-primary) 65%,
+    var(--stellar-color-foreground)
+  );
+}
+.transcript-showcase {
+  background: linear-gradient(
+    105deg,
+    color-mix(
+      in srgb,
+      var(--stellar-color-primary) 4%,
+      var(--stellar-color-canvas)
+    ),
+    transparent
+  );
+}
+.transcript-showcase::before,
+.transcript-showcase::after {
+  content: '';
+  position: absolute;
+  width: 1rem;
+  height: 0.65rem;
+  color: color-mix(in srgb, var(--stellar-color-primary) 55%, transparent);
+  pointer-events: none;
+}
+.transcript-showcase::before {
+  top: 0;
+  left: 0;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+.transcript-showcase::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+}
+.transcript-label {
+  color: var(--stellar-color-primary);
+  opacity: 0.75;
+}
+.transcript-text {
+  display: block;
+}
+.transcript-reveal {
+  animation: transcript-arrive 360ms ease-out both;
+}
+@keyframes transcript-arrive {
+  from {
+    opacity: 0.45;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+:host(.motion-reduced) .transcript-reveal {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .transcript-reveal {
+    animation: none;
+  }
 }

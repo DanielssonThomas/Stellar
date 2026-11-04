@@ -110,6 +110,9 @@ test('manual dividers, selection, swap, maximize and minimize retain actual moun
   await expect
     .poll(async () => Math.round((await images.boundingBox())?.x ?? -1))
     .toBe(0);
+  await page.keyboard.press('m');
+  await page.getByLabel('Show pane controls', { exact: true }).check();
+  await page.keyboard.press('Escape');
   await images
     .getByRole('button', { name: 'Maximize pane', exact: true })
     .click();

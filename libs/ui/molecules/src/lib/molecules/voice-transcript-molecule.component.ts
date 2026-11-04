@@ -7,9 +7,13 @@ import { SkeletonAtom } from '@stellar/ui-atoms';
   imports: [SkeletonAtom],
   templateUrl: './voice-transcript-molecule.component.html',
   styleUrl: './voice-transcript-molecule.component.css',
-  host: { '[attr.aria-busy]': 'loading()' },
+  host: {
+    '[attr.aria-busy]': 'loading()',
+    '[class.motion-reduced]': 'reducedMotion()',
+  },
 })
 export class VoiceTranscriptMolecule {
   readonly text = input('');
   readonly loading = input(false);
+  readonly reducedMotion = input(false);
 }

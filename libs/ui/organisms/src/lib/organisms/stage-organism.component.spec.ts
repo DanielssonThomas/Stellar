@@ -59,6 +59,24 @@ describe('StageOrganism', () => {
     instanceId = 'summary',
   ) => ({ contractVersion: 1, commandId, instanceId, action });
 
+  it('omits pane controls until enabled and preserves mounted content across toggles', async () => {
+    fixture.componentInstance.dispatch(open());
+    await fixture.whenStable();
+    const content = fixture.nativeElement.querySelector('.surface-content');
+    expect(fixture.nativeElement.querySelector('.pane-controls')).toBeNull();
+    fixture.componentRef.setInput('showPaneControls', true);
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelectorAll('.pane-controls button'),
+    ).toHaveLength(7);
+    fixture.componentRef.setInput('showPaneControls', false);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.pane-controls')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.surface-content')).toBe(
+      content,
+    );
+  });
+
   beforeEach(async () => {
     bounds = { width: 1000, height: 700 };
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(

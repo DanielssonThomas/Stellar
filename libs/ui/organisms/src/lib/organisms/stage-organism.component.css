@@ -17,7 +17,7 @@
   --stellar-presentation-body: clamp(1rem, 1.3vw, 1.3rem);
   overflow: hidden;
   overscroll-behavior: contain;
-  padding: 2.75rem clamp(0.75rem, 1.5vw, 1.5rem) 1rem;
+  padding: 1rem clamp(0.75rem, 1.5vw, 1.5rem);
   background: var(--stellar-color-canvas);
 }
 .surface-content {
@@ -35,8 +35,8 @@
 .boundary-left {
   border-left: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
 }
-.surface:not(.boundary-left):not(.boundary-top) {
-  padding-top: max(4.5rem, 3.6vw);
+:host(.pane-tools-visible) .surface {
+  padding-top: 2.75rem;
 }
 .boundary-top {
   border-top: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
@@ -51,12 +51,6 @@
   right: 0.5rem;
   display: flex;
   gap: 0.25rem;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.surface:hover .pane-controls,
-.surface:focus-within .pane-controls {
-  opacity: 1;
 }
 .pane-controls button,
 .minimized-panes button {

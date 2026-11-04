@@ -65,6 +65,7 @@ export interface MicrophoneOption {
 })
 export class DesktopExperienceTemplate {
   readonly statusVisible = signal(false);
+  readonly paneControlsVisible = signal(false);
   readonly requestTimeline = input<readonly RequestStatusEntry[]>([]);
   readonly cloudStatus = input('unavailable');
   readonly cloudLabel = input('Terra');
@@ -271,6 +272,11 @@ export class DesktopExperienceTemplate {
     const target = event.target;
     if (target instanceof HTMLInputElement)
       this.action.emit({ type: 'reduced-motion', enabled: target.checked });
+  }
+
+  setPaneControls(event: Event) {
+    if (event.target instanceof HTMLInputElement)
+      this.paneControlsVisible.set(event.target.checked);
   }
 
   chooseInput(event: Event) {

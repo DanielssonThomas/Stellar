@@ -1,8 +1,12 @@
 <section
-  class="w-80 max-w-full rounded-xl border border-stellar-line bg-stellar-panel/95 px-4 py-3 text-stellar-foreground shadow-lg"
+  class="transcript-showcase relative w-80 max-w-full px-4 py-3"
   aria-label="Voice input"
 >
-  <h2 class="m-0 text-xs font-medium text-stellar-muted">Recognized speech</h2>
+  <h2
+    class="transcript-label m-0 text-[0.6rem] font-medium tracking-[0.18em] uppercase"
+  >
+    <span aria-hidden="true">✧</span> Recognized speech
+  </h2>
   @if (loading()) {
     <stellar-skeleton-atom shape="text" />
   } @else {
@@ -11,7 +15,14 @@
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      [textContent]="text()"
-    ></p>
+    >
+      @for (words of [text()]; track words) {
+        <span
+          class="transcript-text"
+          animate.enter="transcript-reveal"
+          [textContent]="words"
+        ></span>
+      }
+    </p>
   }
 </section>

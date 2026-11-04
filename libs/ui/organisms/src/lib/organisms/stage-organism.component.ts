@@ -38,6 +38,7 @@ import { createStageMotion } from './stage-motion';
   host: {
     '[attr.aria-busy]': 'loading()',
     '[class.motion-reduced]': 'reducedMotion()',
+    '[class.pane-tools-visible]': 'showPaneControls()',
     '[class.keyboard-focus]': 'keyboardFocus()',
     '(keydown.tab)': 'keyboardFocus.set(true)',
     '(pointerdown)': 'keyboardFocus.set(false)',
@@ -49,6 +50,7 @@ export class StageOrganism {
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
   readonly reducedMotion = input(false);
+  readonly showPaneControls = input(false);
   readonly composing = input(false);
   readonly dismissOnClose = input(true);
   readonly focusFallback = input<HTMLElement | null>(null);

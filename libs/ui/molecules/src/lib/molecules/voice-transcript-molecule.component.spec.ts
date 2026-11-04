@@ -34,4 +34,29 @@ describe('VoiceTranscriptMolecule', () => {
     ).not.toBeNull();
     expect(fixture.nativeElement.getAttribute('aria-busy')).toBe('true');
   });
+
+  it('reveals each replacement without retaining stale words or replacing the live region', async () => {
+    fixture.componentRef.setInput('text', 'Show one quote.');
+    await fixture.whenStable();
+    const status: HTMLElement =
+      fixture.nativeElement.querySelector('[role="status"]');
+    const previous = status.firstElementChild;
+    fixture.componentRef.setInput(
+      'text',
+      'Show two stoic quotes side by side.',
+    );
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="status"]')).toBe(status);
+    expect(status.textContent).toBe('Show two stoic quotes side by side.');
+    expect(status.firstElementChild).not.toBe(previous);
+    expect(status.children).toHaveLength(1);
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.getAttribute('aria-atomic')).toBe('true');
+    fixture.componentRef.setInput('reducedMotion', true);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.classList.contains('motion-reduced')).toBe(
+      true,
+    );
+    expect(status.textContent).toBe('Show two stoic quotes side by side.');
+  });
 });
