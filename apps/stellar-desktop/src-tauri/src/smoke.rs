@@ -50,13 +50,29 @@ fn smoke_hold_ivy(
 
 #[cfg(windows)]
 #[tauri::command]
-async fn smoke_capture_window(app: tauri::AppHandle) -> bool {
+async fn smoke_capture_window(app: tauri::AppHandle, detailed: Option<bool>) -> bool {
     println!("STELLAR_SMOKE_STAGE capture-window-start");
     let captured =
         tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
             .await
             .is_ok_and(|result| {
                 result.is_ok_and(|image| {
+                    if detailed == Some(true) {
+                        let Ok(decoded) = ::image::load_from_memory(&image) else {
+                            return false;
+                        };
+                        println!(
+                            "STELLAR_SMOKE_STAGE detailed-capture-{}x{}-bytes{}",
+                            decoded.width(),
+                            decoded.height(),
+                            image.len()
+                        );
+                        if std::fs::write("artifacts/native/detailed-workspace.png", &image)
+                            .is_err()
+                        {
+                            return false;
+                        }
+                    }
                     image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
                 })
             });
@@ -195,11 +211,21 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
+                if (__WORKSPACE_LIVE__) {
+                    stage='detailed-window-capture';
+                    if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
+                }
                 await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
     "#;
+    let script = script.replace(
+        "__DETAILED_CAPTURE__",
+        include_str!("smoke_capture.js")
+            .trim()
+            .trim_end_matches(';'),
+    );
     let script = script.replace(
         "__TELEMETRY_EXPECT_LIVE__",
         if std::env::var_os("STELLAR_TELEMETRY_SMOKE_EXPECT_LIVE").is_some() {
@@ -255,6 +281,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             if window.label() == "main"
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
             {
+                if std::env::var_os("STELLAR_WORKSPACE_SMOKE_LIVE").is_some() {
+                    let _ = window
+                        .window()
+                        .set_size(tauri::LogicalSize::new(1920., 1080.));
+                }
                 check_page(window.clone());
             }
         })

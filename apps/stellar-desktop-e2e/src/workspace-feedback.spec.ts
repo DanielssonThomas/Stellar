@@ -127,6 +127,109 @@ const image = (id: string, src: string): WorkspaceToolOperation => ({
   payload_json: JSON.stringify({ title: id, src, alt: id }),
 });
 
+test('one bulk request starts both images concurrently and returns their settled final view', async ({
+  page,
+}, info) => {
+  const pixels = await (
+    await page.request.get('/emblem/layers/gold-body.png')
+  ).body();
+  let started = 0;
+  let release!: () => void;
+  const loading = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/emblem/layers/batch-*.png', async (route) => {
+    started++;
+    await loading;
+    await route.fulfill({ contentType: 'image/png', body: pixels });
+  });
+  const result = request(page, {
+    kind: 'batch',
+    operations: [
+      image('left', '/emblem/layers/batch-left.png'),
+      image('right', '/emblem/layers/batch-right.png'),
+      { kind: 'focus', instance_id: 'missing' },
+    ],
+  });
+  await expect.poll(() => started).toBe(2);
+  release();
+  expect(await result).toMatchObject({
+    kind: 'batch',
+    outcomes: ['applied', 'applied', 'rejected'],
+    panes: [
+      { instance_id: 'left', render_state: 'ready' },
+      { instance_id: 'right', render_state: 'ready' },
+    ],
+  });
+  for (const id of ['left', 'right']) {
+    await expect(
+      page.locator(`[data-instance-id="${id}"] img.media-image`),
+    ).toBeVisible();
+  }
+  const replies = await page.evaluate(() =>
+    (window as unknown as { workspace290: Fixture }).workspace290.calls.filter(
+      (name) => name === 'workspace_tool_reply',
+    ),
+  );
+  expect(replies).toHaveLength(1);
+  await page.screenshot({ path: info.outputPath('batch-final-view.png') });
+  expect(
+    await request(page, { kind: 'batch', operations: [{ kind: 'clear' }] }),
+  ).toEqual({ kind: 'batch', outcomes: ['applied'], panes: [] });
+  await expect(page.locator('[data-instance-id]')).toHaveCount(0);
+});
+
+test('close panes and voice paint aliases clear the actual Stage including minimized panes', async ({
+  page,
+}) => {
+  for (const text of [
+    'close panes',
+    'close all panes',
+    'close paint',
+    'close paints',
+    'close all paint',
+    'close all paints',
+  ]) {
+    await request(page, {
+      kind: 'batch',
+      operations: ['one', 'two'].map((id) => ({
+        kind: 'open',
+        instance_id: id,
+        surface: 'assistant-message',
+        prominence: 'secondary',
+        payload_json: JSON.stringify({ title: id, body: 'Retained ' + id }),
+      })),
+    });
+    await request(page, { kind: 'minimize', instance_id: 'two' });
+    const outcome = await page.evaluate(async (text) => {
+      const app = (
+        window as unknown as {
+          ng: {
+            getComponent(element: Element): {
+              reflex: {
+                run(text: string, id: string): Promise<{ outcome: string }>;
+              };
+            };
+          };
+        }
+      ).ng.getComponent(document.querySelector('stellar-root') as Element);
+      return app.reflex.run(text, crypto.randomUUID());
+    }, text);
+    expect(outcome.outcome).toBe('confirmed');
+    expect(await request(page, { kind: 'inspect' })).toEqual({
+      kind: 'inspection',
+      panes: [],
+    });
+    await expect(page.locator('[data-instance-id]')).toHaveCount(0);
+  }
+  const calls = await page.evaluate(
+    () => (window as unknown as { workspace290: Fixture }).workspace290.calls,
+  );
+  expect(calls).not.toContain('reflex_infer');
+  expect(calls).not.toContain('reflex_media_snapshot');
+  expect(calls).not.toContain('ivy_submit');
+});
+
 test('actual image success and failure reach Ivy through correlated settled inspection', async ({
   page,
 }, info) => {

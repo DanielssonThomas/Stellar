@@ -9,6 +9,44 @@ const plan: ReflexPlan = {
   reply: 'That song had it coming.',
 };
 
+it.each(['close panes', 'close all panes', 'close paints', 'close paint'])(
+  'dispatches %s once without inference and honors cancellation',
+  async (text) => {
+    const execute = vi.fn(() => 'confirmed' as const),
+      infer = vi.fn();
+    const controller = new ReflexController({
+      environment: async () => ({
+        epoch: 'one',
+        context: '[]',
+        actions: [
+          {
+            id: 'layout.clear',
+            description: 'Close Stellar panes',
+            valid: () => true,
+            execute,
+          },
+        ],
+      }),
+      currentEpoch: () => 'one',
+      infer,
+    });
+    expect((await controller.run(text, 'first', 'professional')).outcome).toBe(
+      'confirmed',
+    );
+    expect((await controller.run(text, 'first', 'professional')).outcome).toBe(
+      'rejected',
+    );
+    const abort = new AbortController();
+    abort.abort();
+    expect(
+      (await controller.run(text, 'cancelled', 'professional', abort.signal))
+        .outcome,
+    ).toBe('cancelled');
+    expect(execute).toHaveBeenCalledOnce();
+    expect(infer).not.toHaveBeenCalled();
+  },
+);
+
 it('swaps the exact registered pair without inference, refuses duplicates and clarifies absent pairs', async () => {
   const execute = vi.fn(() => 'confirmed' as const);
   const infer = vi.fn();

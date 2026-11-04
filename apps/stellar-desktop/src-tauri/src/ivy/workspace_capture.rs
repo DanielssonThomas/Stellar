@@ -21,12 +21,6 @@ pub fn is_native(operation: &WorkspaceToolOperation) -> bool {
 
 const MAX_DIMENSION: u32 = 8192;
 pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
-#[cfg(windows)]
-#[derive(Clone, Copy)]
-enum Encoding {
-    OwnedWindow,
-    Screen,
-}
 #[path = "workspace_capture_image.rs"]
 mod image;
 
@@ -50,15 +44,11 @@ fn dimensions(width: u32, height: u32, stride: usize, size: usize) -> bool {
 
 #[cfg(windows)]
 mod platform {
-    use super::{
-        Encoding, IvyErrorCode, MAX_DIMENSION, MAX_IMAGE_BYTES, dimensions,
-        image::encode as encode_pixels,
-    };
+    use super::{IvyErrorCode, MAX_DIMENSION, dimensions, image::encode as encode_pixels};
     use std::{sync::mpsc, time::Duration};
     use tauri::{AppHandle, Manager};
     use windows_capture::{
         capture::{Context, GraphicsCaptureApiHandler},
-        encoder::{ImageEncoder, ImageEncoderPixelFormat, ImageFormat},
         frame::Frame,
         graphics_capture_api::InternalCaptureControl,
         settings::{
@@ -68,19 +58,23 @@ mod platform {
         window::Window,
     };
 
+    struct Pixels {
+        bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+    }
+    type FrameResult = Result<Pixels, IvyErrorCode>;
     type CaptureResult = Result<Vec<u8>, IvyErrorCode>;
     struct Capture {
-        reply: mpsc::SyncSender<CaptureResult>,
-        encoding: Encoding,
+        reply: mpsc::SyncSender<FrameResult>,
     }
     impl GraphicsCaptureApiHandler for Capture {
-        type Flags = (mpsc::SyncSender<CaptureResult>, Encoding);
+        type Flags = mpsc::SyncSender<FrameResult>;
         type Error = Box<dyn std::error::Error + Send + Sync>;
 
         fn new(context: Context<Self::Flags>) -> Result<Self, Self::Error> {
             Ok(Self {
-                reply: context.flags.0,
-                encoding: context.flags.1,
+                reply: context.flags,
             })
         }
 
@@ -89,14 +83,14 @@ mod platform {
             frame: &mut Frame,
             control: InternalCaptureControl,
         ) -> Result<(), Self::Error> {
-            let result = encode(frame, self.encoding);
+            let result = pixels(frame);
             let _ = self.reply.try_send(result);
             control.stop();
             Ok(())
         }
     }
 
-    fn encode(frame: &mut Frame, encoding: Encoding) -> CaptureResult {
+    fn pixels(frame: &mut Frame) -> FrameResult {
         let width = frame.width();
         let height = frame.height();
         if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
@@ -113,18 +107,11 @@ mod platform {
         for offset in (0..height as usize).map(|y| y * stride) {
             pixels.extend_from_slice(&raw[offset..offset + row]);
         }
-        match encoding {
-            Encoding::Screen => encode_pixels(pixels, width, height),
-            Encoding::OwnedWindow => {
-                let bytes = ImageEncoder::new(ImageFormat::Png, ImageEncoderPixelFormat::Rgba8)
-                    .and_then(|encoder| encoder.encode(&pixels, width, height))
-                    .map_err(|_| IvyErrorCode::Unavailable)?;
-                if bytes.len() > MAX_IMAGE_BYTES {
-                    return Err(IvyErrorCode::Unavailable);
-                }
-                Ok(bytes)
-            }
-        }
+        Ok(Pixels {
+            bytes: pixels,
+            width,
+            height,
+        })
     }
 
     pub fn capture(app: &AppHandle) -> CaptureResult {
@@ -138,10 +125,14 @@ mod platform {
         }
         let width = window.width().map_err(|_| IvyErrorCode::Unavailable)?;
         let height = window.height().map_err(|_| IvyErrorCode::Unavailable)?;
-        if width <= 0 || height <= 0 || width > 4096 || height > 4096 {
+        if width <= 0
+            || height <= 0
+            || width > MAX_DIMENSION as i32
+            || height > MAX_DIMENSION as i32
+        {
             return Err(IvyErrorCode::Unavailable);
         }
-        let image = capture_item(window, Encoding::OwnedWindow)?;
+        let image = capture_item(window)?;
         let current = app
             .get_window("main")
             .ok_or(IvyErrorCode::Unavailable)?
@@ -160,7 +151,6 @@ mod platform {
         T: TryInto<windows_capture::settings::GraphicsCaptureItemType> + Send + 'static,
     >(
         target: T,
-        encoding: Encoding,
     ) -> CaptureResult {
         let (sender, receiver) = mpsc::sync_channel(1);
         let settings = Settings::new(
@@ -171,7 +161,7 @@ mod platform {
             MinimumUpdateIntervalSettings::Default,
             DirtyRegionSettings::Default,
             ColorFormat::Rgba8,
-            (sender, encoding),
+            sender,
         );
         let control =
             Capture::start_free_threaded(settings).map_err(|_| IvyErrorCode::Unavailable)?;
@@ -179,7 +169,9 @@ mod platform {
             .recv_timeout(Duration::from_secs(8))
             .map_err(|_| IvyErrorCode::Timeout);
         control.stop().map_err(|_| IvyErrorCode::Unavailable)?;
-        result?
+        let frame = result??;
+        // Release Windows capture before bounded CPU encoding; the frame deadline covers acquisition.
+        encode_pixels(frame.bytes, frame.width, frame.height)
     }
 }
 

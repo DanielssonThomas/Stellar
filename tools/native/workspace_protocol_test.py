@@ -10,6 +10,60 @@ spec.loader.exec_module(workspace)
 
 
 class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_batch_is_bounded_validated_before_emit_and_correlates_ordered_outcomes(self):
+        frames = []
+        gate = workspace.WorkspaceGate(frames.append)
+        token = gate.arm('1', 'turn')
+        leaf = {'kind': 'open', 'instance_id': 'one', 'surface': 'rich-text',
+                'prominence': 'primary', 'payload_json': '{"text":"' + 'a' * 65525 + '"}'}
+        self.assertEqual(len(leaf['payload_json'].encode()), 65536)
+        batch = {'kind': 'batch', 'operations': [leaf, {**leaf, 'instance_id': 'two'}]}
+        self.assertEqual(workspace.validate_operation(batch), batch)
+        for invalid in [[], [{'kind': 'clear'}] * 9, [batch], [{'kind': 'inspect'}],
+                        [{'kind': 'capture_window'}], [leaf] * 3, [{'kind': 'clear', 'extra': True}]]:
+            with self.subTest(invalid=str(invalid)[:80]), self.assertRaises(workspace.WorkspaceRefused):
+                await gate.call({'kind': 'batch', 'operations': invalid}, token)
+            self.assertEqual(frames, [])
+        task = asyncio.create_task(gate.call(batch, token))
+        await asyncio.sleep(0)
+        self.assertEqual(len(frames), 1)
+        header = {key: frames[0]['data'][key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+        outcome = {'kind': 'batch', 'outcomes': ['applied', 'uncertain'], 'panes': None}
+        for invalid in [{**outcome, 'outcomes': ['applied']}, {**outcome, 'outcomes': ['applied', 'unknown']}, {'kind': 'applied'}]:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                gate.reply({**header, 'outcome': invalid})
+            self.assertFalse(task.done())
+        with self.assertRaises(workspace.WorkspaceRefused):
+            gate.reply({**header, 'epoch': '2', 'outcome': outcome})
+        gate.reply({**header, 'outcome': outcome})
+        self.assertEqual(await task, outcome)
+        self.assertEqual(len(frames), 1)
+
+    async def test_capture_failure_reasons_are_bounded_correlated_and_cancelled(self):
+        frames = []
+        gate = workspace.WorkspaceGate(frames.append)
+        token = gate.arm('1', 'turn')
+        for reason in ('capture_unavailable', 'capture_timeout', 'image_transfer_failed', 'stale_request'):
+            task = asyncio.create_task(gate.call({'kind': 'capture_window'}, token))
+            await asyncio.sleep(0)
+            header = {key: frames[-1]['data'][key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+            for bad_header, bad_reason in [(header, 'private arbitrary message'), ({**header, 'epoch': '2'}, reason)]:
+                with self.assertRaises(workspace.WorkspaceRefused):
+                    gate.reject_image(bad_header, bad_reason)
+                self.assertFalse(task.done())
+            gate.reject_image(header, reason)
+            with self.assertRaises(workspace.WorkspaceCaptureFailed) as error:
+                await task
+            self.assertEqual(error.exception.reason, reason)
+        task = asyncio.create_task(gate.call({'kind': 'capture_window'}, token))
+        await asyncio.sleep(0)
+        header = {key: frames[-1]['data'][key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+        gate.disarm()
+        with self.assertRaises(workspace.WorkspaceRefused):
+            gate.reject_image(header, 'capture_unavailable')
+        with self.assertRaises(workspace.WorkspaceRefused):
+            await task
+
     def test_render_observations_preserve_terminal_and_pending_states(self):
         pane = {'instance_id': 'pane', 'surface': 'image', 'prominence': 'primary', 'minimized': False}
         for state in ('ready', 'loading', 'error', 'hidden', 'unavailable', None):
@@ -86,6 +140,8 @@ class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
                      'payload_json': '{"body":"' + escaped + '"}', 'prominence': 'primary'}
         with self.assertRaises(workspace.WorkspaceRefused):
             await gate.call(operation, token)
+        with self.assertRaises(workspace.WorkspaceRefused):
+            await gate.call({'kind': 'batch', 'operations': [{'kind': 'clear'}, operation]}, token)
         self.assertEqual(emitted, [])
 
     async def test_disarm_and_timeout_reject_late_replies_even_after_rearm(self):

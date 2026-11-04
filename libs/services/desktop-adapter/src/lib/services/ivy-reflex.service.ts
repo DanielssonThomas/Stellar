@@ -17,7 +17,7 @@ import {
 } from '@stellar/desktop-contracts';
 import type { LocalAction } from '../reflex/action-registry';
 import { mediaActionDescriptions } from '../reflex/media-actions';
-import { isPaneSwap } from '../reflex/pane-swap';
+import { paneShortcut } from '../reflex/pane-shortcuts';
 import { captureReflexDiagnostics } from '../reflex/reflex-diagnostics';
 import { RequestTimeline, type RequestTrace } from '../reflex/request-timeline';
 import {
@@ -78,7 +78,7 @@ export class IvyReflexService {
   ) => void;
   private readonly controller = new ReflexController({
     environment: (signal, text) =>
-      isPaneSwap(text)
+      paneShortcut(text)
         ? Promise.resolve({ epoch: this.epoch(), ...this.workspace() })
         : this.environment(signal),
     currentEpoch: () => this.epoch(),
@@ -235,7 +235,7 @@ export class IvyReflexService {
     const revision = this.settingRevision;
     const epoch = this.epoch();
     const workspace = this.workspace();
-    const shortcut = isPaneSwap(text);
+    const shortcut = paneShortcut(text);
     if (!shortcut) {
       try {
         const route = decodeReflexRouting(

@@ -20,6 +20,45 @@ const envelope = {
 };
 
 describe('workspace tool contract', () => {
+  it('validates bounded leaf-only batches and ordered partial outcomes', () => {
+    const operation = {
+      kind: 'batch',
+      operations: [envelope.operation, { kind: 'clear' }],
+    };
+    const request = decodeWorkspaceToolRequest({ ...envelope, operation });
+    expect(request.operation).toEqual(operation);
+    const outcome = {
+      kind: 'batch',
+      outcomes: ['applied', 'uncertain'],
+      panes: [],
+    };
+    expect(decodeWorkspaceToolOutcome(outcome, request)).toEqual(outcome);
+    for (const invalid of [
+      { kind: 'batch', operations: [] },
+      { kind: 'batch', operations: Array(9).fill({ kind: 'clear' }) },
+      { kind: 'batch', operations: [operation] },
+      { kind: 'batch', operations: [{ kind: 'capture_window' }] },
+      { kind: 'batch', operations: [{ kind: 'inspect' }] },
+      { kind: 'batch', operations: [{ kind: 'clear', extra: true }] },
+      {
+        kind: 'batch',
+        operations: Array(3).fill({
+          ...envelope.operation,
+          payload_json: JSON.stringify({ text: 'x'.repeat(65500) }),
+        }),
+      },
+    ])
+      expect(() =>
+        decodeWorkspaceToolRequest({ ...envelope, operation: invalid }),
+      ).toThrow();
+    for (const invalid of [
+      { ...outcome, outcomes: ['applied'] },
+      { ...outcome, outcomes: ['applied', 'success'] },
+      { ...outcome, panes: [{}] },
+      { kind: 'applied' },
+    ])
+      expect(() => decodeWorkspaceToolOutcome(invalid, request)).toThrow();
+  });
   it('validates render observations without promoting loading/error to ready', () => {
     const request = decodeWorkspaceToolRequest({
       ...envelope,

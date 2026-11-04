@@ -74,6 +74,8 @@ export type {
   WorkspaceToolRequest,
   WorkspacePaneMetadata,
   WorkspaceRenderState,
+  WorkspaceMutationStatus,
+  WorkspaceCaptureFailure,
   WorkspaceToolOutcome,
   WorkspaceToolReply,
 } from './generated';

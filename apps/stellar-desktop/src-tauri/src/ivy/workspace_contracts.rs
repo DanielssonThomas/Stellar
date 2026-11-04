@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub const BATCH_MAX_OPERATIONS: usize = 8;
+pub const BATCH_MAX_PAYLOAD_BYTES: usize = 131072;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum WorkspaceSurface {
@@ -24,6 +27,9 @@ pub enum WorkspaceProminence {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkspaceToolOperation {
+    Batch {
+        operations: Vec<WorkspaceToolOperation>,
+    },
     Open {
         instance_id: String,
         surface: WorkspaceSurface,
@@ -161,6 +167,10 @@ pub struct WorkspacePaneLayout {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkspaceToolOutcome {
+    Batch {
+        outcomes: Vec<WorkspaceMutationStatus>,
+        panes: Option<Vec<WorkspacePaneMetadata>>,
+    },
     Displays {
         displays: Vec<WorkspaceDisplay>,
     },
@@ -175,6 +185,23 @@ pub enum WorkspaceToolOutcome {
         revision: u32,
         payload_json: String,
     },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceMutationStatus {
+    Applied,
+    Rejected,
+    Uncertain,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceCaptureFailure {
+    CaptureUnavailable,
+    CaptureTimeout,
+    ImageTransferFailed,
+    StaleRequest,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
