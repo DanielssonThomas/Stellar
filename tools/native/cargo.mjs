@@ -148,7 +148,11 @@ if (action === 'smoke') {
   child.on('close', (code) => {
     clearTimeout(deadline);
     for (const line of output.split(/\r?\n/)) {
-      if (/^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS) /.test(line))
+      if (
+        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
+          line,
+        )
+      )
         console.log(line);
     }
     if (!nativeSmokeSucceeded(code, timedOut, output)) {
@@ -169,6 +173,9 @@ if (action === 'smoke') {
         u64Precision: true,
         malformedInputRejected: true,
         invalidVersionRejected: true,
+        systemVolumeDucking: output.includes('STELLAR_DUCKING_PROBE true')
+          ? 'passed'
+          : 'skipped-no-render-endpoint',
       };
       mkdirSync(resolve(root, 'artifacts/native'), { recursive: true });
       writeFileSync(
