@@ -1,4 +1,5 @@
-import { Component, input, inject } from '@angular/core';
+import { ViewEncapsulation, Component, input, inject } from '@angular/core';
+import { PresentationMarkdownPipe } from './presentation-markdown';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import type { PresentationTextPayload } from './presentation-model';
 import { PRESENTATION_EDIT } from './presentation-edit';
@@ -6,7 +7,8 @@ import { PRESENTATION_EDIT } from './presentation-edit';
 @Component({
   selector: 'stellar-presentation-text-molecule',
   standalone: true,
-  imports: [SkeletonAtom],
+  encapsulation: ViewEncapsulation.None,
+  imports: [SkeletonAtom, PresentationMarkdownPipe],
   templateUrl: './presentation-text-molecule.component.html',
   styleUrl: './presentation-text-molecule.component.css',
   host: { '[attr.aria-busy]': 'loading()' },

@@ -11,7 +11,7 @@ import time
 
 MAX_PAYLOAD = 65536
 MAX_FRAME = 400000
-MAX_PANES = 4
+MAX_PANES = 12
 IMAGE_OPERATIONS = {'capture_window', 'capture_display', 'capture_foreground'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
 SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'workflow',
@@ -71,6 +71,28 @@ def _contains_token(value, token):
     return False
 
 
+def validate_tree(tree):
+    panes, splits = set(), set()
+    def visit(node, depth):
+        if depth > 12 or type(node) is not dict:
+            raise WorkspaceRefused()
+        if node.get('kind') == 'pane':
+            value = node.get('instance_id')
+            if set(node) != {'kind', 'instance_id'} or not _identity(value) or value in panes or len(panes) >= MAX_PANES:
+                raise WorkspaceRefused()
+            panes.add(value)
+            return
+        if (set(node) != {'kind', 'split_id', 'axis', 'percent', 'first', 'second'} | ({'equal_panes'} if 'equal_panes' in node else set()) or ('equal_panes' in node and type(node['equal_panes']) is not bool) or node.get('kind') != 'split' or
+                not _identity(node['split_id']) or node['split_id'] in splits or node['axis'] not in ('horizontal', 'vertical') or
+                type(node['percent']) is not int or not 10 <= node['percent'] <= 90):
+            raise WorkspaceRefused()
+        splits.add(node['split_id'])
+        visit(node['first'], depth + 1)
+        visit(node['second'], depth + 1)
+    visit(tree, 0)
+    return tree
+
+
 def validate_operation(operation):
     if type(operation) is not dict or type(operation.get('kind')) is not str:
         raise WorkspaceRefused()
@@ -82,7 +104,9 @@ def validate_operation(operation):
         'minimize': {'instance_id'}, 'restore': {'instance_id'}, 'maximize': {'instance_id'},
         'resize': {'instance_id', 'percent'}, 'swap': {'instance_id','other_id'},
         'restore_layout': set(), 'inspect_content': {'instance_id'},
-        'arrange': {'instance_ids'}, 'clear': set(), 'inspect': set(),
+        'arrange': {'instance_ids'}, 'set_layout': {'tree'},
+        'split_pane': {'instance_id', 'other_id', 'split_id', 'placement'},
+        'resize_split': {'split_id', 'percent'}, 'clear': set(), 'inspect': set(),
         'capture_window': set(),
         'capture_foreground': set(), 'capture_display': {'display_id'}, 'list_displays': set(),
     }
@@ -98,7 +122,13 @@ def validate_operation(operation):
             raise WorkspaceRefused()
     if 'instance_id' in operation and not _identity(operation['instance_id']):
         raise WorkspaceRefused()
-    if kind == 'resize' and (type(operation['percent']) is not int or not 10 <= operation['percent'] <= 90):
+    if kind == 'set_layout':
+        validate_tree(operation['tree'])
+    if kind in ('split_pane', 'resize_split') and not _identity(operation['split_id']):
+        raise WorkspaceRefused()
+    if kind == 'split_pane' and (not _identity(operation['other_id']) or operation['other_id'] == operation['instance_id'] or operation['placement'] not in ('left', 'right', 'above', 'below')):
+        raise WorkspaceRefused()
+    if kind in ('resize', 'resize_split') and (type(operation['percent']) is not int or not 10 <= operation['percent'] <= 90):
         raise WorkspaceRefused()
     if kind == 'swap' and (not _identity(operation['other_id']) or operation['other_id'] == operation['instance_id']):
         raise WorkspaceRefused()
@@ -146,8 +176,10 @@ def validate_outcome(outcome, operation):
             raise WorkspaceRefused()
         _payload(outcome['payload_json'], PAYLOAD_LIMITS[outcome['surface']])
         return outcome
-    if kind != 'inspection' or operation != 'inspect' or set(outcome) != {'kind', 'panes'}:
+    if kind != 'inspection' or operation != 'inspect' or set(outcome) - {'kind', 'panes', 'tree'} or not {'kind', 'panes'} <= set(outcome):
         raise WorkspaceRefused()
+    if 'tree' in outcome:
+        validate_tree(outcome['tree'])
     panes = outcome['panes']
     if type(panes) is not list or len(panes) > MAX_PANES:
         raise WorkspaceRefused()
@@ -171,7 +203,7 @@ def validate_outcome(outcome, operation):
                     type(layout['title']) is not str or len(layout['title']) > 240 or
                     type(layout['revision']) is not int or not 0 <= layout['revision'] <= 4294967295 or
                     type(layout['selected']) is not bool or type(layout['maximized']) is not bool or
-                    type(layout['position']) is not int or not 0 <= layout['position'] < 4 or
+                    type(layout['position']) is not int or not 0 <= layout['position'] < MAX_PANES or
                     any(type(layout[k]) is not int or not 0 <= layout[k] <= 1000 for k in ('x','y','width','height')) or
                     layout['x'] + layout['width'] > 1001 or layout['y'] + layout['height'] > 1001):
                 raise WorkspaceRefused()
@@ -181,6 +213,27 @@ def validate_outcome(outcome, operation):
 
 class WorkspaceGate:
     """One host-owned active turn, with a single correlated request at a time."""
+
+    @staticmethod
+    def validate_composition(panes, tree):
+        if type(panes) is not list or not 1 <= len(panes) <= MAX_PANES:
+            raise WorkspaceRefused()
+        validate_tree(tree)
+        operations = []
+        ids = set()
+        for pane in panes:
+            if type(pane) is not dict or set(pane) != {'instance_id', 'surface', 'payload_json', 'prominence'}:
+                raise WorkspaceRefused()
+            operation = validate_operation({'kind': 'open', **pane})
+            if pane['instance_id'] in ids:
+                raise WorkspaceRefused()
+            ids.add(pane['instance_id'])
+            operations.append(operation)
+        def leaves(node):
+            return {node['instance_id']} if node['kind'] == 'pane' else leaves(node['first']) | leaves(node['second'])
+        if not ids <= leaves(tree) or len(json.dumps({'panes': panes, 'tree': tree}).encode('utf-8')) > MAX_FRAME:
+            raise WorkspaceRefused()
+        return operations
 
     def __init__(self, emit, timeout=20):
         if not 0 < timeout < 30:

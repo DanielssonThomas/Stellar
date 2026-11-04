@@ -290,7 +290,7 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertEqual(names, {'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
                                              'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window', 'capture_display', 'capture_foreground', 'list_displays',
-                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace'})
+                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace', 'set_layout', 'split_pane', 'resize_split', 'create_layout'})
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
                     for _ in range(200):
                         if self.frames:
@@ -329,6 +329,35 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(result.content[0].type, 'image')
                         self.assertGreater(len(result.content[0].data), 1048576)
 
+    async def test_create_layout_validates_first_then_returns_one_final_image_without_replay(self):
+        token = self.gate.arm('1', 'turn-one')
+        leaf = lambda name: {'kind': 'pane', 'instance_id': name}
+        tree = {'kind': 'split', 'split_id': 'main', 'axis': 'vertical', 'percent': 50, 'first': leaf('a'), 'second': leaf('b')}
+        panes = [{'instance_id': name, 'surface': 'rich-text', 'payload_json': '{}', 'prominence': 'secondary'} for name in ('a', 'b')]
+        async with httpx2.AsyncClient(headers={'Authorization': 'Bearer ' + self.bearer}, trust_env=False) as http:
+            async with streamable_http_client(self.url, http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    invalid = await session.call_tool('create_layout', {'turn_token': token, 'panes': panes + [panes[0]], 'tree': tree})
+                    self.assertTrue(invalid.is_error)
+                    self.assertEqual(self.frames, [])
+                    task = asyncio.create_task(session.call_tool('create_layout', {'turn_token': token, 'panes': panes, 'tree': tree}))
+                    for expected, accepted in [('open', True), ('open', False), ('set_layout', False)]:
+                        for _ in range(200):
+                            if self.frames: break
+                            await asyncio.sleep(.01)
+                        request = self.frames.pop(0)['data']
+                        self.assertEqual(request['operation']['kind'], expected)
+                        header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                        self.gate.reply({**header, 'outcome': {'kind': 'applied' if accepted else 'rejected'}})
+                    await self.feedback()
+                    result = await asyncio.wait_for(task, 5)
+                    self.assertFalse(result.is_error)
+                    report = json.loads(result.content[0].text)
+                    self.assertEqual(report['outcome'], {'panes': [{'kind': 'applied'}, {'kind': 'rejected'}], 'layout': {'kind': 'rejected'}})
+                    self.assertEqual(sum(item.type == 'image' for item in result.content), 1)
+                    self.assertEqual(self.frames, [])
+
     async def test_all_registered_pane_tools_relay_validated_operations(self):
         token = self.gate.arm('1', 'turn-one')
         calls = [
@@ -339,6 +368,9 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
             ('restore_pane', {'instance_id': 'pane'}, 'restore'),
             ('maximize_pane', {'instance_id': 'pane'}, 'maximize'),
             ('resize_pane', {'instance_id': 'pane', 'percent': 65}, 'resize'),
+            ('set_layout', {'tree': {'kind': 'pane', 'instance_id': 'pane'}}, 'set_layout'),
+            ('split_pane', {'instance_id': 'pane', 'other_id': 'other', 'split_id': 'main', 'placement': 'below'}, 'split_pane'),
+            ('resize_split', {'split_id': 'main', 'percent': 50}, 'resize_split'),
             ('swap_panes', {'instance_id': 'pane', 'other_id': 'other'}, 'swap'),
             ('restore_layout', {}, 'restore_layout'),
             ('inspect_content', {'instance_id': 'pane'}, 'inspect_content'),

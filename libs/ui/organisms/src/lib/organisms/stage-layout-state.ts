@@ -1,3 +1,10 @@
+import {
+  type StageTree,
+  removeTreePane,
+  mapTree,
+  treeIds,
+  automaticTree,
+} from './stage-tree';
 export type LayoutPane = {
   readonly instanceId: string;
   readonly minimized: boolean;
@@ -14,6 +21,7 @@ export interface StageLayoutState {
   readonly focusedId: string | null;
   readonly maximizedId: string | null;
   readonly weights: Readonly<Record<string, number>>;
+  readonly tree: StageTree | null;
 }
 
 /** One bounded undo checkpoint; content and content revisions are never rolled back. */
@@ -22,6 +30,7 @@ export function createStageLayoutState() {
     focusedId: null,
     maximizedId: null,
     weights: {},
+    tree: null,
   };
   let previous: {
     state: StageLayoutState;
@@ -29,6 +38,28 @@ export function createStageLayoutState() {
   } | null = null;
   return {
     snapshot: () => state,
+    setTree(tree: StageTree | null) {
+      state = { ...state, tree };
+    },
+    swapTree(a: string, b: string) {
+      if (state.tree)
+        state = {
+          ...state,
+          tree: mapTree(state.tree, (node) =>
+            node.kind === 'pane'
+              ? {
+                  ...node,
+                  instance_id:
+                    node.instance_id === a
+                      ? b
+                      : node.instance_id === b
+                        ? a
+                        : node.instance_id,
+                }
+              : node,
+          ),
+        };
+    },
     setWeights(weights: Readonly<Record<string, number>>) {
       state = { ...state, weights };
     },
@@ -56,6 +87,21 @@ export function createStageLayoutState() {
       const rest = visible.filter((p) => p.instanceId !== id);
       if (!rest.length || !visible.some((p) => p.instanceId === id))
         return false;
+      if (state.tree) {
+        state = {
+          ...state,
+          tree: mapTree(state.tree, (node) =>
+            node.kind !== 'split'
+              ? node
+              : node.first.kind === 'pane' && node.first.instance_id === id
+                ? { ...node, percent, equal_panes: false }
+                : node.second.kind === 'pane' && node.second.instance_id === id
+                  ? { ...node, percent: 100 - percent, equal_panes: false }
+                  : node,
+          ),
+        };
+        return true;
+      }
       const total = rest.reduce(
         (n, p) => n + paneWeight(state.weights, p.instanceId),
         0,
@@ -84,6 +130,7 @@ export function createStageLayoutState() {
       state = {
         ...state,
         weights,
+        tree: removeTreePane(state.tree, id),
         focusedId: state.focusedId === id ? null : state.focusedId,
         maximizedId: state.maximizedId === id ? null : state.maximizedId,
       };
@@ -96,8 +143,14 @@ export function createStageLayoutState() {
       };
     },
     reconcile(ids: readonly string[]) {
+      let tree = state.tree;
+      for (const id of treeIds(tree))
+        if (!ids.includes(id)) tree = removeTreePane(tree, id);
+      if (tree && ids.some((id) => !treeIds(tree).includes(id)))
+        tree = automaticTree(ids);
       state = {
         ...state,
+        tree,
         focusedId:
           state.focusedId && ids.includes(state.focusedId)
             ? state.focusedId
@@ -112,7 +165,7 @@ export function createStageLayoutState() {
       };
     },
     clear() {
-      state = { focusedId: null, maximizedId: null, weights: {} };
+      state = { focusedId: null, maximizedId: null, weights: {}, tree: null };
       previous = null;
     },
   };

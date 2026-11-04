@@ -22,6 +22,40 @@ pub enum WorkspaceProminence {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSplitPlacement {
+    Left,
+    Right,
+    Above,
+    Below,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceSplitAxis {
+    Horizontal,
+    Vertical,
+}
+
+/// Horizontal divides top/bottom; vertical divides left/right. Percent belongs to first.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkspaceLayoutNode {
+    Pane {
+        instance_id: String,
+    },
+    Split {
+        split_id: String,
+        axis: WorkspaceSplitAxis,
+        percent: u8,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        equal_panes: Option<bool>,
+        first: Box<WorkspaceLayoutNode>,
+        second: Box<WorkspaceLayoutNode>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkspaceToolOperation {
     Open {
@@ -59,6 +93,19 @@ pub enum WorkspaceToolOperation {
     Swap {
         instance_id: String,
         other_id: String,
+    },
+    SetLayout {
+        tree: WorkspaceLayoutNode,
+    },
+    SplitPane {
+        instance_id: String,
+        other_id: String,
+        split_id: String,
+        placement: WorkspaceSplitPlacement,
+    },
+    ResizeSplit {
+        split_id: String,
+        percent: u8,
     },
     RestoreLayout,
     InspectContent {
@@ -167,6 +214,8 @@ pub enum WorkspaceToolOutcome {
     Applied,
     Rejected,
     Inspection {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tree: Option<WorkspaceLayoutNode>,
         panes: Vec<WorkspacePaneMetadata>,
     },
     Content {

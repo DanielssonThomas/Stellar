@@ -7,7 +7,8 @@
     "@stellar/ui-molecules": "workspace:^",
     "@stellar/desktop-interaction": "workspace:^",
     "@angular/common": "^21.2.0",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "@stellar/desktop-contracts": "workspace:^"
   },
   "sideEffects": false
 }

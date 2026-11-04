@@ -1,10 +1,12 @@
-import { Component, input } from '@angular/core';
+import { ViewEncapsulation, Component, input } from '@angular/core';
+import { PresentationMarkdownPipe } from './presentation-markdown';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 
 @Component({
   selector: 'stellar-assistant-message-molecule',
   standalone: true,
-  imports: [SkeletonAtom],
+  encapsulation: ViewEncapsulation.None,
+  imports: [SkeletonAtom, PresentationMarkdownPipe],
   templateUrl: './assistant-message-molecule.component.html',
   styleUrl: './assistant-message-molecule.component.css',
   host: { '[attr.aria-busy]': 'loading()' },

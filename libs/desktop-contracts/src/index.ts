@@ -173,3 +173,9 @@ export type {
 } from './generated';
 export { decodeBrowserEvent, decodeImagePreview } from './lib/media-codec';
 export type { WorkspacePaneOperation, WorkspacePaneLayout } from './generated';
+
+export type {
+  WorkspaceLayoutNode,
+  WorkspaceSplitAxis,
+  WorkspaceSplitPlacement,
+} from './generated';

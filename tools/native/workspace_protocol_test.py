@@ -57,6 +57,20 @@ class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(ids=ids), self.assertRaises(workspace.WorkspaceRefused):
                 workspace.validate_operation({'kind': 'arrange', 'instance_ids': ids})
 
+    def test_split_layout_and_composition_validate_before_any_dispatch(self):
+        leaf = lambda name: {'kind': 'pane', 'instance_id': name}
+        tree = {'kind': 'split', 'split_id': 'main', 'axis': 'vertical', 'percent': 50, 'first': leaf('a'), 'second': leaf('b')}
+        self.assertEqual(workspace.validate_operation({'kind': 'set_layout', 'tree': tree})['tree'], tree)
+        for invalid in [{**tree, 'percent': True}, {**tree, 'percent': 99}, {**tree, 'second': leaf('a')}, {**tree, 'script': 'bad'}]:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_operation({'kind': 'set_layout', 'tree': invalid})
+        panes = [{'instance_id': name, 'surface': 'rich-text', 'payload_json': '{}', 'prominence': 'secondary'} for name in ('a', 'b')]
+        self.assertEqual(len(workspace.WorkspaceGate.validate_composition(panes, tree)), 2)
+        for invalid in [panes + [panes[0]], [{**panes[0], 'surface': 'script'}], [{**panes[0], 'payload_json': '{"x":1,"x":2}'}]]:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.WorkspaceGate.validate_composition(invalid, tree)
+        self.assertEqual(workspace.validate_operation({'kind': 'resize_split', 'split_id': 'main', 'percent': 50})['percent'], 50)
+
     async def test_single_pending_reply_is_fenced_and_returns_actual_result(self):
         emitted = []
         gate = workspace.WorkspaceGate(emitted.append)

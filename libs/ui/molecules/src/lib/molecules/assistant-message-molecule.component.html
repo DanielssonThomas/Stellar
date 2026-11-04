@@ -1,14 +1,16 @@
 @if (loading()) {
   <stellar-skeleton-atom shape="text" />
 } @else if (payload(); as message) {
-  <article class="space-y-3 text-stellar-foreground">
-    <h2
-      class="text-lg font-semibold [overflow-wrap:anywhere]"
-      [textContent]="message.title"
-    ></h2>
-    <p
-      class="whitespace-pre-wrap [overflow-wrap:anywhere]"
-      [textContent]="message.body"
-    ></p>
+  <article class="stellar-markdown presentation">
+    @if (message.title) {
+      <h2
+        class="text-lg font-semibold [overflow-wrap:anywhere]"
+        [textContent]="message.title"
+      ></h2>
+    }
+    <div
+      class="markdown"
+      [innerHTML]="message.body | presentationMarkdown"
+    ></div>
   </article>
 }

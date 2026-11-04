@@ -11,7 +11,12 @@ type WorkspacePort = {
     StageOrganism,
     'nextCommandId' | 'inspectPresentations'
   > &
-    Partial<Pick<StageOrganism, 'inspectContent' | 'settlePresentations'>>;
+    Partial<
+      Pick<
+        StageOrganism,
+        'inspectContent' | 'settlePresentations' | 'inspectLayout'
+      >
+    >;
   readonly present: (command: unknown) => StageResult;
   readonly available: () => boolean;
   readonly isCurrent: (request: WorkspaceToolRequest) => boolean;
@@ -48,8 +53,10 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
       const panes = port.stage.inspectPresentations();
       if (panes.some((pane) => !supported(pane.surface)))
         return { kind: 'rejected' };
+      const tree = port.stage.inspectLayout?.();
       return {
         kind: 'inspection',
+        ...(tree ? { tree } : {}),
         panes: panes.flatMap((pane) =>
           supported(pane.surface)
             ? [
@@ -179,6 +186,27 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
           action: 'swap',
           instanceId: operation.instance_id,
           otherId: operation.other_id,
+        };
+        break;
+      case 'set_layout':
+        command = { ...shared, action: 'set-layout', tree: operation.tree };
+        break;
+      case 'split_pane':
+        command = {
+          ...shared,
+          action: 'split-pane',
+          instanceId: operation.instance_id,
+          otherId: operation.other_id,
+          splitId: operation.split_id,
+          placement: operation.placement,
+        };
+        break;
+      case 'resize_split':
+        command = {
+          ...shared,
+          action: 'resize-split',
+          splitId: operation.split_id,
+          percent: operation.percent,
         };
         break;
       case 'restore_layout':

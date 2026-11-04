@@ -20,6 +20,58 @@ const envelope = {
 };
 
 describe('workspace tool contract', () => {
+  it('accepts targeted split operations and rejects malformed recursive layouts', () => {
+    const pane = (instance_id: string) => ({ kind: 'pane', instance_id });
+    const tree = {
+      kind: 'split',
+      split_id: 'main',
+      axis: 'vertical',
+      percent: 50,
+      first: pane('a'),
+      second: pane('b'),
+    };
+    for (const operation of [
+      { kind: 'set_layout', tree },
+      {
+        kind: 'split_pane',
+        instance_id: 'a',
+        other_id: 'b',
+        split_id: 'new',
+        placement: 'below',
+      },
+      { kind: 'resize_split', split_id: 'main', percent: 50 },
+    ])
+      expect(
+        decodeWorkspaceToolRequest({ ...envelope, operation }).operation,
+      ).toEqual(operation);
+    for (const invalid of [
+      { ...tree, percent: 91 },
+      { ...tree, second: pane('a') },
+      { ...tree, axis: 'diagonal' },
+      { ...tree, html: '<script>' },
+    ])
+      expect(() =>
+        decodeWorkspaceToolRequest({
+          ...envelope,
+          operation: { kind: 'set_layout', tree: invalid },
+        }),
+      ).toThrow();
+    const request = decodeWorkspaceToolRequest({
+      ...envelope,
+      operation: { kind: 'inspect' },
+    });
+    const outcome = {
+      kind: 'inspection',
+      tree,
+      panes: ['a', 'b'].map((instance_id) => ({
+        instance_id,
+        surface: 'rich-text',
+        prominence: 'secondary',
+        minimized: false,
+      })),
+    };
+    expect(decodeWorkspaceToolOutcome(outcome, request)).toEqual(outcome);
+  });
   it('validates render observations without promoting loading/error to ready', () => {
     const request = decodeWorkspaceToolRequest({
       ...envelope,

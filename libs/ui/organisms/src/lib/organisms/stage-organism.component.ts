@@ -140,7 +140,8 @@ export class StageOrganism {
         title:
           typeof (instance.payload as Record<string, unknown>)?.['title'] ===
           'string'
-            ? String((instance.payload as Record<string, unknown>)['title'])
+            ? String((instance.payload as Record<string, unknown>)['title']) ||
+              definition.title
             : definition.title,
         hidden: !rect,
         injector,
@@ -151,10 +152,9 @@ export class StageOrganism {
           'primary-surface': instance.prominence === 'primary',
           'boundary-left': (rect?.x ?? 0) > 0,
           'boundary-top': (rect?.y ?? 0) > 0,
-          'emblem-reserve':
-            rect &&
-            rect.x + rect.width > this.layout().emblem.x &&
-            rect.y + rect.height > this.layout().emblem.y,
+          'full-pane':
+            instance.surface === 'browser' &&
+            (instance.payload as Record<string, unknown>)['chrome'] === false,
         }),
       };
     }),
@@ -297,6 +297,10 @@ export class StageOrganism {
     return this.registry.snapshot().map((instance) => instance.instanceId);
   }
 
+  inspectLayout() {
+    return this.layoutState().tree ?? this.layout().tree;
+  }
+
   inspectContent(instanceId: string) {
     const pane = this.instances().find((p) => p.instanceId === instanceId);
     if (!pane || pane.surface === 'activity-summary') return null;
@@ -351,7 +355,7 @@ export class StageOrganism {
             this.layout().surfaces.find(
               (p) => p.instanceId === instance.instanceId,
             ) ?? null,
-          viewport: this.viewport(),
+          viewport: this.layout().canvas,
         }),
       ),
     );
@@ -435,14 +439,15 @@ export class StageOrganism {
     if (!this.drag || event.pointerId !== this.drag.pointerId) return;
     const d = this.drag.divider;
     const box = this.host.nativeElement.getBoundingClientRect();
+    const scroll = this.host.nativeElement.querySelector('.pane-scroll');
     const offset =
       d.axis === 'x'
-        ? event.clientX - box.left - d.bounds.x
-        : event.clientY - box.top - d.bounds.y;
+        ? event.clientX - box.left - d.bounds.x + (scroll?.scrollLeft ?? 0)
+        : event.clientY - box.top - d.bounds.y + (scroll?.scrollTop ?? 0);
     const size = d.axis === 'x' ? d.bounds.width : d.bounds.height;
     this.resizeRatio = Math.max(
       d.minimum,
-      Math.min(1 - d.minimum, offset / Math.max(1, size)),
+      Math.min(d.maximum ?? 1 - d.minimum, offset / Math.max(1, size)),
     );
     if (!this.resizeFrame)
       this.resizeFrame =
@@ -464,10 +469,17 @@ export class StageOrganism {
         this.drag.divider.first,
         this.drag.divider.second,
         this.resizeRatio,
+        this.drag.divider.id,
       );
       this.layoutState.set(this.registry.layout());
       this.resizeRatio = null;
     }
+  }
+
+  equalizeDivider(divider: StageDivider) {
+    this.registry.rememberLayout();
+    this.registry.resizeGroup(divider.first, divider.second, 0.5, divider.id);
+    this.layoutState.set(this.registry.layout());
   }
 
   keyResize(event: KeyboardEvent, divider: StageDivider) {
@@ -479,6 +491,8 @@ export class StageOrganism {
         'ArrowDown',
         'Home',
         'End',
+        'Enter',
+        '=',
       ].includes(event.key)
     )
       return;
@@ -486,16 +500,22 @@ export class StageOrganism {
     this.registry.rememberLayout();
     this.normalizeWeights();
     const ratio =
-      event.key === 'Home'
-        ? divider.minimum
-        : event.key === 'End'
-          ? 1 - divider.minimum
-          : divider.ratio +
-            (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -0.03 : 0.03);
+      event.key === 'Enter' || event.key === '='
+        ? 0.5
+        : event.key === 'Home'
+          ? divider.minimum
+          : event.key === 'End'
+            ? (divider.maximum ?? 1 - divider.minimum)
+            : divider.ratio +
+              (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -0.03 : 0.03);
     this.registry.resizeGroup(
       divider.first,
       divider.second,
-      Math.max(divider.minimum, Math.min(1 - divider.minimum, ratio)),
+      Math.max(
+        divider.minimum,
+        Math.min(divider.maximum ?? 1 - divider.minimum, ratio),
+      ),
+      divider.id,
     );
     this.layoutState.set(this.registry.layout());
   }

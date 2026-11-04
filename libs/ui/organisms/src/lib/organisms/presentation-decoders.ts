@@ -42,15 +42,46 @@ const array = (value: unknown, maximum: number): value is unknown[] =>
 const list = (value: unknown, maximum: number): value is unknown[] =>
   array(value, maximum) && value.length > 0;
 
+function validTypography(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (
+    !plainRecord(value) ||
+    !exact(value, [], ['family', 'fontSize', 'bold', 'italic'])
+  )
+    return false;
+  return (
+    (value['family'] === undefined ||
+      ['sans', 'serif', 'mono'].includes(String(value['family']))) &&
+    (value['fontSize'] === undefined ||
+      (typeof value['fontSize'] === 'number' &&
+        Number.isInteger(value['fontSize']) &&
+        value['fontSize'] >= 12 &&
+        value['fontSize'] <= 48)) &&
+    ['bold', 'italic'].every(
+      (key) => value[key] === undefined || typeof value[key] === 'boolean',
+    )
+  );
+}
+
 function block(value: unknown): PresentationTextBlock | null {
   if (!plainRecord(value)) return null;
   const kind = value['kind'];
   if (
-    (kind === 'paragraph' || kind === 'heading') &&
-    exact(value, ['kind', 'text']) &&
+    (kind === 'paragraph' || kind === 'heading' || kind === 'markdown') &&
+    exact(value, ['kind', 'text'], kind === 'heading' ? ['level'] : []) &&
+    (!Object.hasOwn(value, 'level') ||
+      (Number.isInteger(value['level']) &&
+        Number(value['level']) >= 1 &&
+        Number(value['level']) <= 6)) &&
     text(value['text'], kind === 'heading' ? 240 : 32768)
   )
-    return { kind, text: value['text'] };
+    return {
+      kind,
+      text: value['text'],
+      ...(value['level'] !== undefined
+        ? { level: value['level'] as 1 | 2 | 3 | 4 | 5 | 6 }
+        : {}),
+    };
   if (
     kind === 'code' &&
     exact(value, ['kind', 'text'], ['language']) &&
@@ -116,14 +147,27 @@ export function decodePresentationText(
 ): PresentationTextPayload | null {
   if (
     !plainRecord(value) ||
-    !exact(value, ['title', 'blocks']) ||
-    !text(value['title'], 240) ||
+    !exact(value, ['blocks'], ['title', 'typography']) ||
+    (value['title'] !== undefined &&
+      value['title'] !== '' &&
+      !text(value['title'], 240)) ||
+    !validTypography(value['typography']) ||
     !list(value['blocks'], 32)
   )
     return null;
   const blocks = value['blocks'].map(block);
   return blocks.every((item): item is PresentationTextBlock => item !== null)
-    ? { title: value['title'], blocks }
+    ? {
+        title: typeof value['title'] === 'string' ? value['title'] : '',
+        blocks,
+        ...(value['typography']
+          ? {
+              typography: value[
+                'typography'
+              ] as PresentationTextPayload['typography'],
+            }
+          : {}),
+      }
     : null;
 }
 
@@ -252,9 +296,12 @@ export function decodePresentationBrowser(
 ): PresentationMediaPayload | null {
   if (
     !plainRecord(value) ||
-    !exact(value, ['title', 'url'], ['kind', 'refresh']) ||
+    !exact(value, ['url'], ['title', 'kind', 'refresh', 'chrome']) ||
     (Object.hasOwn(value, 'kind') && value['kind'] !== 'browser') ||
-    !text(value['title'], 240) ||
+    (value['title'] !== undefined &&
+      value['title'] !== '' &&
+      !text(value['title'], 240)) ||
+    (value['chrome'] !== undefined && typeof value['chrome'] !== 'boolean') ||
     (Object.hasOwn(value, 'refresh') &&
       (!Number.isSafeInteger(value['refresh']) || Number(value['refresh']) < 0))
   )
@@ -263,7 +310,10 @@ export function decodePresentationBrowser(
   return url
     ? {
         kind: 'browser',
-        title: value['title'],
+        title: typeof value['title'] === 'string' ? value['title'] : '',
+        ...(typeof value['chrome'] === 'boolean'
+          ? { chrome: value['chrome'] }
+          : {}),
         url,
         ...(typeof value['refresh'] === 'number'
           ? { refresh: value['refresh'] }

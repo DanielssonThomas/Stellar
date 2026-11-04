@@ -183,7 +183,7 @@ test('workspace tiles fill the viewport and stable content survives pane inserti
   expect(
     contentBounds &&
       emblemBounds &&
-      contentBounds.y + contentBounds.height < emblemBounds.y,
+      contentBounds.y + contentBounds.height > emblemBounds.y,
   ).toBe(true);
   await expect(
     page.getByRole('button', { name: /^(Close|Minimize) Assistant message$/ }),

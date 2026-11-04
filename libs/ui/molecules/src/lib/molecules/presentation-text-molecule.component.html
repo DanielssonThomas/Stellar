@@ -1,16 +1,57 @@
 @if (loading()) {
   <stellar-skeleton-atom shape="text" />
 } @else if (payload(); as content) {
-  <article class="presentation">
-    <h2>{{ content.title }}</h2>
+  <article
+    class="stellar-markdown presentation"
+    [style.font-family]="
+      content.typography?.family === 'mono'
+        ? 'monospace'
+        : content.typography?.family === 'serif'
+          ? 'serif'
+          : null
+    "
+    [style.--stellar-presentation-body]="
+      content.typography?.fontSize ? content.typography?.fontSize + 'px' : null
+    "
+    [style.font-weight]="content.typography?.bold ? '700' : null"
+    [style.font-style]="content.typography?.italic ? 'italic' : null"
+  >
+    @if (content.title) {
+      <h2>{{ content.title }}</h2>
+    }
     @for (block of content.blocks; track $index) {
       @let blockIndex = $index;
       @switch (block.kind) {
         @case ('heading') {
-          <h3>{{ block.text }}</h3>
+          @switch (block.level || 3) {
+            @case (1) {
+              <h1 [innerHTML]="block.text | presentationMarkdown: true"></h1>
+            }
+            @case (2) {
+              <h2 [innerHTML]="block.text | presentationMarkdown: true"></h2>
+            }
+            @case (4) {
+              <h4 [innerHTML]="block.text | presentationMarkdown: true"></h4>
+            }
+            @case (5) {
+              <h5 [innerHTML]="block.text | presentationMarkdown: true"></h5>
+            }
+            @case (6) {
+              <h6 [innerHTML]="block.text | presentationMarkdown: true"></h6>
+            }
+            @default {
+              <h3 [innerHTML]="block.text | presentationMarkdown: true"></h3>
+            }
+          }
         }
         @case ('paragraph') {
-          <p>{{ block.text }}</p>
+          <p [innerHTML]="block.text | presentationMarkdown: true"></p>
+        }
+        @case ('markdown') {
+          <div
+            class="markdown"
+            [innerHTML]="block.text | presentationMarkdown"
+          ></div>
         }
         @case ('code') {
           <pre><code [attr.aria-label]="block.language || 'Code'">{{ block.text }}</code></pre>
@@ -18,7 +59,7 @@
         @case ('list') {
           <ul>
             @for (item of block.items; track $index) {
-              <li>{{ item }}</li>
+              <li [innerHTML]="item | presentationMarkdown: true"></li>
             }
           </ul>
         }
@@ -35,7 +76,9 @@
                 >
                   {{ item.checked ? '✓' : '○' }}
                 </button>
-                {{ item.text }}
+                <span
+                  [innerHTML]="item.text | presentationMarkdown: true"
+                ></span>
               </li>
             }
           </ul>
@@ -46,7 +89,10 @@
               <thead>
                 <tr>
                   @for (column of block.columns; track $index) {
-                    <th scope="col">{{ column }}</th>
+                    <th
+                      scope="col"
+                      [innerHTML]="column | presentationMarkdown: true"
+                    ></th>
                   }
                 </tr>
               </thead>
@@ -54,7 +100,7 @@
                 @for (row of block.rows; track $index) {
                   <tr>
                     @for (cell of row; track $index) {
-                      <td>{{ cell }}</td>
+                      <td [innerHTML]="cell | presentationMarkdown: true"></td>
                     }
                   </tr>
                 }

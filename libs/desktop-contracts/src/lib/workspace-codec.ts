@@ -1,4 +1,5 @@
 import type {
+  WorkspaceLayoutNode,
   WorkspacePaneMetadata,
   WorkspacePaneOperation,
   WorkspaceRenderState,
@@ -59,6 +60,56 @@ function id(value: unknown): string {
     throw new DesktopContractError('malformed');
   return result;
 }
+function layoutNode(
+  value: unknown,
+  panes = new Set<string>(),
+  splits = new Set<string>(),
+  depth = 0,
+): WorkspaceLayoutNode {
+  if (depth > 12 || typeof value !== 'object' || value === null)
+    throw new DesktopContractError('malformed');
+  const kind = (value as Record<string, unknown>)['kind'];
+  if (kind === 'pane') {
+    const data = record(value, ['kind', 'instance_id']),
+      instance_id = id(data['instance_id']);
+    if (panes.has(instance_id) || panes.size >= 12)
+      throw new DesktopContractError('malformed');
+    panes.add(instance_id);
+    return { kind, instance_id };
+  }
+  const data = record(value, [
+    'kind',
+    'split_id',
+    'axis',
+    'percent',
+    'first',
+    'second',
+    ...(Object.hasOwn(value, 'equal_panes') ? ['equal_panes'] : []),
+  ]);
+  if (kind !== 'split') throw new DesktopContractError('malformed');
+  const split_id = id(data['split_id']),
+    percent = integer(data['percent'], 90);
+  if (
+    (data['equal_panes'] !== undefined &&
+      typeof data['equal_panes'] !== 'boolean') ||
+    splits.has(split_id) ||
+    percent < 10
+  )
+    throw new DesktopContractError('malformed');
+  splits.add(split_id);
+  return {
+    kind,
+    split_id,
+    percent,
+    ...(typeof data['equal_panes'] === 'boolean'
+      ? { equal_panes: data['equal_panes'] }
+      : {}),
+    axis: choice(data['axis'], { horizontal: true, vertical: true }),
+    first: layoutNode(data['first'], panes, splits, depth + 1),
+    second: layoutNode(data['second'], panes, splits, depth + 1),
+  };
+}
+
 function operation(value: unknown): WorkspaceToolOperation {
   if (typeof value !== 'object' || value === null)
     throw new DesktopContractError('malformed');
@@ -122,9 +173,46 @@ function operation(value: unknown): WorkspaceToolOperation {
     if (instance_id === other_id) throw new DesktopContractError('malformed');
     return { kind, instance_id, other_id };
   }
+  if (kind === 'set_layout') {
+    const data = record(value, ['kind', 'tree']);
+    return { kind, tree: layoutNode(data['tree']) };
+  }
+  if (kind === 'resize_split') {
+    const data = record(value, ['kind', 'split_id', 'percent']);
+    const percent = integer(data['percent'], 90);
+    if (percent < 10) throw new DesktopContractError('malformed');
+    return { kind, split_id: id(data['split_id']), percent };
+  }
+  if (kind === 'split_pane') {
+    const data = record(value, [
+      'kind',
+      'instance_id',
+      'other_id',
+      'split_id',
+      'placement',
+    ]);
+    const instance_id = id(data['instance_id']),
+      other_id = id(data['other_id']);
+    if (instance_id === other_id) throw new DesktopContractError('malformed');
+    return {
+      kind,
+      instance_id,
+      other_id,
+      split_id: id(data['split_id']),
+      placement: choice(data['placement'], {
+        left: true,
+        right: true,
+        above: true,
+        below: true,
+      }),
+    };
+  }
   if (kind === 'arrange') {
     const data = record(value, ['kind', 'instance_ids']);
-    if (!Array.isArray(data['instance_ids']) || data['instance_ids'].length > 4)
+    if (
+      !Array.isArray(data['instance_ids']) ||
+      data['instance_ids'].length > 12
+    )
       throw new DesktopContractError('malformed');
     const ids = data['instance_ids'].map(id);
     if (new Set(ids).size !== ids.length)
@@ -257,8 +345,12 @@ export function decodeWorkspaceToolOutcome(
   }
   if (kind !== 'inspection' || request.operation.kind !== 'inspect')
     throw new DesktopContractError('malformed');
-  const data = record(value, ['kind', 'panes']);
-  if (!Array.isArray(data['panes']) || data['panes'].length > 4)
+  const data = record(value, [
+    'kind',
+    'panes',
+    ...(Object.hasOwn(value as object, 'tree') ? ['tree'] : []),
+  ]);
+  if (!Array.isArray(data['panes']) || data['panes'].length > 12)
     throw new DesktopContractError('malformed');
   const panes: WorkspacePaneMetadata[] = data['panes'].map((item) => {
     const pane = record(item, [
@@ -302,7 +394,11 @@ export function decodeWorkspaceToolOutcome(
   });
   if (new Set(panes.map((pane) => pane.instance_id)).size !== panes.length)
     throw new DesktopContractError('malformed');
-  return { kind, panes };
+  return {
+    kind,
+    ...(data['tree'] !== undefined ? { tree: layoutNode(data['tree']) } : {}),
+    panes,
+  };
 }
 
 function integer(value: unknown, max: number): number {
@@ -340,7 +436,7 @@ function decodePaneLayout(value: unknown) {
     revision: integer(p['revision'], 4294967295),
     selected: p['selected'],
     maximized: p['maximized'],
-    position: integer(p['position'], 3),
+    position: integer(p['position'], 11),
     x,
     y,
     width,

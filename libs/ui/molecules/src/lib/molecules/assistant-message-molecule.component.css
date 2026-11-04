@@ -1,15 +1,1 @@
-:host {
-  display: block;
-}
-article {
-  display: grid;
-  row-gap: 1.25rem;
-}
-h2 {
-  font-size: var(--stellar-presentation-title, 1.125rem);
-  line-height: 1.15;
-}
-p {
-  font-size: var(--stellar-presentation-body, 1rem);
-  line-height: 1.65;
-}
+@import './presentation-markdown.css';

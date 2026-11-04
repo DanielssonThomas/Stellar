@@ -81,6 +81,7 @@ fn reply_requires_correlated_request_and_metadata_only_outcome() {
         epoch: request.epoch.clone(),
         turn_id: request.turn_id.clone(),
         outcome: WorkspaceToolOutcome::Inspection {
+            tree: None,
             panes: vec![WorkspacePaneMetadata {
                 instance_id: "one".into(),
                 surface: WorkspaceSurface::Image,
@@ -100,4 +101,32 @@ fn reply_requires_correlated_request_and_metadata_only_outcome() {
     assert!(!workspace_validate::reply(&request, &reply));
     let raw = r#"{"kind":"inspection","panes":[{"instance_id":"one","surface":"image","prominence":"primary","minimized":false,"payload":"secret"}]}"#;
     assert!(serde_json::from_str::<WorkspaceToolOutcome>(raw).is_err());
+}
+
+#[test]
+fn split_tree_contract_rejects_duplicates_and_preserves_equal_area_intent() {
+    use super::workspace_contracts::WorkspaceLayoutNode;
+    let leaf = |id: &str| serde_json::json!({ "kind": "pane", "instance_id": id });
+    let tree = serde_json::json!({ "kind": "split", "split_id": "main", "axis": "vertical", "percent": 50, "equal_panes": true, "first": leaf("a"), "second": leaf("b") });
+    let parsed: WorkspaceLayoutNode = serde_json::from_value(tree.clone()).unwrap();
+    assert!(super::workspace_validate::layout_tree(&parsed));
+    assert_eq!(serde_json::to_value(parsed).unwrap(), tree);
+    let mut duplicate = tree.clone();
+    duplicate["second"] = leaf("a");
+    assert!(!super::workspace_validate::layout_tree(
+        &serde_json::from_value(duplicate).unwrap()
+    ));
+    for (key, value) in [
+        ("percent", serde_json::json!(0)),
+        ("percent", serde_json::json!(91)),
+    ] {
+        let mut invalid = tree.clone();
+        invalid[key] = value;
+        assert!(!super::workspace_validate::layout_tree(
+            &serde_json::from_value(invalid).unwrap()
+        ));
+    }
+    let mut unknown = tree;
+    unknown["script"] = serde_json::json!("bad");
+    assert!(serde_json::from_value::<WorkspaceLayoutNode>(unknown).is_err());
 }

@@ -1,3 +1,10 @@
+import {
+  type StageTree,
+  removeTreePane,
+  MAX_STAGE_PANES,
+  automaticTree,
+} from './stage-tree';
+import { tileTree, treeMinimum } from './stage-tree-layout';
 import type { EmblemTarget } from '@stellar/desktop-interaction';
 import { paneWeight } from './stage-layout-state';
 
@@ -22,9 +29,12 @@ export interface StageDivider extends StageRect {
   readonly bounds: StageRect;
   readonly ratio: number;
   readonly minimum: number;
+  readonly maximum?: number;
 }
 export interface StageLayout {
   readonly dividers: readonly StageDivider[];
+  readonly tree: StageTree | null;
+  readonly canvas: { readonly width: number; readonly height: number };
   readonly emblem: StageRect;
   readonly composer?: StageRect;
   readonly surfaces: readonly (StageRect & { readonly instanceId: string })[];
@@ -113,6 +123,7 @@ export function directStage(
   composing = false,
   layout?: {
     readonly maximizedId: string | null;
+    readonly tree?: StageTree | null;
     readonly weights: Readonly<Record<string, number>>;
   },
 ): StageLayout {
@@ -127,7 +138,7 @@ export function directStage(
         !instance.minimized &&
         (!layout?.maximizedId || layout.maximizedId === instance.instanceId),
     )
-    .slice(0, 4);
+    .slice(0, MAX_STAGE_PANES);
   const docked = !composing && (visible.length > 0 || target === 'docked');
   const composerHeight = Math.min(
     240,
@@ -168,14 +179,33 @@ export function directStage(
   };
   const composerWidth = Math.min(800, width - padding * 2);
   const dividers: StageDivider[] = [];
-  const surfaces = tile(
-    { x: 0, y: 0, width, height },
-    visible,
-    layout?.weights ?? {},
-    dividers,
-  );
+  const sourceTree =
+    layout?.tree ??
+    (instances.length > 4
+      ? automaticTree(instances.map((p) => p.instanceId))
+      : null);
+  let tree = sourceTree;
+  if (tree)
+    for (const item of instances)
+      if (!visible.some((p) => p.instanceId === item.instanceId))
+        tree = removeTreePane(tree, item.instanceId);
+  const minimum = tree ? treeMinimum(tree) : { width: 0, height: 0 };
+  const canvas = {
+    width: Math.max(width, minimum.width),
+    height: Math.max(height, minimum.height),
+  };
+  const surfaces = tree
+    ? tileTree(tree, { x: 0, y: 0, ...canvas }, dividers)
+    : tile(
+        { x: 0, y: 0, width, height },
+        visible,
+        layout?.weights ?? {},
+        dividers,
+      );
   return {
     dividers,
+    canvas,
+    tree: sourceTree,
     emblem,
     ...(composing
       ? {

@@ -41,8 +41,8 @@
 .boundary-top {
   border-top: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
 }
-.emblem-reserve {
-  padding-bottom: var(--emblem-clearance);
+.surface.full-pane {
+  padding: 0;
 }
 .pane-controls {
   position: absolute;
@@ -155,4 +155,14 @@
 :host .composition-concealed {
   visibility: hidden;
   pointer-events: none;
+}
+
+.pane-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pane-canvas {
+  position: relative;
 }

@@ -30,136 +30,146 @@
       <ng-content select="[stage-composer]" />
     </div>
   }
-  @for (surface of surfaces(); track surface.instanceId) {
-    <section
-      #panel
-      [class]="surface.classes"
-      [class.composition-concealed]="composing()"
-      [style.display]="surface.hidden ? 'none' : null"
-      (pointerdown)="select(surface.instanceId)"
-      (focusin)="select(surface.instanceId)"
-      [attr.inert]="composing() ? '' : null"
-      [attr.aria-hidden]="composing() ? 'true' : null"
-      [attr.data-instance-id]="surface.instanceId"
-      [attr.aria-label]="surface.title"
-      role="region"
-      tabindex="-1"
-      [style.left.px]="surface.x"
-      [style.top.px]="surface.y"
-      [style.width.px]="surface.width"
-      [style.height.px]="surface.height"
-      [style.--emblem-clearance.px]="layout().emblem.height + 48"
-      animate.enter="pane-enter"
-      (animate.leave)="retire($event)"
+  <div class="pane-scroll">
+    <div
+      class="pane-canvas"
+      [style.width.px]="layout().canvas.width"
+      [style.height.px]="layout().canvas.height"
     >
-      @if (showPaneControls()) {
-        <nav
-          class="pane-controls"
-          [attr.aria-label]="surface.title + ' controls'"
+      @for (surface of surfaces(); track surface.instanceId) {
+        <section
+          #panel
+          [class]="surface.classes"
+          [class.composition-concealed]="composing()"
+          [style.display]="surface.hidden ? 'none' : null"
+          (pointerdown)="select(surface.instanceId)"
+          (focusin)="select(surface.instanceId)"
+          [attr.inert]="composing() ? '' : null"
+          [attr.aria-hidden]="composing() ? 'true' : null"
+          [attr.data-instance-id]="surface.instanceId"
+          [attr.aria-label]="surface.title"
+          role="region"
+          tabindex="-1"
+          [style.left.px]="surface.x"
+          [style.top.px]="surface.y"
+          [style.width.px]="surface.width"
+          [style.height.px]="surface.height"
+          animate.enter="pane-enter"
+          (animate.leave)="retire($event)"
         >
-          <button
-            type="button"
-            aria-label="Focus pane"
-            (click)="control('focus', surface.instanceId)"
-          >
-            ◎
-          </button>
-          <button
-            type="button"
-            aria-label="Move pane earlier"
-            (click)="movePane(surface.instanceId, -1)"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            aria-label="Move pane later"
-            (click)="movePane(surface.instanceId, 1)"
-          >
-            →
-          </button>
-          <button
-            type="button"
-            aria-label="Restore previous layout"
-            (click)="restoreLayout()"
-          >
-            ↶
-          </button>
-          @if (layoutState().maximizedId === surface.instanceId) {
-            <button
-              type="button"
-              aria-label="Restore layout"
-              (click)="restoreLayout()"
+          @if (showPaneControls()) {
+            <nav
+              class="pane-controls"
+              [attr.aria-label]="surface.title + ' controls'"
             >
-              ↙
-            </button>
-          } @else {
-            <button
-              type="button"
-              aria-label="Maximize pane"
-              (click)="control('maximize', surface.instanceId)"
-            >
-              ↗
-            </button>
+              <button
+                type="button"
+                aria-label="Focus pane"
+                (click)="control('focus', surface.instanceId)"
+              >
+                ◎
+              </button>
+              <button
+                type="button"
+                aria-label="Move pane earlier"
+                (click)="movePane(surface.instanceId, -1)"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                aria-label="Move pane later"
+                (click)="movePane(surface.instanceId, 1)"
+              >
+                →
+              </button>
+              <button
+                type="button"
+                aria-label="Restore previous layout"
+                (click)="restoreLayout()"
+              >
+                ↶
+              </button>
+              @if (layoutState().maximizedId === surface.instanceId) {
+                <button
+                  type="button"
+                  aria-label="Restore layout"
+                  (click)="restoreLayout()"
+                >
+                  ↙
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  aria-label="Maximize pane"
+                  (click)="control('maximize', surface.instanceId)"
+                >
+                  ↗
+                </button>
+              }
+              <button
+                type="button"
+                aria-label="Minimize pane"
+                (click)="control('minimize', surface.instanceId)"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                aria-label="Close pane"
+                (click)="control('close', surface.instanceId)"
+              >
+                ×
+              </button>
+            </nav>
           }
-          <button
-            type="button"
-            aria-label="Minimize pane"
-            (click)="control('minimize', surface.instanceId)"
+          <div
+            class="surface-content"
+            tabindex="0"
+            role="group"
+            [attr.aria-label]="surface.title + ' content'"
           >
-            −
-          </button>
-          <button
-            type="button"
-            aria-label="Close pane"
-            (click)="control('close', surface.instanceId)"
-          >
-            ×
-          </button>
-        </nav>
+            <ng-container
+              *ngComponentOutlet="
+                surface.component;
+                inputs: surface.inputs;
+                injector: surface.injector
+              "
+            />
+          </div>
+        </section>
       }
-      <div
-        class="surface-content"
-        tabindex="0"
-        role="group"
-        [attr.aria-label]="surface.title + ' content'"
-      >
-        <ng-container
-          *ngComponentOutlet="
-            surface.component;
-            inputs: surface.inputs;
-            injector: surface.injector
+      @for (divider of layout().dividers; track divider.id) {
+        <div
+          class="pane-divider"
+          [class.composition-concealed]="composing()"
+          [attr.inert]="composing() ? '' : null"
+          role="separator"
+          tabindex="0"
+          aria-label="Resize adjacent panes"
+          [attr.aria-orientation]="
+            divider.axis === 'x' ? 'vertical' : 'horizontal'
           "
-        />
-      </div>
-    </section>
-  }
+          [attr.aria-valuenow]="divider.ratio * 100"
+          [attr.aria-valuemin]="divider.minimum * 100"
+          [attr.aria-valuemax]="(divider.maximum ?? 1 - divider.minimum) * 100"
+          [class.horizontal-divider]="divider.axis === 'y'"
+          [style.left.px]="divider.x"
+          [style.top.px]="divider.y"
+          [style.width.px]="divider.width"
+          [style.height.px]="divider.height"
+          (pointerdown)="beginResize($event, divider)"
+          (pointermove)="moveResize($event)"
+          (pointerup)="endResize()"
+          (pointercancel)="endResize()"
+          (lostpointercapture)="endResize()"
+          (keydown)="keyResize($event, divider)"
+          (dblclick)="equalizeDivider(divider)"
+        ></div>
+      }
+    </div>
+  </div>
   @if (!composing()) {
-    @for (divider of layout().dividers; track divider.id) {
-      <div
-        class="pane-divider"
-        role="separator"
-        tabindex="0"
-        aria-label="Resize adjacent panes"
-        [attr.aria-orientation]="
-          divider.axis === 'x' ? 'vertical' : 'horizontal'
-        "
-        [attr.aria-valuenow]="divider.ratio * 100"
-        [attr.aria-valuemin]="divider.minimum * 100"
-        [attr.aria-valuemax]="(1 - divider.minimum) * 100"
-        [class.horizontal-divider]="divider.axis === 'y'"
-        [style.left.px]="divider.x"
-        [style.top.px]="divider.y"
-        [style.width.px]="divider.width"
-        [style.height.px]="divider.height"
-        (pointerdown)="beginResize($event, divider)"
-        (pointermove)="moveResize($event)"
-        (pointerup)="endResize()"
-        (pointercancel)="endResize()"
-        (lostpointercapture)="endResize()"
-        (keydown)="keyResize($event, divider)"
-      ></div>
-    }
     <nav class="minimized-panes" aria-label="Minimized panes">
       @for (surface of surfaces(); track surface.instanceId) {
         @if (surface.minimized) {

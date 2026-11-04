@@ -6,7 +6,42 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::{collections::HashSet, fmt};
 
 const MAX_PAYLOAD: usize = 65536;
-const MAX_PANES: usize = 4;
+const MAX_PANES: usize = 12;
+
+pub fn layout_tree(tree: &super::workspace_contracts::WorkspaceLayoutNode) -> bool {
+    use super::workspace_contracts::WorkspaceLayoutNode;
+    fn visit(
+        node: &WorkspaceLayoutNode,
+        panes: &mut HashSet<String>,
+        splits: &mut HashSet<String>,
+        depth: usize,
+    ) -> bool {
+        if depth > 12 {
+            return false;
+        }
+        match node {
+            WorkspaceLayoutNode::Pane { instance_id } => {
+                identifier(instance_id)
+                    && panes.insert(instance_id.clone())
+                    && panes.len() <= MAX_PANES
+            }
+            WorkspaceLayoutNode::Split {
+                split_id,
+                percent,
+                first,
+                second,
+                ..
+            } => {
+                identifier(split_id)
+                    && splits.insert(split_id.clone())
+                    && (10..=90).contains(percent)
+                    && visit(first, panes, splits, depth + 1)
+                    && visit(second, panes, splits, depth + 1)
+            }
+        }
+    }
+    visit(tree, &mut HashSet::new(), &mut HashSet::new(), 0)
+}
 
 fn identifier(value: &str) -> bool {
     !value.is_empty()
@@ -94,6 +129,21 @@ pub fn request(value: &WorkspaceToolRequest) -> bool {
                 && instance_ids.iter().all(|id| identifier(id))
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
+        WorkspaceToolOperation::SetLayout { tree } => layout_tree(tree),
+        WorkspaceToolOperation::SplitPane {
+            instance_id,
+            other_id,
+            split_id,
+            ..
+        } => {
+            identifier(instance_id)
+                && identifier(other_id)
+                && identifier(split_id)
+                && instance_id != other_id
+        }
+        WorkspaceToolOperation::ResizeSplit { split_id, percent } => {
+            identifier(split_id) && (10..=90).contains(percent)
+        }
         WorkspaceToolOperation::Clear
         | WorkspaceToolOperation::ListDisplays
         | WorkspaceToolOperation::CaptureForeground
@@ -124,8 +174,9 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
             _,
         ) => false,
         (_, WorkspaceToolOutcome::Rejected) => true,
-        (WorkspaceToolOperation::Inspect, WorkspaceToolOutcome::Inspection { panes }) => {
-            panes.len() <= MAX_PANES
+        (WorkspaceToolOperation::Inspect, WorkspaceToolOutcome::Inspection { panes, tree }) => {
+            tree.as_ref().is_none_or(layout_tree)
+                && panes.len() <= MAX_PANES
                 && panes.iter().all(|pane| {
                     identifier(&pane.instance_id)
                         && pane.operations.len() <= 14
@@ -133,7 +184,7 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
                             == pane.operations.len()
                         && pane.layout.as_ref().is_none_or(|layout| {
                             layout.title.chars().count() <= 240
-                                && layout.position < 4
+                                && usize::from(layout.position) < MAX_PANES
                                 && [layout.x, layout.y, layout.width, layout.height]
                                     .iter()
                                     .all(|n| *n <= 1000)
