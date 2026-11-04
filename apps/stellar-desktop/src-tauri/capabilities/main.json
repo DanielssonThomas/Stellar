@@ -3,6 +3,7 @@
   "description": "The local desktop shell may read its versioned readiness contract.",
   "permissions": [
     "allow-reflex-infer",
+    "allow-reflex-route",
     "allow-reflex-prepare",
     "allow-reflex-status",
     "allow-reflex-set-enabled",

@@ -1895,7 +1895,7 @@
       "text": "Don't skip this song.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1904,7 +1904,7 @@
       "text": "Do not close any panes.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1913,7 +1913,7 @@
       "text": "I'm quoting the phrase \"next track\", not asking you to do it.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1922,7 +1922,7 @@
       "text": "If I asked you to mute, what would happen?",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1931,7 +1931,7 @@
       "text": "Keep the volume exactly where it is.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1940,7 +1940,7 @@
       "text": "Don't touch the music.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1949,7 +1949,7 @@
       "text": "I said pause earlier, but don't pause now.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1958,7 +1958,7 @@
       "text": "Leave the selected pane open.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1967,7 +1967,7 @@
       "text": "No, don't move anything.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -1976,7 +1976,7 @@
       "text": "Never mind the skip request.",
       "scenario": "playing",
       "expected": {
-        "route": "clarify",
+        "route": "hermes",
         "action_id": null
       }
     },
@@ -2001,6 +2001,456 @@
       "history": [
         "{\"user\": \"turn it down a little\", \"ivy\": \"Much better.\"}"
       ]
+    },
+    {
+      "id": "case-170",
+      "text": "Please show me my latest github issue",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-171",
+      "text": "Ivy, how are we doing today?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-172",
+      "text": "How are you?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-173",
+      "text": "How is our project going?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-174",
+      "text": "Tell me about your day",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-175",
+      "text": "Hello Ivy",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-176",
+      "text": "Good morning, Ivy",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-177",
+      "text": "What is the weather?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-178",
+      "text": "What is next on my calendar?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-179",
+      "text": "Can you find my newest issue?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-180",
+      "text": "Open the GitHub page for my latest issue",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-181",
+      "text": "Show my GitHub issue in a new pane",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-182",
+      "text": "Show the latest workflow run",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-183",
+      "text": "Tell me our session history",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-184",
+      "text": "Why is the music paused?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-185",
+      "text": "Explain how to skip a track",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-186",
+      "text": "Can you teach me how music playback works?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-187",
+      "text": "What song won a Grammy?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-188",
+      "text": "Which song is best for focus?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-189",
+      "text": "How does volume affect hearing?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-190",
+      "text": "I want to discuss music",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-191",
+      "text": "Play football",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-192",
+      "text": "Turn down that job offer",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-193",
+      "text": "Tell me a joke",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-194",
+      "text": "Pause music and show my latest issue",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-195",
+      "text": "Close Notes and mute the speakers",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-196",
+      "text": "Help me prepare for my next interview",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-197",
+      "text": "Show previous messages",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-198",
+      "text": "Move that meeting to Friday",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-199",
+      "text": "Help me focus on that task",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-200",
+      "text": "Mute Bob on the call",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-201",
+      "text": "Turn it down in my essay",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-202",
+      "text": "Show a workflow presentation about our release",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-203",
+      "text": "Next week let us play a song at the wedding",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-204",
+      "text": "Bring back my previous issue",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-205",
+      "text": "Please pause that subscription",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-206",
+      "text": "Resume my last coding session",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-207",
+      "text": "Skip the introduction in this document",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-208",
+      "text": "What do you think of this song?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-209",
+      "text": "Can you recommend quieter music?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-210",
+      "text": "I like this song, who sings it?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-211",
+      "text": "Write a playful greeting",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-212",
+      "text": "Make the Notes pane show my latest issue",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-213",
+      "text": "Open my calendar in a session panel",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-214",
+      "text": "Show me the workflow failures",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-215",
+      "text": "How did today go?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-216",
+      "text": "What are we doing next?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-217",
+      "text": "Lower the volume after my meeting ends",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-218",
+      "text": "Play my favorite playlist on the web",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-219",
+      "text": "Could you explain my previous error?",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
     }
   ]
 }

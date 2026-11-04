@@ -57,6 +57,7 @@ fn main() {
         cleanup::CleanupReply::decl(&config),
         reflex::ReflexChoice::decl(&config),
         reflex::ReflexAvailability::decl(&config),
+        reflex::ReflexRouting::decl(&config),
         reflex::ReflexMode::decl(&config),
         reflex::ReflexRequest::decl(&config),
         reflex::ReflexRoute::decl(&config),

@@ -54,6 +54,12 @@ export class ReflexController {
   private pending: ReflexEvent[] = [];
   constructor(private readonly ports: ReflexPorts) {}
 
+  recentInteractions(): readonly string[] {
+    return this.historyEpoch === this.ports.currentEpoch()
+      ? [...this.interactions]
+      : [];
+  }
+
   cancel() {
     this.active?.abort();
   }

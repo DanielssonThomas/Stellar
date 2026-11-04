@@ -2,6 +2,7 @@ export type { ShellRequest, ShellReply, ShellError } from './generated';
 export type {
   ReflexChoice,
   ReflexAvailability,
+  ReflexRouting,
   ReflexMode,
   ReflexRequest,
   ReflexRoute,
@@ -15,6 +16,7 @@ export type {
 export {
   decodeReflexReply,
   decodeReflexAvailability,
+  decodeReflexRouting,
   decodeReflexMediaState,
   decodeReflexMediaResult,
 } from './lib/reflex-codec';

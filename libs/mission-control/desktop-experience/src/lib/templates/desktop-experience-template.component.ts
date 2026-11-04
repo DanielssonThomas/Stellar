@@ -28,6 +28,8 @@ import {
   type ComposerFinalizedText,
   type PromptComposerStatus,
   type EmblemManifest,
+  RequestStatusMolecule,
+  type RequestStatusEntry,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
 
@@ -47,6 +49,7 @@ export interface MicrophoneOption {
     PromptComposerMolecule,
     FaultLogMolecule,
     VoiceTranscriptMolecule,
+    RequestStatusMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -56,11 +59,15 @@ export interface MicrophoneOption {
     '(keydown.escape)': 'dismiss($event)',
     '(keydown)': 'menu.keydown($event)',
     tabindex: '-1',
-    'aria-keyshortcuts': 'M',
+    'aria-keyshortcuts': 'M P S',
     '(document:keydown)': 'controlsShortcut($event)',
   },
 })
 export class DesktopExperienceTemplate {
+  readonly statusVisible = signal(false);
+  readonly requestTimeline = input<readonly RequestStatusEntry[]>([]);
+  readonly cloudStatus = input('unavailable');
+  readonly cloudLabel = input('Terra');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly controlsDialog =
     viewChild.required<ElementRef<HTMLDialogElement>>('controlsDialog');
@@ -229,7 +236,7 @@ export class DesktopExperienceTemplate {
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      !['m', 'p'].includes(event.key.toLowerCase())
+      !['m', 'p', 's'].includes(event.key.toLowerCase())
     )
       return;
     if (
@@ -241,11 +248,16 @@ export class DesktopExperienceTemplate {
       return;
     if (['suspended', 'shutdown'].includes(this.state().phase)) return;
     event.preventDefault();
-    if (event.key.toLowerCase() === 'p') this.openMusicControls();
+    if (event.key.toLowerCase() === 's') this.toggleStatus();
+    else if (event.key.toLowerCase() === 'p') this.openMusicControls();
     else {
       this.musicControls().close();
       this.menu.toggle();
     }
+  }
+  toggleStatus() {
+    this.menu.close();
+    this.statusVisible.update((visible) => !visible);
   }
   openMusicControls() {
     this.menu.close();

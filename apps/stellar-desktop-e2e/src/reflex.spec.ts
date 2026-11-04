@@ -3,10 +3,22 @@ import { expect, test, type Page } from '@playwright/test';
 async function reflexFlow(
   page: Page,
   input: 'typed' | 'voice',
-  scenario: 'on' | 'disabled' | 'unavailable' | 'cancelled' = 'on',
+  scenario:
+    | 'on'
+    | 'disabled'
+    | 'unavailable'
+    | 'cancelled'
+    | 'github'
+    | 'greeting' = 'on',
 ) {
+  const message =
+    scenario === 'github'
+      ? 'Please show me my latest github issue'
+      : scenario === 'greeting'
+        ? 'Ivy, how are we doing today?'
+        : 'Ivy, this song is terrible.';
   await page.addInitScript(
-    ({ scenario }) => {
+    ({ scenario, message }) => {
       const result = {
         calls: [] as string[],
         spoken: '',
@@ -87,13 +99,34 @@ async function reflexFlow(
                 };
               if (command === 'ivy_connect' || command === 'ivy_snapshot')
                 return ivy();
-              if (command === 'ivy_submit' || command === 'ivy_select_session')
-                return ivy();
+              if (command === 'ivy_select_session') return ivy();
+              if (command === 'ivy_submit') {
+                result.text = String(request['text']);
+                return {
+                  ...ivy(),
+                  turn_id: request['input_id'],
+                  turn: 'completed',
+                  first_text_observed: true,
+                  items: [
+                    {
+                      kind: 'text',
+                      text: 'Terra response from the connected session.',
+                    },
+                  ],
+                };
+              }
+              if (command === 'reflex_route')
+                return {
+                  version: 1,
+                  local: scenario !== 'github' && scenario !== 'greeting',
+                };
               if (command === 'reflex_set_enabled') return;
               if (command === 'reflex_status')
                 return { version: 1, configured: scenario !== 'unavailable' };
               if (command === 'reflex_prepare')
-                return { version: 1, configured: true };
+                return scenario === 'github' || scenario === 'greeting'
+                  ? new Promise(() => undefined)
+                  : { version: 1, configured: true };
               if (command === 'speech_snapshot') return currentSpeech;
               if (command === 'speech_stop') return speech('idle', null);
               if (command === 'speech_keywords')
@@ -109,7 +142,7 @@ async function reflexFlow(
                 return {
                   version: 1,
                   utterance_id: request['utterance_id'],
-                  text: 'Ivy, this song is terrible.',
+                  text: message,
                 };
               if (command === 'reflex_media_snapshot')
                 return {
@@ -148,7 +181,11 @@ async function reflexFlow(
               }
               if (command === 'reflex_cancel') return;
               if (command === 'speech_speak') {
-                if (!result.action)
+                if (
+                  !result.action &&
+                  scenario !== 'github' &&
+                  scenario !== 'greeting'
+                )
                   throw Error('Acknowledged before execution');
                 result.spoken = String(request['text']);
                 return speech('idle', String(request['utterance_id']));
@@ -193,7 +230,7 @@ async function reflexFlow(
         },
       });
     },
-    { scenario },
+    { scenario, message },
   );
   const fixture = () =>
     page.evaluate(
@@ -236,15 +273,42 @@ async function reflexFlow(
     expect((await fixture()).calls).not.toContain('reflex_prepare');
   }
   if (input === 'typed') {
-    await page
-      .getByPlaceholder('Type a message')
-      .fill('Ivy, this song is terrible.');
+    await page.getByPlaceholder('Type a message').fill(message);
     await page.getByRole('button', { name: 'Send', exact: true }).click();
   } else {
     await page
       .getByRole('button', { name: 'Enable microphone', exact: true })
       .click();
     await page.keyboard.press('Escape');
+  }
+  if (scenario === 'github' || scenario === 'greeting') {
+    await expect
+      .poll(async () => (await fixture()).calls)
+      .toContain('ivy_submit');
+    const result = await fixture();
+    const admittedMessage =
+      input === 'voice' ? message.replace(/^Ivy, /, '') : message;
+    expect(result.text).toBe(admittedMessage);
+    expect(result.calls).not.toContain('reflex_infer');
+    expect(result.calls).not.toContain('reflex_media_snapshot');
+    expect(result.action).toBe('');
+    if (input === 'voice') await page.keyboard.press('m');
+    await page
+      .getByRole('button', { name: 'Request status · S', exact: true })
+      .click();
+    const status = page.locator('[data-request-status]');
+    await expect(status).toContainText(admittedMessage);
+    await expect(status).toContainText('Routed to Terra');
+    await expect(status).toContainText('Response complete');
+    await expect(status).not.toContainText('Action confirmed');
+    await page
+      .getByRole('button', { name: 'Hide request status', exact: true })
+      .click();
+    await page.keyboard.press('s');
+    await expect(status).toBeVisible();
+    await page.keyboard.press('s');
+    await expect(status).toHaveCount(0);
+    return scenario;
   }
   if (scenario === 'disabled' || scenario === 'unavailable') {
     await expect
@@ -313,6 +377,47 @@ async function reflexFlow(
   expect((await fixture()).diagnostics).not.toContain(
     'That song had it coming',
   );
+  await page
+    .getByRole('button', { name: 'Request status · S', exact: true })
+    .click();
+  await expect(page.locator('[data-request-status]')).toContainText(
+    'Action confirmed',
+  );
+  await expect(page.locator('[data-request-status]')).toContainText('Reflex');
+  if (input === 'voice')
+    await expect(page.locator('[data-request-status]')).toContainText(
+      'Voice complete',
+    );
+  if (input === 'typed') {
+    await expect(page.locator('[data-request-status]')).toHaveCSS(
+      'opacity',
+      '1',
+    );
+    await test.info().attach('request-status-desktop', {
+      body: await page.screenshot({
+        path: test.info().outputPath('request-status-desktop.png'),
+      }),
+      contentType: 'image/png',
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const status = page.locator('[data-request-status]');
+    await expect(status).toBeVisible();
+    const bounds = await status.boundingBox();
+    expect(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 390).toBe(
+      true,
+    );
+    await expect(page.locator('[data-request-status] .orbit')).toHaveCSS(
+      'animation-name',
+      'none',
+    );
+    await test.info().attach('request-status-narrow', {
+      body: await page.screenshot({
+        path: test.info().outputPath('request-status-narrow.png'),
+      }),
+      contentType: 'image/png',
+    });
+  }
   if (input === 'voice') {
     const voiceTimings = await page.evaluate(() =>
       performance
@@ -337,7 +442,13 @@ for (const input of ['typed', 'voice'] as const) {
   }) => {
     expect(await reflexFlow(page, input)).toBe('on');
   });
-  for (const scenario of ['disabled', 'unavailable', 'cancelled'] as const) {
+  for (const scenario of [
+    'disabled',
+    'unavailable',
+    'cancelled',
+    'github',
+    'greeting',
+  ] as const) {
     test(`${input} Reflex ${scenario} preserves routing and dispatch safety`, async ({
       page,
     }) => {

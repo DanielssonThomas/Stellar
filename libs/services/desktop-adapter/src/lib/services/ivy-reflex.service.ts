@@ -8,6 +8,7 @@ import {
 import {
   decodeReflexReply,
   decodeReflexAvailability,
+  decodeReflexRouting,
   decodeReflexMediaState,
   decodeReflexMediaResult,
   type ReflexMediaAction,
@@ -17,6 +18,7 @@ import {
 import type { LocalAction } from '../reflex/action-registry';
 import { mediaActionDescriptions } from '../reflex/media-actions';
 import { captureReflexDiagnostics } from '../reflex/reflex-diagnostics';
+import { RequestTimeline, type RequestTrace } from '../reflex/request-timeline';
 import {
   ReflexController,
   type ReflexEnvironment,
@@ -55,6 +57,9 @@ export class IvyReflexService {
   );
   readonly lastRoute = signal('');
   readonly diagnosticNotice = signal('');
+  readonly requests = signal<readonly RequestTrace[]>([]);
+  readonly timeline = new RequestTimeline((items) => this.requests.set(items));
+  private traceEpoch = '';
   private settings: Promise<void> = Promise.resolve();
   private preparation: Promise<void> = Promise.resolve();
   private settingRevision = 0;
@@ -180,6 +185,15 @@ export class IvyReflexService {
   clear() {
     this.controller.clear();
     this.reply.set('');
+    this.timeline.clear();
+  }
+  beginTrace(id: string, text: string, source: RequestTrace['source']) {
+    const epoch = this.epoch();
+    if (epoch !== this.traceEpoch) {
+      this.timeline.clear();
+      this.traceEpoch = epoch;
+    }
+    this.timeline.begin(id, text, source);
   }
   events() {
     return this.controller.events();
@@ -194,14 +208,68 @@ export class IvyReflexService {
     signal?: AbortSignal,
     point?: IvyReflexService['point'],
   ) {
-    const fallback = (reason: string) => {
+    this.beginTrace(id, text, point ? 'voice' : 'typed');
+    const cancelled = () => {
+      this.timeline.finish(id, 'cancelled', 'Request cancelled');
+      return { handled: true, reply: '', outcome: 'cancelled' as const };
+    };
+    const fallback = (
+      reason: string,
+      outcome: 'unavailable' | 'hermes' = 'unavailable',
+    ) => {
       this.lastRoute.set(`Hermes · ${reason}`);
-      return { handled: false, reply: '', outcome: 'unavailable' as const };
+      this.timeline.route(id, 'Terra');
+      return { handled: false, reply: '', outcome };
     };
     if (!this.enabled()) return fallback('Reflex disabled');
+    if (
+      !this.invoke ||
+      !text.trim() ||
+      new TextEncoder().encode(text).length > 2048
+    )
+      return fallback('outside local scope', 'hermes');
     const revision = this.settingRevision;
     const epoch = this.epoch();
     const workspace = this.workspace();
+    try {
+      const route = decodeReflexRouting(
+        await this.invoke('reflex_route', {
+          request: {
+            version: 1,
+            input_id: id,
+            text,
+            mode: this.mode(),
+            context: JSON.stringify({
+              workspace: JSON.parse(workspace.context),
+            }),
+            history: this.controller.recentInteractions(),
+            actions: workspace.actions.map(({ id, description }) => ({
+              id,
+              description,
+            })),
+          },
+        }),
+      );
+      if (
+        revision !== this.settingRevision ||
+        epoch !== this.epoch() ||
+        signal?.aborted
+      )
+        return cancelled();
+      if (!route.local) return fallback('outside local scope', 'hermes');
+    } catch {
+      if (
+        revision !== this.settingRevision ||
+        epoch !== this.epoch() ||
+        signal?.aborted
+      ) {
+        return cancelled();
+      }
+      return fallback('routing unavailable');
+    }
+    this.timeline.route(id, 'Reflex');
+    if (this.available() === null)
+      this.timeline.step(id, 'model-wait', 'Waiting for local readiness');
     await this.preparation;
     // A toggle during admission cancels this request instead of replaying it through Hermes.
     if (
@@ -209,7 +277,7 @@ export class IvyReflexService {
       epoch !== this.epoch() ||
       signal?.aborted
     )
-      return { handled: true, reply: '', outcome: 'cancelled' as const };
+      return cancelled();
     if (!this.invoke || !this.available())
       return fallback('Reflex unavailable');
     let workspaceCurrent = false;
@@ -224,22 +292,56 @@ export class IvyReflexService {
       const reply = 'That changed while I was starting. Try again.';
       this.reply.set(reply);
       this.lastRoute.set('Reflex · rejected');
+      this.timeline.finish(
+        id,
+        'rejected',
+        'Workspace changed; request rejected',
+      );
       return { handled: true, reply, outcome: 'rejected' as const };
     }
-    if (this.busy())
+    if (this.busy()) {
+      this.timeline.finish(id, 'rejected', 'Another local request is active');
       return {
         handled: true,
         reply: 'One thing at a time.',
         outcome: 'rejected' as const,
       };
+    }
     this.busy.set(true);
-    this.point = point;
+    this.point = (stage) => {
+      this.timeline.step(
+        id,
+        stage,
+        {
+          inference_start: 'Local reasoning',
+          inference_complete: 'Local reasoning returned',
+          action_dispatch: 'Action dispatched',
+          action_complete: 'Executor returned',
+        }[stage],
+      );
+      point?.(stage);
+    };
     try {
       const outcome = await this.controller.run(text, id, this.mode(), signal);
       this.lastRoute.set(
         `${outcome.handled ? 'Reflex' : 'Hermes'} · ${outcome.outcome}`,
       );
       if (outcome.outcome === 'unavailable') this.available.set(false);
+      if (outcome.handled)
+        this.timeline.finish(
+          id,
+          outcome.outcome as Exclude<RequestTrace['outcome'], 'pending'>,
+          (
+            {
+              confirmed: 'Action confirmed',
+              clarify: 'Clarification requested',
+              rejected: 'Action rejected',
+              uncertain: 'Result uncertain',
+              cancelled: 'Request cancelled',
+            } as Partial<Record<string, string>>
+          )[outcome.outcome] ?? 'Request finished',
+        );
+      else this.timeline.route(id, 'Terra');
       if (outcome.reply) this.reply.set(outcome.reply);
       return outcome;
     } finally {

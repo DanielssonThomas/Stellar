@@ -2,6 +2,18 @@
   class="experience bg-stellar-canvas text-stellar-foreground"
   aria-label="Stellar experience"
 >
+  @if (statusVisible() && !['suspended', 'shutdown'].includes(state().phase)) {
+    <stellar-request-status-molecule
+      [requests]="requestTimeline()"
+      [localStatus]="reflexStatus()"
+      [cloudStatus]="cloudStatus()"
+      [cloudLabel]="cloudLabel()"
+      [voiceStatus]="voiceStatus()"
+      [reducedMotion]="state().reducedMotion"
+      [loading]="loading()"
+      (dismiss)="statusVisible.set(false)"
+    />
+  }
   @if (voiceNotice()) {
     <p class="voice-notice" role="status">{{ voiceNotice() }}</p>
   }
@@ -137,6 +149,14 @@
       </div>
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      <button
+        type="button"
+        aria-keyshortcuts="S"
+        [attr.aria-pressed]="statusVisible()"
+        (click)="toggleStatus()"
+      >
+        Request status · S
+      </button>
       <button
         type="button"
         role="switch"

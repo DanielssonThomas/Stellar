@@ -107,6 +107,7 @@ fn higher_risk_work_never_reaches_probabilistic_action_selection() {
     r.text = "Ivy, this song is terrible".into();
     assert!(super::admission::delegation(&r).is_none());
     r.text = "Close the Files pane".into();
+    r.context = r#"{"workspace":[{"title":"Files","selected":true}]}"#.into();
     r.actions.push(ReflexChoice {
         id: "pane.0.close".into(),
         description: "Close Files pane".into(),

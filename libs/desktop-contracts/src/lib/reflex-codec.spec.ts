@@ -3,9 +3,20 @@ import {
   decodeReflexReply,
   decodeReflexMediaState,
   decodeReflexAvailability,
+  decodeReflexRouting,
 } from './reflex-codec';
 
 describe('Reflex native contracts', () => {
+  it('rejects malformed routing replies rather than granting local authority', () => {
+    expect(decodeReflexRouting({ version: 1, local: false }).local).toBe(false);
+    for (const bad of [
+      null,
+      { version: 2, local: true },
+      { version: 1, local: 'yes' },
+      { version: 1, local: true, extra: true },
+    ])
+      expect(() => decodeReflexRouting(bad)).toThrow();
+  });
   it('requires an exact versioned boolean readiness reply', () => {
     expect(
       decodeReflexAvailability({ version: 1, configured: true }).configured,

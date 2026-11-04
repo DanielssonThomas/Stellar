@@ -10,6 +10,13 @@ pub struct ReflexAvailability {
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[serde(deny_unknown_fields)]
+pub struct ReflexRouting {
+    pub version: u8,
+    pub local: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(deny_unknown_fields)]
 pub struct ReflexChoice {
     pub id: String,
     pub description: String,

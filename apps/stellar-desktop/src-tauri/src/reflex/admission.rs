@@ -42,40 +42,31 @@ pub fn delegation(request: &ReflexRequest) -> Option<ReflexPlan> {
                         && words.iter().any(|word| word == name)
                 })
         });
-    words
-        .iter()
-        .any(|word| {
-            outside_scope.contains(&word.as_str())
-                && !(known_pane && ["files", "research", "code"].contains(&word.as_str()))
-        })
-        .then(|| ReflexPlan {
-            route: ReflexRoute::Hermes,
-            action_id: None,
-            reply: "Let me take a closer look.".into(),
-        })
+    let outside = words.iter().any(|word| {
+        outside_scope.contains(&word.as_str())
+            && !(known_pane && ["files", "research", "code"].contains(&word.as_str()))
+    });
+    (outside || super::scope::classify(request).is_none()).then(|| ReflexPlan {
+        route: ReflexRoute::Hermes,
+        action_id: None,
+        reply: "Let me take a closer look.".into(),
+    })
 }
 
 // Conservative admission guard: informational questions and explicit negations
 // must not gain mutation authority from a probabilistic interpretation.
 pub fn eligible(r: &ReflexRequest) -> Vec<&ReflexChoice> {
-    let normalized = r
-        .text
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
-        .replace('’', "'");
-    let punctuation = |c: char| c.is_whitespace() || ",.:;!?".contains(c);
-    let text = ["ivy", "i.v"]
-        .iter()
-        .find_map(|wake| {
-            normalized
-                .strip_prefix(wake)
-                .filter(|tail| tail.is_empty() || tail.starts_with(punctuation))
-        })
-        .unwrap_or(&normalized)
-        .trim_start_matches(punctuation);
+    if delegation(r).is_some() {
+        return vec![];
+    }
+    let Some(scope) = super::scope::classify(r) else {
+        return vec![];
+    };
+    let normalized = super::scope::text(&r.text);
+    let text = normalized.as_str();
     let negated = text.contains("don't ")
+        || text.contains("never ")
+        || (text.starts_with("not ") && !text.starts_with("not this one"))
         || text.contains("do not ")
         || text.contains("not asking")
         || [
@@ -136,7 +127,8 @@ pub fn eligible(r: &ReflexRequest) -> Vec<&ReflexChoice> {
     r.actions
         .iter()
         .filter(|a| {
-            !negated
+            super::scope::allows(scope, &a.id)
+                && !negated
                 && !ambiguous
                 && !(needs_player && missing_player && !question)
                 && (!media || a.id.starts_with("media."))
