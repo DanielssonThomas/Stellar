@@ -3,7 +3,7 @@ import type { IvyQuestion, IvySnapshot } from '@stellar/desktop-contracts';
 
 test('question card acknowledges display, traps focus and returns choices or typed answers', async ({
   page,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 640, height: 720 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript(() => {
@@ -134,10 +134,12 @@ test('question card acknowledges display, traps focus and returns choices or typ
   await expect(
     page.getByRole('dialog', { name: 'Experience controls', exact: true }),
   ).toBeHidden();
-  await page.screenshot({ path: 'test-results/ivy-question-card.png' });
+  await page.screenshot({ path: testInfo.outputPath('ivy-question-card.png') });
   await page.getByRole('button', { name: 'Left monitor' }).click();
   await expect(dialog).toBeHidden();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await show('q2', true);
+  await expect(dialog).toHaveCSS('animation-name', /question-arrive$/);
   await page.getByRole('button', { name: 'Left monitor' }).click();
   await page.getByRole('button', { name: 'Right monitor' }).click();
   await page.getByRole('button', { name: 'Send answer' }).click();
