@@ -320,6 +320,8 @@ test('completion fades activity from its working position while the emblem layou
   await expect(page.locator('.activity-overlay')).toHaveCSS('opacity', '1');
   const panel = page.getByLabel('Ivy activity', { exact: true });
   const before = await panel.boundingBox();
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
   await page.evaluate(() => {
     const root = document.querySelector('stellar-root');
     if (!root) throw Error('Missing app');
@@ -343,9 +345,10 @@ test('completion fades activity from its working position while the emblem layou
       window as unknown as { __activityFixture: ActivityFixture }
     ).__activityFixture.publish('completed');
   });
-  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.clock.runFor(32);
   const leaving = await panel.boundingBox();
   expect(Math.abs((leaving?.x ?? -1000) - (before?.x ?? 1000))).toBeLessThan(1);
   expect(Math.abs((leaving?.y ?? -1000) - (before?.y ?? 1000))).toBeLessThan(6);
+  await page.clock.runFor(300);
   await expect(page.locator('[data-ivy-activity]')).toHaveCount(0);
 });

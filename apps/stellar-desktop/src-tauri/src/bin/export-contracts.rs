@@ -110,6 +110,8 @@ fn main() {
         WorkspacePaneOperation::decl(&config),
         WorkspacePaneLayout::decl(&config),
         WorkspaceToolOutcome::decl(&config),
+        WorkspaceMutationStatus::decl(&config),
+        WorkspaceCaptureFailure::decl(&config),
         WorkspaceToolReply::decl(&config),
         TelemetryProject::decl(&config),
         TelemetryState::decl(&config),
@@ -198,6 +200,8 @@ fn main() {
         "export const ivyEvent = {} as const;",
         serde_json::to_string(IVY_EVENT).unwrap()
     );
+    println!("export const workspaceBatchMaxOperations = {BATCH_MAX_OPERATIONS} as const;");
+    println!("export const workspaceBatchMaxPayloadBytes = {BATCH_MAX_PAYLOAD_BYTES} as const;");
     println!(
         "export const workspaceToolEvent = {} as const;",
         serde_json::to_string(WORKSPACE_EVENT).unwrap()

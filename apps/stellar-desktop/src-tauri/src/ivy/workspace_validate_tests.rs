@@ -17,6 +17,83 @@ fn open(payload: &str) -> WorkspaceToolRequest {
 }
 
 #[test]
+fn batches_allow_only_bounded_leaf_mutations_and_aggregate_payloads() {
+    let mut request = open("{}");
+    let leaf = request.operation.clone();
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![leaf.clone(), WorkspaceToolOperation::Clear],
+    };
+    assert!(workspace_validate::request(&request));
+    for operations in [
+        vec![],
+        vec![WorkspaceToolOperation::Clear; 9],
+        vec![WorkspaceToolOperation::CaptureWindow],
+        vec![WorkspaceToolOperation::Inspect],
+        vec![WorkspaceToolOperation::InspectContent {
+            instance_id: "pane".into(),
+        }],
+        vec![WorkspaceToolOperation::Batch {
+            operations: vec![leaf.clone()],
+        }],
+    ] {
+        request.operation = WorkspaceToolOperation::Batch { operations };
+        assert!(!workspace_validate::request(&request));
+    }
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![WorkspaceToolOperation::Clear; BATCH_MAX_OPERATIONS],
+    };
+    assert!(workspace_validate::request(&request));
+    let max = open(&format!("{{\"text\":\"{}\"}}", "x".repeat(65525))).operation;
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![max.clone(); 2],
+    };
+    assert!(workspace_validate::request(&request));
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![max; 3],
+    };
+    assert!(!workspace_validate::request(&request));
+}
+
+#[test]
+fn batch_results_are_correlated_and_match_the_operation_count_without_forged_success() {
+    let mut request = open("{}");
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![request.operation.clone(), WorkspaceToolOperation::Clear],
+    };
+    let mut reply = WorkspaceToolReply {
+        version: 1,
+        request_id: request.request_id.clone(),
+        epoch: request.epoch.clone(),
+        turn_id: request.turn_id.clone(),
+        outcome: WorkspaceToolOutcome::Batch {
+            outcomes: vec![
+                WorkspaceMutationStatus::Applied,
+                WorkspaceMutationStatus::Uncertain,
+            ],
+            panes: Some(vec![]),
+        },
+    };
+    assert!(workspace_validate::reply(&request, &reply));
+    let wire = serde_json::to_string(&reply).unwrap();
+    assert_eq!(
+        serde_json::from_str::<WorkspaceToolReply>(&wire).unwrap(),
+        reply
+    );
+    reply.epoch = "3".into();
+    assert!(!workspace_validate::reply(&request, &reply));
+    reply.epoch = request.epoch.clone();
+    reply.outcome = WorkspaceToolOutcome::Batch {
+        outcomes: vec![WorkspaceMutationStatus::Applied],
+        panes: None,
+    };
+    assert!(!workspace_validate::reply(&request, &reply));
+    reply.outcome = WorkspaceToolOutcome::Applied;
+    assert!(!workspace_validate::reply(&request, &reply));
+    reply.outcome = WorkspaceToolOutcome::Rejected;
+    assert!(workspace_validate::reply(&request, &reply));
+}
+
+#[test]
 fn native_screen_requests_are_bounded_and_cannot_be_answered_by_the_renderer() {
     let mut request = open("{}");
     for operation in [

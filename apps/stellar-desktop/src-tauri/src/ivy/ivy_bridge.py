@@ -298,10 +298,10 @@ async def read_requests(queue, workspace):
                         workspace.gate.disarm()
                     continue
                 if type(request) is dict and request.get('control') == 'workspace_capture_failed':
-                    if workspace is None or set(request) != {'control', 'header'}:
+                    if workspace is None or set(request) not in ({'control', 'header'}, {'control', 'header', 'reason'}):
                         raise Closed()
                     try:
-                        workspace.gate.reject_image(request['header'])
+                        workspace.gate.reject_image(request['header'], request.get('reason', 'capture_unavailable'))
                     except Exception:
                         pass
                     continue

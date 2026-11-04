@@ -1,4 +1,4 @@
-use super::{Encoding, IvyErrorCode, WorkspaceDisplay, platform::capture_item};
+use super::{IvyErrorCode, WorkspaceDisplay, platform::capture_item};
 use windows_capture::{monitor::Monitor, window::Window};
 
 fn monitors() -> Result<Vec<Monitor>, IvyErrorCode> {
@@ -56,7 +56,7 @@ pub(super) fn display(id: Option<&str>) -> Result<Vec<u8>, IvyErrorCode> {
         .into_iter()
         .find(|monitor| monitor.device_name().is_ok_and(|name| name == selected.id))
         .ok_or(IvyErrorCode::Unavailable)?;
-    capture_item(target, Encoding::Screen)
+    capture_item(target)
 }
 
 fn select<'a>(
@@ -82,7 +82,7 @@ pub(super) fn foreground() -> Result<Vec<u8>, IvyErrorCode> {
     if !target.is_valid() {
         return Err(IvyErrorCode::Unavailable);
     }
-    let image = capture_item(target, Encoding::Screen)?;
+    let image = capture_item(target)?;
     if !target.is_valid() || target.process_id().ok() != Some(owner) {
         return Err(IvyErrorCode::Unavailable);
     }

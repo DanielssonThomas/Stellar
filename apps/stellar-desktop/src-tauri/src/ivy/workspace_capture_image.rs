@@ -61,4 +61,43 @@ mod tests {
         let result = ::image::load_from_memory(&bytes).unwrap();
         assert!(result.width() < 1400 && result.height() < 1400);
     }
+
+    #[test]
+    fn detailed_opaque_side_by_side_images_exceed_the_old_limit_but_return_a_decodable_png() {
+        let (width, height) = (1920, 1080);
+        let mut seed = 41_u32;
+        let pixels: Vec<u8> = (0..width * height)
+            .flat_map(|_| {
+                let mut pixel = [0_u8; 4];
+                for channel in &mut pixel[..3] {
+                    seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                    *channel = (seed >> 24) as u8;
+                }
+                pixel[3] = 255;
+                pixel
+            })
+            .collect();
+        let mut full = vec![];
+        PngEncoder::new_with_quality(&mut full, CompressionType::Fast, FilterType::Adaptive)
+            .write_image(&pixels, width, height, ExtendedColorType::Rgba8)
+            .unwrap();
+        assert!(full.len() > MAX_IMAGE_BYTES);
+        let started = std::time::Instant::now();
+        let bounded = encode(pixels, width, height).unwrap();
+        let decoded = ::image::load_from_memory(&bounded).unwrap();
+        assert!(bounded.len() <= MAX_IMAGE_BYTES);
+        assert!(decoded.width() < width && decoded.height() < height);
+        assert_eq!(
+            u64::from(decoded.width()) * u64::from(height),
+            u64::from(decoded.height()) * u64::from(width)
+        );
+        eprintln!(
+            "Detailed capture: full={} bounded={} dimensions={}x{} encode_ms={}",
+            full.len(),
+            bounded.len(),
+            decoded.width(),
+            decoded.height(),
+            started.elapsed().as_millis()
+        );
+    }
 }
