@@ -13,7 +13,7 @@ sys.dont_write_bytecode = True
 PROFILE = Path('D:/Hermes/profiles/ivy')
 INSTALL = 'D:/Hermes/hermes-agent'
 INTEGRATION = PROFILE / 'integration'
-REQUEST_LIMIT = 16384
+REQUEST_LIMIT = 65536
 DEADLINE = 15
 METHODS = {
     'ping': {}, 'runtime.describe': {},
@@ -23,6 +23,7 @@ METHODS = {
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
+    'clarify.respond': {'session_id': str, 'execution_generation': int, 'prompt_id': str, 'answer': str},
     'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
     'integrations.reload': {'session_id': object},
     'workspace.setup': {'descriptor': object, 'session_id': object}, 'workspace.stop': {},
@@ -110,7 +111,11 @@ def validate(request):
     for key, value in params.items():
         if schema[key] is not object and type(value) is not schema[key]:
             raise ValueError()
-        if type(value) is str and not string(value, REQUEST_LIMIT if key == 'text' else 512):
+        if key == 'answer' and method == 'clarify.respond':
+            if len(value.encode('utf-8')) > 16384 or any(ord(c) < 32 and c not in '\n\r\t' for c in value):
+                raise ValueError()
+            continue
+        if type(value) is str and not string(value, 16384 if key == 'text' else 512):
             raise ValueError()
         if key == 'text' and not value.strip():
             raise ValueError()
@@ -194,7 +199,7 @@ async def pump_events(conn, workspace, approvals):
             activity.offer(params)
             continue
         if kind not in {'message.complete', 'session.replay_gap',
-                        'approval.request', 'clarify.request'}:
+                        'approval.request', 'clarify.request', 'clarify.settled'}:
             continue
         # Terminal/control events retain ordering ahead of the next activity batch.
         pending = activity.flush()
@@ -205,7 +210,19 @@ async def pump_events(conn, workspace, approvals):
             raise Closed()
         clean = project(params)
         clean['type'] = kind
-        if kind in {'approval.request', 'clarify.request'}:
+        if kind in {'clarify.request', 'clarify.settled'}:
+            prompt = payload.get('prompt_id')
+            if not string(prompt):
+                raise Closed()
+            clean['payload'] = {'prompt_id': prompt}
+            if kind == 'clarify.request':
+                question, choices = payload.get('question'), payload.get('choices')
+                multi = payload.get('multi_select')
+                if (not string(question, 32768) or type(choices) is not list or len(choices) > 4
+                        or any(not string(choice, 8192) for choice in choices) or type(multi) is not bool):
+                    raise Closed()
+                clean['payload'].update(question=question, choices=choices, multi_select=multi)
+        elif kind == 'approval.request':
             clean['payload'] = {'present': True}
             if kind == 'approval.request':
                 if approvals is not None:

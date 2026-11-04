@@ -40,7 +40,7 @@
     [loading]="loading()"
     [emblemTarget]="state().target"
     [reducedMotion]="state().reducedMotion"
-    [composing]="composing() || faultVisible()"
+    [composing]="composing() || faultVisible() || questions().length > 0"
     [showPaneControls]="paneControlsVisible()"
     [dismissOnClose]="false"
     [focusFallback]="focusFallback"
@@ -357,4 +357,13 @@
       }
     </div>
   </dialog>
+  @for (question of questions().slice(0, 1); track question.id) {
+    <stellar-ivy-question-molecule
+      [question]="question"
+      [loading]="loading()"
+      [reducedMotion]="state().reducedMotion"
+      (shown)="questionShown.emit($event)"
+      (answer)="questionAnswer.emit({ id: question.id, action: $event })"
+    />
+  }
 </div>

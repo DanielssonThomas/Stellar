@@ -46,3 +46,4 @@ export type {
 } from './lib/molecules/presentation-workspace';
 export * from './lib/molecules/request-status-molecule.component';
 export type { RequestStatusEntry } from './lib/molecules/request-status-molecule.component';
+export * from './lib/molecules/ivy-question-molecule.component';

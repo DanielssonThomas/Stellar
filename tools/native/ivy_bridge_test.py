@@ -57,6 +57,25 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_questions_project_only_public_fields_and_allow_bounded_answers(self):
+        conn = Connection()
+        payload = {'prompt_id': 'q1', 'question': 'Which?', 'choices': ['Left', 'Right'], 'multi_select': False, 'private': 'excluded'}
+        await conn.events.put({'params': {'type': 'clarify.request', 'session_id': 's', 'admission_id': 'a',
+            'execution_generation': 3, 'seq': 1, 'replay_epoch': 'e', 'payload': payload}})
+        await conn.events.put(RuntimeError('stop'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        event = json.loads(output.buffer.getvalue())['data']['params']
+        self.assertEqual(event['payload'], {k: v for k, v in payload.items() if k != 'private'})
+        self.assertEqual(event['execution_generation'], 3)
+        for answer in ['', 'a' * 16384, '["Left","Right"]']:
+            request = {'id': 1, 'method': 'clarify.respond', 'params': {'session_id': 's', 'execution_generation': 3, 'prompt_id': 'q1', 'answer': answer}}
+            self.assertEqual(bridge.validate(request)[2]['answer'], answer)
+        request['params']['answer'] = '\0cancelled'
+        with self.assertRaises(ValueError):
+            bridge.validate(request)
+
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()
         offered, cancelled = [], []

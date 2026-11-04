@@ -1,0 +1,86 @@
+<dialog
+  #dialog
+  class="question-dialog"
+  aria-labelledby="ivy-question-title"
+  aria-describedby="ivy-question-text"
+  (cancel)="cancel($event)"
+>
+  <section class="question-card">
+    <p class="eyebrow">
+      <span aria-hidden="true">✧</span> Ivy · A quick question
+    </p>
+    <h2 id="ivy-question-title">Could you check this out?</h2>
+    @if (loading()) {
+      <stellar-skeleton-atom shape="text" />
+    } @else if (question(); as question) {
+      <p id="ivy-question-text" class="question-text">{{ question.text }}</p>
+      <div
+        class="choices"
+        [attr.aria-label]="
+          question.multi_select ? 'Choose any that apply' : 'Choose an option'
+        "
+      >
+        @for (choice of question.choices; track $index) {
+          <button
+            type="button"
+            class="choice"
+            [disabled]="disabled()"
+            [attr.aria-pressed]="
+              question.multi_select ? selected().includes($index) : null
+            "
+            (click)="choose($index)"
+          >
+            <span class="choice-marker" aria-hidden="true">{{
+              question.multi_select
+                ? selected().includes($index)
+                  ? '✓'
+                  : '◇'
+                : $index + 1
+            }}</span>
+            <span>{{ choice }}</span>
+          </button>
+        }
+      </div>
+      <form (submit)="submit($event)">
+        <label for="ivy-question-answer">{{
+          question.choices.length
+            ? 'Or tell me in your own words'
+            : 'Your answer'
+        }}</label>
+        <textarea
+          id="ivy-question-answer"
+          rows="2"
+          maxlength="8000"
+          [value]="draft()"
+          [disabled]="disabled()"
+          (input)="edit($event)"
+          placeholder="Type your answer…"
+        ></textarea>
+        <div class="actions">
+          <button
+            type="button"
+            class="quiet"
+            [disabled]="disabled()"
+            (click)="respond({ kind: 'cancel' })"
+          >
+            Cancel question
+          </button>
+          <button
+            type="button"
+            class="quiet"
+            [disabled]="disabled()"
+            (click)="respond({ kind: 'skip' })"
+          >
+            Skip
+          </button>
+          <button
+            type="submit"
+            [disabled]="disabled() || (!draft().trim() && !selected().length)"
+          >
+            {{ question.answering || submitted() ? 'Sending…' : 'Send answer' }}
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+</dialog>
