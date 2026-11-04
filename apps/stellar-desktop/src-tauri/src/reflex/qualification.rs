@@ -59,7 +59,7 @@ pub fn dispatch(plan: &ReflexPlan, input_id: &str) -> Option<bool> {
         calls: Cell::new(0),
     };
     let ticket = host.snapshot(&port).ok()?.ticket;
-    let result = host.execute(
+    let result = host.execute_observed(
         &ReflexMediaRequest {
             version: 1,
             input_id: input_id.into(),
@@ -67,6 +67,7 @@ pub fn dispatch(plan: &ReflexPlan, input_id: &str) -> Option<bool> {
             action,
         },
         &port,
+        |_, _, _| {},
     );
     Some(matches!(result, ReflexMediaResult::Confirmed) && port.calls.get() == 1)
 }
