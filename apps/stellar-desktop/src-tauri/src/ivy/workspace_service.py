@@ -103,7 +103,8 @@ class WorkspaceService:
         self.owner_session = session_id
 
     def verifies(self, info):
-        if type(info) is not dict or info.get('source') != 'acp' or info.get('edit_approval_policy') != 'ask':
+        if (type(info) is not dict or info.get('source') != 'acp'
+                or info.get('edit_approval_policy') not in {'ask', 'workspace_session', 'session'}):
             return False
         launch = info.get('launch_request')
         editor = launch.get('editor') if type(launch) is dict else None

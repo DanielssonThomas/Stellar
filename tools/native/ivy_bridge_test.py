@@ -13,7 +13,8 @@ SOURCE = Path(__file__).resolve().parents[2] / 'apps/stellar-desktop/src-tauri/s
 spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
-for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py')]:
+for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
+                       ('stellar_ivy_edit_policy', 'ivy_edit_policy.py')]:
     module_spec = importlib.util.spec_from_file_location(name, SOURCE.with_name(filename))
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
@@ -57,6 +58,23 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_terminal_receipt_releases_only_the_exact_active_execution(self):
+        conn = Connection()
+        params = {'session_id': 's', 'admission_id': 'a', 'include_result': True}
+        receipt = {'ref': {'session_id': 's'}, 'admission_id': 'a', 'execution_generation': 4,
+                   'status': 'terminal', 'outcome': 'completed', 'result': {'final_response': 'late answer'}}
+        for change in ({'execution_generation': 5}, {'admission_id': 'foreign'},
+                       {'ref': {'session_id': 'foreign'}}, {'status': 'started'}, {'result': {}}):
+            conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': 4}
+            bridge.settle_receipt(conn, None, params, {**receipt, **change})
+            self.assertIsNotNone(conn.active)
+            self.assertFalse(conn.lease.released)
+        bridge.settle_receipt(conn, None, params, receipt)
+        self.assertIsNone(conn.active)
+        self.assertEqual(conn.lease.released, [True])
+        bridge.settle_receipt(conn, None, params, receipt)
+        self.assertEqual(conn.lease.released, [True])
+
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()
         offered, cancelled = [], []

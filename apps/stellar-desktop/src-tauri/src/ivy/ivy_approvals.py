@@ -133,6 +133,16 @@ class Approvals:
         self.client, self.selected, self.access, self.consent = client, selected, access, consent
         self.tasks = {}
         self.seen = set()
+        self.resuming = None
+
+    def begin_resume(self, sid):
+        self.resuming = (sid, asyncio.get_running_loop().create_future())
+
+    def finish_resume(self, ready):
+        if self.resuming is not None:
+            _, pending = self.resuming
+            self.resuming = None
+            pending.set_result(ready)
 
     def offer(self, params):
         payload = params.get('payload', {})
@@ -157,7 +167,10 @@ class Approvals:
         sid, generation, prompt = key
         choice = 'deny'
         try:
-            if sid == self.selected():
+            ready = True
+            if self.resuming is not None and sid == self.resuming[0]:
+                ready = await asyncio.shield(self.resuming[1])
+            if ready and sid == self.selected():
                 if self.access.get('file_edits') == 'all' and file_proposal(payload):
                     choice = 'once'
                 elif self.access.get('interactive') is True:

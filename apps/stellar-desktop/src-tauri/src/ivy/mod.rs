@@ -8,6 +8,7 @@ mod journal;
 mod lifecycle;
 #[cfg(test)]
 mod lifecycle_tests;
+mod observation;
 pub mod presentation;
 mod presentation_decode;
 mod process;
