@@ -78,6 +78,16 @@ fn check_page(window: Webview) {
                 try { await invoke('music_set_enabled', { request: { version: 2, enabled: true } }); }
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
+                const reflexMedia = await invoke('reflex_media_snapshot');
+                const reflexStatus = await invoke('reflex_status');
+                if(reflexStatus.version!==1 || typeof reflexStatus.configured!=='boolean') throw Error('Reflex readiness contract failed');
+                await invoke('reflex_set_enabled',{enabled:false});
+                await invoke('reflex_set_enabled',{enabled:true});
+                const reflexRejected = await invoke('reflex_media_execute', {request:{version:1,input_id:'smoke-invalid-ticket',ticket:'never-issued',action:'next'}});
+                if(!/^\d+$/.test(reflexMedia.ticket) || !Array.isArray(reflexMedia.actions) || reflexRejected !== 'rejected') throw Error('Reflex native read-only probe failed');
+                const reflexPlan = await invoke('reflex_infer', {request:{version:2,input_id:'smoke-model-contract',text:'skip',mode:'professional',context:'{}',history:[],actions:[]}});
+                if(reflexPlan.version!==1 || reflexPlan.input_id!=='smoke-model-contract' || reflexPlan.plan!==null) throw Error('Reflex model contract probe failed');
+                await invoke('reflex_cancel',{inputId:'smoke-model-contract'});
                 let workspaceMetrics=null;
                 let mediaRejected=0;
                 for (const url of ['file:///secret','https://127.0.0.1/','https://169.254.169.254/']) {
@@ -206,6 +216,12 @@ fn check_page(window: Webview) {
 pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
+            crate::reflex::reflex_media_snapshot,
+            crate::reflex::reflex_media_execute,
+            crate::reflex::reflex_infer,
+            crate::reflex::reflex_status,
+            crate::reflex::reflex_set_enabled,
+            crate::reflex::reflex_cancel,
             crate::commands::shell_status,
             crate::music::music_set_enabled,
             crate::media::workspace_browser,

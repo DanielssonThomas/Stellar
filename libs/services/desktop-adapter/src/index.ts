@@ -1,4 +1,14 @@
 export * from './lib/services/desktop-adapter.service';
+export { IvyReflexService } from './lib/services/ivy-reflex.service';
+export { LocalActionRegistry } from './lib/reflex/action-registry';
+export type { LocalAction } from './lib/reflex/action-registry';
+export { ReflexController } from './lib/reflex/reflex-controller';
+export { reflexPercentiles } from './lib/reflex/reflex-latency';
+export type {
+  ReflexOutcome,
+  ReflexEnvironment,
+  ReflexEvent,
+} from './lib/reflex/reflex-controller';
 export { DesktopAdapter, DesktopAdapterError } from './lib/desktop-adapter';
 export {
   createBrowserDesktopTransport,

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   initialIvySnapshot,
   IvyAdapterService,
+  IvyReflexService,
 } from '@stellar/service-desktop-adapter';
 import type { IvySnapshot } from '@stellar/desktop-contracts';
 import type { StageCommand, ProductionPayloadMap } from '@stellar/ui-organisms';
@@ -44,6 +45,25 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('preserves blank and 8 KiB user input boundaries when local events are pending', async () => {
+    const { assistant, adapter } = setup();
+    const reflex = TestBed.inject(IvyReflexService);
+    vi.spyOn(reflex, 'events').mockReturnValue([
+      {
+        action: 'media.next',
+        target: 'Next track',
+        outcome: 'confirmed',
+        reply: 'Much better.',
+      },
+    ]);
+    const acknowledge = vi.spyOn(reflex, 'acknowledgeEvents');
+    expect(await assistant.submit('  ')).toBe(false);
+    expect(adapter.submit).not.toHaveBeenCalled();
+    const text = 'x'.repeat(8192);
+    expect(await assistant.submit(text)).toBe(true);
+    expect(adapter.submit).toHaveBeenCalledWith(text, expect.any(String));
+    expect(acknowledge).toHaveBeenCalledWith([]);
+  });
   it('waits for authoritative recovery rather than queue acceptance', async () => {
     vi.useFakeTimers();
     const { assistant, state, adapter } = setup();

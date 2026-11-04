@@ -111,6 +111,12 @@ test('normal host keeps decorations and only its explicit local commands', () =>
   assert.equal(config.app.windows[0].devtools, false);
   assert.deepEqual(config.app.security.capabilities, ['desktop-main']);
   assert.deepEqual(capability.permissions, [
+    'allow-reflex-infer',
+    'allow-reflex-status',
+    'allow-reflex-set-enabled',
+    'allow-reflex-cancel',
+    'allow-reflex-media-snapshot',
+    'allow-reflex-media-execute',
     'allow-music-set-enabled',
     'allow-shell-status',
     'allow-cleanup-refine',

@@ -27,6 +27,26 @@ describe('DesktopExperienceTemplate', () => {
     }
   });
 
+  it('exposes Reflex as a named switch with status and emits its next preference', async () => {
+    fixture.componentRef.setInput('reflexEnabled', true);
+    fixture.componentRef.setInput('reflexStatus', 'Ready');
+    fixture.componentRef.setInput('reflexLastRoute', 'Reflex · confirmed');
+    await fixture.whenStable();
+    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector(
+      '[role="switch"][aria-label="Ivy Reflex"]',
+    );
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(
+      fixture.nativeElement
+        .querySelector('#ivy-reflex-status')
+        .textContent.replace(/\s+/g, ' '),
+    ).toContain('Ready · Reflex · confirmed');
+    const change = vi.fn();
+    fixture.componentInstance.toggleReflex.subscribe(change);
+    toggle.click();
+    expect(change).toHaveBeenCalledWith(false);
+  });
+
   it('opens controls with M, preserves typing and switches dialogs without stacking', async () => {
     const view = fixture.componentInstance;
     const key = (options: KeyboardEventInit = {}) =>

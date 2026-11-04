@@ -18,6 +18,128 @@ import { createNativePromptCleanup } from './native-prompt-cleanup';
 
 const id = '11111111-2222-4333-8444-555555555555';
 
+describe('local Reflex admission', () => {
+  const settle = async () => {
+    for (let i = 0; i < 8; i++) await flush();
+  };
+  it('runs after wake admission without selecting a cloud session or submitting Hermes', async () => {
+    const reflex = vi.fn(async () => ({
+      handled: true,
+      outcome: 'confirmed' as const,
+      reply: 'Much better.',
+    }));
+    const selectSession = vi.fn(async () => true);
+    const f = fixture({ reflex, selectSession });
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'Ivy, skip this garbage.',
+    });
+    f.utterance();
+    await settle();
+    expect(reflex).toHaveBeenCalledOnce();
+    expect(f.ports.speak).toHaveBeenCalledWith('Much better.', id);
+    expect(selectSession).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('never lets ambient speech or Prompt dictation invoke local actions', async () => {
+    const reflex = vi.fn(async () => ({
+      handled: true,
+      outcome: 'confirmed' as const,
+      reply: 'Done.',
+    }));
+    const f = fixture({ reflex });
+    f.ports.transcribe.mockResolvedValue({
+      version: 1,
+      utterance_id: id,
+      text: 'skip this garbage',
+    });
+    f.utterance();
+    await settle();
+    expect(reflex).not.toHaveBeenCalled();
+    f.controller.setDraft('skip the next track');
+    f.utterance();
+    await settle();
+    expect(reflex).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('admits local commands offline while keeping uncertain turns fenced', async () => {
+    const reflex = vi.fn(async () => ({
+      handled: true,
+      outcome: 'clarify' as const,
+      reply: 'Which pane?',
+    }));
+    const f = fixture({ reflex });
+    f.update({
+      localAvailable: true,
+      assistant: { ...f.context().assistant, connection: 'unavailable' },
+    });
+    f.utterance();
+    await settle();
+    expect(reflex).toHaveBeenCalledOnce();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('reconciles local playback that completed before its older speech reply arrived', async () => {
+    const pending = deferred<SpeechSnapshot>();
+    const speak = vi.fn(() => pending.promise);
+    const reflex = vi.fn(async () => ({
+      handled: true,
+      outcome: 'confirmed' as const,
+      reply: 'Much better.',
+    }));
+    const f = fixture({ speak, reflex });
+    f.utterance();
+    await settle();
+    expect(speak).toHaveBeenCalledOnce();
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        state: 'idle',
+        operation_id: id,
+        revision: '6',
+      },
+    });
+    pending.resolve({
+      ...initialSpeechSnapshot(),
+      state: 'speaking',
+      operation_id: id,
+      revision: '5',
+    });
+    await settle();
+    expect(f.view().busy).toBe(false);
+    f.feed(false, 1);
+    f.utterance();
+    await settle();
+    expect(reflex).toHaveBeenCalledTimes(2);
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('cancels inference on a microphone reset and suppresses a late acknowledgment', async () => {
+    const pending = deferred<{
+      handled: boolean;
+      outcome: 'confirmed';
+      reply: string;
+    }>();
+    let signal!: AbortSignal;
+    const reflex = vi.fn((_text: string, _id: string, next: AbortSignal) => {
+      signal = next;
+      return pending.promise;
+    });
+    const f = fixture({ reflex });
+    f.utterance();
+    await settle();
+    f.controller.accept({ type: 'reset' });
+    expect(signal.aborted).toBe(true);
+    pending.resolve({ handled: true, outcome: 'confirmed', reply: 'Done.' });
+    await settle();
+    expect(f.ports.speak).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+});
+
 describe('dedicated command recognition integration', () => {
   it('does not open a prompt for out-of-context cancel immediately after acoustic Ivy', async () => {
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

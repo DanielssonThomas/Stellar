@@ -133,6 +133,12 @@ export class DesktopExperienceTemplate {
   readonly voiceInputText = input('');
   readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
+  readonly reflexEnabled = input(false);
+  readonly reflexStatus = input('Unavailable');
+  readonly reflexLastRoute = input('');
+  readonly toggleReflex = output<boolean>();
+  readonly copyReflexDiagnostics = output<void>();
+  readonly reflexDiagnosticNotice = input('');
   readonly voiceBusy = input(false);
   readonly voiceError = input(false);
   readonly muteVoice = output<boolean>();

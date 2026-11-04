@@ -137,6 +137,28 @@
       </div>
       <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+      <button
+        type="button"
+        role="switch"
+        aria-label="Ivy Reflex"
+        [attr.aria-checked]="reflexEnabled()"
+        aria-describedby="ivy-reflex-status"
+        (click)="toggleReflex.emit(!reflexEnabled())"
+      >
+        Ivy Reflex · {{ reflexEnabled() ? 'On' : 'Off' }}
+      </button>
+      <p id="ivy-reflex-status" class="status" aria-live="polite">
+        {{ reflexStatus() }}
+        @if (reflexLastRoute()) {
+          · {{ reflexLastRoute() }}
+        }
+      </p>
+      <button type="button" (click)="copyReflexDiagnostics.emit()">
+        Copy Reflex diagnostics
+      </button>
+      <span class="status" aria-live="polite">{{
+        reflexDiagnosticNotice()
+      }}</span>
       <button type="button" aria-keyshortcuts="P" (click)="openMusicControls()">
         Music visualizer · P
       </button>

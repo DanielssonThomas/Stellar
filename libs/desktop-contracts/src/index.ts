@@ -1,5 +1,24 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
 export type {
+  ReflexChoice,
+  ReflexAvailability,
+  ReflexMode,
+  ReflexRequest,
+  ReflexRoute,
+  ReflexPlan,
+  ReflexReply,
+  ReflexMediaAction,
+  ReflexMediaRequest,
+  ReflexMediaState,
+  ReflexMediaResult,
+} from './generated';
+export {
+  decodeReflexReply,
+  decodeReflexAvailability,
+  decodeReflexMediaState,
+  decodeReflexMediaResult,
+} from './lib/reflex-codec';
+export type {
   MusicRequest,
   MusicLevels,
   MusicStatus,

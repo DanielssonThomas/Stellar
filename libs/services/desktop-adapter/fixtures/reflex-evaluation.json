@@ -1,0 +1,2006 @@
+{
+  "contexts": {
+    "playing": {
+      "context": {
+        "media": {
+          "player": "Fixture Player",
+          "title": "A very loud song",
+          "playing": true,
+          "volume": 60,
+          "muted": false
+        },
+        "workspace": [
+          {
+            "pane": 0,
+            "title": "Notes",
+            "selected": true,
+            "surface": "rich-text"
+          },
+          {
+            "pane": 1,
+            "title": "Workflow",
+            "selected": false,
+            "surface": "workflow"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "media.play",
+          "description": "Resume or start current player playback; unpause music. Does not unmute output."
+        },
+        {
+          "id": "media.pause",
+          "description": "Pause current player playback; put the music on hold. Does not mute output."
+        },
+        {
+          "id": "media.next",
+          "description": "Skip the current song and play the next track."
+        },
+        {
+          "id": "media.previous",
+          "description": "Return to the previous track."
+        },
+        {
+          "id": "media.volume_up",
+          "description": "Raise Windows output volume by 10 percentage points; does not unmute or resume."
+        },
+        {
+          "id": "media.volume_down",
+          "description": "Lower Windows output volume by 10 percentage points; does not mute or pause."
+        },
+        {
+          "id": "media.mute",
+          "description": "Mute Windows output; silence sound without pausing playback."
+        },
+        {
+          "id": "media.unmute",
+          "description": "Unmute Windows output; restore muted sound without resuming or changing volume."
+        },
+        {
+          "id": "media.inspect",
+          "description": "Read the current playback, player, track, volume and mute state without changing anything."
+        },
+        {
+          "id": "pane.0.focus",
+          "description": "focus selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.close",
+          "description": "close selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.minimize",
+          "description": "minimize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.restore",
+          "description": "restore selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.maximize",
+          "description": "maximize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.resize50",
+          "description": "Resize selected Notes pane to 50%"
+        },
+        {
+          "id": "pane.0.right",
+          "description": "Move selected Notes pane one position right"
+        },
+        {
+          "id": "pane.1.focus",
+          "description": "Focus pane 1: Workflow"
+        },
+        {
+          "id": "view.session",
+          "description": "Open a new session presentation; focus selects an existing pane"
+        },
+        {
+          "id": "view.workflow",
+          "description": "Open a new workflow presentation; focus selects an existing pane"
+        },
+        {
+          "id": "layout.restore",
+          "description": "Restore previous presentation layout"
+        }
+      ]
+    },
+    "ambiguous": {
+      "context": {
+        "media": null,
+        "workspace": [
+          {
+            "pane": 0,
+            "title": "Notes",
+            "selected": false
+          },
+          {
+            "pane": 1,
+            "title": "Workflow",
+            "selected": false
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "pane.0.focus",
+          "description": "focus selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.close",
+          "description": "close selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.minimize",
+          "description": "minimize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.restore",
+          "description": "restore selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.maximize",
+          "description": "maximize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.resize50",
+          "description": "Resize selected Notes pane to 50%"
+        },
+        {
+          "id": "pane.0.right",
+          "description": "Move selected Notes pane one position right"
+        },
+        {
+          "id": "pane.1.focus",
+          "description": "Focus pane 1: Workflow"
+        },
+        {
+          "id": "view.session",
+          "description": "Open a new session presentation; focus selects an existing pane"
+        },
+        {
+          "id": "view.workflow",
+          "description": "Open a new workflow presentation; focus selects an existing pane"
+        },
+        {
+          "id": "layout.restore",
+          "description": "Restore previous presentation layout"
+        }
+      ]
+    },
+    "no-player": {
+      "context": {
+        "media": {
+          "player": null,
+          "title": null,
+          "playing": false,
+          "volume": 60,
+          "muted": false
+        },
+        "workspace": [
+          {
+            "pane": 0,
+            "title": "Notes",
+            "selected": true,
+            "surface": "rich-text"
+          },
+          {
+            "pane": 1,
+            "title": "Workflow",
+            "selected": false,
+            "surface": "workflow"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "media.volume_up",
+          "description": "Raise Windows output volume by 10 percentage points; does not unmute or resume."
+        },
+        {
+          "id": "media.volume_down",
+          "description": "Lower Windows output volume by 10 percentage points; does not mute or pause."
+        },
+        {
+          "id": "media.mute",
+          "description": "Mute Windows output; silence sound without pausing playback."
+        },
+        {
+          "id": "media.unmute",
+          "description": "Unmute Windows output; restore muted sound without resuming or changing volume."
+        },
+        {
+          "id": "media.inspect",
+          "description": "Read the current playback, player, track, volume and mute state without changing anything."
+        },
+        {
+          "id": "pane.0.focus",
+          "description": "focus selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.close",
+          "description": "close selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.minimize",
+          "description": "minimize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.restore",
+          "description": "restore selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.maximize",
+          "description": "maximize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.resize50",
+          "description": "Resize selected Notes pane to 50%"
+        },
+        {
+          "id": "pane.0.right",
+          "description": "Move selected Notes pane one position right"
+        },
+        {
+          "id": "pane.1.focus",
+          "description": "Focus pane 1: Workflow"
+        },
+        {
+          "id": "view.session",
+          "description": "Open a new session presentation; focus selects an existing pane"
+        },
+        {
+          "id": "view.workflow",
+          "description": "Open a new workflow presentation; focus selects an existing pane"
+        },
+        {
+          "id": "layout.restore",
+          "description": "Restore previous presentation layout"
+        }
+      ]
+    },
+    "paused": {
+      "context": {
+        "media": {
+          "player": "Fixture Player",
+          "title": "A very loud song",
+          "playing": false,
+          "volume": 60,
+          "muted": false
+        },
+        "workspace": [
+          {
+            "pane": 0,
+            "title": "Notes",
+            "selected": true,
+            "surface": "rich-text"
+          },
+          {
+            "pane": 1,
+            "title": "Workflow",
+            "selected": false,
+            "surface": "workflow"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "media.play",
+          "description": "Resume or start current player playback; unpause music. Does not unmute output."
+        },
+        {
+          "id": "media.pause",
+          "description": "Pause current player playback; put the music on hold. Does not mute output."
+        },
+        {
+          "id": "media.next",
+          "description": "Skip the current song and play the next track."
+        },
+        {
+          "id": "media.previous",
+          "description": "Return to the previous track."
+        },
+        {
+          "id": "media.volume_up",
+          "description": "Raise Windows output volume by 10 percentage points; does not unmute or resume."
+        },
+        {
+          "id": "media.volume_down",
+          "description": "Lower Windows output volume by 10 percentage points; does not mute or pause."
+        },
+        {
+          "id": "media.mute",
+          "description": "Mute Windows output; silence sound without pausing playback."
+        },
+        {
+          "id": "media.unmute",
+          "description": "Unmute Windows output; restore muted sound without resuming or changing volume."
+        },
+        {
+          "id": "media.inspect",
+          "description": "Read the current playback, player, track, volume and mute state without changing anything."
+        },
+        {
+          "id": "pane.0.focus",
+          "description": "focus selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.close",
+          "description": "close selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.minimize",
+          "description": "minimize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.restore",
+          "description": "restore selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.maximize",
+          "description": "maximize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.resize50",
+          "description": "Resize selected Notes pane to 50%"
+        },
+        {
+          "id": "pane.0.right",
+          "description": "Move selected Notes pane one position right"
+        },
+        {
+          "id": "pane.1.focus",
+          "description": "Focus pane 1: Workflow"
+        },
+        {
+          "id": "view.session",
+          "description": "Open a new session presentation; focus selects an existing pane"
+        },
+        {
+          "id": "view.workflow",
+          "description": "Open a new workflow presentation; focus selects an existing pane"
+        },
+        {
+          "id": "layout.restore",
+          "description": "Restore previous presentation layout"
+        }
+      ]
+    },
+    "muted": {
+      "context": {
+        "media": {
+          "player": "Fixture Player",
+          "title": "A very loud song",
+          "playing": true,
+          "volume": 60,
+          "muted": true
+        },
+        "workspace": [
+          {
+            "pane": 0,
+            "title": "Notes",
+            "selected": true,
+            "surface": "rich-text"
+          },
+          {
+            "pane": 1,
+            "title": "Workflow",
+            "selected": false,
+            "surface": "workflow"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "media.play",
+          "description": "Resume or start current player playback; unpause music. Does not unmute output."
+        },
+        {
+          "id": "media.pause",
+          "description": "Pause current player playback; put the music on hold. Does not mute output."
+        },
+        {
+          "id": "media.next",
+          "description": "Skip the current song and play the next track."
+        },
+        {
+          "id": "media.previous",
+          "description": "Return to the previous track."
+        },
+        {
+          "id": "media.volume_up",
+          "description": "Raise Windows output volume by 10 percentage points; does not unmute or resume."
+        },
+        {
+          "id": "media.volume_down",
+          "description": "Lower Windows output volume by 10 percentage points; does not mute or pause."
+        },
+        {
+          "id": "media.mute",
+          "description": "Mute Windows output; silence sound without pausing playback."
+        },
+        {
+          "id": "media.unmute",
+          "description": "Unmute Windows output; restore muted sound without resuming or changing volume."
+        },
+        {
+          "id": "media.inspect",
+          "description": "Read the current playback, player, track, volume and mute state without changing anything."
+        },
+        {
+          "id": "pane.0.focus",
+          "description": "focus selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.close",
+          "description": "close selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.minimize",
+          "description": "minimize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.restore",
+          "description": "restore selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.maximize",
+          "description": "maximize selected pane 0: Notes"
+        },
+        {
+          "id": "pane.0.resize50",
+          "description": "Resize selected Notes pane to 50%"
+        },
+        {
+          "id": "pane.0.right",
+          "description": "Move selected Notes pane one position right"
+        },
+        {
+          "id": "pane.1.focus",
+          "description": "Focus pane 1: Workflow"
+        },
+        {
+          "id": "view.session",
+          "description": "Open a new session presentation; focus selects an existing pane"
+        },
+        {
+          "id": "view.workflow",
+          "description": "Open a new workflow presentation; focus selects an existing pane"
+        },
+        {
+          "id": "layout.restore",
+          "description": "Restore previous presentation layout"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "case-001",
+      "text": "Skip this garbage.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-002",
+      "text": "Ivy, this song is terrible.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-003",
+      "text": "Next track, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-004",
+      "text": "Can we lose this song?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-005",
+      "text": "This track isn't surviving another second. Skip it.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-006",
+      "text": "I'm sick of this song. Next.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-007",
+      "text": "Please move on to the next song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-008",
+      "text": "Enough of this track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-009",
+      "text": "Anything but this song, please skip it.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-010",
+      "text": "Hit next.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-011",
+      "text": "Can you skip what's playing?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-012",
+      "text": "Not this one. Next track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.next"
+      }
+    },
+    {
+      "id": "case-013",
+      "text": "Previous track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-014",
+      "text": "Go back one song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-015",
+      "text": "Play the last track again.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-016",
+      "text": "I liked the one before this. Go back.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-017",
+      "text": "Can we hear the previous song?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-018",
+      "text": "Back a track, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-019",
+      "text": "Take me to the song before this one.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-020",
+      "text": "Oops, previous song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-021",
+      "text": "Skip backward one track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-022",
+      "text": "Bring back that last song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.previous"
+      }
+    },
+    {
+      "id": "case-023",
+      "text": "Pause the music.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-024",
+      "text": "Hold that track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-025",
+      "text": "Can you pause playback?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-026",
+      "text": "Music pause, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-027",
+      "text": "Stop playing for a minute; pause it.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-028",
+      "text": "I need quiet. Pause the song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-029",
+      "text": "Pause what's playing.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-030",
+      "text": "Put the music on hold.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-031",
+      "text": "Freeze playback for now.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-032",
+      "text": "Let's pause this track.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.pause"
+      }
+    },
+    {
+      "id": "case-033",
+      "text": "Resume the music.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-034",
+      "text": "Play, please.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-035",
+      "text": "Put some music on.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-036",
+      "text": "Unpause the song.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-037",
+      "text": "Get the music going again.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-038",
+      "text": "Continue playback.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-039",
+      "text": "Can you start playing?",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-040",
+      "text": "Let's have the music back.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-041",
+      "text": "Resume the current player.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-042",
+      "text": "Carry on with the song.",
+      "scenario": "paused",
+      "expected": {
+        "route": "action",
+        "action_id": "media.play"
+      }
+    },
+    {
+      "id": "case-043",
+      "text": "Turn it down a little.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-044",
+      "text": "Lower the volume a bit.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-045",
+      "text": "That's too loud. Turn it down.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-046",
+      "text": "A little quieter, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-047",
+      "text": "Drop the sound by ten percent.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-048",
+      "text": "Reduce the desktop volume.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-049",
+      "text": "Can you lower the music a notch?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-050",
+      "text": "Take the volume down moderately.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-051",
+      "text": "My ears would appreciate less volume.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-052",
+      "text": "Dial it down slightly.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      }
+    },
+    {
+      "id": "case-053",
+      "text": "Turn it up a little.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-054",
+      "text": "A little louder, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-055",
+      "text": "Raise the volume one notch.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-056",
+      "text": "Increase sound by ten percent.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-057",
+      "text": "The volume needs a modest bump.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-058",
+      "text": "Can you make it louder?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-059",
+      "text": "Bring the volume up slightly.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-060",
+      "text": "Give me a bit more volume.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-061",
+      "text": "Turn the desktop sound up.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-062",
+      "text": "Boost the volume a little.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_up"
+      }
+    },
+    {
+      "id": "case-063",
+      "text": "Mute the sound.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-064",
+      "text": "Silence the desktop.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-065",
+      "text": "Mute audio, please.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-066",
+      "text": "Can you mute the speakers?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-067",
+      "text": "I need the system muted.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-068",
+      "text": "Mute the output for a moment.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-069",
+      "text": "No sound. Mute it.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-070",
+      "text": "Put the desktop on mute.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-071",
+      "text": "Please silence the speakers.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-072",
+      "text": "Mute playback audio.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.mute"
+      }
+    },
+    {
+      "id": "case-073",
+      "text": "Unmute the speakers.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-074",
+      "text": "Restore sound without changing the volume.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-075",
+      "text": "Turn mute off.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-076",
+      "text": "Unmute audio, please.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-077",
+      "text": "Bring the sound back.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-078",
+      "text": "Can you undo mute?",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-079",
+      "text": "Let the speakers make sound again.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-080",
+      "text": "Remove the mute.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-081",
+      "text": "Unmute the desktop.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-082",
+      "text": "I want audio back; unmute it.",
+      "scenario": "muted",
+      "expected": {
+        "route": "action",
+        "action_id": "media.unmute"
+      }
+    },
+    {
+      "id": "case-083",
+      "text": "What's playing right now?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-084",
+      "text": "Which song is this?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-085",
+      "text": "Is anything playing?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-086",
+      "text": "What's the current volume?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-087",
+      "text": "Tell me the playback state.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-088",
+      "text": "Is the desktop muted?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-089",
+      "text": "What player is active?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-090",
+      "text": "How loud is it set?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-091",
+      "text": "What track are we on?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-092",
+      "text": "Check the current music state.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.inspect"
+      }
+    },
+    {
+      "id": "case-093",
+      "text": "Close the selected pane.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.close"
+      }
+    },
+    {
+      "id": "case-094",
+      "text": "Could you close that thing?",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.close"
+      }
+    },
+    {
+      "id": "case-095",
+      "text": "Dismiss the Notes pane.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.close"
+      }
+    },
+    {
+      "id": "case-096",
+      "text": "Close this panel.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.close"
+      }
+    },
+    {
+      "id": "case-097",
+      "text": "Focus Notes.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.focus"
+      }
+    },
+    {
+      "id": "case-098",
+      "text": "Select the Notes pane.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.focus"
+      }
+    },
+    {
+      "id": "case-099",
+      "text": "Bring Notes into focus.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.focus"
+      }
+    },
+    {
+      "id": "case-100",
+      "text": "Focus the Workflow pane.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.1.focus"
+      }
+    },
+    {
+      "id": "case-101",
+      "text": "Switch to the existing workflow panel.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.1.focus"
+      }
+    },
+    {
+      "id": "case-102",
+      "text": "Select Workflow.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.1.focus"
+      }
+    },
+    {
+      "id": "case-103",
+      "text": "Minimize the selected pane.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.minimize"
+      }
+    },
+    {
+      "id": "case-104",
+      "text": "Hide Notes for now.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.minimize"
+      }
+    },
+    {
+      "id": "case-105",
+      "text": "Minimize this panel.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.minimize"
+      }
+    },
+    {
+      "id": "case-106",
+      "text": "Maximize Notes.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.maximize"
+      }
+    },
+    {
+      "id": "case-107",
+      "text": "Make the selected pane fill the stage.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.maximize"
+      }
+    },
+    {
+      "id": "case-108",
+      "text": "Expand this panel to full size.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.maximize"
+      }
+    },
+    {
+      "id": "case-109",
+      "text": "Give Notes half the layout.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.resize50"
+      }
+    },
+    {
+      "id": "case-110",
+      "text": "Resize this pane to fifty percent.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.resize50"
+      }
+    },
+    {
+      "id": "case-111",
+      "text": "Make Notes occupy half the space.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.resize50"
+      }
+    },
+    {
+      "id": "case-112",
+      "text": "Move this pane one spot right.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.right"
+      }
+    },
+    {
+      "id": "case-113",
+      "text": "Swap Notes with the pane on its right.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.right"
+      }
+    },
+    {
+      "id": "case-114",
+      "text": "Put Notes to the right of Workflow.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.right"
+      }
+    },
+    {
+      "id": "case-115",
+      "text": "Open my session view.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "view.session"
+      }
+    },
+    {
+      "id": "case-116",
+      "text": "Show the Ivy session panel.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "view.session"
+      }
+    },
+    {
+      "id": "case-117",
+      "text": "Open a session presentation.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "view.session"
+      }
+    },
+    {
+      "id": "case-118",
+      "text": "Open a new workflow view.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "view.workflow"
+      }
+    },
+    {
+      "id": "case-119",
+      "text": "Show me a workflow presentation.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "view.workflow"
+      }
+    },
+    {
+      "id": "case-120",
+      "text": "Restore the previous layout.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "layout.restore"
+      }
+    },
+    {
+      "id": "case-121",
+      "text": "Undo that layout change.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "layout.restore"
+      }
+    },
+    {
+      "id": "case-122",
+      "text": "Put the panes back where they were.",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "layout.restore"
+      }
+    },
+    {
+      "id": "case-123",
+      "text": "Close that thing.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-124",
+      "text": "Move that pane over there.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-125",
+      "text": "Put it there.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-126",
+      "text": "Make that bigger.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-127",
+      "text": "Do the thing with the pane.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-128",
+      "text": "Close one of these.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-129",
+      "text": "Move a panel.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-130",
+      "text": "Switch that over.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-131",
+      "text": "Move the left pane somewhere else.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-132",
+      "text": "Resize it to the right size.",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-133",
+      "text": "Put some music on.",
+      "scenario": "no-player",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-134",
+      "text": "Resume playback.",
+      "scenario": "no-player",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-135",
+      "text": "Skip the current song.",
+      "scenario": "no-player",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-136",
+      "text": "Start my configured player.",
+      "scenario": "no-player",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-137",
+      "text": "Pause the music.",
+      "scenario": "no-player",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-138",
+      "text": "Write a Rust parser.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-139",
+      "text": "Research the best new graphics card.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-140",
+      "text": "Delete all my project files.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-141",
+      "text": "Run a shell command to restart Windows.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-142",
+      "text": "Buy that album.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-143",
+      "text": "Send Thomas an email.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-144",
+      "text": "Book me a flight.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-145",
+      "text": "Refactor the voice architecture.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-146",
+      "text": "Summarize yesterday's meeting.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-147",
+      "text": "Explain quantum entanglement.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-148",
+      "text": "Change my account password.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-149",
+      "text": "Install a different music player.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-150",
+      "text": "Find a playlist online and subscribe.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-151",
+      "text": "Push my code to main.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-152",
+      "text": "Create a calendar event tomorrow.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-153",
+      "text": "Open an arbitrary executable.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-154",
+      "text": "Download a larger model.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-155",
+      "text": "Fix the failing CI checks.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-156",
+      "text": "Calculate the tax on my portfolio.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-157",
+      "text": "Tell me a long story.",
+      "scenario": "playing",
+      "expected": {
+        "route": "hermes",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-158",
+      "text": "Don't skip this song.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-159",
+      "text": "Do not close any panes.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-160",
+      "text": "I'm quoting the phrase \"next track\", not asking you to do it.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-161",
+      "text": "If I asked you to mute, what would happen?",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-162",
+      "text": "Keep the volume exactly where it is.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-163",
+      "text": "Don't touch the music.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-164",
+      "text": "I said pause earlier, but don't pause now.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-165",
+      "text": "Leave the selected pane open.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-166",
+      "text": "No, don't move anything.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-167",
+      "text": "Never mind the skip request.",
+      "scenario": "playing",
+      "expected": {
+        "route": "clarify",
+        "action_id": null
+      }
+    },
+    {
+      "id": "case-168",
+      "text": "the Notes one",
+      "scenario": "ambiguous",
+      "expected": {
+        "route": "action",
+        "action_id": "pane.0.close"
+      },
+      "history": ["{\"user\": \"close that pane\", \"ivy\": \"Which pane?\"}"]
+    },
+    {
+      "id": "case-169",
+      "text": "a little quieter again",
+      "scenario": "playing",
+      "expected": {
+        "route": "action",
+        "action_id": "media.volume_down"
+      },
+      "history": [
+        "{\"user\": \"turn it down a little\", \"ivy\": \"Much better.\"}"
+      ]
+    }
+  ]
+}

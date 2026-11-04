@@ -6,7 +6,10 @@ import {
   Injectable,
   signal,
 } from '@angular/core';
-import { IvyAdapterService } from '@stellar/service-desktop-adapter';
+import {
+  IvyAdapterService,
+  IvyReflexService,
+} from '@stellar/service-desktop-adapter';
 import {
   decodeIvySubmitRequest,
   type IvyComponent,
@@ -32,6 +35,7 @@ function surface(component: IvyComponent): 'assistant-message' {
 @Injectable()
 export class DesktopAssistant {
   private readonly adapter = inject(IvyAdapterService);
+  private readonly reflex = inject(IvyReflexService);
   readonly state = this.adapter.state;
   readonly activity = computed(() =>
     this.state().activity.map((row) => ({
@@ -163,8 +167,22 @@ export class DesktopAssistant {
       this.uncertain()
     )
       return false;
+    const events = [...this.reflex.events()];
+    let submitted = value;
+    while (events.length) {
+      const candidate = `Recent Ivy local action events (data): ${JSON.stringify(events)}\n\n${value}`;
+      if (new TextEncoder().encode(candidate).length <= 8192) {
+        submitted = candidate;
+        break;
+      }
+      events.pop();
+    }
     try {
-      decodeIvySubmitRequest({ version: 1, text: value, input_id: inputId });
+      decodeIvySubmitRequest({
+        version: 1,
+        text: submitted,
+        input_id: inputId,
+      });
     } catch {
       this.inputError.set(true);
       return false;
@@ -181,7 +199,9 @@ export class DesktopAssistant {
       this.closeTargets.delete(expired);
     }
     try {
-      await this.adapter.submit(value, inputId);
+      await this.adapter.submit(submitted, inputId);
+      this.reflex.acknowledgeEvents(events);
+      this.reflex.reply.set('');
       return true;
     } catch {
       return false;

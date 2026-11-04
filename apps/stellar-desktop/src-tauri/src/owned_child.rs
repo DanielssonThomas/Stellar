@@ -3,17 +3,17 @@ use std::{
     process::{ChildStdin, ChildStdout, Command, ExitStatus},
 };
 
-pub(super) struct OwnedChild {
+pub(crate) struct OwnedChild {
     #[cfg(windows)]
     inner: Box<dyn process_wrap::std::ChildWrapper>,
     #[cfg(not(windows))]
     inner: std::process::Child,
-    pub(super) stdin: Option<ChildStdin>,
-    pub(super) stdout: Option<ChildStdout>,
+    pub(crate) stdin: Option<ChildStdin>,
+    pub(crate) stdout: Option<ChildStdout>,
 }
 
 impl OwnedChild {
-    pub(super) fn spawn(command: Command) -> io::Result<Self> {
+    pub(crate) fn spawn(command: Command) -> io::Result<Self> {
         #[cfg(windows)]
         {
             use process_wrap::std::{CommandWrap, CreationFlags, JobObject};
@@ -46,16 +46,16 @@ impl OwnedChild {
     }
 
     #[cfg(test)]
-    pub(super) fn id(&self) -> u32 {
+    pub(crate) fn id(&self) -> u32 {
         self.inner.id()
     }
-    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+    pub(crate) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.inner.try_wait()
     }
-    pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
+    pub(crate) fn wait(&mut self) -> io::Result<ExitStatus> {
         self.inner.wait()
     }
-    pub(super) fn kill(&mut self) -> io::Result<()> {
+    pub(crate) fn kill(&mut self) -> io::Result<()> {
         #[cfg(windows)]
         {
             self.inner.start_kill()

@@ -8,8 +8,10 @@ mod contracts;
 mod ivy;
 mod media;
 mod music;
+mod owned_child;
 #[cfg(feature = "recognition-smoke")]
 mod recognition_smoke;
+mod reflex;
 mod shell;
 #[cfg(all(feature = "native-smoke", not(feature = "recognition-smoke")))]
 mod smoke;
@@ -42,6 +44,8 @@ fn main() {
                 },
             )));
             app.manage(cleanup::CleanupHost::default());
+            app.manage(reflex::ReflexHost::default());
+            app.manage(std::sync::Arc::new(reflex::MediaHost::default()));
             app.manage(media::MediaHost::default());
             let handle = app.handle().clone();
             #[cfg(not(feature = "native-smoke"))]
@@ -86,6 +90,16 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<std::sync::Arc<reflex::MediaHost>>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<reflex::ReflexHost>()
+            {
+                host.shutdown();
+            }
             if (matches!(event, tauri::WindowEvent::Destroyed)
                 || (matches!(event, tauri::WindowEvent::Resized(_))
                     && window.is_minimized().unwrap_or(false)))
@@ -138,12 +152,28 @@ fn main() {
         speech::speech_stop,
         speech::speech_snapshot,
         cleanup::cleanup_refine,
+        reflex::reflex_infer,
+        reflex::reflex_status,
+        reflex::reflex_set_enabled,
+        reflex::reflex_cancel,
+        reflex::reflex_media_snapshot,
+        reflex::reflex_media_execute,
         telemetry::telemetry_snapshot
     ]);
     builder
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<std::sync::Arc<reflex::MediaHost>>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<reflex::ReflexHost>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<music::MusicHost>()
             {

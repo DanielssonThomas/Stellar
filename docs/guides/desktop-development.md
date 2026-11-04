@@ -47,6 +47,94 @@ Type generation does not validate runtime data. Native command adapters deserial
 
 Ubuntu quality checks discover every affected project with an E2E target before installing Chromium dependencies. A Windows native job always runs pinned native checks and actual WebView smoke; this favors a clear required gate over a conditional skip route. Cargo and Nx caches reduce repeat work. Required `verify` requires explicit success from both jobs; failed, cancelled, skipped or missing native results cannot turn green.
 
+## Ivy Reflex
+
+Reflex is an opt-out beta local interpretation path for everyday desktop requests when a supported installed model is configured. Existing wake, Prompt, Prompt cancel, Done, Clear and foreground controls run first. Admitted ordinary Terra voice requests and typed Terra input try Reflex before Hermes; composed Sol prompts retain their existing dispatch. Unsupported work delegates once. Ambiguity asks for clarification. A failed or uncertain dispatched action never falls through to cloud execution.
+
+`LocalActionRegistry` in the shared desktop adapter offers request-scoped IDs, descriptions and application-owned executor closures. The model cannot supply tool names, parameters, shell commands or code. The app composes Stage focus/close/minimize/restore/maximize, 25/50/75 percent resizing, adjacent pane moves, layout restoration and session/workflow views using the existing validated Stage. It currently exposes the first eight panes; less specific destinations or unsupported sizes require clarification. New content creation, file changes, application shutdown and arbitrary application launching remain Hermes work. Professional/playful tone is session-local, defaults to Ivy's existing warm professional personality, and can be selected conversationally.
+
+### Beta launch and menu
+
+On the qualified PC, the authorized Qwen3-4B Q4_K_M weights, provenance sidecar and CUDA llama.cpp engine are already installed under `D:/Hermes`. From the repository root, explicitly opt into the validated 36-layer GPU configuration:
+
+```powershell
+./tools/native/start-reflex.ps1 -Gpu
+```
+
+The launcher verifies the exact existing model provenance and SHA-256, sets the three Reflex environment variables for this launch, and invokes the existing native build/launch target. If Rust is absent from PATH on the qualified PC, it reuses the existing sibling `.stellar-toolchains` installation for this process and checks the repository's installed pin. It neither installs toolchains, downloads assets nor writes persistent machine/user environment variables. `-CheckOnly` validates and prints configuration without building, starting inference or opening the app. `-ModelPath` and `-LlamaPath` accept explicit installed locations. Omitting `-Gpu` uses the existing conservative CPU default and warns that it misses the latency target. Prerequisites remain those in Windows setup above.
+
+Press **M** to open **Experience controls**, then use **Ivy Reflex · On/Off**. The default preference is On; without a verified supported configuration it shows Unavailable and requests fall back to Hermes. The preference is stored under `stellar.ivy-reflex.enabled` in the app's local storage and survives normal restarts of that same desktop profile. Browser preview and native Desktop have separate storage. If storage is blocked, the preference still applies to the current session.
+
+Status is **Ready**, **Starting**, **Unavailable** or **Disabled**. Ready means model/engine paths, configuration, pinned provenance and weights verified; it does not promise a warm model. Starting covers the initial check and an active local request. Off immediately cancels frontend admission, fences queued native model/media work and stops the owned Reflex process. Already-started effects retain their receipt and are never replayed through Hermes. Turning On again serializes native re-enablement before admitting another request. Missing assets, readiness/transport failures or invalid model replies fall back to Hermes before dispatch. After runtime unavailability, toggle Off/On to retry the local readiness check. Deterministic session commands remain independent of this preference.
+
+The same menu displays the **last ordinary request route**, for example `Reflex · confirmed`, `Reflex · clarify`, `Hermes · hermes`, or `Hermes · Reflex disabled`. This indicator covers typed and admitted spoken requests; composed Sol and deterministic session commands retain their existing routes. With a player available, a simple playback-state question is a useful initial read-only check. A complex coding/research question should show Hermes. The route is observational; a confirmed mock benchmark is not proof of a particular real device's behavior.
+
+### Capturing beta diagnostics
+
+Reproduce the issue and, before restarting, press **M → Copy Reflex diagnostics**. Paste the JSON into the issue/chat report. The clipboard export contains current preference/status/mode, last route, bounded recent Reflex and voice timings, p50/p95 and outcomes, including failures. It contains no request text, reply text, pane titles, paths, session identifiers or audio. The button reports clipboard failure without interrupting routing. Timing samples are local to the current app process (up to 128 Reflex and 64 voice entries, cleared in batches at capacity).
+
+For a slow response, include whether it was the first request after launch or over 60 seconds idle, and whether a game or another GPU workload was running. For a wrong action, add the exact request, expected and observed action, selected pane/player state and whether a change happened despite uncertainty. For repetitive personality, paste a short sequence of requests/replies and the tone mode; these strings are deliberately excluded from diagnostics. Avoid repeating an uncertain action until checking its actual result. First audible speaker onset remains unmeasured; observed first-audio timing is not a physical audio measurement.
+
+Windows media uses the current Global System Media Transport Controls session, its advertised capabilities and Core Audio output volume. Play/resume, pause, next/previous, ten-point volume changes, mute/unmute and state inspection are available when advertised. Playback can resume an existing player; there is no configured native player launcher in the current repository. It does not depend on the Spotify MCP integration. Missing players/devices produce clarification or a rejected operation. Windows' successful media-operation receipt is the confirmation boundary; a noncompliant player's actual audible output is not independently observed. Volume additionally requires readback.
+
+Native media tickets are single-use, carry inspected device/player/track state, and are rechecked before dispatch. The final operation-start gate is atomic against cancellation; already-started OS work cannot be undone and uncertain completion is never retried. The most recent 256 input receipts suppress duplicate admission; older native tickets remain invalid after receipt eviction. Foreground, layout, microphone reset, Stop, Cancel request and shutdown fence late results. A rolling three-interaction context supports clarification follow-ups. Up to six compact action events include the application-owned target description, confirmed/uncertain outcome and actual reply. They accompany the next Hermes request in the same foreground, fit within its existing 8 KiB limit, and are consumed only after submission is accepted. Blank user input never becomes an event-only request. Pending events are in memory and do not survive an application restart.
+
+### Explicit model setup
+
+No model weights or inference engine are bundled or downloaded at application startup. Install assets only with user authorization. The initial admitted model is the official [Qwen3-1.7B Q8_0 GGUF](https://huggingface.co/Qwen/Qwen3-1.7B-GGUF), Apache-2.0, 1,834,426,016 bytes, revision `90862c4b9d2787eaed51d12237eafdfe7c5f6077`, SHA-256 `061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a`. The model card links its upstream model and license. Preserve that license with redistributed assets. The initial upstream repository offers Q8_0; no third-party smaller quantization is implicitly trusted.
+
+Set `STELLAR_REFLEX_MODEL` and `STELLAR_REFLEX_LLAMA` to absolute installed file paths before launching the desktop. Beside `Qwen3-1.7B-Q8_0.gguf`, create `Qwen3-1.7B-Q8_0.provenance.json` containing:
+
+```json
+{
+  "source": "Qwen/Qwen3-1.7B-GGUF",
+  "revision": "90862c4b9d2787eaed51d12237eafdfe7c5f6077",
+  "sha256": "061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a",
+  "license": "Apache-2.0"
+}
+```
+
+The host validates that pinned provenance and hashes the local weights before each cold launch. The tested existing engine is `D:/Hermes/tools/llamacpp-cuda-11370-win32-x64/llama-server.exe`, build 11370 (`bed0a8566`). It owns a separate loopback-only server on port 18439 with a random per-launch API key, no Web UI, no proxy/redirect following, one slot and a 4096-token context. It never borrows the Hermes 9B GPU server. Thinking is disabled in the chat template and each inference request. Schema-constrained output is checked again at the native and renderer boundaries; actions and a proposed short acknowledgment come from one inference. Success speech is released only after the executor confirms.
+
+After the 1.7B accuracy/latency results below, the user separately authorized the official [Qwen3-4B Q4_K_M GGUF](https://huggingface.co/Qwen/Qwen3-4B-GGUF) for qualification: Apache-2.0, 2,497,280,256 bytes, revision `bc640142c66e1fdd12af0bd68f40445458f3869b`, SHA-256 `7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5`. For an explicit 4B trial, point `STELLAR_REFLEX_MODEL` to that installed file and use the corresponding `Qwen3-4B-Q4_K_M.provenance.json`, with those source/revision/hash values and the same license. Both exact artifact identities are admitted; no other file or model size is silently substituted. The engine also receives `--reasoning off`, and replies containing hidden reasoning are rejected.
+
+CPU is the default: four inference/batch threads, below-normal priority, device `none` and no KV GPU offload. `STELLAR_REFLEX_GPU_LAYERS=28` opts into GPU offload for qualification; 0–36 is the validated range. A model remains warm for 60 seconds after its last request, then is terminated and reaped. Stop cancels active inference; app exit shuts the host down. The shared Windows Job Object owner also terminates descendants on desktop failure. GPU mode is never enabled automatically. Cold setup and ten-second inference deadlines are correctness bounds, not latency claims.
+
+### Qualification and latency evidence
+
+The 169-case corpus is `libs/services/desktop-adapter/fixtures/reflex-evaluation.json`. It includes at least 150 distinct phrasings plus differing-context repetitions, colloquial complaints, ambiguous references, clarification follow-ups, negations and cloud-only work. Its unit test supplies labeled plans to exercise registry routing and dispatch. Those fixture results do **not** measure model accuracy or personality. The native `reflex-qualify` executable uses the production prompt, decoder, lifecycle and installed model, with no real desktop executor or microphone.
+
+The qualification executable additionally sends generated media plans through the production native ticket/validation/commit registry with an in-memory fixture media port. It has no Windows media adapter, microphone or real effects. Each proposed acknowledgment is reported after mocked dispatch confirmation. Runtime admission keeps informational/negated requests from mutation choices, requires an actual player for playback, and requires a selected/named pane or explicit source position for deictic pane operations. These are conservative English admission rules, not a claim of complete natural-language understanding.
+
+After authorizing the installed assets, run the following from the workspace with the model environment configured. Use the installed recognition Python environment, which already supplies `psutil`, and build optimized code for meaningful cold-hash timings:
+
+```powershell
+cargo build --locked --release -p stellar-desktop --bin reflex-qualify
+& D:/Hermes/profiles/ivy/recognition/.venv/Scripts/python.exe tools/native/reflex-benchmark.py --run-model --layers 0 --binary target/release/reflex-qualify.exe --output artifacts/native/reflex-cpu-workers
+& D:/Hermes/profiles/ivy/recognition/.venv/Scripts/python.exe tools/native/reflex-benchmark.py --run-model --layers 28 --binary target/release/reflex-qualify.exe --output artifacts/native/reflex-gpu-workers
+```
+
+For 4B, set its model path and use `--layers 36` for full GPU qualification. Each output directory must be new; the driver records model, engine, executable, prompt, corpus and driver SHA-256s plus the source base revision. Its `--corpus` option supports a separately identified subset or a corpus with `rolling_history: true`. No fixture run or benchmark is an automatic approval to enable a different model or GPU policy.
+
+On 4 November 2026, the i7-14700K/32 GB/RTX 4070 SUPER host produced the following [recorded qualification evidence](../../tools/native/fixtures/reflex-qualification-2026-11-04.json). Percentiles include failures. Exploratory 1.7B and later 4B runs use different prompt/schema revisions and more realistic paused/muted/unavailable-player contexts; these are measured development alternatives, not a controlled model-size-only comparison.
+
+| Configuration                         | Cases correct          | p50       | p95       | Scope                                                       |
+| ------------------------------------- | ---------------------- | --------- | --------- | ----------------------------------------------------------- |
+| 1.7B Q8 CPU, exploratory              | 95/169                 | 2,415 ms  | 8,008 ms  | Earlier prompt; fails both objectives                       |
+| 1.7B Q8 GPU, hardened exploratory     | 125/169                | 448 ms    | 2,737 ms  | Accuracy insufficient                                       |
+| 4B Q4 GPU, final                      | 169/169 in this corpus | 292 ms    | 350 ms    | Real inference plus confirmed mocked native media registry  |
+| 4B Q4 CPU, 36-case late-prompt subset | 18/36                  | 13,109 ms | 13,946 ms | Frequent timeouts; unsuitable for the instant-action target |
+
+The final GPU cold request took 3,313 ms. Its process-tree RSS peaked at 3.98 GB, recognition workers at 0.89 GB, and whole-machine GPU usage at 5,308 MiB (a separately observed idle baseline was about 2,100 MiB). No recognition worker errors occurred during synthetic-silence coexistence. All generated media plans reached confirmed mocked dispatch; this media-only subset measured p50 292 ms and p95 356 ms. The all-route table also includes clarification and fast Hermes routing. GPU allocations were released after the owned qualification process exited. CPU remains the resource-conservative default but does not meet the latency objective on this setup; an explicit 4B GPU trial is the measured fast route, with the 60-second idle release policy.
+
+This remains experimental behavior delivered as an opt-out beta for practical user testing. Physical microphone/media-device and gaming qualification are not blockers for that initial beta; their limitations remain explicit. The recorded final run matched all 169 expected decisions; that is corpus evidence, not a claim of perfect general intent understanding. The flagship song complaint selects next. Rolling 12-turn stress generated five distinct replies but repeated some openings, so personality variation is not fully qualified. The sub-500 ms warm transcript-to-mocked-action objective is met in this run; real speech-end-to-action, first audible acknowledgment, gaming contention and UI frame-time objectives remain unqualified. Cold latency exceeds the target. No threshold or model increase is hidden behind a passing fixture test.
+
+The driver warms actual installed keyword/transcription workers, sends synthetic silence, samples process RSS and whole-machine GPU usage, and stops its owned processes afterward. It neither captures a microphone nor performs playback/pane actions. The JSONL includes every case, failures, responses, cold latency and p50/p95 including failures; resource JSON reports worker errors and recognition timings. Silence coexistence is a residency/STT load test, not recognition accuracy or spoken intent qualification. Quiet keyword frames return before keyword decoding, so their timing measures protocol overhead, not active keyword inference latency. Whole-machine GPU usage includes unrelated applications.
+
+`stellar.reflex.latency` records bounded content-free renderer measurements for every route, including failures, inference and action dispatch/completion. `reflexPercentiles()` reports all-request and confirmed-request p50/p95 separately. `stellar.voice.latency` also includes speech-end observation, VAD finalization, warm/legacy STT, local inference, completed action, TTS and first observed audio timing when the speech worker reports it. Native timing is not a physical-audibility measurement.
+
+Native keyword-enabled utterance finalization retains its existing 800 ms quiet tail; legacy/no-keyword finalization retains 1,400 ms. Draft finalization retains its shorter tail. The native quiet tail leaves roughly 700 ms of the 1.5-second speech-end target for transcription, reasoning and execution. No silence threshold, wake protection or recognition reliability gate was weakened for Reflex. Synthetic typed/voice E2E proves the no-Hermes path with mocked model/media/audio; native smoke reads real media state and rejects an invalid dispatch ticket without changing playback. Live spoken recognition, controlled native playback effects and physical first-audio qualification remain separate from these automated checks.
+
 ## Local music visualizer
 
 Press **P** outside a text field, or choose **Music visualizer · P** from Experience controls (**M**), to open the audio controls. Listening is off at launch. **Listen to desktop audio** captures the current default Windows playback output with WASAPI loopback, including music from Spotify or other players. This is separate from microphone capture, activity detection and voice recognition. The dialog provides overall, bass, midrange and treble sensitivity sliders from 0–300% and live level meters; changes last for the current app session. Closing the dialog leaves listening enabled.
