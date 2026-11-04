@@ -45,6 +45,7 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
         useValue: {
           state: signal(initialSpeechSnapshot()),
           initialize: vi.fn(async () => undefined),
+          setDucking: vi.fn(),
           stop: vi.fn(async () => undefined),
         },
       },
@@ -178,6 +179,7 @@ describe('desktop voice cleanup integration', () => {
     };
     const speech = {
       keywordsAvailable: true,
+      setDucking: vi.fn(),
       state: signal(initialSpeechSnapshot()),
       keywords: vi.fn(
         async (

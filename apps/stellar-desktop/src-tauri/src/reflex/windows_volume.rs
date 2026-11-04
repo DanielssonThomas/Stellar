@@ -3,6 +3,57 @@ use super::contracts::*;
 use wasapi::{DeviceEnumerator, Direction};
 use windows::Win32::{Media::Audio::Endpoints::IAudioEndpointVolume, System::Com::CLSCTX_ALL};
 
+struct Apartment;
+impl Drop for Apartment {
+    fn drop(&mut self) {
+        wasapi::deinitialize();
+    }
+}
+
+struct DuckEndpoint {
+    volume: IAudioEndpointVolume,
+    id: String,
+    // Drop the interface before releasing this thread's COM apartment.
+    _apartment: Apartment,
+}
+
+pub(crate) fn duck_endpoint() -> Result<Box<dyn crate::volume_ducking::Endpoint>, ()> {
+    wasapi::initialize_mta().ok().map_err(|_| ())?;
+    let apartment = Apartment;
+    let (volume, id) = endpoint()?;
+    Ok(Box::new(DuckEndpoint {
+        volume,
+        id,
+        _apartment: apartment,
+    }))
+}
+
+impl crate::volume_ducking::Endpoint for DuckEndpoint {
+    fn read(&self) -> Result<f32, ()> {
+        // The owned interface and MTA stay alive on the worker thread.
+        unsafe { self.volume.GetMasterVolumeLevelScalar() }.map_err(|_| ())
+    }
+
+    fn write(&self, level: f32) -> Result<(), ()> {
+        if !level.is_finite() || !(0.0..=1.0).contains(&level) {
+            return Err(());
+        }
+        // The optional event-context GUID is null; mute is never changed.
+        unsafe {
+            self.volume
+                .SetMasterVolumeLevelScalar(level, std::ptr::null())
+        }
+        .map_err(|_| ())
+    }
+
+    fn is_current(&self) -> bool {
+        DeviceEnumerator::new()
+            .and_then(|e| e.get_default_device(&Direction::Render))
+            .and_then(|d| d.get_id())
+            .is_ok_and(|id| id == self.id)
+    }
+}
+
 fn endpoint() -> Result<(IAudioEndpointVolume, String), ()> {
     let device = DeviceEnumerator::new()
         .map_err(|_| ())?

@@ -12,6 +12,7 @@ import type {
   KeywordReply,
 } from '@stellar/desktop-contracts';
 import { SpeechAdapter, SpeechAdapterError } from '../speech/speech-adapter';
+import { VolumeDucking } from '../speech/volume-ducking';
 import {
   browserSpeechTransport,
   initialSpeechSnapshot,
@@ -38,6 +39,7 @@ export class SpeechAdapterService {
   readonly keywordsAvailable =
     inject(SPEECH_TRANSPORT).keywordsAvailable === true;
   private readonly adapter = new SpeechAdapter(inject(SPEECH_TRANSPORT));
+  private readonly ducking = new VolumeDucking(inject(SPEECH_TRANSPORT));
   private readonly current = signal(initialSpeechSnapshot());
   readonly state = this.current.asReadonly();
   private disposed = false;
@@ -50,6 +52,7 @@ export class SpeechAdapterService {
   constructor() {
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
+      this.ducking.dispose();
       ++this.generation;
       try {
         this.adapter.dispose();
@@ -61,6 +64,10 @@ export class SpeechAdapterService {
 
   transcribe(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
     return this.transcribeWith(pcm, utteranceId, false);
+  }
+
+  setDucking(active: boolean, listening = false) {
+    this.ducking.set(active, listening);
   }
 
   initialize(): Promise<void> {

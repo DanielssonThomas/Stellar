@@ -17,6 +17,7 @@ mod shell;
 mod smoke;
 mod speech;
 mod telemetry;
+mod volume_ducking;
 
 fn main() {
     use tauri::{Emitter, Manager};
@@ -37,6 +38,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
+            app.manage(volume_ducking::VolumeDucking::default());
             let music_handle = app.handle().clone();
             app.manage(music::MusicHost::new(std::sync::Arc::new(
                 move |snapshot| {
@@ -90,6 +92,11 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {
@@ -151,6 +158,7 @@ fn main() {
         speech::speech_speak,
         speech::speech_stop,
         speech::speech_snapshot,
+        speech::speech_set_ducking,
         cleanup::cleanup_refine,
         reflex::reflex_infer,
         reflex::reflex_route,
@@ -166,6 +174,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {

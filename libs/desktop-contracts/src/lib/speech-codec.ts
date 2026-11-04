@@ -1,6 +1,7 @@
 import type {
   SpeechError,
   SpeechRequest,
+  SpeechDuckingRequest,
   SpeechStopRequest,
   SpeechSnapshot,
   SpeechSpeakRequest,
@@ -85,6 +86,15 @@ function identifier(value: unknown): string {
 export function decodeSpeechRequest(value: unknown): SpeechRequest {
   const data = record(value, ['version']);
   return { version: version(data['version']) };
+}
+
+export function decodeSpeechDuckingRequest(
+  value: unknown,
+): SpeechDuckingRequest {
+  const data = record(value, ['version', 'active']);
+  if (typeof data['active'] !== 'boolean')
+    throw new DesktopContractError('malformed');
+  return { version: version(data['version']), active: data['active'] };
 }
 
 export function decodeSpeechStopRequest(value: unknown): SpeechStopRequest {

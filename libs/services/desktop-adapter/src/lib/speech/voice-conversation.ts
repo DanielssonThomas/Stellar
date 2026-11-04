@@ -45,6 +45,8 @@ export interface VoiceContext {
 }
 
 export interface VoiceView {
+  readonly ducking?: boolean;
+  readonly duckingListening?: boolean;
   readonly inputText?: string;
   readonly foregroundActive?: boolean;
   readonly passive?: boolean;
@@ -546,6 +548,7 @@ export class VoiceConversation {
 
   stopVoice() {
     if (this.disposed) return;
+    this.awaitingQuiet = true;
     this.invalidate();
     this.publish();
   }
@@ -1725,7 +1728,23 @@ export class VoiceConversation {
       this.ports.onCapturePauseChange?.(paused);
     }
     const context = this.context;
+    const voiceEligible = Boolean(
+      context?.available &&
+        context.audio.status === 'capturing' &&
+        !this.stopping &&
+        !this.blocked &&
+        !this.failure &&
+        !this.awaitingQuiet &&
+        !this.typedLease &&
+        (this.promptOpen || this.invocation.active()),
+    );
     this.ports.onChange({
+      ducking:
+        voiceEligible &&
+        (this.phase !== null ||
+          preparing(this.composition.status) ||
+          context?.audio.activity.active === true),
+      duckingListening: voiceEligible && this.phase === null,
       inputText: this.inputText,
       foregroundActive: this.promptOpen || this.invocation.active(),
       passive: !this.promptOpen && !this.invocation.active(),

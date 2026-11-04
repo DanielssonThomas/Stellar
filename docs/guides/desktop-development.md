@@ -18,6 +18,10 @@ Angular production builds keep critical CSS external (`optimization.styles.inlin
 
 ## Contracts and checks
 
+Active Ivy voice interactions fade the default Windows playback endpoint to 20% of its saved scalar level over approximately 800 ms. Foreground speech starts the fade; transcription, prompt preparation, model thinking, synthesis and playback keep it held. Listening pauses have a 1.6-second grace period so the utterance boundary does not briefly restore volume. Completed playback, cancellation, failure, microphone stop and suspension release it with an approximately 800 ms fade back. Passive wake listening alone does not change playback volume. This controls the system master level, including Ivy's speech, and never changes mute.
+
+The native volume worker retains the original scalar and endpoint throughout a turn, so lease renewals and interrupted fades do not compound reductions. Explicit volume changes supersede the saved level and suppress further ducking until release. Default-device changes attempt to restore the retained endpoint before capturing the new default. The renderer renews a six-second native lease every two seconds; expiry starts restoration. Graceful window destruction and exit stop the worker and restore its owned volume before releasing COM. Disconnected devices, failed endpoint writes and abrupt process termination cannot guarantee restoration. Browser tests verify coordination; native smoke exercises the real IPC, fade, hold, mute preservation and restoration on the current render endpoint.
+
 Rust owns IPC serialization. `libs/desktop-contracts` is tagged scope:shared/type:model and exports ts-rs output, generated command/event maps and strict runtime decoders. The governed scope:shared/type:util service-desktop-adapter owns native calls, sanitizes errors and disposes subscriptions, including late registrations. Its browser fake advertises no native capabilities. Change Rust first, run `node tools/native/cargo.mjs contract-generate`, and review the generated diff. `contract-check` fails on drift, including uncommitted changes to generated output.
 
 ```sh

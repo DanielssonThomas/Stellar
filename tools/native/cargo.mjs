@@ -75,6 +75,7 @@ if (action === 'smoke') {
             permissions: [
               'allow-music-set-enabled',
               'allow-reflex-media-snapshot',
+              'allow-speech-set-ducking',
               'allow-reflex-media-execute',
               'allow-reflex-infer',
               'allow-reflex-route',

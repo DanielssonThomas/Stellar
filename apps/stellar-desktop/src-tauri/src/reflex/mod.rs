@@ -14,6 +14,8 @@ mod windows_volume;
 use contracts::*;
 pub use media_host::MediaHost;
 pub use model::ReflexHost;
+#[cfg(windows)]
+pub(crate) use windows_volume::duck_endpoint;
 
 #[tauri::command]
 pub fn reflex_route(request: ReflexRequest) -> ReflexRouting {

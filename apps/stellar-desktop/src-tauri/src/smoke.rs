@@ -79,6 +79,24 @@ fn check_page(window: Webview) {
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
                 const reflexMedia = await invoke('reflex_media_snapshot');
+                let duckingRejected = false;
+                try { await invoke('speech_set_ducking', {request:{version:2,active:true}}); }
+                catch(error) { duckingRejected = error === 'unsupported_version'; }
+                if (!duckingRejected) throw Error('Ducking version validation failed');
+                if (reflexMedia.volume === null) throw Error('No render endpoint for ducking qualification');
+                try {
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,1000));
+                    const lowered = await invoke('reflex_media_snapshot');
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,100));
+                    const held = await invoke('reflex_media_snapshot');
+                    if (lowered.endpoint_id !== reflexMedia.endpoint_id || lowered.muted !== reflexMedia.muted || Math.abs(lowered.volume-reflexMedia.volume*0.2)>1 || held.volume !== lowered.volume)
+                        throw Error('System volume fade or hold failed');
+                } finally { await invoke('speech_set_ducking', {request:{version:1,active:false}}); }
+                await new Promise(resolve=>setTimeout(resolve,1000));
+                const restored = await invoke('reflex_media_snapshot');
+                if (restored.volume !== reflexMedia.volume || restored.muted !== reflexMedia.muted) throw Error('System volume restoration failed');
                 const reflexRoute = await invoke('reflex_route',{request:{version:1,input_id:'smoke-substantive',text:'Please show me my latest github issue',mode:'professional',context:'{}',history:[],actions:[]}});
                 if(reflexRoute.version!==1 || reflexRoute.local!==false) throw Error('Substantive request did not delegate');
                 const reflexStatus = await invoke('reflex_status');
@@ -221,6 +239,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::reflex::reflex_media_snapshot,
+            crate::speech::speech_set_ducking,
             crate::reflex::reflex_media_execute,
             crate::reflex::reflex_infer,
             crate::reflex::reflex_route,

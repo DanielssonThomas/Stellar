@@ -144,6 +144,7 @@ export class DesktopVoice {
     onChange: (view) =>
       this.zone.run(() => {
         this.current.set(view);
+        this.speech.setDucking(view.ducking ?? false, view.duckingListening);
         this.experience.setPassiveListening(view.passive ?? false);
       }),
     onComposition: (value) =>
@@ -171,6 +172,7 @@ export class DesktopVoice {
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
+      this.speech.setDucking(false);
       this.foregroundCleared = undefined;
     });
   }

@@ -35,6 +35,14 @@ pub struct SpeechRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
+pub struct SpeechDuckingRequest {
+    pub version: u16,
+    /// Renew a six-second native lease; false starts restoration.
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
 pub struct SpeechTranscribeRequest {
     pub version: u16,
     pub epoch: String,

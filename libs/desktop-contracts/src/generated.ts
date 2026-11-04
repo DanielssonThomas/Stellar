@@ -79,6 +79,11 @@ export type TelemetrySnapshot = { schemaVersion: number, sequence: number, obser
 export type SpeechState = "idle" | "collecting" | "transcribing" | "synthesizing" | "speaking" | "unavailable";
 export type SpeechError = "malformed_request" | "unsupported_version" | "busy" | "unavailable" | "model_missing" | "timeout" | "cancelled" | "protocol";
 export type SpeechRequest = { version: number, };
+export type SpeechDuckingRequest = { version: number,
+/**
+ * Renew a six-second native lease; false starts restoration.
+ */
+active: boolean, };
 export type SpeechStopRequest = { version: number, epoch: string, };
 export type SpeechTranscribeRequest = { version: number, epoch: string, utterance_id: string, sample_rate_hz: number, pcm: Array<number>, };
 export type SpeechTranscript = { version: number, utterance_id: string, text: string, };
@@ -119,5 +124,6 @@ export const speechStopCommand = "speech_stop" as const;
 export const speechSnapshotCommand = "speech_snapshot" as const;
 export const speechCollectCommand = "speech_collect" as const;
 export const speechKeywordsCommand = "speech_keywords" as const;
+export const speechSetDuckingCommand = "speech_set_ducking" as const;
 export const speechEvent = "speech-state" as const;
-export type SpeechCommands = { [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest; [speechCollectCommand]: SpeechTranscribeRequest; [speechKeywordsCommand]: KeywordRequest };
+export type SpeechCommands = { [speechTranscribeCommand]: SpeechTranscribeRequest; [speechSpeakCommand]: SpeechSpeakRequest; [speechStopCommand]: SpeechStopRequest; [speechSnapshotCommand]: SpeechRequest; [speechCollectCommand]: SpeechTranscribeRequest; [speechKeywordsCommand]: KeywordRequest; [speechSetDuckingCommand]: SpeechDuckingRequest };
