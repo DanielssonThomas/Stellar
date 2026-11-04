@@ -1,7 +1,6 @@
 use super::{contracts::*, prompt};
 use crate::owned_child::OwnedChild;
 use std::{
-    path::PathBuf,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -13,6 +12,7 @@ struct State {
     busy: Option<String>,
     touched: Option<Instant>,
     closed: bool,
+    disabled: bool,
     generation: u64,
     key: String,
 }
@@ -21,6 +21,16 @@ struct State {
 pub struct ReflexHost(Arc<Mutex<State>>);
 
 impl ReflexHost {
+    pub fn set_enabled(&self, enabled: bool) {
+        if let Ok(mut s) = self.0.lock() {
+            s.disabled = !enabled;
+            if !enabled {
+                s.generation = s.generation.saturating_add(1);
+                stop(&mut s);
+                s.busy = None;
+            }
+        }
+    }
     pub fn cancel(&self, id: Option<&str>) {
         if let Ok(mut s) = self.0.lock() {
             if id.is_some() && s.busy.as_deref() != id {
@@ -45,12 +55,15 @@ impl ReflexHost {
         if !prompt::valid_request(request) {
             return None;
         }
+        if !self.0.lock().is_ok_and(|s| !s.closed && !s.disabled) {
+            return None;
+        }
         if let Some(plan) = super::admission::delegation(request) {
             return Some(plan);
         }
         let generation = {
             let mut s = self.0.lock().ok()?;
-            if s.closed || s.busy.is_some() {
+            if s.closed || s.disabled || s.busy.is_some() {
                 return None;
             }
             s.busy = Some(request.input_id.clone());
@@ -201,20 +214,8 @@ impl Drop for State {
 
 fn launch(key: &str, current: &dyn Fn() -> bool) -> Option<OwnedChild> {
     // Only explicitly configured, already installed files. Never download or reuse Hermes' GPU server.
-    let model = PathBuf::from(std::env::var_os("STELLAR_REFLEX_MODEL")?);
-    let binary = PathBuf::from(std::env::var_os("STELLAR_REFLEX_LLAMA")?);
-    if !model.is_absolute() || !model.is_file() || !binary.is_absolute() || !binary.is_file() {
-        return None;
-    }
-    super::setup::verify(&model)?;
+    let (model, binary, layers) = super::setup::configuration()?;
     if !current() {
-        return None;
-    }
-    let layers: u8 = std::env::var("STELLAR_REFLEX_GPU_LAYERS")
-        .unwrap_or_else(|_| "0".into())
-        .parse()
-        .ok()?;
-    if layers > 36 {
         return None;
     }
     // Refuse an occupied endpoint rather than borrowing an unrelated local process.
@@ -265,3 +266,7 @@ fn launch(key: &str, current: &dyn Fn() -> bool) -> Option<OwnedChild> {
     drop(socket);
     OwnedChild::spawn(command).ok()
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod settings_tests;

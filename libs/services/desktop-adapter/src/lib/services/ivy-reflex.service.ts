@@ -1,6 +1,13 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import {
+  DestroyRef,
+  Injectable,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import {
   decodeReflexReply,
+  decodeReflexAvailability,
   decodeReflexMediaState,
   decodeReflexMediaResult,
   type ReflexMediaAction,
@@ -9,6 +16,7 @@ import {
 } from '@stellar/desktop-contracts';
 import type { LocalAction } from '../reflex/action-registry';
 import { mediaActionDescriptions } from '../reflex/media-actions';
+import { captureReflexDiagnostics } from '../reflex/reflex-diagnostics';
 import {
   ReflexController,
   type ReflexEnvironment,
@@ -30,7 +38,25 @@ export class IvyReflexService {
       __TAURI__?: { core: { invoke: Invoke } };
     }
   ).__TAURI__?.core.invoke;
-  readonly localAvailable = !!this.invoke;
+  private readonly preference = signal(this.readPreference());
+  readonly enabled = this.preference.asReadonly();
+  private readonly available = signal<boolean | null>(null);
+  readonly localAvailable = computed(
+    () => this.enabled() && !!this.invoke && this.available() !== false,
+  );
+  readonly status = computed(() =>
+    !this.enabled()
+      ? 'Disabled'
+      : this.busy() || this.available() === null
+        ? 'Starting'
+        : this.available()
+          ? 'Ready'
+          : 'Unavailable',
+  );
+  readonly lastRoute = signal('');
+  readonly diagnosticNotice = signal('');
+  private settings: Promise<void> = Promise.resolve();
+  private settingRevision = 0;
   readonly reply = signal('');
   readonly busy = signal(false);
   readonly mode = signal<ReflexMode>('professional');
@@ -67,7 +93,63 @@ export class IvyReflexService {
   });
 
   constructor() {
+    this.configure(this.enabled());
     inject(DestroyRef).onDestroy(() => this.controller.cancel());
+  }
+  private readPreference(): boolean {
+    try {
+      return (
+        globalThis.localStorage?.getItem('stellar.ivy-reflex.enabled') !==
+        'false'
+      );
+    } catch {
+      return true;
+    }
+  }
+  setEnabled(enabled: boolean) {
+    this.preference.set(enabled);
+    try {
+      globalThis.localStorage?.setItem(
+        'stellar.ivy-reflex.enabled',
+        String(enabled),
+      );
+    } catch {
+      /* Session preference still applies when storage is unavailable. */
+    }
+    if (!enabled) this.controller.cancel();
+    this.configure(enabled);
+  }
+  private configure(enabled: boolean) {
+    const revision = ++this.settingRevision;
+    this.available.set(null);
+    this.settings = this.settings.then(async () => {
+      try {
+        if (!this.invoke) throw Error('Native Reflex unavailable');
+        await this.invoke('reflex_set_enabled', { enabled });
+        if (!enabled || revision !== this.settingRevision) return;
+        const state = decodeReflexAvailability(
+          await this.invoke('reflex_status'),
+        );
+        if (revision === this.settingRevision)
+          this.available.set(state.configured);
+      } catch {
+        if (revision === this.settingRevision) this.available.set(false);
+      }
+    });
+  }
+  async copyDiagnostics() {
+    try {
+      const report = captureReflexDiagnostics({
+        enabled: this.enabled(),
+        status: this.status(),
+        last_route: this.lastRoute(),
+        mode: this.mode(),
+      });
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      this.diagnosticNotice.set('Diagnostics copied');
+    } catch {
+      this.diagnosticNotice.set('Clipboard unavailable. Try again.');
+    }
   }
   bind(workspace: Workspace, epoch: () => string) {
     this.workspace = workspace;
@@ -93,8 +175,18 @@ export class IvyReflexService {
     signal?: AbortSignal,
     point?: IvyReflexService['point'],
   ) {
-    if (!this.invoke)
+    const fallback = (reason: string) => {
+      this.lastRoute.set(`Hermes · ${reason}`);
       return { handled: false, reply: '', outcome: 'unavailable' as const };
+    };
+    if (!this.enabled()) return fallback('Reflex disabled');
+    const revision = this.settingRevision;
+    await this.settings;
+    // A toggle during admission cancels this request instead of replaying it through Hermes.
+    if (revision !== this.settingRevision || signal?.aborted)
+      return { handled: true, reply: '', outcome: 'cancelled' as const };
+    if (!this.invoke || !this.available())
+      return fallback('Reflex unavailable');
     if (this.busy())
       return {
         handled: true,
@@ -105,6 +197,10 @@ export class IvyReflexService {
     this.point = point;
     try {
       const outcome = await this.controller.run(text, id, this.mode(), signal);
+      this.lastRoute.set(
+        `${outcome.handled ? 'Reflex' : 'Hermes'} · ${outcome.outcome}`,
+      );
+      if (outcome.outcome === 'unavailable') this.available.set(false);
       if (outcome.reply) this.reply.set(outcome.reply);
       return outcome;
     } finally {

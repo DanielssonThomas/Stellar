@@ -2,6 +2,7 @@ import type {
   ReflexReply,
   ReflexMediaState,
   ReflexMediaResult,
+  ReflexAvailability,
 } from '../generated';
 
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -11,6 +12,17 @@ const keys = (v: Record<string, unknown>, names: string[]) =>
   names.every((key) => Object.hasOwn(v, key));
 const text = (v: unknown, max: number): v is string =>
   typeof v === 'string' && new TextEncoder().encode(v).length <= max;
+
+export function decodeReflexAvailability(v: unknown): ReflexAvailability {
+  if (
+    !record(v) ||
+    !keys(v, ['version', 'configured']) ||
+    v['version'] !== 1 ||
+    typeof v['configured'] !== 'boolean'
+  )
+    throw new Error('Invalid Reflex availability');
+  return v as unknown as ReflexAvailability;
+}
 
 export function decodeReflexReply(v: unknown, inputId: string): ReflexReply {
   if (

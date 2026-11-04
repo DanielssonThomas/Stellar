@@ -153,6 +153,8 @@ fn main() {
         speech::speech_snapshot,
         cleanup::cleanup_refine,
         reflex::reflex_infer,
+        reflex::reflex_status,
+        reflex::reflex_set_enabled,
         reflex::reflex_cancel,
         reflex::reflex_media_snapshot,
         reflex::reflex_media_execute,

@@ -1,6 +1,28 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::{io::Read, path::Path};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
+
+pub fn configuration() -> Option<(PathBuf, PathBuf, u8)> {
+    let model = PathBuf::from(std::env::var_os("STELLAR_REFLEX_MODEL")?);
+    let binary = PathBuf::from(std::env::var_os("STELLAR_REFLEX_LLAMA")?);
+    let layers: u8 = std::env::var("STELLAR_REFLEX_GPU_LAYERS")
+        .unwrap_or_else(|_| "0".into())
+        .parse()
+        .ok()?;
+    if layers > 36
+        || !model.is_absolute()
+        || !model.is_file()
+        || !binary.is_absolute()
+        || !binary.is_file()
+    {
+        return None;
+    }
+    verify(&model)?;
+    Some((model, binary, layers))
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

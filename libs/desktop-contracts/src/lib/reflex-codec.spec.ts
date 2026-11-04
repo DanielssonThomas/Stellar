@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { decodeReflexReply, decodeReflexMediaState } from './reflex-codec';
+import {
+  decodeReflexReply,
+  decodeReflexMediaState,
+  decodeReflexAvailability,
+} from './reflex-codec';
 
 describe('Reflex native contracts', () => {
+  it('requires an exact versioned boolean readiness reply', () => {
+    expect(
+      decodeReflexAvailability({ version: 1, configured: true }).configured,
+    ).toBe(true);
+    for (const bad of [
+      null,
+      { version: 2, configured: true },
+      { version: 1, configured: 'yes' },
+      { version: 1, configured: true, extra: true },
+    ])
+      expect(() => decodeReflexAvailability(bad)).toThrow();
+  });
   it('accepts only short, correlated and internally consistent plans', () => {
     const value = {
       version: 1,

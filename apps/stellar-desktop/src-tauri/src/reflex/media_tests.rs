@@ -55,6 +55,58 @@ fn request(ticket: String) -> ReflexMediaRequest {
 }
 
 #[test]
+fn disable_revokes_tickets_and_enable_requires_a_fresh_snapshot() {
+    let host = MediaHost::default();
+    let port = Mock::new();
+    let old = request(host.snapshot(&port).unwrap().ticket);
+    host.set_enabled(false);
+    assert!(host.snapshot(&port).is_err());
+    assert!(matches!(
+        host.execute(&old, &port),
+        ReflexMediaResult::Rejected
+    ));
+    host.set_enabled(true);
+    assert!(matches!(
+        host.execute(&old, &port),
+        ReflexMediaResult::Rejected
+    ));
+    let mut fresh = request(host.snapshot(&port).unwrap().ticket);
+    fresh.input_id = "fresh-request".into();
+    assert!(matches!(
+        host.execute(&fresh, &port),
+        ReflexMediaResult::Confirmed
+    ));
+    assert_eq!(port.calls.get(), 1);
+}
+
+#[test]
+fn disable_at_commit_prevents_a_queued_device_effect() {
+    struct DisableAtCommit<'a>(&'a MediaHost, Mock);
+    impl MediaPort for DisableAtCommit<'_> {
+        fn snapshot(&self) -> Result<ReflexMediaState, ()> {
+            self.1.snapshot()
+        }
+        fn execute(
+            &self,
+            action: &ReflexMediaAction,
+            expected: &ReflexMediaState,
+            commit: &Commit<'_>,
+        ) -> ReflexMediaResult {
+            self.0.set_enabled(false);
+            self.1.execute(action, expected, commit)
+        }
+    }
+    let host = MediaHost::default();
+    let port = DisableAtCommit(&host, Mock::new());
+    let r = request(host.snapshot(&port).unwrap().ticket);
+    assert!(matches!(
+        host.execute(&r, &port),
+        ReflexMediaResult::Rejected
+    ));
+    assert_eq!(port.1.calls.get(), 0);
+}
+
+#[test]
 fn executes_once_with_current_snapshot_and_rejects_replays() {
     let host = MediaHost::default();
     let port = Mock::new();

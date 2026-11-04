@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let corpus: Value = serde_json::from_slice(&std::fs::read(&args[2])?)?;
     let host = model::ReflexHost::default();
+    host.set_enabled(true);
     let mut samples = Vec::new();
     let mut correct = 0;
     let mut unavailable = 0;

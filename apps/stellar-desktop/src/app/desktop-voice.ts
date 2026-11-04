@@ -182,7 +182,7 @@ export class DesktopVoice {
       audio: this.audio.state(),
       speech: this.speech.state(),
       assistant: this.assistant.state(),
-      localAvailable: this.reflex.localAvailable,
+      localAvailable: this.reflex.localAvailable(),
       available:
         this.sessionKnown() &&
         !this.sessionError() &&
@@ -245,7 +245,7 @@ export class DesktopVoice {
     const snapshot = await this.ivy.snapshot();
     if (
       (snapshot.error &&
-        !(this.reflex.localAvailable && snapshot.error === 'unavailable')) ||
+        !(this.reflex.localAvailable() && snapshot.error === 'unavailable')) ||
       ['submitting', 'admitted', 'uncertain'].includes(snapshot.turn)
     )
       throw new Error('Conversation state is not settled');

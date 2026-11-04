@@ -3,6 +3,13 @@ use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[serde(deny_unknown_fields)]
+pub struct ReflexAvailability {
+    pub version: u8,
+    pub configured: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(deny_unknown_fields)]
 pub struct ReflexChoice {
     pub id: String,
     pub description: String,

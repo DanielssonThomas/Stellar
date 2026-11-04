@@ -13,6 +13,29 @@ pub use media_host::MediaHost;
 pub use model::ReflexHost;
 
 #[tauri::command]
+pub async fn reflex_status() -> Result<ReflexAvailability, ()> {
+    tauri::async_runtime::spawn_blocking(|| ReflexAvailability {
+        version: 1,
+        configured: setup::configuration().is_some(),
+    })
+    .await
+    .map_err(|_| ())
+}
+
+#[tauri::command]
+pub async fn reflex_set_enabled(
+    host: tauri::State<'_, ReflexHost>,
+    media: tauri::State<'_, std::sync::Arc<MediaHost>>,
+    enabled: bool,
+) -> Result<(), ()> {
+    media.set_enabled(enabled);
+    let host = host.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || host.set_enabled(enabled))
+        .await
+        .map_err(|_| ())
+}
+
+#[tauri::command]
 pub async fn reflex_infer(
     host: tauri::State<'_, ReflexHost>,
     request: ReflexRequest,

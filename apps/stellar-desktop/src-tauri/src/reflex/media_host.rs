@@ -20,17 +20,27 @@ struct State {
     epoch: u64,
     active: Option<String>,
     closed: bool,
+    disabled: bool,
 }
 
 #[derive(Default)]
 pub struct MediaHost(Mutex<State>);
 
 impl MediaHost {
+    pub fn set_enabled(&self, enabled: bool) {
+        if let Ok(mut s) = self.0.lock() {
+            s.disabled = !enabled;
+            if !enabled {
+                s.epoch = s.epoch.saturating_add(1);
+                s.snapshot = None;
+            }
+        }
+    }
     pub fn snapshot(&self, port: &impl MediaPort) -> Result<ReflexMediaState, ()> {
         let epoch = self.0.try_lock().map_err(|_| ())?.epoch;
         let mut snapshot = port.snapshot()?;
         let mut s = self.0.try_lock().map_err(|_| ())?;
-        if s.closed || s.epoch != epoch || s.active.is_some() {
+        if s.closed || s.disabled || s.epoch != epoch || s.active.is_some() {
             return Err(());
         }
         s.ticket = s.ticket.checked_add(1).ok_or(())?;
@@ -45,6 +55,7 @@ impl MediaHost {
         };
         if r.version != 1
             || s.closed
+            || s.disabled
             || s.active.is_some()
             || !super::prompt::valid_id(&r.input_id)
             || s.seen.contains(&r.input_id)
@@ -70,7 +81,10 @@ impl MediaHost {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
         let current = || {
             self.0.lock().is_ok_and(|s| {
-                !s.closed && s.epoch == epoch && s.active.as_deref() == Some(&r.input_id)
+                !s.closed
+                    && !s.disabled
+                    && s.epoch == epoch
+                    && s.active.as_deref() == Some(&r.input_id)
             }) && std::time::Instant::now() < deadline
         };
         let commit = |effect: &mut dyn FnMut()| {
@@ -78,6 +92,7 @@ impl MediaHost {
                 return false;
             };
             if s.closed
+                || s.disabled
                 || s.epoch != epoch
                 || s.active.as_deref() != Some(&r.input_id)
                 || std::time::Instant::now() >= deadline

@@ -11,6 +11,7 @@ export type MusicError = "malformed" | "unsupported_version" | "unavailable";
 export type CleanupRequest = { version: number, raw: string, };
 export type CleanupReply = { version: number, text: string | null, };
 export type ReflexChoice = { id: string, description: string, };
+export type ReflexAvailability = { version: number, configured: boolean, };
 export type ReflexMode = "professional" | "playful";
 export type ReflexRequest = { version: number, input_id: string, text: string, mode: ReflexMode, context: string, history: Array<string>, actions: Array<ReflexChoice>, };
 export type ReflexRoute = "action" | "clarify" | "hermes";
