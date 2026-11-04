@@ -31,7 +31,12 @@ pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u
     let mut line = serde_json::to_vec(&json!({"id":sequence,"method":method,"params":params}))
         .map_err(|_| IvyErrorCode::Protocol)?;
     line.push(b'\n');
-    if line.len() > 16_384 {
+    let limit = if method == "clarify.respond" {
+        65_536
+    } else {
+        16_384
+    };
+    if line.len() > limit {
         return Err(IvyErrorCode::MalformedRequest);
     }
     Ok(line)

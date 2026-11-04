@@ -20,7 +20,7 @@ mod telemetry;
 
 fn main() {
     use tauri::{Emitter, Manager};
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 10);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 11);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
         "workspace_tool_reply"
@@ -144,6 +144,7 @@ fn main() {
         ivy::ivy_clear_conversation,
         ivy::ivy_new_session,
         ivy::ivy_reload_mcp,
+        ivy::ivy_question_reply,
         ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_collect,

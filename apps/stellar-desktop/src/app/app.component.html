@@ -23,6 +23,15 @@
     [selectedInputLabel]="experience.inputs.selectedLabel()"
     [activityStatus]="experience.activityStatus()"
     [ivyActivity]="assistant.activity()"
+    [questions]="
+      assistant.state().connection === 'ready' &&
+      assistant.state().turn === 'admitted' &&
+      !['suspended', 'shutdown'].includes(experience.state().phase)
+        ? (assistant.state().questions ?? [])
+        : []
+    "
+    (questionShown)="questionShown($event)"
+    (questionAnswer)="answerQuestion($event.id, $event.action)"
     [ivyTurnId]="assistant.state().turn_id"
     [ivyPreparing]="assistant.state().turn === 'submitting'"
     [ivyWorking]="assistant.waiting()"

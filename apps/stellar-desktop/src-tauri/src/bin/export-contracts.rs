@@ -97,6 +97,9 @@ fn main() {
         IvyActivityState::decl(&config),
         IvyActivity::decl(&config),
         IvySnapshot::decl(&config),
+        IvyQuestion::decl(&config),
+        IvyQuestionAction::decl(&config),
+        IvyQuestionReplyRequest::decl(&config),
         WorkspaceSurface::decl(&config),
         WorkspaceProminence::decl(&config),
         WorkspaceToolOperation::decl(&config),
@@ -180,6 +183,7 @@ fn main() {
         "ivyClearConversationCommand",
         "ivyNewSessionCommand",
         "ivyReloadMcpCommand",
+        "ivyQuestionReplyCommand",
     ]
     .iter()
     .zip(IVY_COMMANDS)
@@ -202,7 +206,7 @@ fn main() {
         serde_json::to_string(WORKSPACE_REPLY_COMMAND).unwrap()
     );
     println!(
-        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest }};"
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest }};"
     );
     for (name, command) in [
         "speechTranscribeCommand",

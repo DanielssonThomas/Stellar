@@ -22,6 +22,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_questions.rs"]
+mod questions;
 #[path = "host_requests.rs"]
 mod requests;
 #[path = "host_startup.rs"]
@@ -36,6 +38,7 @@ pub enum Action {
     Submit(IvySubmitRequest),
     Cancel,
     Reconcile,
+    Question(IvyQuestionReplyRequest),
     Lifecycle(
         super::lifecycle::Control,
         Ticket,
@@ -164,6 +167,7 @@ impl IvyHost {
                             Action::Submit(request) => session.submit(request),
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
+                            Action::Question(request) => session.answer_question(request),
                             #[cfg(feature = "native-smoke")]
                             Action::SmokeHold(ack) => {
                                 let _ = ack.send(());
@@ -287,24 +291,8 @@ pub(super) use super::connection::fail;
 #[cfg(test)]
 pub(super) use super::connection::publish_ready;
 
-pub fn validate_submit(request: &IvySubmitRequest) -> Result<(), IvyErrorCode> {
-    let valid_id = request.input_id.len() == 36
-        && request.input_id.bytes().enumerate().all(|(index, byte)| {
-            if [8, 13, 18, 23].contains(&index) {
-                byte == b'-'
-            } else {
-                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
-            }
-        });
-    if request.version != 1
-        || !valid_id
-        || request.text.trim().is_empty()
-        || request.text.len() > 8192
-    {
-        return Err(IvyErrorCode::MalformedRequest);
-    }
-    Ok(())
-}
+#[cfg(test)]
+pub(super) use requests::validate_submit;
 
 #[cfg(test)]
 #[path = "host_tests.rs"]

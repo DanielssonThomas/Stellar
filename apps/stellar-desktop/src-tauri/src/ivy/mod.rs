@@ -12,6 +12,8 @@ mod observation;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+mod question_contracts;
+mod questions;
 #[cfg(test)]
 mod recovery_tests;
 mod rotation;
@@ -60,6 +62,17 @@ pub fn ivy_snapshot(
 ) -> Result<IvySnapshot, IvyErrorCode> {
     validate(request)?;
     host.snapshot()
+}
+
+#[tauri::command]
+pub fn ivy_question_reply(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: contracts::IvyQuestionReplyRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    host.question_reply(request)
 }
 
 #[tauri::command]
@@ -169,3 +182,6 @@ pub fn workspace_tool_reply(
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
     host.workspace_reply(reply)
 }
+
+#[cfg(test)]
+mod question_tests;

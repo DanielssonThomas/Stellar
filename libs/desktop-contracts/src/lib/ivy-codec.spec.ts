@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { decodeIvySnapshot, decodeIvySubmitRequest } from './ivy-codec';
+import {
+  decodeIvySnapshot,
+  decodeIvySubmitRequest,
+  decodeIvyQuestionReply,
+} from './ivy-codec';
 const id = '00000000-0000-4000-8000-000000000001';
 const snapshot = () => ({
   version: 1,
@@ -25,6 +29,42 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('validates question bounds, exact actions and unique prompt IDs', () => {
+    const question = {
+      id: 'q1',
+      text: 'Choose',
+      choices: ['Left'],
+      multi_select: false,
+      shown: false,
+      answering: false,
+    };
+    expect(
+      decodeIvySnapshot({ ...snapshot(), questions: [question] }).questions,
+    ).toEqual([question]);
+    for (const questions of [
+      [question, question],
+      [{ ...question, choices: Array(5).fill('x') }],
+      [{ ...question, shown: 'yes' }],
+    ])
+      expect(() => decodeIvySnapshot({ ...snapshot(), questions })).toThrow();
+    for (const action of [
+      { kind: 'shown' },
+      { kind: 'answer', answer: 'Left' },
+      { kind: 'skip' },
+      { kind: 'cancel' },
+    ])
+      expect(
+        decodeIvyQuestionReply({ version: 1, prompt_id: 'q1', action }).action,
+      ).toEqual(action);
+    for (const action of [
+      { kind: 'answer', answer: '' },
+      { kind: 'skip', answer: 'x' },
+      { kind: 'execute' },
+    ])
+      expect(() =>
+        decodeIvyQuestionReply({ version: 1, prompt_id: 'q1', action }),
+      ).toThrow();
+  });
   it('preserves full Unicode replies and presentation content beyond former caps', () => {
     const content = '🪐"\\\n'.repeat(100_000);
     const value = {

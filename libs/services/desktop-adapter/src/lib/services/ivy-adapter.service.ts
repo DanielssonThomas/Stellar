@@ -16,6 +16,8 @@ import {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyQuestionReplyCommand,
+  type IvyQuestionAction,
   type IvyModel,
   type IvyCommands,
   type IvySnapshot,
@@ -93,6 +95,14 @@ export class IvyAdapterService {
   }
   snapshot() {
     return this.invoke(ivySnapshotCommand, { version: 1 });
+  }
+
+  questionReply(promptId: string, action: IvyQuestionAction) {
+    return this.invoke(ivyQuestionReplyCommand, {
+      version: 1,
+      prompt_id: promptId,
+      action,
+    });
   }
 
   async selectSession(model: IvyModel): Promise<boolean> {
