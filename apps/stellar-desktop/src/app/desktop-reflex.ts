@@ -11,10 +11,14 @@ type Port = {
 export function desktopReflex(port: Port) {
   return () => {
     const panes = port.stage.inspectPresentations();
-    const fingerprint = JSON.stringify(panes);
-    const valid = () =>
-      port.available() &&
-      JSON.stringify(port.stage.inspectPresentations()) === fingerprint;
+    // Loading and paint observations do not change pane dispatch authority.
+    const signature = () =>
+      JSON.stringify(
+        port.stage.inspectPresentations(),
+        (key, value: unknown) => (key === 'render_state' ? undefined : value),
+      );
+    const fingerprint = signature();
+    const valid = () => port.available() && signature() === fingerprint;
     const actions: LocalAction[] = [];
     const add = (
       id: string,
