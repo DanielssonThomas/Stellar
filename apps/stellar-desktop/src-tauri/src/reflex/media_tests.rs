@@ -55,6 +55,26 @@ fn request(ticket: String) -> ReflexMediaRequest {
 }
 
 #[test]
+fn receipt_is_only_emitted_for_validated_dispatch_and_does_not_change_result() {
+    let host = MediaHost::default();
+    let port = Mock::new();
+    let count = Cell::new(0);
+    let r = request(host.snapshot(&port).unwrap().ticket);
+    let result = host.execute_observed(&r, &port, |req, state, result| {
+        count.set(count.get() + 1);
+        assert_eq!(req.input_id, "request-1");
+        assert_eq!(state.title.as_deref(), Some("track"));
+        assert!(matches!(result, ReflexMediaResult::Confirmed));
+    });
+    assert!(matches!(result, ReflexMediaResult::Confirmed));
+    assert_eq!(count.get(), 1);
+    host.execute_observed(&r, &port, |_, _, _| count.set(count.get() + 1));
+    assert_eq!(count.get(), 1);
+    host.snapshot(&port).unwrap();
+    assert_eq!(count.get(), 1);
+}
+
+#[test]
 fn disable_revokes_tickets_and_enable_requires_a_fresh_snapshot() {
     let host = MediaHost::default();
     let port = Mock::new();
