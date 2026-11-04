@@ -261,7 +261,7 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('conversing inside Stellar Desktop', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertEqual(names, {'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
-                                             'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window',
+                                             'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window', 'capture_display', 'capture_foreground', 'list_displays',
                                              'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content'})
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
                     for _ in range(200):
@@ -283,18 +283,21 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
             async with streamable_http_client(self.url, http_client=http) as streams:
                 async with ClientSession(streams[0], streams[1]) as session:
                     await session.initialize()
-                    task = asyncio.create_task(session.call_tool('capture_window', {'turn_token': token}))
-                    for _ in range(200):
-                        if self.frames:
-                            break
-                        await asyncio.sleep(.01)
-                    request = self.frames[0]['data']
-                    header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
-                    self.gate.reply_image(header, b'\x89PNG\r\n\x1a\n' + b'x' * 1100000)
-                    result = await asyncio.wait_for(task, 5)
-                    self.assertFalse(result.is_error)
-                    self.assertEqual(result.content[0].type, 'image')
-                    self.assertGreater(len(result.content[0].data), 1048576)
+                    for tool in ['capture_window', 'capture_display', 'capture_foreground']:
+                        self.frames.clear()
+                        task = asyncio.create_task(session.call_tool(tool, {'turn_token': token}))
+                        for _ in range(200):
+                            if self.frames:
+                                break
+                            await asyncio.sleep(.01)
+                        request = self.frames[0]['data']
+                        self.assertEqual(request['operation']['kind'], tool)
+                        header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                        self.gate.reply_image(header, b'\x89PNG\r\n\x1a\n' + b'x' * 1100000)
+                        result = await asyncio.wait_for(task, 5)
+                        self.assertFalse(result.is_error)
+                        self.assertEqual(result.content[0].type, 'image')
+                        self.assertGreater(len(result.content[0].data), 1048576)
 
     async def test_all_registered_pane_tools_relay_validated_operations(self):
         token = self.gate.arm('1', 'turn-one')

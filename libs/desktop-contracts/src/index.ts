@@ -67,6 +67,7 @@ export type {
   WorkspaceSurface,
   WorkspaceProminence,
   WorkspaceToolOperation,
+  WorkspaceDisplay,
   WorkspaceToolRequest,
   WorkspacePaneMetadata,
   WorkspaceToolOutcome,

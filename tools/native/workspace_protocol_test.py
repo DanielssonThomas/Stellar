@@ -10,6 +10,29 @@ spec.loader.exec_module(workspace)
 
 
 class WorkspaceProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_screen_targets_and_monitor_metadata_are_bounded_and_cancelled_images_are_rejected(self):
+        display = {'id': 'monitor1', 'name': 'Left', 'width': 3840, 'height': 2160, 'primary': True, 'foreground': True}
+        self.assertEqual(workspace.validate_outcome({'kind': 'displays', 'displays': [display]}, 'list_displays')['displays'], [display])
+        for invalid in [{**display, 'width': True}, {**display, 'id': ''}, {**display, 'foreground': 'yes'}]:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_outcome({'kind': 'displays', 'displays': [invalid]}, 'list_displays')
+        for operation in [{'kind': 'capture_display', 'display_id': None}, {'kind': 'capture_display', 'display_id': 'monitor1'}, {'kind': 'capture_foreground'}]:
+            frames = []
+            gate = workspace.WorkspaceGate(frames.append)
+            token = gate.arm('1', 'turn')
+            task = asyncio.create_task(gate.call(operation, token))
+            await asyncio.sleep(0)
+            request = frames[0]['data']
+            header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+            gate.disarm()
+            with self.assertRaises(workspace.WorkspaceRefused):
+                gate.reply_image(header, b'\x89PNG\r\n\x1a\nimage')
+            with self.assertRaises(workspace.WorkspaceRefused):
+                await task
+        for target in ['', 'a' * 129, '\0bad', 1]:
+            with self.assertRaises(workspace.WorkspaceRefused):
+                workspace.validate_operation({'kind': 'capture_display', 'display_id': target})
+
     def test_operations_reject_unknown_keys_bad_ids_and_ambiguous_json(self):
         valid = {'kind': 'open', 'instance_id': 'pane_1', 'surface': 'rich-text',
                  'payload_json': '{"text":"hello"}', 'prominence': 'primary'}

@@ -12,6 +12,7 @@ import time
 MAX_PAYLOAD = 65536
 MAX_FRAME = 400000
 MAX_PANES = 4
+IMAGE_OPERATIONS = {'capture_window', 'capture_display', 'capture_foreground'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
 SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'workflow',
                       'session', 'assistant-message'})
@@ -83,6 +84,7 @@ def validate_operation(operation):
         'restore_layout': set(), 'inspect_content': {'instance_id'},
         'arrange': {'instance_ids'}, 'clear': set(), 'inspect': set(),
         'capture_window': set(),
+        'capture_foreground': set(), 'capture_display': {'display_id'}, 'list_displays': set(),
     }
     if kind == 'update' and 'expected_revision' in operation:
         fields['update'] = fields['update'] | {'expected_revision'}
@@ -90,6 +92,10 @@ def validate_operation(operation):
             raise WorkspaceRefused()
     if kind not in fields or set(operation) != fields[kind] | {'kind'}:
         raise WorkspaceRefused()
+    if kind == 'capture_display' and operation['display_id'] is not None:
+        value = operation['display_id']
+        if type(value) is not str or not value or len(value.encode('utf-8')) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            raise WorkspaceRefused()
     if 'instance_id' in operation and not _identity(operation['instance_id']):
         raise WorkspaceRefused()
     if kind == 'resize' and (type(operation['percent']) is not int or not 10 <= operation['percent'] <= 90):
@@ -117,6 +123,21 @@ def validate_outcome(outcome, operation):
     if type(kind) is not str:
         raise WorkspaceRefused()
     if kind in ('applied', 'rejected') and set(outcome) == {'kind'}:
+        return outcome
+    if kind == 'displays' and operation == 'list_displays':
+        displays = outcome.get('displays')
+        if set(outcome) != {'kind', 'displays'} or type(displays) is not list or not 1 <= len(displays) <= 16:
+            raise WorkspaceRefused()
+        ids = set()
+        for display in displays:
+            if (type(display) is not dict or set(display) != {'id','name','width','height','primary','foreground'} or
+                    type(display['id']) is not str or not display['id'] or len(display['id'].encode('utf-8')) > 128 or
+                    any(ord(c) < 32 or ord(c) == 127 for c in display['id']) or display['id'] in ids or
+                    type(display['name']) is not str or not 1 <= len(display['name']) <= 240 or
+                    any(type(display[k]) is not int or not 1 <= display[k] <= 32768 for k in ('width','height')) or
+                    any(type(display[k]) is not bool for k in ('primary','foreground'))):
+                raise WorkspaceRefused()
+            ids.add(display['id'])
         return outcome
     if kind == 'content' and operation == 'inspect_content':
         if (set(outcome) != {'kind','instance_id','surface','revision','payload_json'} or
@@ -221,14 +242,14 @@ class WorkspaceGate:
                 (reply['request_id'], reply['epoch'], reply['turn_id']) != pending[:3] or
                 self.active is None or self.active[:2] != pending[1:3] or pending[3].done()):
             raise WorkspaceRefused()
-        if pending[4] == 'capture_window':
+        if pending[4] in IMAGE_OPERATIONS:
             raise WorkspaceRefused()
         outcome = validate_outcome(reply['outcome'], pending[4])
         pending[3].set_result(outcome)
 
     def reply_image(self, header, image):
         pending = self.pending
-        if (pending is None or pending[4] != 'capture_window' or type(header) is not dict or
+        if (pending is None or pending[4] not in IMAGE_OPERATIONS or type(header) is not dict or
                 set(header) != {'version', 'request_id', 'epoch', 'turn_id'} or
                 type(header['version']) is not int or header['version'] != 1 or
                 (header['request_id'], header['epoch'], header['turn_id']) != pending[:3] or
@@ -240,7 +261,7 @@ class WorkspaceGate:
 
     def reject_image(self, header):
         pending = self.pending
-        if (pending is None or pending[4] != 'capture_window' or type(header) is not dict or
+        if (pending is None or pending[4] not in IMAGE_OPERATIONS or type(header) is not dict or
                 set(header) != {'version', 'request_id', 'epoch', 'turn_id'} or
                 type(header['version']) is not int or header['version'] != 1 or
                 (header['request_id'], header['epoch'], header['turn_id']) != pending[:3] or

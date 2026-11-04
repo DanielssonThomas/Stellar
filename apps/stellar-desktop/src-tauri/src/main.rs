@@ -68,8 +68,8 @@ fn main() {
             #[cfg(windows)]
             {
                 let handle = app.handle().clone();
-                ivy_host.set_workspace_capture(std::sync::Arc::new(move || {
-                    ivy::capture_workspace_window(&handle)
+                ivy_host.set_workspace_capture(std::sync::Arc::new(move |operation| {
+                    ivy::capture_workspace_operation(&handle, operation)
                 }));
             }
             app.manage(ivy_host);

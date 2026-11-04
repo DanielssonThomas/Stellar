@@ -100,6 +100,7 @@ fn main() {
         WorkspaceSurface::decl(&config),
         WorkspaceProminence::decl(&config),
         WorkspaceToolOperation::decl(&config),
+        WorkspaceDisplay::decl(&config),
         WorkspaceToolRequest::decl(&config),
         WorkspacePaneMetadata::decl(&config),
         WorkspacePaneOperation::decl(&config),
