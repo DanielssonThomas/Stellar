@@ -112,6 +112,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
   assert.deepEqual(config.app.security.capabilities, ['desktop-main']);
   assert.deepEqual(capability.permissions, [
     'allow-reflex-infer',
+    'allow-reflex-prepare',
     'allow-reflex-status',
     'allow-reflex-set-enabled',
     'allow-reflex-cancel',
@@ -170,4 +171,18 @@ test('owned Ivy cleanup is connected to window destruction and app exit', () => 
     source,
     /\.run\(\|app, event\|\s*\{[\s\S]*?RunEvent::Exit[\s\S]*?app\.try_state::<ivy::IvyHost>\(\)[\s\S]*?host\.shutdown\(\)/,
   );
+  for (const host of [
+    'reflex::ReflexHost',
+    'std::sync::Arc<reflex::MediaHost>',
+  ]) {
+    const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const event of ['WindowEvent::Destroyed', 'RunEvent::Exit']) {
+      assert.match(
+        source,
+        new RegExp(
+          `${event}[\\s\\S]*?try_state::<${escaped}>\\(\\)[\\s\\S]*?host\\.shutdown\\(\\)`,
+        ),
+      );
+    }
+  }
 });

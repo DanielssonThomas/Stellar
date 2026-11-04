@@ -2,6 +2,7 @@ mod admission;
 pub mod contracts;
 mod media_host;
 mod model;
+mod process;
 mod prompt;
 mod setup;
 #[cfg(windows)]
@@ -11,6 +12,14 @@ mod windows_volume;
 use contracts::*;
 pub use media_host::MediaHost;
 pub use model::ReflexHost;
+
+#[tauri::command]
+pub async fn reflex_prepare(host: tauri::State<'_, ReflexHost>) -> Result<ReflexAvailability, ()> {
+    Ok(ReflexAvailability {
+        version: 1,
+        configured: host.prepare().await,
+    })
+}
 
 #[tauri::command]
 pub async fn reflex_status() -> Result<ReflexAvailability, ()> {

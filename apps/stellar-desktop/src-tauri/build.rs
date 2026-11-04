@@ -17,6 +17,7 @@ fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
         "reflex_infer",
+        "reflex_prepare",
         "reflex_status",
         "reflex_set_enabled",
         "reflex_cancel",

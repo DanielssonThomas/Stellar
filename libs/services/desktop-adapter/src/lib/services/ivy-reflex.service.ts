@@ -56,6 +56,7 @@ export class IvyReflexService {
   readonly lastRoute = signal('');
   readonly diagnosticNotice = signal('');
   private settings: Promise<void> = Promise.resolve();
+  private preparation: Promise<void> = Promise.resolve();
   private settingRevision = 0;
   readonly reply = signal('');
   readonly busy = signal(false);
@@ -122,16 +123,34 @@ export class IvyReflexService {
   private configure(enabled: boolean) {
     const revision = ++this.settingRevision;
     this.available.set(null);
+    let accepted = false;
     this.settings = this.settings.then(async () => {
       try {
         if (!this.invoke) throw Error('Native Reflex unavailable');
         await this.invoke('reflex_set_enabled', { enabled });
-        if (!enabled || revision !== this.settingRevision) return;
+        accepted = true;
+      } catch {
+        if (revision === this.settingRevision) this.available.set(false);
+      }
+    });
+    this.preparation = this.settings.then(async () => {
+      try {
+        if (
+          !accepted ||
+          !enabled ||
+          revision !== this.settingRevision ||
+          !this.invoke
+        )
+          return;
         const state = decodeReflexAvailability(
           await this.invoke('reflex_status'),
         );
-        if (revision === this.settingRevision)
-          this.available.set(state.configured);
+        if (revision !== this.settingRevision) return;
+        const prepared = state.configured
+          ? decodeReflexAvailability(await this.invoke('reflex_prepare'))
+              .configured
+          : false;
+        if (revision === this.settingRevision) this.available.set(prepared);
       } catch {
         if (revision === this.settingRevision) this.available.set(false);
       }
@@ -181,12 +200,32 @@ export class IvyReflexService {
     };
     if (!this.enabled()) return fallback('Reflex disabled');
     const revision = this.settingRevision;
-    await this.settings;
+    const epoch = this.epoch();
+    const workspace = this.workspace();
+    await this.preparation;
     // A toggle during admission cancels this request instead of replaying it through Hermes.
-    if (revision !== this.settingRevision || signal?.aborted)
+    if (
+      revision !== this.settingRevision ||
+      epoch !== this.epoch() ||
+      signal?.aborted
+    )
       return { handled: true, reply: '', outcome: 'cancelled' as const };
     if (!this.invoke || !this.available())
       return fallback('Reflex unavailable');
+    let workspaceCurrent = false;
+    try {
+      workspaceCurrent =
+        workspace.context === this.workspace().context &&
+        workspace.actions.every((action) => action.valid());
+    } catch {
+      /* A retired workspace cannot authorize a delayed request. */
+    }
+    if (!workspaceCurrent) {
+      const reply = 'That changed while I was starting. Try again.';
+      this.reply.set(reply);
+      this.lastRoute.set('Reflex · rejected');
+      return { handled: true, reply, outcome: 'rejected' as const };
+    }
     if (this.busy())
       return {
         handled: true,
