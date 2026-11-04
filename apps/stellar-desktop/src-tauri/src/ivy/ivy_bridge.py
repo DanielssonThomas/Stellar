@@ -145,7 +145,15 @@ def load_library():
     return module.IvyConnection, discover_gateway_endpoint, connect_gateway
 
 
-async def pump(conn, workspace=None):
+async def pump(conn, workspace=None, approvals=None):
+    try:
+        await pump_events(conn, workspace, approvals)
+    finally:
+        if approvals is not None:
+            await approvals.cancel()
+
+
+async def pump_events(conn, workspace, approvals):
     from stellar_ivy_activity import Activity
     activity = Activity()
     text_seen = {}
@@ -163,6 +171,9 @@ async def pump(conn, workspace=None):
         if type(params) is not dict:
             continue
         kind = params.get('type')
+        if kind == 'approval.settled' and approvals is not None:
+            await approvals.settle(params)
+            continue
         if kind == 'message.delta':
             payload = params.get('payload')
             sid, admission = params.get('session_id'), params.get('admission_id')
@@ -197,6 +208,9 @@ async def pump(conn, workspace=None):
         if kind in {'approval.request', 'clarify.request'}:
             clean['payload'] = {'present': True}
             if kind == 'approval.request':
+                if approvals is not None:
+                    approvals.offer(params)
+                    continue
                 sid = params.get('session_id')
                 generation = payload.get('execution_generation', params.get('execution_generation'))
                 prompt = payload.get('prompt_id')
@@ -210,6 +224,8 @@ async def pump(conn, workspace=None):
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         if kind == 'message.complete':
+            if approvals is not None:
+                await approvals.cancel(params.get('session_id'))
             admission = params.get('admission_id') or payload.get('admission_id')
             if not string(admission):
                 raise Closed()
@@ -392,6 +408,8 @@ async def request_worker(conn, workspace, queue):
                             final = workspace.redact(final)
                         projected['result'] = {'final_response': text_fields({'text': final})['text']}
                 result = projected
+            if method in {'session.create', 'session.resume'}:
+                conn.selected_session = result.get('session_id')
             emit({'id': rid, 'result': result})
         except asyncio.TimeoutError:
             if workspace is not None:
@@ -423,6 +441,8 @@ async def serve():
         from stellar_workspace_protocol import WorkspaceGate
         from stellar_workspace_mcp import make_server
         from stellar_workspace_service import WorkspaceService
+        from stellar_ivy_approvals import Approvals, load_access
+        access = load_access(PROFILE)
         try:
             import win32cred
         except ImportError:
@@ -434,10 +454,11 @@ async def serve():
             raise Closed()
         # Discovery validates home and loopback; explicit endpoint forbids autostart.
         async with connect(found.endpoint) as client:
-            conn = IvyConnection(client, approvals=False)
+            conn = IvyConnection(client, approvals=bool(access))
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
-            tasks = [asyncio.create_task(pump(conn, workspace)), asyncio.create_task(requests_with_workspace(conn, workspace))]
+            approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
+            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace))]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()

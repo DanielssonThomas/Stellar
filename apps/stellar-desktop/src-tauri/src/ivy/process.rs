@@ -60,6 +60,7 @@ impl Broker {
         let modules = [
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
+            ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),
             (
                 "stellar_workspace_credentials",
                 include_str!("workspace_credentials.py"),
