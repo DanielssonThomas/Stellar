@@ -155,6 +155,39 @@ describe('Ivy Reflex beta preference and admission', () => {
     expect((await next).outcome).toBe('cancelled');
     expect(execute).not.toHaveBeenCalled();
   });
+  it('rejects a replacement pane even when its compact visible context is identical', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    let instance = 'original';
+    service.bind(
+      () => {
+        const original = instance;
+        return {
+          context: '{"title":"Notes","selected":true}',
+          actions: [
+            {
+              id: 'pane.safe',
+              description: 'Close selected Notes pane',
+              valid: () => original === instance,
+              execute,
+            },
+          ],
+        };
+      },
+      () => 'one',
+    );
+    const request = service.run(
+      'Close that pane',
+      'replacement-during-startup',
+    );
+    instance = 'replacement';
+    ready.resolve({ version: 1, configured: true });
+    expect((await request).outcome).toBe('rejected');
+    expect(invoke.mock.calls.some(([c]) => c === 'reflex_infer')).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+  });
   it('defaults on for validated configuration and confirms a local action', async () => {
     const { service, execute } = fixture();
     expect(service.status()).toBe('Starting');

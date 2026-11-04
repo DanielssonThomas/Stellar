@@ -201,7 +201,7 @@ export class IvyReflexService {
     if (!this.enabled()) return fallback('Reflex disabled');
     const revision = this.settingRevision;
     const epoch = this.epoch();
-    const workspace = this.workspace().context;
+    const workspace = this.workspace();
     await this.preparation;
     // A toggle during admission cancels this request instead of replaying it through Hermes.
     if (
@@ -212,7 +212,15 @@ export class IvyReflexService {
       return { handled: true, reply: '', outcome: 'cancelled' as const };
     if (!this.invoke || !this.available())
       return fallback('Reflex unavailable');
-    if (workspace !== this.workspace().context) {
+    let workspaceCurrent = false;
+    try {
+      workspaceCurrent =
+        workspace.context === this.workspace().context &&
+        workspace.actions.every((action) => action.valid());
+    } catch {
+      /* A retired workspace cannot authorize a delayed request. */
+    }
+    if (!workspaceCurrent) {
       const reply = 'That changed while I was starting. Try again.';
       this.reply.set(reply);
       this.lastRoute.set('Reflex · rejected');
