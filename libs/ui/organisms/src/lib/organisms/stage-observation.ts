@@ -1,10 +1,14 @@
-import type { WorkspaceRenderState } from '@stellar/desktop-contracts';
+import type { PresentationMediaMolecule } from '@stellar/ui-molecules';
+
+type RenderState =
+  | ReturnType<PresentationMediaMolecule['renderState']>
+  | 'hidden';
 
 export function stageRenderState(
   host: HTMLElement,
   id: string,
   hidden: boolean,
-): WorkspaceRenderState {
+): RenderState {
   if (hidden) return 'hidden';
   const panel = Array.from(
     host.querySelectorAll<HTMLElement>('[data-instance-id]'),
@@ -37,7 +41,7 @@ export function stageRenderState(
 /** Wait for paint, finite layout motion and media readiness; never wait indefinitely for a website. */
 export async function settleStage(
   host: HTMLElement,
-  observe: () => readonly { render_state: WorkspaceRenderState }[],
+  observe: () => readonly { render_state: RenderState }[],
   current: () => boolean,
 ) {
   const started = performance.now();

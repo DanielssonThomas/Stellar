@@ -48,7 +48,9 @@ describe('observed Stage rendering', () => {
     vi.useFakeTimers();
     const f = fixture();
     f.media.dataset['renderState'] = 'loading';
-    const observe = () => [{ render_state: f.state() }];
+    const observe: Parameters<typeof settleStage>[1] = () => [
+      { render_state: f.state() },
+    ];
     const finished = vi.fn();
     const pending = settleStage(f.host, observe, () => true).then(finished);
     await vi.advanceTimersByTimeAsync(200);
