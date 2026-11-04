@@ -31,9 +31,21 @@ use std::{collections::HashSet, time::Instant};
 // Qualification links a fixture media port, never a Windows executor or microphone.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
+    if args.len() == 3 && args[1] == "--verify-model" {
+        let started = Instant::now();
+        if setup::verify(std::path::Path::new(&args[2])).is_none() {
+            return Err("Model verification rejected; no inference started".into());
+        }
+        println!(
+            "{}",
+            json!({"verification_ms": started.elapsed().as_secs_f64() * 1000.,
+            "verified": true, "scope": "read-only pinned model verification; no inference or desktop actions"})
+        );
+        return Ok(());
+    }
     if args.len() != 3 || args[1] != "--corpus" {
         return Err(
-            "Usage: reflex-qualify --corpus PATH (requires explicitly configured installed model)"
+            "Usage: reflex-qualify --corpus PATH or --verify-model PATH (installed assets only)"
                 .into(),
         );
     }

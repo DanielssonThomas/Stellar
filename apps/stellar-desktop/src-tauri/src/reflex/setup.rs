@@ -63,16 +63,20 @@ pub fn verify(model: &Path) -> Option<()> {
     if file.metadata().ok()?.len() > 3_000_000_000 {
         return None;
     }
+    (digest(&mut file)? == p.sha256.to_lowercase()).then_some(())
+}
+
+fn digest(reader: &mut dyn Read) -> Option<String> {
     let mut hash = Sha256::new();
     let mut buffer = [0; 65536];
     loop {
-        let count = file.read(&mut buffer).ok()?;
+        let count = reader.read(&mut buffer).ok()?;
         if count == 0 {
             break;
         }
         hash.update(&buffer[..count]);
     }
-    (format!("{:x}", hash.finalize()) == p.sha256.to_lowercase()).then_some(())
+    Some(format!("{:x}", hash.finalize()))
 }
 
 pub fn token() -> Option<String> {
@@ -80,3 +84,7 @@ pub fn token() -> Option<String> {
     getrandom::fill(&mut bytes).ok()?;
     Some(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
+
+#[cfg(test)]
+#[path = "setup_tests.rs"]
+mod tests;

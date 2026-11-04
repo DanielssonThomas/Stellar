@@ -1,3 +1,7 @@
 [workspace]
 members = ["apps/stellar-desktop/src-tauri", "tools/native/rust-size"]
 resolver = "3"
+
+# Model integrity checks scan gigabytes even in the interactive debug launcher.
+[profile.dev.package.sha2]
+opt-level = 3

@@ -395,6 +395,112 @@
         }
       ],
       "identity_capture_complete": true
+    },
+    {
+      "label": "Issue #277 debug SHA optimization; 3 mocked play requests, not a corpus accuracy study",
+      "local_artifact_directory": "tmp/cold-fix-qualification",
+      "baseline_checksum_probe_ms": 26946,
+      "baseline_probe_scope": "Read-only 65536-byte checksum loop linked against existing unoptimized debug sha2 rlib. Digest matched the pinned 4B asset. Not full cold model initialization.",
+      "production_verifier_samples": [
+        {
+          "scope": "read-only pinned model verification; no inference or desktop actions",
+          "verification_ms": 1334.5897,
+          "verified": true
+        },
+        {
+          "scope": "read-only pinned model verification; no inference or desktop actions",
+          "verification_ms": 1327.1711,
+          "verified": true
+        },
+        {
+          "scope": "read-only pinned model verification; no inference or desktop actions",
+          "verification_ms": 1357.7196000000001,
+          "verified": true
+        }
+      ],
+      "summary": {
+        "cold_ms": 4945.045099999999,
+        "correct": 3,
+        "count": 3,
+        "distinct_replies": 3,
+        "gpu_layers": "36",
+        "p50_ms_including_failures": 384.6782,
+        "p95_ms_including_failures": 4945.045099999999,
+        "scope": "inference and safe mocked native media registry; no microphone, real actions or acknowledgment audio",
+        "total_seconds": 5.9775595,
+        "unavailable": 0
+      },
+      "cases": [
+        {
+          "case": "cold-fix-0",
+          "mock_media_dispatch_confirmed": true,
+          "ms": 4945.045099999999,
+          "passed": true,
+          "plan": {
+            "action_id": "media.play",
+            "reply": "Let’s crank up the volume.",
+            "route": "action"
+          }
+        },
+        {
+          "case": "cold-fix-1",
+          "mock_media_dispatch_confirmed": true,
+          "ms": 348.02509999999995,
+          "passed": true,
+          "plan": {
+            "action_id": "media.play",
+            "reply": "Playing up the volume.",
+            "route": "action"
+          }
+        },
+        {
+          "case": "cold-fix-2",
+          "mock_media_dispatch_confirmed": true,
+          "ms": 384.6782,
+          "passed": true,
+          "plan": {
+            "action_id": "media.play",
+            "reply": "Time to turn up the volume.",
+            "route": "action"
+          }
+        }
+      ],
+      "resources": {
+        "model_sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+        "llama_sha256": "c05b7e1ad9f612ebd89eab965669a8d8b8a9a89c81e4a49339105f9137125892",
+        "binary_sha256": "820bde10662da0e67b5fbf93d1f7f49f74d1ab436318a9e83e11397454d650cc",
+        "corpus_sha256": "5393ac6612d7e6f2336ad51c2a3223bda49467ea6b7242c2e6e035da003ee140",
+        "prompt_sha256": "62dbc50136c7d70356fb7a9734fa36f24a85c2d0fade9ce6de2c1a128b1e06fb",
+        "driver_sha256": "d61431b331a53495808faf2c29b935b70d12327665f2a314c1c14ac09315ee66",
+        "git_head": "f562c804defea556602892f1249b789aec33d10a",
+        "model_rss_bytes": 3085393920,
+        "recognition_rss_bytes": 887414784,
+        "gpu_total_used_mib": 11224,
+        "layers": 36,
+        "microphone": false,
+        "desktop_actions": false,
+        "recognition_input": "synthetic silence, not command accuracy qualification",
+        "worker_errors": [],
+        "recognition_ms": {
+          "keywords": {
+            "count": 160,
+            "p50": 0.4528999998001382,
+            "p95": 0.7551000016974285
+          },
+          "transcribe": {
+            "count": 3,
+            "p50": 69.4835000031162,
+            "p95": 119.25089999931515
+          }
+        }
+      },
+      "source_note": "Issue #277 working tree on base f562c80, package-only sha2 opt-level 3 in dev profile; source/profile hashes identify measured changes. No idle/GPU policy or model/prompt changes. Only 3 bounded mocked requests; no broad latency percentile or accuracy claim.",
+      "source_sha256": {
+        "Cargo.toml": "ee0023f0e889c19d3868ef9d1606f954ac77d599474357194e615863babd06c4",
+        "apps/stellar-desktop/src-tauri/src/reflex/setup.rs": "1577f741cbd3b4af8ebc33e4435fbd29657c567240dd35728b294c3ebbbe914f",
+        "apps/stellar-desktop/src-tauri/src/bin/reflex-qualify.rs": "465713f04fbe143fa0061a04fce6289a6f1a5089a84bd2b29c4a35a846295aa6"
+      },
+      "identity_capture_complete": true
     }
   ],
   "remaining_intent_errors": [
