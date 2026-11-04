@@ -246,8 +246,18 @@ impl Session {
             }
             self.accept_receipt(matching[0])?;
         }
+        self.observe_receipt()
+    }
+
+    pub(super) fn observe_receipt(&mut self) -> Result<(), IvyErrorCode> {
+        if !self.record.unsettled {
+            return self.drain();
+        }
+        let Some(sid) = self.record.session_id.clone() else {
+            return Err(IvyErrorCode::Uncertain);
+        };
         let Some(admission) = self.record.admission_id.clone() else {
-            return Ok(());
+            return Err(IvyErrorCode::Uncertain);
         };
         let receipt = self.call(
             "prompt.receipt",

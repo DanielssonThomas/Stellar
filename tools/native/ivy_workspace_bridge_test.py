@@ -21,6 +21,8 @@ def load(name):
 bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_activity'] = load('ivy_activity')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
+sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+approvals_module = load('ivy_approvals')
 protocol = load('workspace_protocol')
 
 
@@ -37,6 +39,63 @@ class Pipe:
 
 
 class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_replayed_edit_during_resume_waits_for_verified_attachment(self):
+        for verified in (True, False):
+            replayed, reply = asyncio.Event(), asyncio.Event()
+            class Workspace:
+                task = object()
+                def verifies(inner, info):
+                    return verified
+                def redact(inner, text):
+                    return text
+                gate = protocol.WorkspaceGate(lambda _: None)
+
+            class Connection:
+                def __init__(inner):
+                    inner.client = inner
+                    inner.events = asyncio.Queue()
+                    inner.active = None
+                    inner.completed = set()
+                    inner.selected_session = 'old'
+                    inner.answers = []
+                async def call(inner, method, params):
+                    if method == 'runtime.describe':
+                        return {'capabilities': ['acp-session-mcp-v1']}
+                    await inner.events.put({'params': {'type': 'approval.request', 'session_id': 's',
+                        'execution_generation': 4, 'payload': {'prompt_id': 'p', 'edit': {
+                            'tool_name': 'write_file', 'path': 'D:/fixture.txt', 'old_text': None,
+                            'new_text': 'fixture', 'arguments': {}}}}})
+                    replayed.set()
+                    await reply.wait()
+                    return {'session_id': 's', 'info': {'source': 'acp', 'edit_approval_policy': 'session'}}
+                async def rpc(inner, method, **params):
+                    inner.answers.append((method, params))
+
+            conn = Connection()
+            handler = approvals_module.Approvals(conn, lambda: conn.selected_session, {'file_edits': 'all'})
+            incoming = asyncio.Queue()
+            await incoming.put((1, 'session.resume', {'session_id': 's'}))
+            await incoming.put(None)
+            with patch.object(bridge, 'emit', lambda _: None):
+                pump = asyncio.create_task(bridge.pump(conn, Workspace(), handler))
+                worker = asyncio.create_task(bridge.request_worker(conn, Workspace(), incoming, handler))
+                await replayed.wait()
+                await asyncio.sleep(0)
+                self.assertFalse(conn.answers)
+                reply.set()
+                if verified:
+                    await worker
+                else:
+                    with self.assertRaises(bridge.Closed):
+                        await worker
+                await asyncio.gather(*handler.tasks.values())
+                self.assertEqual(conn.answers, [('approval.respond', {
+                    'session_id': 's', 'execution_generation': 4, 'prompt_id': 'p',
+                    'choice': 'once' if verified else 'deny'})])
+                await conn.events.put(RuntimeError('close fixture'))
+                with self.assertRaises(bridge.Closed):
+                    await pump
+
     async def test_acp_creation_checks_capabilities_and_keeps_descriptor_private(self):
         class Workspace:
             task = object()

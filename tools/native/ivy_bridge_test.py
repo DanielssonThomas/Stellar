@@ -13,7 +13,8 @@ SOURCE = Path(__file__).resolve().parents[2] / 'apps/stellar-desktop/src-tauri/s
 spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
-for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py')]:
+for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
+                       ('stellar_ivy_edit_policy', 'ivy_edit_policy.py')]:
     module_spec = importlib.util.spec_from_file_location(name, SOURCE.with_name(filename))
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
@@ -57,6 +58,7 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+
     async def test_questions_project_only_public_fields_and_allow_bounded_answers(self):
         conn = Connection()
         payload = {'prompt_id': 'q1', 'question': 'Which?', 'choices': ['Left', 'Right'], 'multi_select': False, 'private': 'excluded'}
@@ -75,6 +77,48 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         request['params']['answer'] = '\0cancelled'
         with self.assertRaises(ValueError):
             bridge.validate(request)
+
+    async def test_terminal_receipt_releases_only_the_exact_active_execution(self):
+        conn = Connection()
+        params = {'session_id': 's', 'admission_id': 'a', 'include_result': True}
+        receipt = {'ref': {'session_id': 's'}, 'admission_id': 'a', 'execution_generation': 4,
+                   'status': 'terminal', 'outcome': 'completed', 'result': {'final_response': 'late answer'}}
+        for change in ({'execution_generation': 5}, {'admission_id': 'foreign'},
+                       {'ref': {'session_id': 'foreign'}}, {'status': 'started'}, {'result': {}}):
+            conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': 4}
+            await bridge.settle_receipt(conn, None, params, {**receipt, **change})
+            self.assertIsNotNone(conn.active)
+            self.assertFalse(conn.lease.released)
+        await bridge.settle_receipt(conn, None, params, receipt)
+        self.assertIsNone(conn.active)
+        self.assertEqual(conn.lease.released, [True])
+        await bridge.settle_receipt(conn, None, params, receipt)
+        self.assertEqual(conn.lease.released, [True])
+
+    async def test_queued_admission_learns_generation_and_cancels_its_pending_dialogs(self):
+        conn = Connection()
+        conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': None}
+        params = {'session_id': 's', 'admission_id': 'a'}
+        receipt = {'ref': {'session_id': 's'}, 'admission_id': 'a', 'execution_generation': 4, 'status': 'running'}
+        cancelled = []
+        class Handler:
+            async def cancel(self, sid):
+                cancelled.append(sid)
+        await bridge.settle_receipt(conn, None, params, {**receipt, 'admission_id': 'foreign'}, Handler())
+        self.assertIsNone(conn.active['execution_generation'])
+        await bridge.settle_receipt(conn, None, params, receipt, Handler())
+        self.assertEqual(conn.active['execution_generation'], 4)
+        self.assertFalse(cancelled)
+        await bridge.settle_receipt(conn, None, params, {**receipt, 'status': 'terminal', 'outcome': 'cancelled'}, Handler())
+        self.assertIsNone(conn.active)
+        self.assertEqual(cancelled, ['s'])
+        self.assertEqual(conn.lease.released, [True])
+        conn.active = {'session_id': 's', 'admission_id': 'b', 'execution_generation': None}
+        await bridge.settle_receipt(conn, None, {'session_id': 's', 'admission_id': 'b'},
+            {**receipt, 'admission_id': 'b', 'status': 'terminal', 'outcome': 'failed'}, Handler())
+        self.assertIsNone(conn.active)
+        self.assertEqual(cancelled, ['s', 's'])
+
 
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()
@@ -387,3 +431,4 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

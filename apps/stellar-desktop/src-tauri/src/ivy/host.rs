@@ -3,6 +3,7 @@ use super::process::Broker;
 use super::{
     contracts::*,
     journal::Journal,
+    observation::Observation,
     process::{self, OwnedChild},
     rotation::{self, Pending, Ticket},
     session::Session,
@@ -141,7 +142,7 @@ impl IvyHost {
                 buffered: vec![],
                 replay: None,
             };
-            let mut deadline: Option<Instant> = None;
+            let mut observation = Observation::default();
             let mut first = first;
             loop {
                 let incoming = first
@@ -163,10 +164,7 @@ impl IvyHost {
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
-                            Action::Submit(request) => {
-                                deadline = Some(Instant::now() + Duration::from_secs(180));
-                                session.submit(request)
-                            }
+                            Action::Submit(request) => session.submit(request),
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
                             Action::Question(request) => session.answer_question(request),
@@ -235,11 +233,10 @@ impl IvyHost {
                         }
                     }
                 }
-                if deadline.is_some_and(|end| Instant::now() >= end) && session.record.unsettled {
+                if let Err(error) = observation.poll(&mut session, Instant::now()) {
                     tools.disarm();
                     tools.set_input(None);
-                    fail(&mut session, IvyErrorCode::Timeout);
-                    deadline = None;
+                    fail(&mut session, error);
                 }
             }
         });
