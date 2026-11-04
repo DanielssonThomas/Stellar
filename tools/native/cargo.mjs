@@ -201,6 +201,7 @@ if (action === 'smoke') {
   if (action === 'test') {
     for (const script of [
       'ivy_bridge_test.py',
+      'ivy_approvals_test.py',
       'ivy_workspace_bridge_test.py',
       'workspace_protocol_test.py',
       'workspace_credentials_test.py',

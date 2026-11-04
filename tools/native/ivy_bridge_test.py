@@ -57,6 +57,31 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
+        conn = Connection()
+        offered, cancelled = [], []
+
+        class Handler:
+            def offer(self, params):
+                offered.append(params)
+
+            async def cancel(self, sid=None):
+                cancelled.append(sid)
+
+        await conn.events.put({'params': {'type': 'approval.request', 'session_id': 'session',
+            'execution_generation': 7, 'payload': {'prompt_id': 'prompt', 'command': 'PRIVATE'}}})
+        await conn.events.put({'params': {'type': 'message.complete', 'session_id': 'session',
+            'admission_id': 'admission', 'payload': {'text': 'done', 'outcome': 'completed'}}})
+        await conn.events.put(RuntimeError('closed'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn, approvals=Handler())
+        self.assertEqual(len(offered), 1)
+        self.assertEqual(cancelled, ['session', None])
+        self.assertNotIn(b'PRIVATE', output.buffer.getvalue())
+        frames = [json.loads(line) for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual([f['data']['params']['type'] for f in frames], ['message.complete'])
+
     async def test_first_text_availability_is_bounded_content_free_and_not_narratable(self):
         conn = Connection()
         for seq in range(1, 5):
