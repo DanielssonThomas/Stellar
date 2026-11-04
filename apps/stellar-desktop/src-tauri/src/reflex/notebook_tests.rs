@@ -91,5 +91,19 @@ fn disabled_capture_writes_nothing_and_capacity_never_evicts() {
     }
     assert!(write_receipt(&folder, &request, &state, &ReflexMediaResult::Confirmed).is_err());
     assert_eq!(fs::read_dir(folder.join("reflex")).unwrap().count(), 256);
+    let wakes = std::cell::Cell::new(0);
+    persist_and_wake(
+        &folder,
+        &request,
+        &state,
+        &ReflexMediaResult::Confirmed,
+        || wakes.set(wakes.get() + 1),
+    );
+    assert_eq!(
+        wakes.get(),
+        1,
+        "A full spool must still wake its recovery worker"
+    );
+    assert_eq!(fs::read_dir(folder.join("reflex")).unwrap().count(), 256);
     fs::remove_dir_all(folder.parent().unwrap()).unwrap();
 }

@@ -70,6 +70,22 @@ fn write_receipt(
     fs::rename(temp, destination)
 }
 
+fn persist_and_wake(
+    folder: &Path,
+    r: &ReflexMediaRequest,
+    state: &ReflexMediaState,
+    outcome: &ReflexMediaResult,
+    wake: impl FnOnce(),
+) {
+    if write_receipt(folder, r, state, outcome).is_err() {
+        eprintln!("Ivy notebook receipt deferred: local storage unavailable");
+    }
+    // A full or temporarily unavailable spool still needs its existing worker to recover.
+    if folder.join("enabled").is_file() {
+        wake();
+    }
+}
+
 pub fn record(r: &ReflexMediaRequest, state: &ReflexMediaState, outcome: &ReflexMediaResult) {
     let (r, state, outcome) = (r.clone(), state.clone(), outcome.clone());
     // One bounded receipt for an explicit dispatch; no snapshot subscription or playback polling.
@@ -77,30 +93,26 @@ pub fn record(r: &ReflexMediaRequest, state: &ReflexMediaState, outcome: &Reflex
         .name("ivy-notebook-receipt".into())
         .spawn(move || {
             let folder = Path::new(PROFILE).join("notebook/private");
-            if write_receipt(&folder, &r, &state, &outcome).is_err() {
-                eprintln!("Ivy notebook receipt deferred: local storage unavailable");
-                return;
-            }
-            if !folder.join("enabled").is_file() {
-                return;
-            }
-            let mut command = std::process::Command::new(
-                "D:/Hermes/tools/python-3.14.9+20261021-win32-x64/python.exe",
-            );
-            command
-                .arg(Path::new(PROFILE).join("notebook/notebook.py"))
-                .arg("drain")
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null());
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                command.creation_flags(0x08000000);
-            }
-            // Reap the short-lived worker in this detached receipt thread.
-            let _ = command.status();
+            persist_and_wake(&folder, &r, &state, &outcome, wake_worker);
         });
+}
+
+fn wake_worker() {
+    let mut command =
+        std::process::Command::new("D:/Hermes/tools/python-3.14.9+20261021-win32-x64/python.exe");
+    command
+        .arg(Path::new(PROFILE).join("notebook/notebook.py"))
+        .arg("drain")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    // Reap the short-lived worker in this detached receipt thread.
+    let _ = command.status();
 }
 
 #[cfg(test)]
