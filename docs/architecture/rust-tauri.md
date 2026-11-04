@@ -58,6 +58,12 @@ Use the [Rust/Tauri workflow skill](../../.agents/skills/develop-rust-tauri/SKIL
 
 ## Machine-readable exception registry
 
+### Windows playback volume interop
+
+Issue [#271](https://github.com/DanielssonThomas/Stellar/issues/271) isolates Core Audio COM calls in `apps/stellar-desktop/src-tauri/src/reflex/windows_volume.rs`. Only this private module permits unsafe code for `IMMDevice::Activate<IAudioEndpointVolume>` and its scalar volume/mute methods. The existing WASAPI wrapper provides device enumeration and apartment setup but does not wrap endpoint volume. This boundary avoids global media key injection, screen automation and shell execution.
+
+The caller owns an initialized MTA for the whole operation. Reference-counted COM interfaces remain local; no raw pointer escapes. The null event-context GUID is an optional Windows parameter. Requests target the inspected default render endpoint, recheck its identity and values, clamp adjustments to ten percentage points within 0–100, and require readback. The native host serializes the synchronous operation start against cancellation, then releases its lock before waiting/readback. Window destruction and exit seal dispatch. Independent review of this exact module and safe native read-only/invalid-ticket smoke passed during #271; repeat review and native qualification when changing the Windows/WASAPI bindings or this boundary. No other unsafe or file-size exemption is introduced.
+
 ### WebView2 focus interop
 
 Issue #257 introduces one narrowly scoped unsafe block in `apps/stellar-desktop/src-tauri/src/media/browser_focus.rs` for WebView2’s `ICoreWebView2Controller::add_GotFocus`, `CoreWebView2` and `ICoreWebView2::add_SourceChanged`. Tauri does not expose child focus through its general webview events. Native source events cover fragment and SPA history changes. Native focus is required to keep actual webpage clicks and workspace selection synchronized without granting websites application IPC or trusting page messages. The desktop entry point denies unsafe code by default; only this private Windows module permits it. Other crates retain their existing default prohibition.
