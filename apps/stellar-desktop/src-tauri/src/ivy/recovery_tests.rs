@@ -15,7 +15,7 @@ use std::{
     },
 };
 
-fn fixture(receipt: &str) -> (Session, std::path::PathBuf) {
+pub(super) fn fixture(receipt: &str) -> (Session, std::path::PathBuf) {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let directory = std::env::temp_dir().join(format!(
         "stellar-recovery-{}-{}",
@@ -95,6 +95,14 @@ fn known_terminal_receipt_settles_without_resubmitting() {
 #[test]
 fn mismatched_generation_or_missing_completed_result_retains_uncertainty() {
     for (receipt, expected) in [
+        (
+            "@{ref=@{session_id='foreign'};admission_id='admission';execution_generation=3;status='terminal';outcome='completed';result=@{final_response='wrong'}}",
+            IvyErrorCode::Protocol,
+        ),
+        (
+            "@{ref=@{session_id='session'};admission_id='foreign';execution_generation=3;status='terminal';outcome='completed';result=@{final_response='wrong'}}",
+            IvyErrorCode::Protocol,
+        ),
         (
             "@{ref=@{session_id='session'};admission_id='admission';execution_generation=4;status='terminal';outcome='completed';result=@{final_response='wrong'}}",
             IvyErrorCode::Uncertain,

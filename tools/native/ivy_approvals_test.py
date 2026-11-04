@@ -11,6 +11,9 @@ SOURCE = Path(__file__).resolve().parents[2] / 'apps/stellar-desktop/src-tauri/s
 spec = importlib.util.spec_from_file_location('approvals', SOURCE)
 approvals = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(approvals)
+spec = importlib.util.spec_from_file_location('edit_policy', SOURCE.with_name('ivy_edit_policy.py'))
+edit_policy = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(edit_policy)
 
 
 class Client:
@@ -30,6 +33,70 @@ def event(prompt='p', sid='s', generation=4, edit=True):
 
 
 class AccessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_resume_defers_edit_consent_until_the_session_is_verified(self):
+        for ready in (True, False):
+            client = Client()
+            selected = [None]
+            handler = approvals.Approvals(client, lambda: selected[0], {'file_edits': 'all'})
+            handler.begin_resume('s')
+            handler.offer(event())
+            await asyncio.sleep(0)
+            self.assertFalse(client.calls)
+            selected[0] = 's' if ready else None
+            handler.finish_resume(ready)
+            await self.settle(handler)
+            self.assertEqual(client.calls[0][1]['choice'], 'once' if ready else 'deny')
+
+    async def test_session_edit_grant_is_fenced_and_reads_back_before_background_work(self):
+        for access, current, expected in (({'file_edits': 'all'}, 'ask', 'session'),
+                                          ({}, 'session', 'ask')):
+            snapshot = {'session_id': 's', 'revision': 7, 'execution_generation': 4,
+                        'running': False, 'pending': [],
+                        'info': {'source': 'acp', 'edit_approval_policy': current}}
+            calls = []
+
+            class PolicyClient:
+                async def rpc(inner, method, **params):
+                    calls.append((method, params))
+                    if method == 'session.mutate':
+                        snapshot['info']['edit_approval_policy'] = params['payload']['policy']
+                        return {'session_id': 's', 'operation': 'edit_policy'}
+                    return snapshot
+
+            result = await edit_policy.synchronize(PolicyClient(), snapshot, access)
+            self.assertEqual(result['info']['edit_approval_policy'], expected)
+            self.assertEqual([method for method, _ in calls], ['session.mutate', 'session.resume'])
+            params = calls[0][1]
+            self.assertEqual((params['session_id'], params['expected_revision'], params['expected_generation']), ('s', 7, 4))
+            self.assertEqual(params['operation'], 'edit_policy')
+            self.assertEqual(params['payload'], {'policy': expected})
+            calls.clear()
+            await edit_policy.synchronize(PolicyClient(), snapshot, access)
+            self.assertFalse(calls)
+
+    async def test_edit_policy_never_changes_an_active_turn_or_unfenced_session(self):
+        client = Client()
+        base = {'session_id': 's', 'revision': 7, 'execution_generation': 4,
+                'running': False, 'pending': [], 'info': {'source': 'acp', 'edit_approval_policy': 'ask'}}
+        for state in ({'running': True}, {'pending': [{'admission_id': 'a'}]}):
+            await edit_policy.synchronize(client, {**base, **state}, {'file_edits': 'all'})
+        for state in ({'revision': True}, {'execution_generation': None}, {'running': None}):
+            with self.assertRaises(ValueError):
+                await edit_policy.synchronize(client, {**base, **state}, {'file_edits': 'all'})
+        self.assertFalse(client.calls)
+
+    async def test_wrong_policy_mutation_receipt_or_readback_is_refused(self):
+        for wrong in ('receipt', 'policy'):
+            snapshot = {'session_id': 's', 'revision': 7, 'execution_generation': 4,
+                        'running': False, 'pending': [], 'info': {'source': 'acp', 'edit_approval_policy': 'ask'}}
+            class WrongClient:
+                async def rpc(inner, method, **params):
+                    if method == 'session.mutate':
+                        return {'session_id': 'foreign' if wrong == 'receipt' else 's', 'operation': 'edit_policy'}
+                    return snapshot
+            with self.assertRaises(ValueError):
+                await edit_policy.synchronize(WrongClient(), snapshot, {'file_edits': 'all'})
+
     def test_missing_invalid_and_explicit_host_access(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

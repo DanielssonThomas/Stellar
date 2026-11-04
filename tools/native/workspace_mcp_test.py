@@ -104,7 +104,9 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
         info = {'source': 'acp', 'edit_approval_policy': 'ask', 'launch_request': {'editor': {'mcp_servers': {'fingerprint': fingerprint}}}}
         self.assertTrue(first.verifies(info))
         self.assertFalse(first.verifies({**info, 'source': 'cli'}))
-        self.assertFalse(first.verifies({**info, 'edit_approval_policy': 'session'}))
+        self.assertTrue(first.verifies({**info, 'edit_approval_policy': 'session'}))
+        self.assertTrue(first.verifies({**info, 'edit_approval_policy': 'workspace_session'}))
+        self.assertFalse(first.verifies({**info, 'edit_approval_policy': 'unknown'}))
         self.assertFalse(first.verifies({**info, 'launch_request': {'editor': {'mcp_servers': {'fingerprint': '0' * 64}}}}))
         old_token = first.gate.arm('1', 'old-turn')
         bearer = editor['mcp_servers'][0]['headers'][0]['value']

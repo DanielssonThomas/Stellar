@@ -50,10 +50,12 @@ mod tests {
     #[test]
     fn complex_pixels_are_scaled_to_fit_the_image_transport() {
         let mut seed = 7_u32;
-        let pixels = (0..1400*1400*4).map(|_| {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            (seed >> 24) as u8
-        }).collect();
+        let pixels = (0..1400 * 1400 * 4)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed >> 24) as u8
+            })
+            .collect();
         let bytes = encode(pixels, 1400, 1400).unwrap();
         assert!(bytes.len() <= MAX_IMAGE_BYTES);
         let result = ::image::load_from_memory(&bytes).unwrap();
