@@ -1988,9 +1988,7 @@
         "route": "action",
         "action_id": "pane.0.close"
       },
-      "history": [
-        "{\"user\": \"close that pane\", \"ivy\": \"Which pane?\"}"
-      ]
+      "history": ["{\"user\": \"close that pane\", \"ivy\": \"Which pane?\"}"]
     },
     {
       "id": "case-169",

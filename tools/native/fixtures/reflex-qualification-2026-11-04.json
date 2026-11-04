@@ -327,5 +327,11 @@
       "owned process descendants and PID reuse",
       "newer playback idle event before older speech reply"
     ]
+  },
+  "corpus_formatting": {
+    "note": "After qualification, Prettier changed whitespace only. All 169 parsed cases, expected decisions and contexts are identical. Recorded benchmark hashes refer to the exact measured input bytes before formatting.",
+    "measured_bytes_sha256": "e3e774d13e77c9e854c2d2cbb3695db8a163cc130c7ef8b545fa7eb2d90a0408",
+    "formatted_bytes_sha256": "c6b44281a3507263a135341612b38d81fd26c1e537b2a370beecd6a9b3b281b6",
+    "parsed_json_sha256": "7bb9da6028812fdf997e0a7771bfecf74b61a736d738f193d90031ba224492f7"
   }
 }
