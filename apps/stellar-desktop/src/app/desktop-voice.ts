@@ -40,6 +40,8 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
+  private playbackGeneration = 0;
+  private disposed = false;
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
@@ -96,7 +98,14 @@ export class DesktopVoice {
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
     speak: async (text, id) => {
+      const generation = this.playbackGeneration;
       await this.questionCue.wait();
+      if (
+        generation !== this.playbackGeneration ||
+        this.disposed ||
+        this.current().muted
+      )
+        return this.speech.state();
       const before = this.speech.state();
       this.narration = {
         id,
@@ -128,6 +137,8 @@ export class DesktopVoice {
         });
     },
     stop: () => {
+      this.playbackGeneration++;
+      this.questionCue.dispose();
       this.finishNarration('cancelled');
       return this.speech.stop();
     },
@@ -176,6 +187,8 @@ export class DesktopVoice {
     );
     effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
+      this.disposed = true;
+      this.playbackGeneration++;
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
@@ -185,6 +198,7 @@ export class DesktopVoice {
   }
 
   setMuted(muted: boolean) {
+    if (muted) this.playbackGeneration++;
     this.conversation.setMuted(muted);
     if (muted) {
       this.questionCue.cancel();
@@ -255,6 +269,7 @@ export class DesktopVoice {
     this.narration = undefined;
   }
   stop() {
+    this.playbackGeneration++;
     this.questionCue.cancel();
     this.conversation.stopVoice();
   }

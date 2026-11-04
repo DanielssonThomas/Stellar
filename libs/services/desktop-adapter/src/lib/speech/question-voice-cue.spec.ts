@@ -3,6 +3,36 @@ import { QuestionVoiceCue } from './question-voice-cue';
 import { initialSpeechSnapshot } from './speech-transport';
 
 describe('question voice cue', () => {
+  it('ignores a late failure from an older cue', async () => {
+    const state = initialSpeechSnapshot();
+    let rejectOld: (reason: Error) => void = () => undefined;
+    const old = new Promise<typeof state>((_, reject) => {
+      rejectOld = reject;
+    });
+    const speak = vi
+      .fn()
+      .mockReturnValueOnce(old)
+      .mockResolvedValue({ ...state, state: 'speaking', revision: '1' });
+    const cue = new QuestionVoiceCue({
+      enabled: () => true,
+      state: () => state,
+      speak,
+      stop: async () => undefined,
+    });
+    cue.notify('old');
+    cue.dispose();
+    cue.notify('new');
+    let finished = false;
+    void cue.wait().then(() => {
+      finished = true;
+    });
+    rejectOld(new Error('late'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    cue.observe({ ...state, revision: '2' });
+    await cue.wait();
+  });
   function fixture(enabled = true) {
     const state = initialSpeechSnapshot();
     const speak = vi

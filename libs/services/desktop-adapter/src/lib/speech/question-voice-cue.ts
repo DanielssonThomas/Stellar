@@ -30,17 +30,22 @@ export class QuestionVoiceCue {
     const ready = new Promise<void>((resolve) => {
       finish = resolve;
     });
-    this.pending = {
+    const ticket = {
       epoch: before.epoch,
       revision: BigInt(before.revision),
       ready,
       finish,
     };
+    this.pending = ticket;
     void this.ports
       .speak('Could you check this out?', crypto.randomUUID())
       .then(
-        (snapshot) => this.observe(snapshot),
-        () => this.dispose(),
+        (snapshot) => {
+          if (this.pending === ticket) this.observe(snapshot);
+        },
+        () => {
+          if (this.pending === ticket) this.dispose();
+        },
       );
   }
 
@@ -64,10 +69,13 @@ export class QuestionVoiceCue {
   }
 
   cancel() {
-    if (!this.pending) return;
+    const ticket = this.pending;
+    if (!ticket) return;
     void this.ports
       .stop()
-      .finally(() => this.dispose())
+      .finally(() => {
+        if (this.pending === ticket) this.dispose();
+      })
       .catch(() => undefined);
   }
 }
