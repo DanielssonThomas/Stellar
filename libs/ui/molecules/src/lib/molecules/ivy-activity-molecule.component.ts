@@ -24,9 +24,9 @@ export type { IvyActivityItem } from './ivy-activity-timeline';
   styleUrl: './ivy-activity-molecule.component.css',
   host: {
     '[attr.aria-busy]': 'loading()',
-    '[style.--emblem-x.px]': 'emblem().x',
-    '[style.--emblem-y.px]': 'emblem().y',
-    '[style.--emblem-size.px]': 'emblem().width',
+    '[style.--emblem-x.px]': 'anchor().x',
+    '[style.--emblem-y.px]': 'anchor().y',
+    '[style.--emblem-size.px]': 'anchor().width',
   },
 })
 export class IvyActivityMolecule {
@@ -38,6 +38,7 @@ export class IvyActivityMolecule {
   readonly suppressed = input(false);
   readonly reducedMotion = input(false);
   readonly emblem = input({ x: 0, y: 0, width: 280, height: 280 });
+  readonly anchor = signal({ x: 0, y: 0, width: 280, height: 280 });
   readonly view = signal<IvyActivityView>({
     visible: false,
     leaving: false,
@@ -85,6 +86,11 @@ export class IvyActivityMolecule {
         : 'Working';
   });
   constructor() {
+    effect(() => {
+      const emblem = this.emblem();
+      // Retain the last working position while the terminal activity fades out.
+      if (this.active() || !this.view().visible) this.anchor.set(emblem);
+    });
     effect(() =>
       this.timeline.update(this.active(), this.turnId(), this.actions()),
     );

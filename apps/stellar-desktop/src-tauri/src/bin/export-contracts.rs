@@ -106,6 +106,7 @@ fn main() {
         WorkspaceDisplay::decl(&config),
         WorkspaceToolRequest::decl(&config),
         WorkspacePaneMetadata::decl(&config),
+        WorkspaceRenderState::decl(&config),
         WorkspacePaneOperation::decl(&config),
         WorkspacePaneLayout::decl(&config),
         WorkspaceToolOutcome::decl(&config),

@@ -153,11 +153,13 @@ def validate_outcome(outcome, operation):
         raise WorkspaceRefused()
     ids = set()
     for pane in panes:
-        if (type(pane) is not dict or not {'instance_id', 'surface', 'prominence', 'minimized'} <= set(pane) or set(pane) - {'instance_id', 'surface', 'prominence', 'minimized', 'layout', 'operations'}
+        if (type(pane) is not dict or not {'instance_id', 'surface', 'prominence', 'minimized'} <= set(pane) or set(pane) - {'instance_id', 'surface', 'prominence', 'minimized', 'layout', 'operations', 'render_state'}
                 or not _identity(pane['instance_id']) or pane['instance_id'] in ids
                 or type(pane['surface']) is not str or pane['surface'] not in METADATA_SURFACES
                 or type(pane['prominence']) is not str or pane['prominence'] not in PROMINENCE
                 or type(pane['minimized']) is not bool):
+            raise WorkspaceRefused()
+        if pane.get('render_state') is not None and (type(pane['render_state']) is not str or pane['render_state'] not in {'ready', 'loading', 'error', 'hidden', 'unavailable'}):
             raise WorkspaceRefused()
         operations = pane.get('operations', [])
         allowed = {'focus','minimize','restore','close','arrange','swap','resize','maximize','restore_layout','update','inspect_content','gallery','browser_navigation','focus_agent'}

@@ -18,6 +18,12 @@
   max-width: calc(var(--emblem-x) - var(--panel-gap) - 18px);
   top: calc(var(--emblem-y) + var(--emblem-size) * 0.5);
   transform: translateY(-50%);
+  transition:
+    top 420ms cubic-bezier(0.22, 0.7, 0.25, 1),
+    left 420ms cubic-bezier(0.22, 0.7, 0.25, 1),
+    right 420ms cubic-bezier(0.22, 0.7, 0.25, 1),
+    width 420ms cubic-bezier(0.22, 0.7, 0.25, 1),
+    max-width 420ms cubic-bezier(0.22, 0.7, 0.25, 1);
   padding: 0.85rem 1.1rem;
   box-shadow: 0 0 18px
     color-mix(in srgb, var(--stellar-color-primary) 9%, transparent);
@@ -146,6 +152,9 @@ li {
   top: calc(var(--emblem-y) + var(--emblem-size) * 0.16);
   width: 24px;
   height: 24px;
+  transition:
+    left 420ms ease,
+    top 420ms ease;
 }
 svg {
   width: 100%;
@@ -248,11 +257,13 @@ svg {
 .motion-reduced *,
 .motion-reduced svg {
   animation: none;
+  transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .activity-overlay,
   .activity-overlay *,
   .activity-overlay svg {
     animation: none;
+    transition: none;
   }
 }

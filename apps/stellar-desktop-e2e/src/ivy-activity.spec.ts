@@ -311,3 +311,41 @@ test('compact panels stay within the window without resizing the emblem', async 
   }
   expect(await page.locator('.emblem-slot').boundingBox()).toEqual(before);
 });
+
+test('completion fades activity from its working position while the emblem layout changes', async ({
+  page,
+}) => {
+  await install(page);
+  await publish(page, 'admitted', [row]);
+  await expect(page.locator('.activity-overlay')).toHaveCSS('opacity', '1');
+  const panel = page.getByLabel('Ivy activity', { exact: true });
+  const before = await panel.boundingBox();
+  await page.evaluate(() => {
+    const root = document.querySelector('stellar-root');
+    if (!root) throw Error('Missing app');
+    const app = (
+      window as unknown as {
+        ng: {
+          getComponent(element: Element): {
+            experience: {
+              state: {
+                update(
+                  change: (state: { target: string }) => { target: string },
+                ): void;
+              };
+            };
+          };
+        };
+      }
+    ).ng.getComponent(root);
+    app.experience.state.update((state) => ({ ...state, target: 'focused' }));
+    (
+      window as unknown as { __activityFixture: ActivityFixture }
+    ).__activityFixture.publish('completed');
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const leaving = await panel.boundingBox();
+  expect(Math.abs((leaving?.x ?? -1000) - (before?.x ?? 1000))).toBeLessThan(1);
+  expect(Math.abs((leaving?.y ?? -1000) - (before?.y ?? 1000))).toBeLessThan(6);
+  await expect(page.locator('[data-ivy-activity]')).toHaveCount(0);
+});

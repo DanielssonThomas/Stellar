@@ -27,6 +27,7 @@ function setup() {
         title: 'Pane',
         selected: false,
         maximized: false,
+        render_state: 'ready' as const,
         position: index,
         rect: null,
         viewport: { width: 1100, height: 760 },
@@ -55,10 +56,28 @@ function setup() {
       blocks: [{ kind: 'paragraph', text: 'Private pane content' }],
     }),
   } as const;
-  return { registry, isCurrent, available, present, call, open };
+  return { registry, isCurrent, available, present, call, open, stage };
 }
 
 describe('native workspace composition', () => {
+  it('waits for renderer settlement and fences a retired owner before returning inspection', async () => {
+    const f = setup();
+    f.call(f.open);
+    let finish!: () => void;
+    const settle = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    Object.assign(f.stage, { settlePresentations: settle });
+    const observation = f.call({ kind: 'inspect' });
+    expect(settle).toHaveBeenCalledOnce();
+    f.isCurrent.mockReturnValue(false);
+    finish();
+    expect(await observation).toEqual({ kind: 'rejected' });
+    expect(f.present).toHaveBeenCalledOnce();
+  });
   it('maps each assistant layout command to its exact Stage behavior', () => {
     const { call, open, registry, present } = setup();
     call(open);

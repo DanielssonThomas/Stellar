@@ -20,6 +20,51 @@ const envelope = {
 };
 
 describe('workspace tool contract', () => {
+  it('validates render observations without promoting loading/error to ready', () => {
+    const request = decodeWorkspaceToolRequest({
+      ...envelope,
+      operation: { kind: 'inspect' },
+    });
+    for (const render_state of [
+      'ready',
+      'loading',
+      'error',
+      'hidden',
+      'unavailable',
+    ]) {
+      const outcome = {
+        kind: 'inspection',
+        panes: [
+          {
+            instance_id: 'image',
+            surface: 'image',
+            prominence: 'primary',
+            minimized: false,
+            render_state,
+          },
+        ],
+      };
+      expect(decodeWorkspaceToolOutcome(outcome, request)).toEqual(outcome);
+    }
+    for (const render_state of ['success', 1, {}, 'loaded'])
+      expect(() =>
+        decodeWorkspaceToolOutcome(
+          {
+            kind: 'inspection',
+            panes: [
+              {
+                instance_id: 'image',
+                surface: 'image',
+                prominence: 'primary',
+                minimized: false,
+                render_state,
+              },
+            ],
+          },
+          request,
+        ),
+      ).toThrow();
+  });
   it('validates native monitor targets without permitting renderer capture replies', () => {
     for (const operation of [
       { kind: 'list_displays' },

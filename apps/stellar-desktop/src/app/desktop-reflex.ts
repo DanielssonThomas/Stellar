@@ -11,10 +11,14 @@ type Port = {
 export function desktopReflex(port: Port) {
   return () => {
     const panes = port.stage.inspectPresentations();
-    const fingerprint = JSON.stringify(panes);
-    const valid = () =>
-      port.available() &&
-      JSON.stringify(port.stage.inspectPresentations()) === fingerprint;
+    // Loading and paint observations do not change pane dispatch authority.
+    const signature = () =>
+      JSON.stringify(
+        port.stage.inspectPresentations(),
+        (key, value: unknown) => (key === 'render_state' ? undefined : value),
+      );
+    const fingerprint = signature();
+    const valid = () => port.available() && signature() === fingerprint;
     const actions: LocalAction[] = [];
     const add = (
       id: string,
@@ -36,6 +40,15 @@ export function desktopReflex(port: Port) {
         },
       });
     };
+    const visible = panes.filter(
+      (pane) => !pane.minimized && pane.rect !== null,
+    );
+    if (visible.length === 2)
+      add('pane.swap_pair', 'Swap the two visible pane positions', {
+        action: 'swap',
+        instanceId: visible[0].instanceId,
+        otherId: visible[1].instanceId,
+      });
     for (const pane of panes.slice(0, 8)) {
       const id = pane.instanceId;
       for (const action of [

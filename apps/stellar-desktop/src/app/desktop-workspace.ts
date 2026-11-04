@@ -11,7 +11,7 @@ type WorkspacePort = {
     StageOrganism,
     'nextCommandId' | 'inspectPresentations'
   > &
-    Partial<Pick<StageOrganism, 'inspectContent'>>;
+    Partial<Pick<StageOrganism, 'inspectContent' | 'settlePresentations'>>;
   readonly present: (command: unknown) => StageResult;
   readonly available: () => boolean;
   readonly isCurrent: (request: WorkspaceToolRequest) => boolean;
@@ -31,7 +31,7 @@ const supported = (surface: string): surface is WorkspaceSurface =>
   surfaces.includes(surface);
 
 export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
-  return (request): WorkspaceToolOutcome => {
+  const handle = (request: WorkspaceToolRequest): WorkspaceToolOutcome => {
     if (!port.available() || !port.isCurrent(request))
       return { kind: 'rejected' };
     const operation = request.operation;
@@ -58,6 +58,9 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
                   surface: pane.surface,
                   prominence: pane.prominence,
                   minimized: pane.minimized,
+                  ...('render_state' in pane
+                    ? { render_state: pane.render_state }
+                    : {}),
                   operations: [
                     'focus',
                     'minimize',
@@ -199,4 +202,12 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
       ? { kind: 'applied' }
       : { kind: 'rejected' };
   };
+  return (request) =>
+    request.operation.kind === 'inspect' && port.stage.settlePresentations
+      ? port.stage
+          .settlePresentations(
+            () => port.available() && port.isCurrent(request),
+          )
+          .then(() => handle(request))
+      : handle(request);
 }

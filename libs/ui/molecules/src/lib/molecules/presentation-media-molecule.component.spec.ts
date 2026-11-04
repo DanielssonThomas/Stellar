@@ -26,6 +26,9 @@ describe('PresentationMediaMolecule', () => {
       .dispatchEvent(new Event('error'));
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain('Image unavailable');
+    expect(fixture.nativeElement.getAttribute('data-render-state')).toBe(
+      'error',
+    );
     fixture.componentRef.setInput('payload', {
       kind: 'image',
       title: 'Next',
@@ -36,9 +39,15 @@ describe('PresentationMediaMolecule', () => {
     expect(
       fixture.nativeElement.querySelector('[aria-label="Loading image"]'),
     ).not.toBeNull();
+    expect(fixture.nativeElement.getAttribute('data-render-state')).toBe(
+      'loading',
+    );
     fixture.nativeElement.querySelector('img').dispatchEvent(new Event('load'));
     await fixture.whenStable();
     expect(fixture.componentInstance.pending()).toBe(false);
+    expect(fixture.nativeElement.getAttribute('data-render-state')).toBe(
+      'ready',
+    );
   });
   it('exposes the browser limitation without creating a frame or fetching the remote address', async () => {
     fixture.componentRef.setInput('payload', {
@@ -51,6 +60,9 @@ describe('PresentationMediaMolecule', () => {
       'Embedded browsing requires the native desktop',
     );
     expect(fixture.nativeElement.querySelector('iframe')).toBeNull();
+    expect(fixture.nativeElement.getAttribute('data-render-state')).toBe(
+      'error',
+    );
     expect(fixture.nativeElement.querySelector('a')).toBeNull();
   });
 

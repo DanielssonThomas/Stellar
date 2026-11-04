@@ -1,6 +1,7 @@
 import type {
   WorkspacePaneMetadata,
   WorkspacePaneOperation,
+  WorkspaceRenderState,
   WorkspaceProminence,
   WorkspaceSurface,
   WorkspaceToolOperation,
@@ -28,6 +29,13 @@ const surfaces: Record<WorkspaceSurface, true> = {
 const prominence: Record<WorkspaceProminence, true> = {
   primary: true,
   secondary: true,
+};
+const renderStates: Record<WorkspaceRenderState, true> = {
+  ready: true,
+  loading: true,
+  error: true,
+  hidden: true,
+  unavailable: true,
 };
 const payloadLimits: Record<WorkspaceSurface, number> = {
   'rich-text': 65536,
@@ -260,6 +268,11 @@ export function decodeWorkspaceToolOutcome(
       'minimized',
       ...(typeof item === 'object' &&
       item !== null &&
+      Object.hasOwn(item, 'render_state')
+        ? ['render_state']
+        : []),
+      ...(typeof item === 'object' &&
+      item !== null &&
       Object.hasOwn(item, 'layout')
         ? ['layout']
         : []),
@@ -276,6 +289,9 @@ export function decodeWorkspaceToolOutcome(
       surface: choice(pane['surface'], surfaces),
       prominence: choice(pane['prominence'], prominence),
       minimized: pane['minimized'],
+      ...(pane['render_state'] == null
+        ? {}
+        : { render_state: choice(pane['render_state'], renderStates) }),
       ...(pane['operations'] === undefined
         ? {}
         : { operations: paneOperations(pane['operations']) }),

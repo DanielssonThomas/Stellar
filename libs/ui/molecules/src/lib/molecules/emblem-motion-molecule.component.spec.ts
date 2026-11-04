@@ -145,12 +145,14 @@ describe('EmblemMotionMolecule', () => {
     ).not.toBeNull();
     fixture.componentRef.setInput('waiting', false);
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
+    const ring = fixture.nativeElement.querySelector('.waiting-ring');
+    expect(ring.classList.contains('waiting-visible')).toBe(false);
     expect(fixture.nativeElement.querySelector('.waiting-response')).toBeNull();
     fixture.componentRef.setInput('waiting', true);
     fixture.componentRef.setInput('phase', 'suspended');
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.waiting-ring')).toBe(ring);
+    expect(ring.classList.contains('waiting-visible')).toBe(false);
   });
 
   it('shows one concentric Sol ring and two eye glints only after assembly settles', async () => {
@@ -342,7 +344,7 @@ describe('EmblemMotionMolecule', () => {
     ).toBe('50% 50%');
     expect(
       fixture.nativeElement.querySelector(
-        'svg:not(.filter-definitions),object,iframe',
+        'svg:not(.filter-definitions):not(.waiting-ring),object,iframe',
       ),
     ).toBeNull();
     expect(
