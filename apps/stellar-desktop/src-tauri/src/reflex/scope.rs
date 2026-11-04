@@ -127,23 +127,52 @@ pub(super) fn classify(r: &ReflexRequest) -> Option<Scope> {
         }
     }
     // A short answer may resolve the immediately preceding local pane clarification.
-    if named
+    let positional = panes.is_some_and(|panes| !panes.is_empty())
+        && has(&["left", "right", "leftmost", "rightmost"])
+        && words.iter().all(|word| {
+            [
+                "the",
+                "one",
+                "pane",
+                "panel",
+                "on",
+                "left",
+                "right",
+                "leftmost",
+                "rightmost",
+            ]
+            .contains(word)
+        });
+    if (named || positional)
         && words.len() <= 8
         && r.history.last().is_some_and(|row| {
-            serde_json::from_str::<Value>(row)
-                .ok()
-                .and_then(|v| v["ivy"].as_str().map(|s| s.ends_with('?')))
-                .unwrap_or_else(|| row.ends_with('?'))
-        })
-        && r.history.iter().any(|row| {
-            ["close", "focus", "move", "pane"]
+            let Ok(prior) = serde_json::from_str::<Value>(row) else {
+                return false;
+            };
+            let user = text_from_history(&prior);
+            let prior_words: Vec<_> = user
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|word| !word.is_empty())
+                .collect();
+            prior["ivy"]
+                .as_str()
+                .is_some_and(|reply| reply.ends_with('?'))
+                && command_words(&prior_words, "pane", r)
+                && [
+                    "close", "dismiss", "focus", "select", "move", "swap", "resize", "bigger",
+                    "minimize", "maximize",
+                ]
                 .iter()
-                .any(|verb| row.to_lowercase().contains(verb))
+                .any(|verb| prior_words.contains(verb))
         })
     {
         return command_words(&words, "pane", r).then_some(Scope::Pane);
     }
     None
+}
+
+fn text_from_history(prior: &Value) -> String {
+    text(prior["user"].as_str().unwrap_or_default())
 }
 
 pub(super) fn allows(scope: Scope, id: &str) -> bool {

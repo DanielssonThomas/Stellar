@@ -45,6 +45,25 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('shows an authoritative recovered cloud receipt after uncertainty and ignores stale terminal events', async () => {
+    const { assistant, adapter, state } = setup();
+    await assistant.submit('Show my issue');
+    const id = adapter.submit.mock.calls[0][1];
+    const reflex = TestBed.inject(IvyReflexService);
+    state.set({ ...state(), revision: '2', turn_id: id, turn: 'uncertain' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)?.outcome).toBe('uncertain');
+    state.set({ ...state(), revision: '3', turn: 'completed' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)).toMatchObject({ outcome: 'completed' });
+    expect(reflex.requests().at(-1)?.steps.at(-1)?.label).toBe(
+      'Response recovered',
+    );
+    state.set({ ...state(), revision: '2', turn: 'failed' });
+    TestBed.tick();
+    expect(reflex.requests().at(-1)?.outcome).toBe('completed');
+    expect(adapter.submit).toHaveBeenCalledOnce();
+  });
   it('records observed cloud stages under the original request and fences stale or terminal updates', async () => {
     const { assistant, state } = setup();
     const reflex = TestBed.inject(IvyReflexService);

@@ -92,6 +92,17 @@ export class RequestTimeline {
         : item,
     );
   }
+  reconcile(
+    id: string,
+    outcome: 'completed' | 'failed' | 'cancelled',
+    label: string,
+  ) {
+    this.update(id, (item) =>
+      item.outcome === 'uncertain' && ['Terra', 'Sol'].includes(item.route)
+        ? { ...this.point(item, 'reconciled', label), outcome, speaking: false }
+        : item,
+    );
+  }
   speech(
     id: string,
     stage: 'synthesis' | 'playing' | 'completed' | 'failed' | 'cancelled',

@@ -1,6 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { RequestTimeline, type RequestTrace } from './request-timeline';
 describe('Request timeline observations', () => {
+  it('settles cloud uncertainty from an authoritative receipt while preserving definitive and local outcomes', () => {
+    let items: readonly RequestTrace[] = [];
+    const trace = new RequestTimeline((next) => (items = next));
+    trace.begin('cloud', 'Show my issue', 'typed');
+    trace.route('cloud', 'Terra');
+    trace.finish('cloud', 'uncertain', 'Result uncertain');
+    trace.reconcile('cloud', 'completed', 'Response recovered');
+    trace.reconcile('cloud', 'failed', 'Late failure');
+    expect(items[0].outcome).toBe('completed');
+    expect(items[0].steps.map((step) => step.label)).toContain(
+      'Result uncertain',
+    );
+    expect(items[0].steps.at(-1)?.label).toBe('Response recovered');
+    trace.begin('local', 'Skip', 'voice');
+    trace.route('local', 'Reflex');
+    trace.finish('local', 'uncertain', 'Result uncertain');
+    trace.reconcile('local', 'completed', 'Unrelated cloud response');
+    expect(items[1].outcome).toBe('uncertain');
+  });
   it('joins routing and backend completion under one request and ignores late events', () => {
     let now = 0,
       items: readonly RequestTrace[] = [];

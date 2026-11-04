@@ -374,11 +374,26 @@ export class DesktopAssistant {
       cancelled: 'Request cancelled',
       uncertain: 'Result uncertain',
     } as const;
-    if (snapshot.turn in labels)
+    if (snapshot.turn in labels) {
       this.reflex.timeline.finish(
         id,
         snapshot.turn as keyof typeof labels,
         labels[snapshot.turn as keyof typeof labels],
       );
+      if (
+        snapshot.turn === 'completed' ||
+        snapshot.turn === 'failed' ||
+        snapshot.turn === 'cancelled'
+      )
+        this.reflex.timeline.reconcile(
+          id,
+          snapshot.turn,
+          {
+            completed: 'Response recovered',
+            failed: 'Failure confirmed',
+            cancelled: 'Cancellation confirmed',
+          }[snapshot.turn],
+        );
+    }
   }
 }

@@ -95,6 +95,27 @@ fn preflight_fails_closed_on_invalid_wire_requests() {
 }
 
 #[test]
+fn positional_followups_require_the_immediately_preceding_local_pane_clarification() {
+    for text in [
+        "the left one",
+        "the right one",
+        "the leftmost pane",
+        "the pane on the right",
+    ] {
+        let mut r = request(text);
+        assert!(!super::reflex_route(r.clone()).local, "{text}");
+        r.history = vec![r#"{"user":"close that pane","ivy":"Which pane?"}"#.into()];
+        assert_eq!(scope::classify(&r), Some(Scope::Pane), "{text}");
+        r.history
+            .push(r#"{"user":"what song is playing","ivy":"Which player?"}"#.into());
+        assert!(admission::delegation(&r).is_some(), "{text}");
+    }
+    let mut r = request("the left one from yesterday's meeting");
+    r.history = vec![r#"{"user":"close that pane","ivy":"Which pane?"}"#.into()];
+    assert!(admission::delegation(&r).is_some());
+}
+
+#[test]
 fn corpus_keeps_clear_local_actions_and_delegates_external_requests() {
     let corpus: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../../libs/services/desktop-adapter/fixtures/reflex-evaluation.json"
