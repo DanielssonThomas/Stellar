@@ -223,6 +223,8 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
             {'id': True, 'method': 'ping', 'params': {}},
             {'id': 1, 'method': 'audio.synthesize', 'params': {'text': 'no'}},
             {'id': 1, 'method': 'session.create', 'params': {'request_id': 'id', 'profile': 'other'}},
+            {'id': 1, 'method': 'session.create', 'params': {'request_id': 'id', 'model': 'gpt-6.1-sol', 'toolsets': ['all']}},
+            {'id': 1, 'method': 'session.create', 'params': {'request_id': 'id', 'model': 'gpt-6.1-sol', 'yolo': True}},
             {'id': 1, 'method': 'prompt.submit', 'params': {'session_id': 'id', 'input_id': 'id', 'text': ' '}},
         ]:
             with self.assertRaises(ValueError):

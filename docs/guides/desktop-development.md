@@ -228,6 +228,10 @@ Requests are limited to 16 KiB of encoded JSONL and the native incoming queue to
 
 ### Personal-host file access and approvals
 
+Stellar's workspace uses Hermes `source=acp` for editor MCP and file-edit integration. On creation, the owned bridge resolves the personal Ivy profile's saved `platform_toolsets.desktop` selection, falling back to `cli` only when no Desktop selection is saved, and passes those toolsets explicitly. This prevents ACP's coding defaults from silently omitting profile-enabled tools such as `computer_use`, image generation, speech or scheduled tasks. Resolution uses Hermes' profile resolver, including global disabled toolsets and enabled MCP/plugins; an explicit empty selection stays authoritative. Hermes' own Electron-only `desktop_ui` tools remain unavailable on ACP. Malformed selections or missing gateway support fail closed. The bridge verifies the frozen launch selection; renderer requests cannot supply tools or bypass flags.
+
+Tool selections are frozen for workspace conversations. After changing profile tools or upgrading from the previous ACP defaults, restart Desktop and use **clear conversation** to create a fresh logical session; the older Hermes transcript remains stored. The standalone **new session** reset preserves the old frozen tool policy and does not refresh tools. Profile access uses the existing Windows account and supplies no administrator token, elevation or approval bypass. Keep any no-elevation requirement in the trusted personal profile policy; these tools are not an OS sandbox.
+
 The Windows account owner can opt into Desktop approvals by creating `D:/Hermes/profiles/ivy/integration/desktop-access.json` and restarting Stellar Desktop:
 
 ```json

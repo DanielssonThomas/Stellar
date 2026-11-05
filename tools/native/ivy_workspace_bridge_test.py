@@ -22,6 +22,8 @@ bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_activity'] = load('ivy_activity')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+profile_tools = load('ivy_profile_tools')
+sys.modules['stellar_ivy_profile_tools'] = profile_tools
 approvals_module = load('ivy_approvals')
 protocol = load('workspace_protocol')
 
@@ -36,6 +38,42 @@ class Pipe:
 
     def send(self, value):
         self.lines.put(json.dumps(value).encode() + b'\n')
+
+
+class ProfileToolTests(unittest.TestCase):
+    def test_desktop_selection_is_resolved_with_global_restrictions(self):
+        config = {'platform_toolsets': {'desktop': ['hermes-cli', 'computer_use'], 'cli': ['file']},
+                  'agent': {'disabled_toolsets': ['terminal']}}
+        calls = []
+        def resolve(value, platform):
+            calls.append((value, platform))
+            return {'file', 'computer_use', 'desktop_ui'}
+        self.assertEqual(profile_tools.select_toolsets(config, resolve), ['computer_use', 'file'])
+        self.assertEqual(calls, [(config, 'desktop')])
+
+    def test_missing_desktop_uses_cli_and_empty_desktop_is_authoritative(self):
+        for platforms, expected in [({'cli': ['file']}, 'cli'), ({'desktop': []}, 'desktop'), ({}, 'cli')]:
+            calls = []
+            def resolve(config, platform):
+                calls.append(platform)
+                return set()
+            self.assertEqual(profile_tools.select_toolsets({'platform_toolsets': platforms}, resolve), [])
+            self.assertEqual(calls, [expected])
+
+    def test_malformed_selection_never_falls_back_to_broader_tools(self):
+        for value in (None, 'all', {}, [None], [1], [''], ['file', 'file'], [' file'], ['file'] * 257):
+            def resolve(*args):
+                self.fail('Malformed selection reached resolver')
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                profile_tools.select_toolsets({'platform_toolsets': {'desktop': value}}, resolve)
+        for config in (None, [], {'platform_toolsets': None}, {'platform_toolsets': []}):
+            with self.subTest(config=config), self.assertRaises(ValueError):
+                profile_tools.select_toolsets(config, resolve)
+        # Hermes marks unreadable/default-fallback configurations with a dict subclass.
+        class FailedConfig(dict):
+            pass
+        with self.assertRaises(ValueError):
+            profile_tools.select_toolsets(FailedConfig(), resolve)
 
 
 class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
@@ -116,24 +154,51 @@ class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
                 self.sessions = set()
                 self.params = None
             async def call(self, method, params):
-                return {'session_create': {'parameters': ['model', 'provider'], 'sources': ['acp']},
+                return {'session_create': {'parameters': ['model', 'provider', 'toolsets'], 'sources': ['acp']},
                         'capabilities': ['acp-editor-policy-v1', 'acp-session-mcp-v1']}
             async def rpc(self, method, **params):
                 self.params = params
                 return {'session_id': 'session', 'info': {'model': 'gpt-6.1-sol', 'source': 'acp', 'edit_approval_policy': 'ask',
-                        'launch_request': {'model': 'gpt-6.1-sol', 'provider': 'openai-codex'}}}
+                        'launch_request': {'model': 'gpt-6.1-sol', 'provider': 'openai-codex',
+                                           'toolsets': params['toolsets']}}}
 
         conn, workspace = Connection(), Workspace()
         body = {'id': 1, 'method': 'session.create', 'params': {'request_id': 'request', 'model': 'gpt-6.1-sol'}}
         stdin = type('Input', (), {'buffer': io.BytesIO(json.dumps(body).encode() + b'\n')})()
         frames = []
-        with patch.object(sys, 'stdin', stdin), patch.object(bridge, 'emit', frames.append):
+        with patch.object(sys, 'stdin', stdin), patch.object(bridge, 'emit', frames.append), \
+                patch.object(profile_tools, 'load_toolsets', return_value=['computer_use', 'file', 'terminal']):
             await bridge.requests_with_workspace(conn, workspace)
         self.assertEqual(conn.params['source'], 'acp')
         self.assertEqual(conn.params['editor'], workspace.editor())
+        self.assertEqual(conn.params['toolsets'], ['computer_use', 'file', 'terminal'])
+        self.assertEqual(set(conn.params), {'source', 'cwd', 'request_id', 'model', 'provider', 'editor', 'toolsets'})
         self.assertEqual(workspace.owner_session, 'session')
         self.assertEqual(frames, [{'id': 1, 'result': {'session_id': 'session', 'model': 'gpt-6.1-sol'}}])
         self.assertNotIn('private-secret', str(frames))
+
+        # A gateway that ignores the explicit choice must never become a verified session.
+        original_rpc = conn.rpc
+        async def wrong_tools(method, **params):
+            result = await original_rpc(method, **params)
+            result['info']['launch_request']['toolsets'] = ['file']
+            return result
+        conn.rpc = wrong_tools
+        stdin.buffer.seek(0)
+        with patch.object(sys, 'stdin', stdin), patch.object(bridge, 'emit', frames.append), \
+                patch.object(profile_tools, 'load_toolsets', return_value=['computer_use']):
+            with self.assertRaises(bridge.Closed):
+                await bridge.requests_with_workspace(conn, workspace)
+
+        conn.params = None
+        async def old_gateway(method, params):
+            return {'session_create': {'parameters': ['model', 'provider'], 'sources': ['acp']},
+                    'capabilities': ['acp-editor-policy-v1', 'acp-session-mcp-v1']}
+        conn.call = old_gateway
+        stdin.buffer.seek(0)
+        with patch.object(sys, 'stdin', stdin), self.assertRaises(bridge.Closed):
+            await bridge.requests_with_workspace(conn, workspace)
+        self.assertIsNone(conn.params)
 
     async def test_reply_is_read_while_prompt_rpc_waits_for_early_tool(self):
         pipe = Pipe()

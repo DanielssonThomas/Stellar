@@ -390,10 +390,12 @@ async def request_worker(conn, workspace, queue, approvals=None):
                     raise Closed()
                 options = {}
                 if workspace is not None and workspace.task is not None:
+                    from stellar_ivy_profile_tools import load_toolsets
                     if ('acp' not in description.get('session_create', {}).get('sources', []) or
+                            'toolsets' not in fields or
                             not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
                         raise Closed()
-                    options = {'editor': workspace.editor()}
+                    options = {'editor': workspace.editor(), 'toolsets': load_toolsets()}
                 result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
                     request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
                 sid = result.get('session_id')
@@ -408,6 +410,8 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
                     raise Closed()
                 if options and not workspace.verifies(info):
+                    raise Closed()
+                if options and launch.get('toolsets') != options['toolsets']:
                     raise Closed()
                 if options:
                     result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
