@@ -67,6 +67,10 @@ impl Broker {
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
             ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),
             (
+                "stellar_ivy_profile_tools",
+                include_str!("ivy_profile_tools.py"),
+            ),
+            (
                 "stellar_ivy_edit_policy",
                 include_str!("ivy_edit_policy.py"),
             ),
