@@ -235,6 +235,18 @@ test('session shortcut ignores typing and modifiers; busy work cannot be reset',
   await install(page);
   await page.keyboard.press('Control+c');
   await expect(dialog(page)).not.toBeVisible();
+  const shifted = await page.evaluate(() => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'C',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(shifted).toBe(false);
+  await expect(dialog(page)).not.toBeVisible();
   await page.keyboard.press('m');
   const input = page.getByLabel('Message Ivy', { exact: true });
   await input.fill('Ivy ');

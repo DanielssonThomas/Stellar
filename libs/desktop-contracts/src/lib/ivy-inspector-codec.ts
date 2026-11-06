@@ -28,7 +28,12 @@ function text(value: unknown, maximum: number): string {
   const result = boundedString(value, maximum * 4);
   if (
     [...result].length > maximum ||
-    /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(result)
+    [...result].some((character) => {
+      const code = character.charCodeAt(0);
+      return (
+        (code < 32 && !['\n', '\r', '\t'].includes(character)) || code === 127
+      );
+    })
   )
     throw new DesktopContractError('malformed');
   return result;

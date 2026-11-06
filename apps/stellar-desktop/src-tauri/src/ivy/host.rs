@@ -170,9 +170,7 @@ impl IvyHost {
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
                             Action::Inspect(request, reply) => {
-                                let result = super::inspector::inspect(&mut session, request);
-                                let _ = reply.send(result);
-                                Ok(())
+                                inspector::run(&mut session, request, reply)
                             }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => session.submit(request),
@@ -214,11 +212,7 @@ impl IvyHost {
                                 Ok(())
                             }
                         };
-                        if let Err(error) = result {
-                            tools.disarm();
-                            tools.set_input(None);
-                            fail(&mut session, error);
-                        }
+                        settle_result(&mut session, &tools, result);
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -294,6 +288,14 @@ impl IvyHost {
 impl Drop for IvyHost {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+fn settle_result(session: &mut Session, tools: &WorkspaceHub, result: Result<(), IvyErrorCode>) {
+    if let Err(error) = result {
+        tools.disarm();
+        tools.set_input(None);
+        fail(session, error);
     }
 }
 

@@ -1,6 +1,11 @@
 use super::{contracts::IvyErrorCode, inspector_contracts::*, session::Session};
 use serde_json::json;
 
+pub enum InspectionError {
+    Data(IvyErrorCode),
+    Session(IvyErrorCode),
+}
+
 fn bounded(value: &str, maximum: usize) -> bool {
     value.chars().count() <= maximum
         && !value
@@ -31,23 +36,30 @@ pub fn validate_request(request: &IvyInspectorRequest) -> Result<(), IvyErrorCod
 pub fn inspect(
     session: &mut Session,
     request: IvyInspectorRequest,
-) -> Result<IvyInspectorSnapshot, IvyErrorCode> {
-    validate_request(&request)?;
+) -> Result<IvyInspectorSnapshot, InspectionError> {
+    validate_request(&request).map_err(InspectionError::Data)?;
     let active = session.record.session_id.clone();
-    let result = session.call(
-        "inspector.inspect",
-        json!({
-            "active":active, "requested":request.session_id, "offset":request.offset,
-            "before":request.before_message,
-        }),
-    )?;
-    let result: IvyInspectorSnapshot =
-        serde_json::from_value(result).map_err(|_| IvyErrorCode::Protocol)?;
-    validate_reply(&result)?;
-    if result.active_session_id != active || !session.shared.current(session.epoch) {
-        return Err(IvyErrorCode::Unavailable);
+    let result = session
+        .call(
+            "inspector.inspect",
+            json!({
+                "active":active, "requested":request.session_id, "offset":request.offset,
+                "before":request.before_message,
+            }),
+        )
+        .map_err(InspectionError::Session)?;
+    // Broker calls buffer unrelated lifecycle frames; process them even when the
+    // inspector's own metrics payload is malformed.
+    session.drain().map_err(InspectionError::Session)?;
+    let result: IvyInspectorSnapshot = serde_json::from_value(result)
+        .map_err(|_| InspectionError::Data(IvyErrorCode::Protocol))?;
+    validate_reply(&result).map_err(InspectionError::Data)?;
+    if !session.shared.current(session.epoch) {
+        return Err(InspectionError::Session(IvyErrorCode::Unavailable));
     }
-    session.drain()?;
+    if result.active_session_id != active {
+        return Err(InspectionError::Data(IvyErrorCode::Protocol));
+    }
     Ok(result)
 }
 

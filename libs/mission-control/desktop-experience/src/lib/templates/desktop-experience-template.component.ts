@@ -276,6 +276,7 @@ export class DesktopExperienceTemplate {
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
+      (event.shiftKey && event.key.toLowerCase() === 'c') ||
       !['m', 'p', 's', 'c'].includes(event.key.toLowerCase())
     )
       return;

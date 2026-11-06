@@ -1,6 +1,29 @@
 use super::super::inspector_contracts::{IvyInspectorRequest, IvyInspectorSnapshot};
 use super::*;
 
+pub(super) fn run(
+    session: &mut Session,
+    request: IvyInspectorRequest,
+    reply: mpsc::SyncSender<Result<IvyInspectorSnapshot, IvyErrorCode>>,
+) -> Result<(), IvyErrorCode> {
+    use super::super::inspector::InspectionError;
+    let result = super::super::inspector::inspect(session, request);
+    match result {
+        Ok(snapshot) => {
+            let _ = reply.send(Ok(snapshot));
+            Ok(())
+        }
+        Err(InspectionError::Data(error)) => {
+            let _ = reply.send(Err(error));
+            Ok(())
+        }
+        Err(InspectionError::Session(error)) => {
+            let _ = reply.send(Err(error.clone()));
+            Err(error)
+        }
+    }
+}
+
 impl IvyHost {
     pub fn inspect(
         &self,
@@ -39,3 +62,7 @@ impl IvyHost {
         Ok(rx)
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "host_inspector_tests.rs"]
+mod tests;
