@@ -14,11 +14,15 @@ use windows::Media::Control::{
 use windows_capture::window::Window;
 
 pub(super) fn foreground() -> Result<AwarenessApp, ()> {
-    let window = Window::foreground().map_err(|_| ())?;
-    let process = window.process_id().map_err(|_| ())?;
-    let app = state::label(&window.process_name().map_err(|_| ())?, 120);
-    let title = state::label(&window.title().map_err(|_| ())?, 160);
-    if !window.is_valid() || window.process_id().ok() != Some(process) || app.is_empty() {
+    let window = Window::foreground().map_err(|_| unavailable("foreground"))?;
+    let process = window.process_id().map_err(|_| unavailable("process_id"))?;
+    let app = state::label(
+        &super::windows_process::basename(process).map_err(|_| unavailable("process_name"))?,
+        120,
+    );
+    let title = state::label(&window.title().map_err(|_| unavailable("title"))?, 160);
+    if window.process_id().ok() != Some(process) || app.is_empty() {
+        unavailable("window_identity");
         return Err(());
     }
     Ok(AwarenessApp {
@@ -26,6 +30,13 @@ pub(super) fn foreground() -> Result<AwarenessApp, ()> {
         title,
         observed_at_ms: state::now().to_string(),
     })
+}
+
+fn unavailable(stage: &str) {
+    #[cfg(feature = "native-smoke")]
+    println!("STELLAR_AWARENESS_SOURCE {stage}");
+    #[cfg(not(feature = "native-smoke"))]
+    let _ = stage;
 }
 
 fn wait<T: windows_core::RuntimeType>(

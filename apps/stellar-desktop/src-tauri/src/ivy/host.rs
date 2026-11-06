@@ -55,6 +55,7 @@ pub enum Action {
     SmokeHold(mpsc::SyncSender<()>),
 }
 struct Work {
+    context: Option<super::workspace_context::ContextLease>,
     epoch: u64,
     workspace_epoch: u64,
     action: Action,
@@ -129,7 +130,6 @@ impl IvyHost {
         let context_provider = Arc::new(Mutex::new(
             None::<super::workspace_context::ContextProvider>,
         ));
-        let provider = context_provider.clone();
         let owned = child.clone();
         std::thread::spawn(move || {
             let Some((journal, record, first)) =
@@ -170,14 +170,7 @@ impl IvyHost {
                         let result = match work.action {
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => {
-                                let context = provider.lock().ok().and_then(|slot| {
-                                    slot.as_ref().and_then(|provide| {
-                                        provide(
-                                            &session.workspace_epoch.saturating_sub(1).to_string(),
-                                        )
-                                    })
-                                });
-                                session.submit_with_context(request, context.as_deref())
+                                session.submit_with_context(request, work.context)
                             }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),

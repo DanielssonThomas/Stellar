@@ -90,14 +90,7 @@ impl AwarenessHost {
     }
 
     pub fn provider(&self) -> crate::ivy::ContextProvider {
-        let shared = self.shared.clone();
-        Arc::new(move |epoch| {
-            shared
-                .0
-                .lock()
-                .ok()
-                .and_then(|state| state.context(epoch, state::now()))
-        })
+        provider(self.shared.clone())
     }
 
     pub fn shutdown(&self) {
@@ -118,6 +111,27 @@ impl Drop for AwarenessHost {
     fn drop(&mut self) {
         self.shutdown();
     }
+}
+
+fn provider(shared: Shared) -> crate::ivy::ContextProvider {
+    Arc::new(move |epoch| {
+        let generation = {
+            let state = shared.0.lock().ok()?;
+            if state.stopped || !state.snapshot.enabled {
+                return None;
+            }
+            state.generation
+        };
+        let shared = shared.clone();
+        let epoch = epoch.to_string();
+        Some(Arc::new(move || {
+            let state = shared.0.lock().ok()?;
+            if state.generation != generation {
+                return None;
+            }
+            state.context(&epoch, state::now())
+        }) as crate::ivy::ContextLease)
+    })
 }
 
 fn observe(shared: Shared, publish: Publisher) {

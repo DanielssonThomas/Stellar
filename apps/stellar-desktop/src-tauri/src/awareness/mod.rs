@@ -3,6 +3,8 @@ mod host;
 mod state;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod windows_process;
 
 use contracts::*;
 pub use host::AwarenessHost;

@@ -9,7 +9,26 @@ pub fn prompt(text: String, workspace: bool) -> String {
     )
 }
 
-pub type ContextProvider = std::sync::Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+pub type ContextLease = std::sync::Arc<dyn Fn() -> Option<String> + Send + Sync>;
+pub type ContextProvider = std::sync::Arc<dyn Fn(&str) -> Option<ContextLease> + Send + Sync>;
+
+pub fn annotate_params(
+    params: &mut serde_json::Value,
+    context: Option<&str>,
+    ivy: Option<serde_json::Value>,
+) {
+    let Some(original) = params
+        .get("text")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+    else {
+        return;
+    };
+    params["text"] = observed_prompt(original.clone(), true, context, ivy).into();
+    if super::process::request_line(u64::MAX, "prompt.submit", params).is_err() {
+        params["text"] = original.into();
+    }
+}
 
 pub fn observed_prompt(
     text: String,
@@ -83,5 +102,40 @@ mod tests {
             observed_prompt(text.clone(), false, Some(&excessive), None),
             prompt(text, false)
         );
+    }
+
+    #[test]
+    fn escaped_rpc_frame_overflow_falls_back_to_the_valid_original_request() {
+        let original = serde_json::json!({"session_id":"session","input_id":"00000000-0000-0000-0000-000000000001","workspace_epoch":"1","text":"\"".repeat(6_800)});
+        assert!(super::super::process::request_line(u64::MAX, "prompt.submit", &original).is_ok());
+        let context = serde_json::json!({"title":"x".repeat(2_400)}).to_string();
+        let mut excessive = original.clone();
+        excessive["text"] = observed_prompt(
+            original["text"].as_str().unwrap().into(),
+            true,
+            Some(&context),
+            None,
+        )
+        .into();
+        assert!(excessive["text"].as_str().unwrap().len() < 16_384);
+        assert!(
+            super::super::process::request_line(u64::MAX, "prompt.submit", &excessive).is_err()
+        );
+        let mut params = original.clone();
+        annotate_params(&mut params, Some(&context), None);
+        assert_eq!(params, original);
+        assert!(super::super::process::request_line(u64::MAX, "prompt.submit", &params).is_ok());
+    }
+
+    #[test]
+    fn frame_budget_keeps_annotation_when_it_fits() {
+        let mut params = serde_json::json!({"session_id":"session","input_id":"input","workspace_epoch":"1","text":"What is playing?"});
+        annotate_params(
+            &mut params,
+            Some(r#"{"spotify":{"title":"Synthetic"}}"#),
+            None,
+        );
+        assert!(params["text"].as_str().unwrap().contains("Synthetic"));
+        assert!(super::super::process::request_line(u64::MAX, "prompt.submit", &params).is_ok());
     }
 }

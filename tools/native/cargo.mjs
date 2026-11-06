@@ -153,7 +153,7 @@ if (action === 'smoke') {
     clearTimeout(deadline);
     for (const line of output.split(/\r?\n/)) {
       if (
-        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
+        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|AWARENESS_CHECKS|AWARENESS_SOURCE|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
           line,
         )
       )

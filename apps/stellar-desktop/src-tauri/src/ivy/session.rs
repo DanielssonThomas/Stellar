@@ -53,7 +53,7 @@ impl Session {
     pub fn submit_with_context(
         &mut self,
         request: IvySubmitRequest,
-        context: Option<&str>,
+        context: Option<super::workspace_context::ContextLease>,
     ) -> Result<(), IvyErrorCode> {
         if self.record.input_id.as_deref() == Some(&request.input_id) {
             return Ok(());
@@ -62,20 +62,8 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
-        let ivy_state = self.shared.view.lock().ok().map(|view| {
-            json!({
-                "model":view.snapshot.model, "turn":view.snapshot.turn,
-                "workspace_tools":view.snapshot.workspace_tools,
-                "pending_questions":view.snapshot.questions.as_ref().map_or(0, Vec::len),
-            })
-        });
-        let text = super::workspace_context::observed_prompt(
-            request.text,
-            self.record.workspace.is_some(),
-            context,
-            ivy_state,
-        );
-        let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
+        let text = super::workspace_context::prompt(request.text, self.record.workspace.is_some());
+        let mut params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();
         let next = Record {
@@ -97,6 +85,15 @@ impl Session {
             self.journal.save(&self.record)?;
             return Err(IvyErrorCode::Unavailable);
         }
+        let observation = context.and_then(|resolve| resolve());
+        let ivy_state = self.shared.view.lock().ok().map(|view| {
+            json!({
+                "model":view.snapshot.model, "turn":view.snapshot.turn,
+                "workspace_tools":view.snapshot.workspace_tools,
+                "pending_questions":view.snapshot.questions.as_ref().map_or(0, Vec::len),
+            })
+        });
+        super::workspace_context::annotate_params(&mut params, observation.as_deref(), ivy_state);
         let receipt = self
             .broker
             .as_mut()

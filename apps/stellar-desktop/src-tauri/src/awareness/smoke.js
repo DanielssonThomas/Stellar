@@ -40,18 +40,14 @@
   const resumed = await invoke('awareness_set_enabled', {
     request: { version: 1, enabled: true },
   });
-  return (
-    rejected &&
-    workspaceRejected &&
-    observed?.version === 1 &&
-    observed.app_health === 'available' &&
-    !!observed.foreground &&
-    !paused.enabled &&
-    paused.foreground === null &&
-    paused.spotify === null &&
-    quiet.revision === paused.revision &&
-    quiet.app_health === 'paused' &&
-    quiet.media_health === 'paused' &&
-    resumed.enabled
-  );
+  return [
+    rejected,
+    workspaceRejected,
+    observed?.version === 1,
+    observed.app_health === 'available' && !!observed.foreground,
+    !paused.enabled && paused.foreground === null && paused.spotify === null,
+    quiet.revision === paused.revision,
+    quiet.app_health === 'paused' && quiet.media_health === 'paused',
+    resumed.enabled,
+  ];
 })();

@@ -45,3 +45,37 @@ fn malformed_workspace_does_not_replace_cache() {
     assert!(host.snapshot().unwrap().workspace.is_none());
     host.shutdown();
 }
+
+#[test]
+fn deferred_context_lease_rereads_freshness_and_cannot_survive_pause_resume() {
+    let shared = Arc::new((Mutex::new(State::new(true)), Condvar::new()));
+    let seed = |name: &str, stamp: u64| {
+        let mut state = shared.0.lock().unwrap();
+        let generation = state.generation;
+        state.observe(
+            generation,
+            Ok(AwarenessApp {
+                app: name.into(),
+                title: "Synthetic".into(),
+                observed_at_ms: stamp.to_string(),
+            }),
+            None,
+        );
+    };
+    seed("before.exe", state::now());
+    let provide = provider(shared.clone());
+    let pending = provide("0").unwrap();
+    seed("after.exe", state::now());
+    assert!(pending().unwrap().contains("after.exe"));
+    seed("expired.exe", state::now().saturating_sub(6_000));
+    let expired: serde_json::Value = serde_json::from_str(&pending().unwrap()).unwrap();
+    assert!(expired["foreground"].is_null());
+    {
+        let mut state = shared.0.lock().unwrap();
+        state.enabled(false);
+        state.enabled(true);
+    }
+    seed("resumed.exe", state::now());
+    assert!(pending().is_none());
+    assert!(provide("0").unwrap()().unwrap().contains("resumed.exe"));
+}
