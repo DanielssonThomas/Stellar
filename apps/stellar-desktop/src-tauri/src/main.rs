@@ -2,6 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+#[cfg(feature = "native-smoke")]
+mod background_smoke;
 mod cleanup;
 mod commands;
 mod contracts;
@@ -20,7 +22,7 @@ mod telemetry;
 
 fn main() {
     use tauri::{Emitter, Manager};
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 11);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 12);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
         "workspace_tool_reply"
@@ -145,6 +147,7 @@ fn main() {
         ivy::ivy_new_session,
         ivy::ivy_reload_mcp,
         ivy::ivy_question_reply,
+        ivy::ivy_claim_update,
         ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_collect,

@@ -59,6 +59,41 @@ class Connection:
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
 
+    async def test_background_starts_forward_only_verified_metadata_marker(self):
+        conn = Connection()
+        for index, payload in enumerate([
+                {'display_kind': 'async_delegation_complete', 'text': 'private raw tool output'},
+                {'display_kind': 'process_complete'},
+                {'display_kind': 'process_complete', 'notification_category': 'diagnostic'},
+                {'text': 'pretend this is autonomous'}]):
+            await conn.events.put({'params': {'type': 'message.start', 'session_id': 's',
+                'admission_id': str(index), 'authority_epoch': 2, 'execution_generation': 3,
+                'seq': index + 1, 'replay_epoch': 'e', 'payload': payload}})
+        await conn.events.put(RuntimeError('stop'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        events = [json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual([event['payload'] for event in events],
+                         [{'autonomous': True}, {'autonomous': True}, {'autonomous': False}, {'autonomous': False}])
+        self.assertEqual(events[0]['authority_epoch'], 2)
+
+    async def test_replay_is_selected_session_only_and_projects_bounded_metadata(self):
+        conn = Connection()
+        conn.selected_session = 's'
+        async def rpc(method, **params):
+            self.assertEqual(method, 'session.events.since')
+            return {'truncated': False, 'replay_epoch': 'e', 'last_sequence': 2, 'events': [
+                {'session_id': 's', 'type': 'message.start', 'seq': 1, 'replay_epoch': 'e',
+                 'admission_id': 'a', 'payload': {'display_kind': 'process_complete', 'secret': 'excluded'}},
+                {'session_id': 's', 'type': 'tool.start', 'payload': {'secret': 'excluded'}}]}
+        conn.rpc = rpc
+        result = await bridge.replay_events(conn, {'session_id': 's', 'replay_epoch': 'e', 'last_sequence': 0}, None)
+        self.assertEqual(len(result['events']), 1)
+        self.assertEqual(result['events'][0]['payload'], {'autonomous': True})
+        with self.assertRaises(bridge.Closed):
+            await bridge.replay_events(conn, {'session_id': 'foreign', 'replay_epoch': 'e', 'last_sequence': 0}, None)
+
     async def test_questions_project_only_public_fields_and_allow_bounded_answers(self):
         conn = Connection()
         payload = {'prompt_id': 'q1', 'question': 'Which?', 'choices': ['Left', 'Right'], 'multi_select': False, 'private': 'excluded'}

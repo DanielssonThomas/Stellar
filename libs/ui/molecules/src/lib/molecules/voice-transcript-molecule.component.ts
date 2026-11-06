@@ -13,6 +13,8 @@ import { SkeletonAtom } from '@stellar/ui-atoms';
   },
 })
 export class VoiceTranscriptMolecule {
+  readonly label = input('Recognized speech');
+  readonly ariaLabel = input('Voice input');
   readonly text = input('');
   readonly loading = input(false);
   readonly reducedMotion = input(false);

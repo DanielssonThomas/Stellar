@@ -1,11 +1,11 @@
 <section
   class="transcript-showcase relative w-80 max-w-full px-4 py-3"
-  aria-label="Voice input"
+  [attr.aria-label]="ariaLabel()"
 >
   <h2
     class="transcript-label m-0 text-[0.6rem] font-medium tracking-[0.18em] uppercase"
   >
-    <span aria-hidden="true">✧</span> Recognized speech
+    <span aria-hidden="true">✧</span> {{ label() }}
   </h2>
   @if (loading()) {
     <stellar-skeleton-atom shape="text" />

@@ -12,6 +12,8 @@ import type {
   IvyRequest,
   IvySubmitRequest,
   IvySnapshot,
+  IvyBackgroundUpdate,
+  IvyClaimUpdateRequest,
   IvyQuestion,
   IvyQuestionReplyRequest,
   WorkspaceToolsState,
@@ -230,6 +232,32 @@ function activity(value: unknown): IvyActivity[] {
   return result;
 }
 
+export function decodeIvyClaimUpdate(value: unknown): IvyClaimUpdateRequest {
+  const data = record(value, ['version', 'update_id', 'request_id']);
+  return {
+    version: version(data['version']),
+    update_id: text(data['update_id'], 512),
+    request_id: identifier(data['request_id']),
+  };
+}
+
+function backgroundUpdates(value: unknown): IvyBackgroundUpdate[] {
+  if (!Array.isArray(value) || value.length > 8)
+    throw new DesktopContractError('malformed');
+  const result = value.map((item) => {
+    const data = record(item, ['id', 'text', 'speech_claim']);
+    return {
+      id: text(data['id'], 512),
+      text: text(data['text'], 262144),
+      speech_claim:
+        data['speech_claim'] === null ? null : identifier(data['speech_claim']),
+    };
+  });
+  if (new Set(result.map((item) => item.id)).size !== result.length)
+    throw new DesktopContractError('malformed');
+  return result;
+}
+
 export function decodeIvySnapshot(value: unknown): IvySnapshot {
   const data = record(
     value,
@@ -248,7 +276,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
       'reset_id',
       'error',
     ],
-    ['first_text_observed', 'questions'],
+    ['first_text_observed', 'questions', 'background_updates'],
   );
   if (
     Object.hasOwn(data, 'first_text_observed') &&
@@ -264,6 +292,9 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   if (decoded.filter((item) => item.kind !== 'text').length > 1)
     throw new DesktopContractError('malformed');
   const snapshot: IvySnapshot = {
+    ...(Object.hasOwn(data, 'background_updates')
+      ? { background_updates: backgroundUpdates(data['background_updates']) }
+      : {}),
     ...(Object.hasOwn(data, 'questions')
       ? { questions: questions(data['questions']) }
       : {}),

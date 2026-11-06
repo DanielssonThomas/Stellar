@@ -53,6 +53,22 @@ pub(super) fn connect(
             return Err(IvyErrorCode::Protocol);
         }
     }
+    if let Some(sid) = session.record.session_id.clone() {
+        let resumed = session.call("session.resume", json!({"session_id":sid}))?;
+        if resumed
+            .get("session_id")
+            .and_then(serde_json::Value::as_str)
+            != Some(&sid)
+        {
+            return Err(IvyErrorCode::Protocol);
+        }
+        session.resume_updates(&resumed)?;
+        session.drain()?;
+    } else {
+        session
+            .shared
+            .update(session.epoch, |view| view.background_updates = None);
+    }
     publish_ready(session);
     Ok(())
 }

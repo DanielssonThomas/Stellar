@@ -20,6 +20,7 @@ METHODS = {
     'session.create': {'request_id': str, 'model': str},
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
+    'session.events.since': {'session_id': str, 'replay_epoch': str, 'last_sequence': int},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
@@ -119,7 +120,7 @@ def validate(request):
             raise ValueError()
         if key == 'text' and not value.strip():
             raise ValueError()
-        if key in {'execution_generation', 'generation', 'revision'} and value < 0:
+        if key in {'execution_generation', 'generation', 'revision', 'last_sequence'} and value < 0:
             raise ValueError()
     if method == 'integrations.reload' and params['session_id'] is not None and not string(params['session_id']):
         raise ValueError()
@@ -198,7 +199,7 @@ async def pump_events(conn, workspace, approvals):
         if kind in {'tool.start', 'tool.complete'}:
             activity.offer(params)
             continue
-        if kind not in {'message.complete', 'session.replay_gap',
+        if kind not in {'message.start', 'message.complete', 'session.replay_gap',
                         'approval.request', 'clarify.request', 'clarify.settled'}:
             continue
         # Terminal/control events retain ordering ahead of the next activity batch.
@@ -210,7 +211,9 @@ async def pump_events(conn, workspace, approvals):
             raise Closed()
         clean = project(params)
         clean['type'] = kind
-        if kind in {'clarify.request', 'clarify.settled'}:
+        if kind == 'message.start':
+            clean['payload'] = {'autonomous': autonomous_start(payload)}
+        elif kind in {'clarify.request', 'clarify.settled'}:
             prompt = payload.get('prompt_id')
             if not string(prompt):
                 raise Closed()
@@ -265,6 +268,40 @@ async def pump_events(conn, workspace, approvals):
                     raise Closed()
                 envelope[key] = event[key]
         emit({'event': 'gateway', 'data': envelope})
+
+
+def autonomous_start(payload):
+    return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
+            and payload.get('notification_category') != 'diagnostic')
+
+
+async def replay_events(conn, params, workspace):
+    if params['session_id'] != getattr(conn, 'selected_session', None):
+        raise Closed()
+    result = await asyncio.wait_for(conn.client.rpc('session.events.since', **params), DEADLINE)
+    if (type(result) is not dict or type(result.get('events')) is not list
+            or len(result['events']) > 1024 or type(result.get('truncated')) is not bool
+            or not string(result.get('replay_epoch'))
+            or type(result.get('last_sequence')) is not int or result['last_sequence'] < 0):
+        raise Closed()
+    events = []
+    for event in result['events']:
+        if type(event) is not dict or event.get('session_id') != params['session_id']:
+            raise Closed()
+        kind, payload = event.get('type'), event.get('payload')
+        if kind not in {'message.start', 'message.complete'}:
+            continue
+        if type(payload) is not dict:
+            raise Closed()
+        clean = project(event)
+        clean['type'] = kind
+        clean['payload'] = ({'autonomous': autonomous_start(payload)} if kind == 'message.start'
+                            else text_fields(payload))
+        if workspace is not None and type(clean['payload'].get('text')) is str:
+            clean['payload']['text'] = workspace.redact(clean['payload']['text'])
+        events.append(clean)
+    return {'events': events, 'replay_epoch': result['replay_epoch'],
+            'last_sequence': result['last_sequence'], 'truncated': result['truncated']}
 
 
 async def requests(conn):
@@ -371,6 +408,8 @@ async def request_worker(conn, workspace, queue, approvals=None):
         try:
             if method in {'session.new', 'integrations.reload'}:
                 result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
+            elif method == 'session.events.since':
+                result = await replay_events(conn, params, workspace)
             elif method == 'workspace.setup':
                 if workspace is None:
                     raise Closed()
@@ -445,7 +484,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
                 await settle_receipt(conn, workspace, params, result, approvals)
-            if method == 'workspace.setup':
+            if method in {'workspace.setup', 'session.events.since'}:
                 pass
             elif method == 'runtime.describe':
                 if (type(result) is not dict or

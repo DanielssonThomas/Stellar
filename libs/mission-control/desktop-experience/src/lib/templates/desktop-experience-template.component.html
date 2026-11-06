@@ -122,6 +122,38 @@
     />
   }
 
+  @if (backgroundPreview(); as update) {
+    <aside
+      data-background-update
+      class="absolute top-4 left-4 z-20 max-w-[calc(100%-2rem)]"
+      aria-label="Ivy update notification"
+    >
+      <stellar-voice-transcript-molecule
+        [text]="update.text"
+        label="Ivy update"
+        ariaLabel="Ivy background update"
+        [loading]="loading()"
+        [reducedMotion]="state().reducedMotion"
+      />
+      <div class="mt-2 flex gap-2">
+        <button
+          type="button"
+          class="rounded-lg border border-stellar-muted bg-stellar-canvas px-3 py-2 text-xs text-stellar-foreground"
+          (click)="readBackgroundUpdate()"
+        >
+          Read update
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-stellar-muted bg-stellar-canvas px-3 py-2 text-xs text-stellar-foreground"
+          (click)="dismissedUpdate.set(update.id)"
+        >
+          Dismiss update
+        </button>
+      </div>
+    </aside>
+  }
+
   <dialog
     #controlsDialog
     data-desktop-menu

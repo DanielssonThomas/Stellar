@@ -1,8 +1,14 @@
 mod activity;
 #[cfg(test)]
 mod activity_tests;
+#[cfg(feature = "native-smoke")]
+mod background_probe;
+mod background_updates;
+#[cfg(test)]
+mod background_updates_tests;
 mod connection;
 pub mod contracts;
+mod events;
 mod host;
 mod journal;
 mod lifecycle;
@@ -22,6 +28,7 @@ mod session;
 #[cfg(test)]
 mod session_tests;
 mod state;
+mod update_store;
 mod workspace_capture;
 mod workspace_context;
 pub mod workspace_contracts;
@@ -73,6 +80,24 @@ pub fn ivy_question_reply(
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
     host.question_reply(request)
+}
+
+#[tauri::command]
+pub async fn ivy_claim_update(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: contracts::IvyClaimUpdateRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    let reply = host.claim_background(request)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        reply
+            .recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| IvyErrorCode::Timeout)?
+    })
+    .await
+    .map_err(|_| IvyErrorCode::Unavailable)?
 }
 
 #[tauri::command]

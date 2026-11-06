@@ -17,6 +17,7 @@ import {
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
   ivyQuestionReplyCommand,
+  ivyClaimUpdateCommand,
   type IvyQuestionAction,
   type IvyModel,
   type IvyCommands,
@@ -103,6 +104,20 @@ export class IvyAdapterService {
       prompt_id: promptId,
       action,
     });
+  }
+
+  async claimUpdate(updateId: string, requestId: string): Promise<boolean> {
+    const snapshot = await this.adapter.request(ivyClaimUpdateCommand, {
+      version: 1,
+      update_id: updateId,
+      request_id: requestId,
+    });
+    this.accept(snapshot, ++this.operationSequence, true);
+    return (
+      snapshot.background_updates?.some(
+        (update) => update.id === updateId && update.speech_claim === requestId,
+      ) === true
+    );
   }
 
   async selectSession(model: IvyModel): Promise<boolean> {

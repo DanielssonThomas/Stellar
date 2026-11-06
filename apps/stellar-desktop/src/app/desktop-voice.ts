@@ -15,6 +15,7 @@ import {
   IvyReflexService,
   VoiceConversation,
   QuestionVoiceCue,
+  UpdateVoiceCue,
   type VoiceComposition,
   type PromptPresentation,
   type VoiceModel,
@@ -42,11 +43,43 @@ export class DesktopVoice {
   private readonly sessionError = signal(false);
   private playbackGeneration = 0;
   private disposed = false;
+  private readonly updateRevision = signal(0);
+  private readonly updateFailure = signal(false);
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
     speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
+  });
+  private readonly updateCue = new UpdateVoiceCue({
+    available: () =>
+      !this.disposed &&
+      this.sessionKnown() &&
+      !this.sessionError() &&
+      this.assistant.state().connection === 'ready' &&
+      !['suspended', 'shutdown'].includes(this.experience.state().phase),
+    busy: () =>
+      this.current().busy ||
+      ['submitting', 'admitted', 'uncertain'].includes(
+        this.assistant.state().turn,
+      ) ||
+      this.compositionState().status !== 'idle' ||
+      !!(
+        this.current().foregroundActive && this.audio.state().activity?.active
+      ),
+    enabled: () => !this.current().muted && !this.current().error,
+    state: () => this.speech.state(),
+    claim: (id, request) => this.ivy.claimUpdate(id, request),
+    speak: (text, id) => {
+      this.updateFailure.set(false);
+      return this.speech.speak(text, id);
+    },
+    stop: () => this.speech.stop(),
+    waitForQuestion: () => this.questionCue.wait(),
+    id: () => crypto.randomUUID(),
+    changed: () =>
+      this.zone.run(() => this.updateRevision.update((value) => value + 1)),
+    failed: () => this.zone.run(() => this.updateFailure.set(true)),
   });
   private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
@@ -58,7 +91,13 @@ export class DesktopVoice {
           status:
             'Conversation state unavailable. Refresh before voice resumes.',
         }
-      : this.current(),
+      : this.updateFailure() && !this.current().busy
+        ? {
+            ...this.current(),
+            error: true,
+            status: 'Update available as text; local speech did not complete.',
+          }
+        : this.current(),
   );
   private readonly compositionState = signal<VoiceComposition>({
     raw: '',
@@ -100,6 +139,7 @@ export class DesktopVoice {
     speak: async (text, id) => {
       const generation = this.playbackGeneration;
       await this.questionCue.wait();
+      await this.updateCue.wait();
       if (
         generation !== this.playbackGeneration ||
         this.disposed ||
@@ -139,6 +179,7 @@ export class DesktopVoice {
     stop: () => {
       this.playbackGeneration++;
       this.questionCue.dispose();
+      this.updateCue.cancel();
       this.finishNarration('cancelled');
       return this.speech.stop();
     },
@@ -193,12 +234,14 @@ export class DesktopVoice {
       this.sessionRequest++;
       this.conversation.dispose();
       this.questionCue.cancel();
+      this.updateCue.dispose();
       this.foregroundCleared = undefined;
     });
   }
 
   setMuted(muted: boolean) {
     if (muted) this.playbackGeneration++;
+    if (muted) this.updateCue.cancel();
     this.conversation.setMuted(muted);
     if (muted) {
       this.questionCue.cancel();
@@ -239,6 +282,7 @@ export class DesktopVoice {
   }
 
   private updateContext() {
+    this.updateRevision();
     const speech = this.speech.state();
     this.questionCue.observe(speech);
     const narration = this.narration;
@@ -262,6 +306,7 @@ export class DesktopVoice {
         !this.sessionError() &&
         !['suspended', 'shutdown'].includes(this.experience.state().phase),
     });
+    this.updateCue.observe(this.assistant.state().background_updates ?? []);
   }
   private finishNarration(stage: 'completed' | 'failed' | 'cancelled') {
     if (!this.narration) return;
@@ -271,6 +316,7 @@ export class DesktopVoice {
   stop() {
     this.playbackGeneration++;
     this.questionCue.cancel();
+    this.updateCue.cancel();
     this.conversation.stopVoice();
   }
   async retry(): Promise<void> {

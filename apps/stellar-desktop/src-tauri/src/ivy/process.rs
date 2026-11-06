@@ -209,6 +209,10 @@ impl Broker {
         params: Value,
         events: &mut Vec<Value>,
     ) -> Result<Value, IvyErrorCode> {
+        #[cfg(feature = "native-smoke")]
+        if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+            println!("STELLAR_SMOKE_STAGE bg-rpc-{}", method.replace('.', "-"));
+        }
         self.sequence = self.sequence.checked_add(1).ok_or(IvyErrorCode::Protocol)?;
         let line = request_line(self.sequence, method, &params)?;
         {
@@ -233,6 +237,10 @@ impl Broker {
             }
             if frame.get("id").and_then(Value::as_u64) == Some(self.sequence) {
                 if let Some(error) = frame.get("error") {
+                    #[cfg(feature = "native-smoke")]
+                    if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+                        println!("STELLAR_SMOKE_STAGE bg-rpc-refused");
+                    }
                     return Err(match error.get("code").and_then(Value::as_str) {
                         Some("busy") => IvyErrorCode::Busy,
                         Some("unavailable") => IvyErrorCode::Unavailable,

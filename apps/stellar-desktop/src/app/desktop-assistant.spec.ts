@@ -45,6 +45,28 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('shows background text alongside the active turn without granting presentation authority', () => {
+    const { assistant, state, present } = setup();
+    const reflex = TestBed.inject(IvyReflexService);
+    reflex.reply.set('Earlier local acknowledgement');
+    state.set({
+      ...state(),
+      revision: '2',
+      turn: 'admitted',
+      background_updates: [
+        {
+          id: 'background',
+          text: 'Your background work is ready.',
+          speech_claim: null,
+        },
+      ],
+    });
+    TestBed.tick();
+    expect(assistant.reply()).toContain('Your background work is ready.');
+    expect(assistant.busy()).toBe(true);
+    expect(reflex.reply()).toBe('');
+    expect(present).not.toHaveBeenCalled();
+  });
   it('shows an authoritative recovered cloud receipt after uncertainty and ignores stale terminal events', async () => {
     const { assistant, adapter, state } = setup();
     await assistant.submit('Show my issue');

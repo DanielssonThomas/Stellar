@@ -45,6 +45,10 @@ pub struct Journal {
 }
 
 impl Journal {
+    pub(super) fn updates_path(&self) -> PathBuf {
+        self.path.with_file_name("ivy-updates.json")
+    }
+
     pub fn open(directory: &Path) -> Result<(Self, Record), IvyErrorCode> {
         fs::create_dir_all(directory).map_err(|_| IvyErrorCode::Storage)?;
         let lock = OpenOptions::new()

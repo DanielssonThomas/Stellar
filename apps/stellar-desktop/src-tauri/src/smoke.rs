@@ -271,8 +271,13 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_new_session,
             crate::ivy::ivy_reload_mcp,
             crate::ivy::ivy_question_reply,
+            crate::ivy::ivy_claim_update,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
+            crate::speech::speech_speak,
+            crate::speech::speech_stop,
+            crate::speech::speech_snapshot,
+            crate::background_smoke::background_smoke_start,
             smoke_hold_ivy,
             smoke_capture_window,
             smoke_result
@@ -286,7 +291,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
                         .window()
                         .set_size(tauri::LogicalSize::new(1920., 1080.));
                 }
-                check_page(window.clone());
+                if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+                    crate::background_smoke::check(window.clone());
+                } else {
+                    check_page(window.clone());
+                }
             }
         })
 }

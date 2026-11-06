@@ -62,6 +62,8 @@ export type {
   IvyComponent,
   IvyPresentation,
   IvySnapshot,
+  IvyBackgroundUpdate,
+  IvyClaimUpdateRequest,
   IvyQuestion,
   IvyQuestionAction,
   IvyQuestionReplyRequest,
@@ -91,6 +93,7 @@ export {
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
   ivyQuestionReplyCommand,
+  ivyClaimUpdateCommand,
   ivyEvent,
   workspaceToolEvent,
   workspaceToolReplyCommand,
@@ -102,6 +105,7 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
   decodeIvyQuestionReply,
+  decodeIvyClaimUpdate,
 } from './lib/ivy-codec';
 export {
   decodeWorkspaceToolRequest,

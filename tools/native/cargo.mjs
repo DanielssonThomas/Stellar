@@ -61,7 +61,10 @@ function cargo(command, capture = false) {
   return result.stdout;
 }
 
-if (action === 'smoke') {
+if (action === 'smoke' || action === 'background-smoke') {
+  const backgroundSmoke = action === 'background-smoke';
+  if (backgroundSmoke) env.STELLAR_BACKGROUND_SMOKE = '1';
+  else delete env.STELLAR_BACKGROUND_SMOKE;
   if (process.platform !== 'win32')
     throw new Error('Native smoke requires Windows + WebView2');
   env.CARGO_TARGET_DIR = resolve(root, 'target/smoke');
@@ -97,6 +100,11 @@ if (action === 'smoke') {
               'allow-ivy-new-session',
               'allow-ivy-reload-mcp',
               'allow-ivy-question-reply',
+              'allow-ivy-claim-update',
+              'allow-speech-speak',
+              'allow-speech-stop',
+              'allow-speech-snapshot',
+              'allow-background-smoke-start',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
               'allow-smoke-hold-ivy',
@@ -115,12 +123,21 @@ if (action === 'smoke') {
     '--features',
     'custom-protocol,native-smoke',
   ]);
-  rmSync(resolve(root, 'artifacts/native/smoke.json'), { force: true });
+  rmSync(
+    resolve(
+      root,
+      backgroundSmoke
+        ? 'artifacts/native/background-smoke.json'
+        : 'artifacts/native/smoke.json',
+    ),
+    { force: true },
+  );
   const child = spawn(
     resolve(env.CARGO_TARGET_DIR, 'debug/stellar-desktop.exe'),
     [],
     {
       cwd: root,
+      env,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'inherit'],
     },
@@ -133,14 +150,19 @@ if (action === 'smoke') {
       child.kill();
     } else output += chunk.toString('utf8');
   });
-  const deadline = setTimeout(() => {
-    timedOut = true;
-    spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-      windowsHide: true,
-      stdio: 'ignore',
-    });
-    console.error('Native WebView smoke timed out after 30 seconds');
-  }, 30_000);
+  const deadline = setTimeout(
+    () => {
+      timedOut = true;
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      console.error(
+        `Native WebView smoke timed out after ${backgroundSmoke ? 120 : 30} seconds`,
+      );
+    },
+    backgroundSmoke ? 120_000 : 30_000,
+  );
   child.on('error', (error) => {
     clearTimeout(deadline);
     throw error;
@@ -151,28 +173,50 @@ if (action === 'smoke') {
       if (/^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS) /.test(line))
         console.log(line);
     }
-    if (!nativeSmokeSucceeded(code, timedOut, output)) {
+    if (
+      !nativeSmokeSucceeded(code, timedOut, output) ||
+      (backgroundSmoke &&
+        !output.includes('STELLAR_SMOKE_STAGE background-spoken-once'))
+    ) {
       console.error(
         'Native smoke lacked a successful IPC completion handshake',
       );
       process.exitCode = 1;
     } else {
-      const report = {
-        platform: process.platform,
-        embeddedWebView: true,
-        renderedShell: true,
-        styledShell: true,
-        runtimeStyleNonce: true,
-        versionedIpc: true,
-        typedAppInfo: true,
-        eventSubscription: true,
-        u64Precision: true,
-        malformedInputRejected: true,
-        invalidVersionRejected: true,
-      };
+      const report = backgroundSmoke
+        ? {
+            platform: process.platform,
+            embeddedWebView: true,
+            realGateway: true,
+            disposableConversation: true,
+            promptSubmissions: 1,
+            autonomousUpdateVisible: true,
+            speechPlayedOnce: true,
+            reconnectRetainsClaim: true,
+            microphone: false,
+            physicalAudibilityMeasured: false,
+          }
+        : {
+            platform: process.platform,
+            embeddedWebView: true,
+            renderedShell: true,
+            styledShell: true,
+            runtimeStyleNonce: true,
+            versionedIpc: true,
+            typedAppInfo: true,
+            eventSubscription: true,
+            u64Precision: true,
+            malformedInputRejected: true,
+            invalidVersionRejected: true,
+          };
       mkdirSync(resolve(root, 'artifacts/native'), { recursive: true });
       writeFileSync(
-        resolve(root, 'artifacts/native/smoke.json'),
+        resolve(
+          root,
+          backgroundSmoke
+            ? 'artifacts/native/background-smoke.json'
+            : 'artifacts/native/smoke.json',
+        ),
         `${JSON.stringify(report, null, 2)}\n`,
       );
       console.log('Native embedded WebView shell + versioned IPC smoke passed');

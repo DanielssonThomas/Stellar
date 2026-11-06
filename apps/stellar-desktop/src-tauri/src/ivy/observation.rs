@@ -10,11 +10,11 @@ pub(super) struct Observation {
 
 impl Observation {
     pub(super) fn poll(&mut self, session: &mut Session, now: Instant) -> Result<(), IvyErrorCode> {
-        let observing = session.broker.is_some()
-            && session.record.unsettled
-            && session.record.admission_id.is_some();
+        let observing = session.broker.is_some();
         if self.due(now, observing) {
             session.observe_receipt()?;
+            session.poll_updates()?;
+            session.drain()?;
         }
         Ok(())
     }
