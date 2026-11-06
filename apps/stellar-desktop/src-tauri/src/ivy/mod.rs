@@ -1,6 +1,10 @@
 mod activity;
 #[cfg(test)]
 mod activity_tests;
+pub mod chart_contracts;
+#[cfg(test)]
+mod chart_tests;
+mod chart_validate;
 mod connection;
 #[cfg(all(test, windows))]
 mod context_submit_tests;

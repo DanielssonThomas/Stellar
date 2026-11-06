@@ -1,4 +1,5 @@
 import type { ActivitySummaryPayload } from '@stellar/ui-molecules';
+import type { WorkspaceChartPayload } from '@stellar/desktop-contracts';
 import type {
   PresentationTextPayload,
   PresentationMediaPayload,
@@ -83,6 +84,7 @@ export type StageResult = {
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 export type ProductionPayloadMap = {
+  readonly chart: WorkspaceChartPayload;
   readonly 'rich-text': PresentationTextPayload;
   readonly image: Extract<PresentationMediaPayload, { kind: 'image' }>;
   readonly browser: Extract<PresentationMediaPayload, { kind: 'browser' }>;
@@ -105,6 +107,7 @@ function payloadLimit(surface: unknown): number {
     case 'image':
       return 512 * 1024 + 6144;
     case 'diagram':
+    case 'chart':
       return 16384;
     case 'browser':
       return 4096;

@@ -25,6 +25,9 @@ importers:
       '@angular/router':
         specifier: ~21.2.0
         version: 21.2.25(@angular/common@21.2.25(@angular/core@21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2))(@angular/platform-browser@21.2.25(@angular/common@21.2.25(@angular/core@21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)))(rxjs@7.8.2)
+      chart.js:
+        specifier: 4.6.1
+        version: 4.6.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -218,6 +221,12 @@ importers:
       '@angular/core':
         specifier: ^21.2.0
         version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+      '@stellar/desktop-contracts':
+        specifier: workspace:^
+        version: link:../../desktop-contracts
+      chart.js:
+        specifier: 4.6.1
+        version: 4.6.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -251,6 +260,9 @@ importers:
       '@angular/core':
         specifier: ^21.2.0
         version: 21.2.25(@angular/compiler@21.2.25)(rxjs@7.8.2)
+      '@stellar/desktop-contracts':
+        specifier: workspace:^
+        version: link:../../desktop-contracts
       '@stellar/desktop-interaction':
         specifier: workspace:^
         version: link:../../desktop-interaction
@@ -3006,6 +3018,12 @@ packages:
     engines: { node: '>=10.0' }
     peerDependencies:
       tslib: '2'
+
+  '@kurkle/color@0.3.4':
+    resolution:
+      {
+        integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==,
+      }
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution:
@@ -6532,6 +6550,13 @@ packages:
       {
         integrity: sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA==,
       }
+
+  chart.js@4.6.1:
+    resolution:
+      {
+        integrity: sha512-hJyniucsFmq//EvXYvJ6c6mahPoI3kaxdjVH8awTaJ/fDNWeSqqqArixMJWkWNN6fcYvPU3HneSANFNYtRi61g==,
+      }
+    engines: { pnpm: '>=8' }
 
   chokidar@3.6.0:
     resolution:
@@ -15240,6 +15265,8 @@ snapshots:
       '@jsonjoy.com/codegen': 17.67.0(tslib@2.8.1)
       tslib: 2.8.1
 
+  '@kurkle/color@0.3.4': {}
+
   '@leichtgewicht/ip-codec@2.0.5': {}
 
   '@listr2/prompt-adapter-inquirer@3.0.5(@inquirer/prompts@7.10.1(@types/node@26.6.5))(@types/node@26.6.5)(listr2@9.0.5)':
@@ -17801,6 +17828,10 @@ snapshots:
   char-regex@1.0.2: {}
 
   chardet@2.2.0: {}
+
+  chart.js@4.6.1:
+    dependencies:
+      '@kurkle/color': 0.3.4
 
   chokidar@3.6.0:
     dependencies:

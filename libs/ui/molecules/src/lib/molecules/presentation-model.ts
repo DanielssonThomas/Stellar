@@ -1,4 +1,7 @@
+import type { WorkspaceChart } from '@stellar/desktop-contracts';
+
 export type PresentationTextBlock =
+  | { readonly kind: 'chart'; readonly chart: WorkspaceChart }
   | { readonly kind: 'paragraph' | 'heading'; readonly text: string }
   | { readonly kind: 'code'; readonly text: string; readonly language?: string }
   | { readonly kind: 'list'; readonly items: readonly string[] }

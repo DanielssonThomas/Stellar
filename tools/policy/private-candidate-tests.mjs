@@ -29,8 +29,8 @@ const trustedFiles = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'];
 // A lockfile or manifest content change needs a reviewed update to these pins.
 const reviewedTextDigests = Object.freeze({
   'package.json': Object.freeze([
-    '2e32448de66f08f47fcd051a92e23838d46898e0a017bc8f7809bf50b8e29a02',
-    'feccff9bbc42112bea23a6448202498c54d8f13435de321136989d47bfc870fe',
+    'bff6f72bffe7e522b89acf445458267dd633002833535f9bdae5f3658b3abf8c',
+    'bc9bf4a33cbdb0be9257110cbc6d25dd10db0341da3f9a7c33dd211f19456c25',
     '5638695381ffdc62b5d4aa1e83f99853c82e66db4d4c5fd86b009ce5b127bcb6',
     'ccea48e999b785ee50ab325e8080ae38d38a41ec2c8fea5b6ea7befc14cb437a',
     '956dc7c4f7f9f16f2c32f5d3ed9cde80c2f85284a9039fdcc112b06488201b16',
@@ -39,8 +39,8 @@ const reviewedTextDigests = Object.freeze({
     '425e9cd72c54fe88e19c7531f8a0468993ba8388fc229daf8ad6fcbf510fa15a',
   ]),
   'pnpm-lock.yaml': Object.freeze([
-    '05ff2f238e3e92de3893ef6f5af19788fb0e24426792ec77af4e4403643ed336',
-    '71cfba16e803798d616d0286f76cc2b88cdb60f39150f1df63f7ec175fe6a3c7',
+    '5468addb9a2cf546109f40f3ea5337d9d09e04690ace50e5dd30b4ffb28af110',
+    '16c8ff18f2fa8b6876b542ed30784b34795525cbae89a36a6b76efe730cbbd25',
   ]),
   'pnpm-workspace.yaml': Object.freeze([
     '6c42e2165e21fd922db48dd309e180d5cb62502d50b09dfdcfac463d8ad4e089',

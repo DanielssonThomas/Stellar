@@ -11,6 +11,7 @@ pub enum WorkspaceSurface {
     Image,
     Browser,
     Diagram,
+    Chart,
     Workflow,
     Session,
     AssistantMessage,

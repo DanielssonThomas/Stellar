@@ -40,6 +40,7 @@ use app_info_contracts::{
 };
 use command_name::APP_INFO_COMMAND;
 use contracts::{ShellError, ShellReply, ShellRequest};
+use ivy::chart_contracts::*;
 use ivy::contracts::*;
 use ivy::inspector_contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
@@ -125,6 +126,10 @@ fn main() {
         IvyQuestionAction::decl(&config),
         IvyQuestionReplyRequest::decl(&config),
         WorkspaceSurface::decl(&config),
+        WorkspaceChartType::decl(&config),
+        WorkspaceChartDataset::decl(&config),
+        WorkspaceChart::decl(&config),
+        WorkspaceChartPayload::decl(&config),
         WorkspaceProminence::decl(&config),
         WorkspaceToolOperation::decl(&config),
         WorkspaceDisplay::decl(&config),
