@@ -6,232 +6,245 @@
   (cancel)="closed.emit()"
   (keydown)="keydown($event)"
 >
-  <div class="inspector-shell">
-    <header class="inspector-header flex items-center justify-between gap-4">
-      <div>
-        <p class="eyebrow">Conversation · C</p>
-        <h2 id="ivy-sessions-title">Ivy sessions</h2>
-      </div>
-      <div class="flex items-center gap-2">
-        <button
-          type="button"
-          [disabled]="loading()"
-          (click)="refresh.emit()"
-          aria-label="Refresh session details"
-        >
-          ↻
-        </button>
-        <button
-          type="button"
-          aria-label="Close Ivy sessions"
-          (click)="closed.emit()"
-        >
-          ✕
-        </button>
-      </div>
-    </header>
-    <div class="inspector-body">
-      <aside class="history-column" aria-label="Conversations">
-        <button
-          type="button"
-          class="current-button"
-          (click)="selected.emit(null)"
-        >
-          Current session
-        </button>
-        <label class="sr-only" for="ivy-session-search"
-          >Search Ivy sessions</label
-        >
-        <input
-          id="ivy-session-search"
-          type="search"
-          placeholder="Find a conversation…"
-          [value]="query()"
-          (input)="search($event)"
-        />
-        <ol class="session-list">
-          @for (session of filtered(); track session.id) {
-            <li>
-              <button
-                type="button"
-                [class]="rowClass(session.id)"
-                [attr.aria-pressed]="
-                  session.id === snapshot()?.selected_session_id
-                "
-                (click)="selected.emit(session.id)"
-              >
-                <span class="session-title">{{ session.title }}</span>
-                <span class="session-meta"
-                  >{{
-                    session.last_activity_at || session.started_at
-                      | date: 'MMM d, HH:mm'
-                  }}
-                  · {{ session.message_count }} messages</span
-                >
-                @if (session.id === snapshot()?.active_stored_session_id) {
-                  <span class="active-label">Active</span>
-                }
-              </button>
-            </li>
-          } @empty {
-            <li class="empty">
-              {{
-                loading()
-                  ? 'Loading conversations…'
-                  : 'No matching conversations'
-              }}
-            </li>
-          }
-        </ol>
-        @if (
-          snapshot()?.next_offset !== null &&
-          snapshot()?.next_offset !== undefined
-        ) {
+  @if (visible()) {
+    <div class="inspector-shell">
+      <header class="inspector-header flex items-center justify-between gap-4">
+        <div>
+          <p class="eyebrow">Conversation · C</p>
+          <h2 id="ivy-sessions-title">Ivy sessions</h2>
+        </div>
+        <div class="flex items-center gap-2">
           <button
             type="button"
             [disabled]="loading()"
-            (click)="moreSessions.emit()"
+            (click)="refresh.emit()"
+            aria-label="Refresh session details"
           >
-            Older sessions
+            ↻
           </button>
-        }
-      </aside>
-      <section class="detail-column" aria-label="Session details">
-        <div class="status-line">
-          <span class="status-dot" aria-hidden="true"></span>{{ status()
-          }}<span class="model-label">{{ model() }} · {{ routeLabel() }}</span>
+          <button
+            type="button"
+            aria-label="Close Ivy sessions"
+            (click)="closed.emit()"
+          >
+            ✕
+          </button>
         </div>
-        <div class="metrics-grid">
-          <section class="metric-card" aria-label="Active context">
-            <h3>Active context</h3>
-            @if (contextPercent() !== null) {
-              <p class="metric-value">
-                {{ contextPercent() }}% <span>used</span>
-              </p>
-              <progress
-                [value]="snapshot()?.context?.used"
-                [max]="snapshot()?.context?.limit"
-                aria-label="Active context used"
-              ></progress>
-              <p class="metric-detail">
-                {{ snapshot()?.context?.used | number }} /
-                {{ snapshot()?.context?.limit | number }} tokens
-              </p>
-            } @else {
-              <p class="metric-value unavailable">Unavailable</p>
-            }
-            <p class="metric-detail">
-              Compactions:
-              {{ snapshot()?.context?.compactions ?? 'Unavailable' }}
-            </p>
-            @if (snapshot()?.context?.observed_at) {
-              <p class="metric-detail">
-                Observed {{ snapshot()?.context?.observed_at | date: 'HH:mm:ss'
-                }}{{
-                  stale(snapshot()?.context?.observed_at, 15) ? ' · Stale' : ''
-                }}
-              </p>
-            }
-          </section>
-          <section class="metric-card" aria-label="Codex account allowance">
-            <h3>Codex allowance</h3>
-            @for (window of snapshot()?.account?.windows ?? []; track $index) {
-              <p class="allowance-line">
-                {{ window.label }}
-                <strong>{{
-                  window.used_percent === null
-                    ? 'Unavailable'
-                    : (100 - window.used_percent | number: '1.0-0') + '% left'
-                }}</strong>
-              </p>
-              @if (window.reset_at) {
-                <p class="metric-detail">
-                  Resets {{ window.reset_at | date: 'MMM d, HH:mm' }}
-                </p>
-              }
+      </header>
+      <div class="inspector-body">
+        <aside class="history-column" aria-label="Conversations">
+          <button
+            type="button"
+            class="current-button"
+            (click)="selected.emit(null)"
+          >
+            Current session
+          </button>
+          <label class="sr-only" for="ivy-session-search"
+            >Search Ivy sessions</label
+          >
+          <input
+            id="ivy-session-search"
+            type="search"
+            placeholder="Find a conversation…"
+            [value]="query()"
+            (input)="search($event)"
+          />
+          <ol class="session-list">
+            @for (session of filtered(); track session.id) {
+              <li>
+                <button
+                  type="button"
+                  [class]="rowClass(session.id)"
+                  [attr.aria-pressed]="
+                    session.id === snapshot()?.selected_session_id
+                  "
+                  (click)="selected.emit(session.id)"
+                >
+                  <span class="session-title">{{ session.title }}</span>
+                  <span class="session-meta"
+                    >{{
+                      session.last_activity_at || session.started_at
+                        | date: 'MMM d, HH:mm'
+                    }}
+                    · {{ session.message_count }} messages</span
+                  >
+                  @if (session.id === snapshot()?.active_stored_session_id) {
+                    <span class="active-label">Active</span>
+                  }
+                </button>
+              </li>
             } @empty {
-              <p class="metric-value unavailable">
+              <li class="empty">
                 {{
-                  snapshot()?.account?.state === 'loading'
-                    ? 'Checking…'
-                    : 'Unavailable'
+                  loading()
+                    ? 'Loading conversations…'
+                    : 'No matching conversations'
                 }}
-              </p>
+              </li>
             }
-            <p class="metric-detail">
-              Ivy profile account · shared across sessions
-            </p>
-            @if (snapshot()?.account?.observed_at) {
-              <p class="metric-detail">
-                Observed {{ snapshot()?.account?.observed_at | date: 'HH:mm:ss'
-                }}{{
-                  stale(snapshot()?.account?.observed_at, 120) ? ' · Stale' : ''
-                }}
-              </p>
-            }
-          </section>
-        </div>
-        <div class="runtime-line">
-          <span>Voice · {{ voice() }}</span
-          ><span>Reflex · {{ reflex() }}</span>
-        </div>
-        @if (error()) {
-          <p class="notice" role="status">
-            {{ error() }} Previously loaded details may be stale.
-          </p>
-        }
-        @if (loading() && !snapshot()) {
-          <stellar-skeleton-atom shape="text" />
-        }
-        <div class="transcript-header">
-          <h3>{{ current()?.title || 'Conversation' }}</h3>
-          <span>{{ current()?.model || 'Model unavailable' }}</span>
-        </div>
-        <div
-          class="transcript"
-          aria-label="Conversation transcript"
-          tabindex="0"
-        >
-          @if (messages().length >= 400) {
-            <p class="empty">Showing the most recent 400 messages.</p>
-          }
+          </ol>
           @if (
-            snapshot()?.next_before !== null &&
-            snapshot()?.next_before !== undefined
+            snapshot()?.next_offset !== null &&
+            snapshot()?.next_offset !== undefined
           ) {
             <button
               type="button"
               [disabled]="loading()"
-              (click)="olderMessages.emit()"
+              (click)="moreSessions.emit()"
             >
-              Earlier messages
+              Older sessions
             </button>
           }
-          @for (message of messages(); track message.id) {
-            <article [class.user-message]="message.role === 'user'">
-              <p class="message-role">
-                {{ message.role === 'user' ? 'You' : 'Ivy'
-                }}<time>{{ message.at | date: 'HH:mm' }}</time>
+        </aside>
+        <section class="detail-column" aria-label="Session details">
+          <div class="status-line">
+            <span class="status-dot" aria-hidden="true"></span>{{ status()
+            }}<span class="model-label"
+              >{{ model() }} · {{ routeLabel() }}</span
+            >
+          </div>
+          <div class="metrics-grid">
+            <section class="metric-card" aria-label="Active context">
+              <h3>Active context</h3>
+              @if (contextPercent() !== null) {
+                <p class="metric-value">
+                  {{ contextPercent() }}% <span>used</span>
+                </p>
+                <progress
+                  [value]="snapshot()?.context?.used"
+                  [max]="snapshot()?.context?.limit"
+                  aria-label="Active context used"
+                ></progress>
+                <p class="metric-detail">
+                  {{ snapshot()?.context?.used | number }} /
+                  {{ snapshot()?.context?.limit | number }} tokens
+                </p>
+              } @else {
+                <p class="metric-value unavailable">Unavailable</p>
+              }
+              <p class="metric-detail">
+                Compactions:
+                {{ snapshot()?.context?.compactions ?? 'Unavailable' }}
               </p>
-              <p class="message-text">{{ message.text }}</p>
-            </article>
-          } @empty {
-            <p class="empty">
-              {{
-                snapshot()?.history_available
-                  ? 'No messages in this session yet.'
-                  : 'Conversation history unavailable.'
-              }}
+              @if (snapshot()?.context?.observed_at) {
+                <p class="metric-detail">
+                  Observed
+                  {{ snapshot()?.context?.observed_at | date: 'HH:mm:ss'
+                  }}{{
+                    stale(snapshot()?.context?.observed_at, 15)
+                      ? ' · Stale'
+                      : ''
+                  }}
+                </p>
+              }
+            </section>
+            <section class="metric-card" aria-label="Codex account allowance">
+              <h3>Codex allowance</h3>
+              @for (
+                window of snapshot()?.account?.windows ?? [];
+                track $index
+              ) {
+                <p class="allowance-line">
+                  {{ window.label }}
+                  <strong>{{
+                    window.used_percent === null
+                      ? 'Unavailable'
+                      : (100 - window.used_percent | number: '1.0-0') + '% left'
+                  }}</strong>
+                </p>
+                @if (window.reset_at) {
+                  <p class="metric-detail">
+                    Resets {{ window.reset_at | date: 'MMM d, HH:mm' }}
+                  </p>
+                }
+              } @empty {
+                <p class="metric-value unavailable">
+                  {{
+                    snapshot()?.account?.state === 'loading'
+                      ? 'Checking…'
+                      : 'Unavailable'
+                  }}
+                </p>
+              }
+              <p class="metric-detail">
+                Ivy profile account · shared across sessions
+              </p>
+              @if (snapshot()?.account?.observed_at) {
+                <p class="metric-detail">
+                  Observed
+                  {{ snapshot()?.account?.observed_at | date: 'HH:mm:ss'
+                  }}{{
+                    stale(snapshot()?.account?.observed_at, 120)
+                      ? ' · Stale'
+                      : ''
+                  }}
+                </p>
+              }
+            </section>
+          </div>
+          <div class="runtime-line">
+            <span>Voice · {{ voice() }}</span
+            ><span>Reflex · {{ reflex() }}</span>
+          </div>
+          @if (error()) {
+            <p class="notice" role="status">
+              {{ error() }} Previously loaded details may be stale.
             </p>
           }
-        </div>
-      </section>
+          @if (loading() && !snapshot()) {
+            <stellar-skeleton-atom shape="text" />
+          }
+          <div class="transcript-header">
+            <h3>{{ current()?.title || 'Conversation' }}</h3>
+            <span>{{ current()?.model || 'Model unavailable' }}</span>
+          </div>
+          <div
+            class="transcript"
+            aria-label="Conversation transcript"
+            tabindex="0"
+          >
+            @if (messages().length >= 400) {
+              <p class="empty">Showing the most recent 400 messages.</p>
+            }
+            @if (
+              snapshot()?.next_before !== null &&
+              snapshot()?.next_before !== undefined
+            ) {
+              <button
+                type="button"
+                [disabled]="loading()"
+                (click)="olderMessages.emit()"
+              >
+                Earlier messages
+              </button>
+            }
+            @for (message of messages(); track message.id) {
+              <article [class.user-message]="message.role === 'user'">
+                <p class="message-role">
+                  {{ message.role === 'user' ? 'You' : 'Ivy'
+                  }}<time>{{ message.at | date: 'HH:mm' }}</time>
+                </p>
+                <p class="message-text">{{ message.text }}</p>
+              </article>
+            } @empty {
+              <p class="empty">
+                {{
+                  snapshot()?.history_available
+                    ? 'No messages in this session yet.'
+                    : 'Conversation history unavailable.'
+                }}
+              </p>
+            }
+          </div>
+        </section>
+      </div>
+      <footer class="inspector-footer flex items-center justify-between gap-3">
+        <p>Browsing history keeps your current conversation active.</p>
+        <button type="button" [disabled]="busy()" (click)="newSession.emit()">
+          New session
+        </button>
+      </footer>
     </div>
-    <footer class="inspector-footer flex items-center justify-between gap-3">
-      <p>Browsing history keeps your current conversation active.</p>
-      <button type="button" [disabled]="busy()" (click)="newSession.emit()">
-        New session
-      </button>
-    </footer>
-  </div>
+  }
 </dialog>
