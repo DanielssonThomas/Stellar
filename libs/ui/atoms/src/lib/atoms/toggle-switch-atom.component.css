@@ -1,0 +1,126 @@
+:host {
+  display: block;
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-height: 3.8rem;
+  cursor: pointer;
+  color: var(--stellar-color-foreground);
+}
+.switch-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.switch-label {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.switch-description {
+  color: var(--stellar-color-muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  max-width: 33rem;
+}
+.switch-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+  min-width: 5rem;
+  justify-content: flex-end;
+  min-height: 2.75rem;
+}
+input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+  margin: 0;
+  z-index: 1;
+}
+.switch-state {
+  min-width: 1.4rem;
+  text-align: right;
+  font-size: 0.65rem;
+  color: var(--stellar-color-muted);
+}
+.switch-rail {
+  position: relative;
+  width: 2.55rem;
+  height: 1.4rem;
+  border: 1px solid var(--stellar-color-divider);
+  border-radius: 1rem;
+  background: var(--stellar-color-panel);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease;
+}
+.switch-thumb {
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--stellar-color-muted);
+  transition:
+    transform 180ms ease,
+    background 180ms ease;
+}
+.switch-on .switch-rail {
+  background: color-mix(
+    in srgb,
+    var(--stellar-color-primary) 19%,
+    var(--stellar-color-canvas)
+  );
+  border-color: var(--stellar-color-primary);
+}
+.switch-on .switch-thumb {
+  transform: translateX(1.1rem);
+  background: var(--stellar-color-primary);
+}
+.switch-on .switch-state {
+  color: var(--stellar-color-primary);
+}
+.switch-control:focus-within {
+  outline: 2px solid var(--stellar-color-primary);
+  outline-offset: 4px;
+  border-radius: 1rem;
+}
+.switch-disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.switch-loading {
+  display: block;
+  width: 5rem;
+  overflow: hidden;
+}
+.motion-reduced .switch-rail,
+.motion-reduced .switch-thumb {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch-rail,
+  .switch-thumb {
+    transition: none;
+  }
+}
+@media (max-width: 480px) {
+  .switch-row {
+    gap: 0.75rem;
+  }
+  .switch-label {
+    font-size: 0.76rem;
+  }
+  .switch-description {
+    font-size: 0.65rem;
+  }
+}

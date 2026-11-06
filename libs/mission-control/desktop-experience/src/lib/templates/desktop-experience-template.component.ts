@@ -10,6 +10,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { DesktopMenu } from './desktop-menu';
+import { DesktopSettingsNavigation } from './desktop-settings-navigation';
+import { ToggleSwitchAtom } from '@stellar/ui-atoms';
 import {
   initialState,
   type InteractionEvent,
@@ -52,6 +54,7 @@ export interface MicrophoneOption {
   selector: 'stellar-desktop-experience-template',
   standalone: true,
   imports: [
+    ToggleSwitchAtom,
     StageOrganism,
     EmblemMotionMolecule,
     AudioVisualizerMolecule,
@@ -103,6 +106,10 @@ export class DesktopExperienceTemplate {
   readonly menu = new DesktopMenu(
     this.host.nativeElement,
     () => this.controlsDialog().nativeElement,
+  );
+  readonly settings = new DesktopSettingsNavigation(
+    () => this.controlsDialog().nativeElement,
+    () => this.state().reducedMotion,
   );
   readonly ivyActivity = input<readonly IvyActivityItem[]>([]);
   readonly ivyTurnId = input<string | null>(null);
@@ -169,6 +176,10 @@ export class DesktopExperienceTemplate {
   readonly voiceInputText = input('');
   readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
+  readonly wakeSensitivity = input<'standard' | 'high'>('standard');
+  readonly showRecognition = input(false);
+  readonly wakeSensitivityChange = output<'standard' | 'high'>();
+  readonly showRecognitionChange = output<boolean>();
   readonly reflexEnabled = input(false);
   readonly awarenessEnabled = input(true);
   readonly awarenessStatus = input('Awareness unavailable');
@@ -259,6 +270,7 @@ export class DesktopExperienceTemplate {
   openFaultControls() {
     this.musicControls().close();
     if (!this.menu.open()) this.menu.toggle();
+    this.settings.show('ivy');
   }
   presentFinalizedPrompt(text: ComposerFinalizedText, signal: AbortSignal) {
     return this.promptComposer().presentFinalized(text, signal);
@@ -286,7 +298,7 @@ export class DesktopExperienceTemplate {
     if (
       event.target instanceof Element &&
       event.target.closest(
-        'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+        'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select, [contenteditable]:not([contenteditable="false"])',
       )
     )
       return;

@@ -32,7 +32,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentRef.setInput('reflexStatus', 'Ready');
     fixture.componentRef.setInput('reflexLastRoute', 'Reflex · confirmed');
     await fixture.whenStable();
-    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector(
+    const toggle: HTMLInputElement = fixture.nativeElement.querySelector(
       '[role="switch"][aria-label="Ivy Reflex"]',
     );
     expect(toggle.getAttribute('aria-checked')).toBe('true');
@@ -47,12 +47,44 @@ describe('DesktopExperienceTemplate', () => {
     expect(change).toHaveBeenCalledWith(false);
   });
 
+  it('delegates recognition preferences and blocks sensitivity changes while voice is busy', async () => {
+    const sensitivity = vi.fn();
+    const recognition = vi.fn();
+    fixture.componentInstance.wakeSensitivityChange.subscribe(sensitivity);
+    fixture.componentInstance.showRecognitionChange.subscribe(recognition);
+    const wake: HTMLInputElement = fixture.nativeElement.querySelector(
+      '[aria-label="Higher wake sensitivity"]',
+    );
+    const show: HTMLInputElement = fixture.nativeElement.querySelector(
+      '[aria-label="Show recognition results"]',
+    );
+    wake.click();
+    show.click();
+    expect(sensitivity).toHaveBeenCalledExactlyOnceWith('high');
+    expect(recognition).toHaveBeenCalledExactlyOnceWith(true);
+    fixture.componentRef.setInput('voiceBusy', true);
+    fixture.componentRef.setInput('wakeSensitivity', 'high');
+    await fixture.whenStable();
+    expect(wake.disabled).toBe(true);
+    expect(wake.checked).toBe(true);
+    wake.click();
+    expect(sensitivity).toHaveBeenCalledTimes(1);
+    show.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'm',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(fixture.componentInstance.menu.open()).toBe(true);
+  });
+
   it('routes the pane controls checkbox to Stage and retains it when the menu reopens', async () => {
     const view = fixture.componentInstance;
     view.menu.toggle();
     await fixture.whenStable();
     const toggle: HTMLInputElement = fixture.nativeElement.querySelector(
-      '#desktop-pane-controls',
+      '[role="switch"][aria-label="Show pane controls"]',
     );
     expect(toggle.checked).toBe(false);
     expect(view.stage().showPaneControls()).toBe(false);
@@ -295,7 +327,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
     const button: HTMLButtonElement = fixture.nativeElement.querySelector(
-      '[data-desktop-menu] .actions button',
+      '[data-settings-section="overview"] .settings-button-row button',
     );
     expect(button.textContent).toContain('Start activity');
     expect(
@@ -311,7 +343,7 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
     expect(
       fixture.nativeElement.querySelector(
-        '[data-desktop-menu] .actions button',
+        '[data-settings-section="overview"] .settings-button-row button',
       ),
     ).toBe(button);
     expect(button.textContent).toContain('End activity');
@@ -332,7 +364,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
     const input: HTMLInputElement = fixture.nativeElement.querySelector(
-      '#desktop-reduce-motion',
+      '[role="switch"][aria-label="Reduce motion"]',
     );
     input.checked = true;
     input.dispatchEvent(new Event('change'));

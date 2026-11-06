@@ -30,7 +30,9 @@ test('M opens modal controls, contains focus, preserves typing and switches to m
   });
   await expect(close).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(controls.getByLabel('Reduce motion')).toBeFocused();
+  await expect(
+    controls.getByRole('switch', { name: 'Ivy awareness', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(close).toBeFocused();
   const draft = controls.getByRole('textbox', {
