@@ -12,6 +12,9 @@
       } @else {
         <p role="status">{{ description() }}</p>
       }
+      <span class="elapsed" aria-label="Request elapsed time"
+        >{{ elapsed(view().elapsedMs) }} elapsed</span
+      >
       <span class="working-line" aria-hidden="true"></span>
     </section>
     @if (view().actions.length) {
@@ -20,18 +23,76 @@
           <span class="terminal-mark" aria-hidden="true">›_</span> Actions
         </h2>
         <ol>
-          @for (row of view().actions.slice(-6); track row.id) {
-            <li [attr.data-state]="row.status">
+          @for (row of displayedActions(); track row.id) {
+            <li
+              [attr.data-state]="row.status"
+              [attr.title]="row.label + ' · ' + row.status"
+            >
+              <span
+                class="provider-icon"
+                role="img"
+                [attr.aria-label]="providerLabel(row)"
+              >
+                @if (row.provider === 'stellar') {
+                  <img src="emblem/layers/outer-frame.svg" alt="" />
+                } @else {
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    @switch (row.provider) {
+                      @case ('chrome') {
+                        <circle cx="10" cy="10" r="8" />
+                        <circle cx="10" cy="10" r="3" />
+                        <path d="M10 7h7 M12.6 11.5l-3.5 6 M7.4 11.5 4 5.5" />
+                      }
+                      @case ('github') {
+                        <path
+                          d="M6 16v-3C2 13 2 8 5 7L5 3l4 2h2l4-2v4c3 1 3 6-1 6v4 M6 15C3 16 3 13 1 13"
+                        />
+                      }
+                      @case ('calendar') {
+                        <rect x="3" y="4" width="14" height="13" rx="2" />
+                        <path
+                          d="M6 2v4 M14 2v4 M3 8h14 M6 11h3 M11 11h3 M6 14h3"
+                        />
+                      }
+                      @case ('spotify') {
+                        <circle cx="10" cy="10" r="8" />
+                        <path
+                          d="M5 7Q10 5 15 8 M6 10Q10 8 14 11 M7 13Q10 11.5 13 13.5"
+                        />
+                      }
+                      @case ('web') {
+                        <circle cx="10" cy="10" r="8" />
+                        <ellipse cx="10" cy="10" rx="3" ry="8" />
+                        <path d="M2 10h16" />
+                      }
+                      @case ('mcp') {
+                        <path d="m3 12 8-8 4 4-8 8 M6 15l3 3 8-8 M3 8 8 3" />
+                      }
+                      @default {
+                        <path d="m3 5 5 5-5 5 M10 15h7" />
+                      }
+                    }
+                  </svg>
+                }
+              </span>
               <span
                 class="action-mark"
                 [class.running]="row.running"
                 aria-hidden="true"
               ></span>
-              <span class="action-label">{{ row.label }}</span>
-              <span class="action-state">{{ row.status }}</span>
+              <span class="action-label"
+                >{{ row.label }}{{ row.running ? '…' : '' }}</span
+              >
+              <span class="action-state"
+                >{{ row.status }} · {{ elapsed(row.elapsedMs) }}</span
+              >
             </li>
           }
         </ol>
+        <span class="overflow" role="status">{{ overflow() }}</span>
+        <span class="overflow compact-overflow" role="status">{{
+          compactOverflow()
+        }}</span>
       </section>
     }
     @for (special of indicators(); track special.indicator) {

@@ -150,7 +150,7 @@ impl SpeechHost {
             .as_ref()
             .ok_or(SpeechError::Unavailable)?
             .output();
-        let payload = process::payload(json!({"text":request.text,"output":output}));
+        let payload = process::payload(super::acknowledgment::payload(request.text, &output));
         let host = self.clone();
         std::thread::spawn(move || {
             let result = payload.and_then(|bytes| {

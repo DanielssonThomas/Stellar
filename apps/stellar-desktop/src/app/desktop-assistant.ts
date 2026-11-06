@@ -40,17 +40,44 @@ export class DesktopAssistant {
   readonly activity = computed(() =>
     this.state().activity.map((row) => ({
       id: row.id,
-      label: {
-        shell: 'Shell command',
-        web: 'Web request',
-        file_read: 'Read files',
-        file_write: 'Write files',
-        mcp: 'MCP tool call',
-        skill: 'Modify skill',
-        skill_create: 'Create skill',
-        memory: 'Update memory',
-        tool: 'Tool call',
-      }[row.kind],
+      provider: row.provider,
+      label:
+        row.operation && row.provider && row.kind === 'mcp'
+          ? `${
+              {
+                search: 'Searching',
+                read: 'Reading',
+                write: 'Writing',
+                open: 'Opening',
+                list: 'Listing',
+                inspect: 'Inspecting',
+                update: 'Updating',
+                execute: 'Running',
+                call: 'Calling',
+              }[row.operation]
+            } ${
+              {
+                chrome: 'Chrome',
+                stellar: 'Stellar',
+                github: 'GitHub',
+                calendar: 'calendar',
+                spotify: 'Spotify',
+                mcp: 'MCP tool',
+                local: 'local tool',
+                web: 'the web',
+              }[row.provider]
+            }`
+          : {
+              shell: 'Shell command',
+              web: 'Web request',
+              file_read: 'Read files',
+              file_write: 'Write files',
+              mcp: 'MCP tool call',
+              skill: 'Modify skill',
+              skill_create: 'Create skill',
+              memory: 'Update memory',
+              tool: 'Tool call',
+            }[row.kind],
       status: row.state,
       running: row.state === 'running',
       confirmed: row.state === 'completed',
