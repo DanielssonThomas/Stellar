@@ -12,6 +12,8 @@ type Stage =
   | 'hermes_submit'
   | 'first_model_delta'
   | 'hermes_admitted'
+  | 'acknowledgment_requested'
+  | 'acknowledgment_playback_observed'
   | 'first_validated_text'
   | 'model_completed'
   | 'tts_request'

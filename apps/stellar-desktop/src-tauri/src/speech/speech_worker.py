@@ -5,6 +5,8 @@ import sys
 sys.dont_write_bytecode = True
 
 import contextlib
+import base64
+import hashlib
 import json
 import math
 import os
@@ -20,6 +22,7 @@ VOICE = PROFILE / 'voice'
 MAX_REQUEST = 3 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024
 MAX_WAV = 8 * 1024 * 1024
+CACHED_ACKNOWLEDGMENT_SHA256 = '762c2f8958c715db47b92c4f80028b38eb0e4e84c09bdb11531e1696d783eee8'
 PROTOCOL_LOCK = threading.Lock()
 
 for _key, _value in {
@@ -253,7 +256,7 @@ def sentences(text):
 
 
 def speak(req, protocol, engine=None):
-    if set(req) != {'text', 'output'}:
+    if set(req) not in ({'text', 'output'}, {'text', 'output', 'cached_wav'}):
         reject()
     text, output = req['text'], req['output']
     if type(text) is not str or not text.strip() or utf8_size(text) > 4000:
@@ -275,9 +278,36 @@ def speak(req, protocol, engine=None):
     if alternate.exists() or alternate.is_symlink() or alternate.with_suffix('.tmp.wav').exists():
         reject()
     emit(protocol, {'state': 'synthesizing'})
+    if 'cached_wav' in req:
+        cached_acknowledgment(req, target, protocol)
+        return
     engine = engine or VoiceEngine()
     engine.configure(settings)
     synthesize_segments(text, target, alternate, protocol, engine)
+
+
+def cached_acknowledgment(req, target, protocol):
+    encoded = req['cached_wav']
+    if (req['text'] != 'Mm, let me check.' or type(encoded) is not str
+            or len(encoded) > 100_000):
+        reject()
+    try:
+        audio = base64.b64decode(encoded, validate=True)
+    except (ValueError, UnicodeError):
+        reject()
+    if hashlib.sha256(audio).hexdigest() != CACHED_ACKNOWLEDGMENT_SHA256:
+        reject()
+    started = time.perf_counter()
+    def timing(stage):
+        emit(protocol, {'timing': {'stage': stage, 'elapsed_ms': round((time.perf_counter()-started)*1000)}})
+    timing('synthesis_started')
+    with target.open('xb') as output:
+        output.write(audio)
+    timing('first_audio')
+    timing('synthesis_completed')
+    playback(target, protocol, terminal=False, on_dispatch=lambda: timing('playback_dispatched'))
+    timing('playback_completed')
+    emit(protocol, {'done': True})
 
 
 def synthesize_segments(text, target, alternate, protocol, engine):

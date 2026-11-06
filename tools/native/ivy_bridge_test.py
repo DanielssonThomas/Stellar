@@ -287,6 +287,33 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ActivityTests(unittest.IsolatedAsyncioTestCase):
+    def test_provider_and_operation_are_allowlisted_tool_identity_not_arguments(self):
+        activity = sys.modules['stellar_ivy_activity'].Activity()
+        cases = [
+            ('mcp__chrome_devtools__navigate_page', 'chrome', 'open'),
+            ('mcp_stellar_workspace_present_image', 'stellar', 'open'),
+            ('mcp_github_fetch_issue', 'github', 'read'),
+            ('mcp_google_calendar_list_events', 'calendar', 'list'),
+            ('mcp_spotify_get_playback', 'spotify', 'read'),
+            ('mcp_unknown_secret_chrome_search', 'mcp', 'call'),
+            ('terminal', 'local', 'execute'),
+        ]
+        for seq, (name, provider, operation) in enumerate(cases):
+            activity.offer(self.event(seq, name=name, args={'action': 'search', 'query': 'SECRET'}))
+            row = activity.flush()['payload']['actions'][-1]
+            self.assertEqual((row['provider'], row['operation']), (provider, operation))
+            self.assertNotIn('SECRET', json.dumps(row))
+            self.assertNotIn(name, json.dumps(row))
+        event = self.event(20, name='mcp_github_read_issue')
+        event['payload']['tool_id'] = 'same'
+        activity.offer(event)
+        activity.flush()
+        event = self.event(21, kind='tool.complete', name='mcp_spotify_get_playback', result={'success': True})
+        event['payload']['tool_id'] = 'same'
+        activity.offer(event)
+        row = activity.flush()['payload']['actions'][-1]
+        self.assertEqual((row['provider'], row['operation']), ('github', 'read'))
+
     async def test_tool_batches_keep_order_around_content_free_text_availability(self):
         conn = Connection()
         await conn.events.put({'params': self.event(1, name='mcp_example')})

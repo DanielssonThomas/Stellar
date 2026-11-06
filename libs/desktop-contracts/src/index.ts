@@ -52,6 +52,8 @@ export type {
   IvyActivity,
   IvyActivityKind,
   IvyActivityState,
+  IvyActivityProvider,
+  IvyActivityOperation,
   IvyConnectionState,
   IvyTurnState,
   IvyErrorCode,

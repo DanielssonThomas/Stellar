@@ -29,6 +29,27 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('accepts bounded provider/action enums and rejects arbitrary metadata', () => {
+    const row = {
+      id: '0123456789abcdef',
+      kind: 'mcp',
+      state: 'running',
+      provider: 'calendar',
+      operation: 'list',
+    };
+    expect(
+      decodeIvySnapshot({ ...snapshot(), activity: [row] }).activity,
+    ).toEqual([row]);
+    for (const bad of [
+      { ...row, provider: 'secret' },
+      { ...row, operation: 'rm -rf' },
+      { ...row, operation: null },
+      { ...row, args: 'secret' },
+    ])
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), activity: [bad] }),
+      ).toThrow();
+  });
   it('validates question bounds, exact actions and unique prompt IDs', () => {
     const question = {
       id: 'q1',

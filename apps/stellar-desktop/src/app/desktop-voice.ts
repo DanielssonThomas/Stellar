@@ -97,11 +97,12 @@ export class DesktopVoice {
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: async (text, id) => {
+    speak: async (text, id, current = () => true) => {
       const generation = this.playbackGeneration;
       await this.questionCue.wait();
       if (
         generation !== this.playbackGeneration ||
+        !current() ||
         this.disposed ||
         this.current().muted
       )

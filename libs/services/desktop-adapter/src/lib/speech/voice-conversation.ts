@@ -31,6 +31,7 @@ import {
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
 import { SpeechActivity } from './speech-activity';
+import { CloudVoiceCue } from './cloud-voice-cue';
 import type { ReflexOutcome } from '../reflex/reflex-controller';
 
 const preparing = (status: VoiceComposition['status']) =>
@@ -83,7 +84,11 @@ export interface VoicePorts {
     ) => void,
   ) => Promise<ReflexOutcome>;
   readonly cancelReflex?: () => void;
-  readonly speak: (text: string, id: string) => Promise<SpeechSnapshot>;
+  readonly speak: (
+    text: string,
+    id: string,
+    current?: () => boolean,
+  ) => Promise<SpeechSnapshot>;
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
   readonly onChange: (view: VoiceView) => void;
@@ -159,8 +164,31 @@ export class VoiceConversation {
   private draftCleanupPromise?: Promise<void>;
   private draftRevision = 0;
   private typedLease?: AbortController;
+  private readonly acknowledgment: CloudVoiceCue;
 
   constructor(private readonly ports: VoicePorts) {
+    this.acknowledgment = new CloudVoiceCue({
+      enabled: () =>
+        !this.muted &&
+        !this.disposed &&
+        this.phase === 'waiting' &&
+        this.context?.available === true &&
+        this.context.assistant.turn === 'admitted' &&
+        this.context.assistant.turn_id === this.voiceTurn &&
+        this.composition.model === 'terra',
+      state: () =>
+        this.context?.speech ?? {
+          version: 1,
+          revision: '0',
+          epoch: '0',
+          operation_id: null,
+          state: 'unavailable',
+          error: null,
+        },
+      speak: ports.speak,
+      stop: ports.stop,
+      stage: (stage) => this.latency.point(stage),
+    });
     this.assembler = createUtteranceAssembler({
       silenceMs: ports.silenceMs ?? (ports.keywords ? 800 : 1400),
     });
@@ -253,6 +281,7 @@ export class VoiceConversation {
       context.assistant.turn,
     );
     this.context = context;
+    this.acknowledgment.observe(context.speech);
     if (context.assistant.model === 'sol' && context.assistant.turn_id)
       this.solSessionStarted = true;
     if (
@@ -536,6 +565,13 @@ export class VoiceConversation {
   setMuted(muted: boolean) {
     if (this.disposed) return;
     this.muted = muted;
+    if (muted)
+      void this.acknowledgment.cancel().then((stopped) => {
+        if (!stopped && !this.disposed)
+          this.fail(
+            'Local speech could not stop. Retry voice before resuming.',
+          );
+      });
     if (
       muted &&
       (this.phase === 'speaking' ||
@@ -1515,11 +1551,14 @@ export class VoiceConversation {
     if (snapshot.turn_id !== this.voiceTurn) return;
     if (snapshot.first_text_observed) this.latency.point('first_model_delta');
     if (snapshot.turn === 'admitted') this.latency.point('hermes_admitted');
+    if (snapshot.turn === 'admitted' && this.composition.model === 'terra')
+      this.acknowledgment.schedule(this.voiceTurn);
     if (
       ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
     )
       this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
+      void this.acknowledgment.cancel();
       this.latency.finish('interrupted');
       this.voiceTurn = null;
       this.phase = null;
@@ -1530,6 +1569,7 @@ export class VoiceConversation {
       return;
     }
     if (snapshot.turn !== 'completed') return;
+    const cueStopped = this.acknowledgment.handoff();
     this.invocation.activate();
     this.latency.point('model_completed');
     const id = this.voiceTurn;
@@ -1556,11 +1596,15 @@ export class VoiceConversation {
     this.phase = 'speaking';
     this.playbackAcknowledged = false;
     this.assembler.reset();
-    this.latency.point('tts_request');
-    void this.ports
-      .speak(text, id)
+    void cueStopped
+      .then((stopped) => {
+        if (!this.current(generation) || this.muted) return undefined;
+        if (!stopped) throw new Error('acknowledgment stop failed');
+        this.latency.point('tts_request');
+        return this.ports.speak(text, id);
+      })
       .then((snapshot) => {
-        if (!this.current(generation)) return;
+        if (!snapshot || !this.current(generation)) return;
         if (snapshot.state === 'unavailable') {
           this.fail(
             'Local voice unavailable. Retry voice or use the text reply.',
@@ -1629,6 +1673,7 @@ export class VoiceConversation {
   }
 
   private invalidate(stopWarmWorkers = true) {
+    this.acknowledgment.clear();
     this.ports.cancelReflex?.();
     this.pcmSequence = null;
     this.lastVoicedSequence = null;

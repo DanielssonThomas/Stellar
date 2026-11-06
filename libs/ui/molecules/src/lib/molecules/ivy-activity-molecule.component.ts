@@ -85,6 +85,50 @@ export class IvyActivityMolecule {
         ? 'Preparing request'
         : 'Working';
   });
+  readonly displayedActions = computed(() => {
+    const rows = this.view().actions;
+    const running = rows.filter((row) => row.running);
+    return running.length >= 4
+      ? running.slice(-4)
+      : [
+          ...rows.filter((row) => !row.running).slice(-(4 - running.length)),
+          ...running,
+        ];
+  });
+  readonly overflow = computed(() =>
+    this.hiddenActions(this.displayedActions()),
+  );
+  readonly compactOverflow = computed(() =>
+    this.hiddenActions(this.displayedActions().slice(-2)),
+  );
+  private hiddenActions(displayed: readonly IvyActivityItem[]) {
+    const hidden = this.view().actions.filter(
+      (row) => !displayed.some((shown) => shown.id === row.id),
+    );
+    const active = hidden.filter((row) => row.running).length;
+    return active
+      ? `+${active} more running`
+      : hidden.length
+        ? `+${hidden.length} earlier calls`
+        : '';
+  }
+  elapsed(ms = 0) {
+    return `${Math.floor(ms / 1000)}s`;
+  }
+  providerLabel(row: IvyActivityItem) {
+    return (
+      {
+        chrome: 'Chrome',
+        stellar: 'Stellar',
+        github: 'GitHub',
+        calendar: 'Calendar',
+        spotify: 'Spotify',
+        mcp: 'MCP',
+        local: 'Local tool',
+        web: 'Web',
+      } as const
+    )[row.provider ?? 'local'];
+  }
   constructor() {
     effect(() => {
       const emblem = this.emblem();
