@@ -1970,6 +1970,79 @@ describe('voice conversation ownership', () => {
     expect(f.ports.speak).toHaveBeenCalledOnce();
   });
 
+  it.each([false, true])(
+    'serializes post-wake draft collection behind passive diagnostics (reset queued: %s)',
+    async (resetQueued) => {
+      const passive = deferred<void>();
+      let active = false;
+      let collisions = 0;
+      let wakeNext = false;
+      const buffers: Int16Array[] = [];
+      const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => {
+        if (active) {
+          collisions++;
+          throw new Error('SpeechHost busy');
+        }
+        active = true;
+        buffers.push(pcm);
+        try {
+          if (buffers.length === 1) {
+            await passive.promise;
+            return { version: 1, utterance_id, text: 'Ambient speech' };
+          }
+          expect(pcm.some((sample) => sample !== 0)).toBe(true);
+          return { version: 1, utterance_id, text: 'A short spoken request' };
+        } finally {
+          active = false;
+        }
+      });
+      const f = fixture({
+        collect,
+        keywords: async (_pcm, _stream, sequence) => {
+          const detection = wakeNext
+            ? { command: 'ivy' as const, end_sample: (sequence + 1) * 640 }
+            : null;
+          wakeNext = false;
+          return { sequence, detection };
+        },
+      });
+      const settle = async () => {
+        for (let i = 0; i < 8; i++) await flush();
+      };
+      f.controller.setRecognitionOptions('high', true);
+      f.feed(true, 8);
+      f.feed(false, 35);
+      await settle();
+      expect(collect).toHaveBeenCalledOnce();
+      wakeNext = true;
+      f.feed(true, 1);
+      await settle();
+      expect(f.view().foregroundActive).toBe(true);
+      f.feed(true, 8);
+      f.feed(false, 40);
+      await settle();
+      expect(collect).toHaveBeenCalledOnce();
+      expect(collisions).toBe(0);
+      expect(f.view().error).toBe(false);
+      if (resetQueued) f.controller.accept({ type: 'reset' });
+      passive.resolve();
+      await settle();
+      expect(collisions).toBe(0);
+      expect(f.view().error).toBe(false);
+      expect(collect).toHaveBeenCalledTimes(resetQueued ? 1 : 2);
+      if (resetQueued) expect(f.ports.submit).not.toHaveBeenCalled();
+      else
+        expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+          'A short spoken request',
+          id,
+        );
+      expect(buffers.every((pcm) => pcm.every((sample) => sample === 0))).toBe(
+        true,
+      );
+      f.controller.dispose();
+    },
+  );
+
   it('keeps passive diagnostics local and selects the high-sensitivity wake-only mode', async () => {
     const observations = vi.fn();
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

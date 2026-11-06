@@ -270,6 +270,7 @@ export class VoiceConversation {
               stage === 'started' ? 'stt_request' : 'stt_completed',
             );
         },
+        () => this.passiveRecognition?.wait(),
       );
     }
     if (ports.presentFinalized)
