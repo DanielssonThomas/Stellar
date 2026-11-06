@@ -254,6 +254,8 @@ test('session shortcut ignores typing and modifiers; busy work cannot be reset',
   await expect(input).toHaveValue('Ivy c');
   await expect(dialog(page)).not.toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(input).not.toBeVisible();
+  await page.locator('stellar-desktop-experience-template').focus();
   await page.evaluate(() =>
     (
       window as unknown as { __inspectorFixture: InspectorFixture }
