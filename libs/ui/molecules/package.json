@@ -2,10 +2,11 @@
   "name": "@stellar/ui-molecules",
   "version": "0.0.1",
   "peerDependencies": {
+    "@angular/common": "^21.2.0",
     "@angular/core": "^21.2.0",
+    "@stellar/desktop-contracts": "workspace:^",
     "@stellar/ui-atoms": "workspace:^",
     "@stellar/desktop-interaction": "workspace:^",
-    "@stellar/desktop-contracts": "workspace:^",
     "clsx": "^2.1.1"
   },
   "sideEffects": false

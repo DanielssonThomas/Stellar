@@ -153,6 +153,13 @@
       <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
       <button
         type="button"
+        aria-keyshortcuts="C"
+        (click)="setSessionsVisible(true)"
+      >
+        Ivy sessions · C
+      </button>
+      <button
+        type="button"
         aria-keyshortcuts="S"
         [attr.aria-pressed]="statusVisible()"
         (click)="toggleStatus()"
@@ -396,3 +403,25 @@
     />
   }
 </div>
+<stellar-ivy-session-inspector-molecule
+  [visible]="sessionsVisible()"
+  [snapshot]="sessionSnapshot()"
+  [sessions]="sessionRows()"
+  [messages]="sessionMessages()"
+  [loading]="sessionLoading()"
+  [error]="sessionError()"
+  [status]="assistantStatus()"
+  [voice]="voiceStatus()"
+  [reflex]="reflexStatus()"
+  [model]="cloudLabel()"
+  [verifiedModel]="verifiedModel()"
+  [busy]="
+    assistantBusy() || voiceBusy() || composing() || cloudStatus() !== 'ready'
+  "
+  (closed)="setSessionsVisible(false)"
+  (selected)="sessionSelected.emit($event)"
+  (refresh)="sessionRefresh.emit()"
+  (moreSessions)="sessionMore.emit()"
+  (olderMessages)="sessionOlderMessages.emit()"
+  (newSession)="sessionNew.emit()"
+/>

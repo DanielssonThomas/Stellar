@@ -1,5 +1,10 @@
 export * from './lib/services/desktop-adapter.service';
 export {
+  IvyInspectorService,
+  IVY_INSPECTOR_READ,
+} from './lib/services/ivy-inspector.service';
+export type { IvyInspectorRead } from './lib/services/ivy-inspector.service';
+export {
   DesktopAwarenessService,
   AWARENESS_TRANSPORT,
 } from './lib/services/desktop-awareness.service';

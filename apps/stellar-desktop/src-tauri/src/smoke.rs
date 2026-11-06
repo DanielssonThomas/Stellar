@@ -200,6 +200,17 @@ fn check_page(window: Webview) {
                 catch (error) { malformedRejected = error.code === 'malformed_request'; }
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
+                stage='inspector-request-validation';
+                let inspectorRejected=0;
+                for(const request of [
+                  {version:2,session_id:null,offset:0,before_message:null},
+                  {version:1,session_id:'',offset:0,before_message:null}
+                ]) {
+                  try { await invoke('ivy_inspect',{request}); }
+                  catch(error) { if(error==='malformed_request')inspectorRejected++; }
+                }
+                if(inspectorRejected!==2)throw Error('Inspector malformed contract failed');
+                stage='lifecycle-validation';
                 let lifecycleRejected = 0;
                 for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
                     try { await invoke(name, { request: { version: 2 } }); }
@@ -219,6 +230,12 @@ fn check_page(window: Webview) {
                 await invoke('ivy_disconnect', { request: { version: 1 } });
                 const disconnectResponsive = performance.now() - beforeDisconnect < 750;
                 const cancelledRotation = await pending;
+                stage='inspector-disconnected';
+                let inspectorUnavailable=false;
+                try { await invoke('ivy_inspect',{request:{version:1,session_id:null,offset:0,before_message:null}}); }
+                catch(error) { inspectorUnavailable=error==='unavailable'; }
+                if(!inspectorUnavailable)throw Error('Disconnected inspector read-only contract failed');
+                stage='local-checks';
                 const capturedWindow = await invoke('smoke_capture_window');
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
                 const root = document.querySelector('stellar-root');
@@ -318,6 +335,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_question_reply,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
+            crate::ivy::inspector::ivy_inspect,
             smoke_hold_ivy,
             smoke_capture_window,
             smoke_result

@@ -6,6 +6,8 @@ mod connection;
 mod context_submit_tests;
 pub mod contracts;
 mod host;
+pub(crate) mod inspector;
+pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
 #[cfg(test)]

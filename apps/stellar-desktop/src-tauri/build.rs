@@ -19,6 +19,7 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        "ivy_inspect",
         awareness::AWARENESS_COMMANDS[0],
         awareness::AWARENESS_COMMANDS[1],
         awareness::AWARENESS_COMMANDS[2],

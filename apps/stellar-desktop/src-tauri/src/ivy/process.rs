@@ -63,6 +63,11 @@ pub fn stop(child: &OwnedChild) {
 impl Broker {
     pub fn launch(child: OwnedChild) -> Result<Self, IvyErrorCode> {
         let modules = [
+            (
+                "stellar_ivy_inspector_history",
+                include_str!("ivy_inspector_history.py"),
+            ),
+            ("stellar_ivy_inspector", include_str!("ivy_inspector.py")),
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
             ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),

@@ -1,5 +1,18 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
 export type {
+  IvyInspectorRequest,
+  IvyInspectorSnapshot,
+  IvySessionSummary,
+  IvySessionMessage,
+  IvySessionContext,
+  IvyUsageWindow,
+  IvyAccountUsage,
+  IvyUsageState,
+  IvySessionRole,
+} from './generated';
+export { ivyInspectCommand } from './generated';
+export { decodeIvyInspectorSnapshot } from './lib/ivy-inspector-codec';
+export type {
   AwarenessApp,
   AwarenessMedia,
   AwarenessHealth,

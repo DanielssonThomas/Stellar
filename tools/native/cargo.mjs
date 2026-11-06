@@ -103,6 +103,7 @@ if (action === 'smoke') {
               'allow-ivy-question-reply',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
+              'allow-ivy-inspect',
               'allow-smoke-hold-ivy',
               'allow-smoke-capture-window',
             ],

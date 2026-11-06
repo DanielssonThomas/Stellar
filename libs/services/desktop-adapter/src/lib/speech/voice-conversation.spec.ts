@@ -3095,6 +3095,26 @@ describe('spoken prompt composition', () => {
 });
 
 describe('native voice lifecycle commands', () => {
+  it('runs a requested UI new session through lifecycle without submitting a model prompt', async () => {
+    const newSession = vi.fn(async () => true),
+      onNewSession = vi.fn();
+    const f = fixture({ newSession, onNewSession });
+    expect(await f.controller.newSession()).toBe(true);
+    expect(newSession).toHaveBeenCalledOnce();
+    expect(onNewSession).toHaveBeenCalledOnce();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.view().passive).toBe(true);
+    f.controller.dispose();
+  });
+  it('refuses a UI new session while an admitted turn is running', async () => {
+    const newSession = vi.fn(async () => true);
+    const f = fixture({ newSession });
+    f.update({ assistant: { ...f.context().assistant, turn: 'admitted' } });
+    expect(await f.controller.newSession()).toBe(false);
+    expect(newSession).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
   it('accepts a standalone collected reload while passive without activating foreground presence', async () => {
     const reloadMcp = vi.fn(async () => true);
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

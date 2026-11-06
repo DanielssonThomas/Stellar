@@ -20,6 +20,7 @@ import {
   MusicVisualizerService,
   createNativeMediaWorkspace,
   IvyReflexService,
+  IvyInspectorService,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
 import {
@@ -66,6 +67,16 @@ import { DesktopFaults } from './desktop-faults';
   },
 })
 export class AppComponent {
+  readonly inspector = inject(IvyInspectorService);
+  inspectorVisible(visible: boolean) {
+    if (visible) this.inspector.open();
+    else this.inspector.close();
+  }
+  async newInspectorSession() {
+    if (await this.voice.newSession()) {
+      this.inspector.select(null);
+    }
+  }
   private readonly injector = inject(Injector);
   async questionShown(id: string) {
     try {

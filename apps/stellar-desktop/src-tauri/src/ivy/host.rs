@@ -22,6 +22,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_inspector.rs"]
+mod inspector;
 #[path = "host_questions.rs"]
 mod questions;
 #[path = "host_requests.rs"]
@@ -34,6 +36,10 @@ mod startup;
 mod route_tests;
 
 pub enum Action {
+    Inspect(
+        super::inspector_contracts::IvyInspectorRequest,
+        mpsc::SyncSender<Result<super::inspector_contracts::IvyInspectorSnapshot, IvyErrorCode>>,
+    ),
     Connect,
     Submit(IvySubmitRequest),
     Cancel,
@@ -168,6 +174,9 @@ impl IvyHost {
                         session.epoch = work.epoch;
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
+                            Action::Inspect(request, reply) => {
+                                inspector::run(&mut session, request, reply)
+                            }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => {
                                 session.submit_with_context(request, work.context)
@@ -210,11 +219,7 @@ impl IvyHost {
                                 Ok(())
                             }
                         };
-                        if let Err(error) = result {
-                            tools.disarm();
-                            tools.set_input(None);
-                            fail(&mut session, error);
-                        }
+                        settle_result(&mut session, &tools, result);
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -297,6 +302,14 @@ impl IvyHost {
 impl Drop for IvyHost {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+fn settle_result(session: &mut Session, tools: &WorkspaceHub, result: Result<(), IvyErrorCode>) {
+    if let Err(error) = result {
+        tools.disarm();
+        tools.set_input(None);
+        fail(session, error);
     }
 }
 

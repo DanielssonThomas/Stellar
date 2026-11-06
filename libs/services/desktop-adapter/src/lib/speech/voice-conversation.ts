@@ -1171,10 +1171,16 @@ export class VoiceConversation {
     }
   }
 
+  async newSession(): Promise<boolean> {
+    return this.withCaptureReleased(() =>
+      this.lifecycleCommand('new session', this.generation),
+    );
+  }
+
   private async lifecycleCommand(
     command: 'new session' | 'reload mcp',
     generation: number,
-  ) {
+  ): Promise<boolean> {
     const context = this.context;
     if (
       !context ||
@@ -1188,7 +1194,7 @@ export class VoiceConversation {
       this.controlNotice =
         'Ivy is busy. Try the command after this turn finishes.';
       this.publish();
-      return;
+      return false;
     }
     this.sessionPending = true;
     this.controlNotice =
@@ -1203,12 +1209,13 @@ export class VoiceConversation {
           ? this.ports.newSession
           : this.ports.reloadMcp;
       const accepted = operation ? await operation() : false;
-      if (command === 'new session' && !this.newSessionRequested) return;
+      if (command === 'new session' && !this.newSessionRequested)
+        return accepted;
       if (
         this.disposed ||
         (!this.current(generation) && !(accepted && command === 'new session'))
       )
-        return;
+        return false;
       this.phase = null;
       if (!accepted) {
         this.controlNotice =
@@ -1218,6 +1225,7 @@ export class VoiceConversation {
       } else if (command === 'new session') {
         if (this.newSessionRequested) this.finishNewSession();
       } else this.controlNotice = 'MCP integrations reloaded.';
+      return accepted;
     } catch {
       if (
         this.current(generation) &&
@@ -1229,6 +1237,7 @@ export class VoiceConversation {
             ? 'New session was not confirmed. Check Ivy before continuing.'
             : 'MCP reload failed or is unsupported. Conversation preserved.';
       }
+      return false;
     } finally {
       this.sessionPending = false;
       if (!this.disposed) this.publish();

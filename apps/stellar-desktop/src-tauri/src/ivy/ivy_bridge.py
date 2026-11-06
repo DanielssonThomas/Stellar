@@ -27,6 +27,7 @@ METHODS = {
     'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
     'integrations.reload': {'session_id': object},
     'workspace.setup': {'descriptor': object, 'session_id': object}, 'workspace.stop': {},
+    'inspector.inspect': {'active': object, 'requested': object, 'offset': int, 'before': object},
 }
 CAPABILITIES = ['durable-admission-v1', 'event-replay-v1', 'local-cli-create-v1']
 IDENTITY = {'session_id', 'stored_session_id', 'admission_id', 'input_id',
@@ -369,7 +370,22 @@ async def request_worker(conn, workspace, queue, approvals=None):
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method in {'session.new', 'integrations.reload'}:
+            if method == 'inspector.inspect':
+                from stellar_ivy_inspector import Inspector
+                inspector = getattr(conn, 'inspector', None)
+                if inspector is None:
+                    inspector = conn.inspector = Inspector(PROFILE)
+                active = params['active']
+                if getattr(conn, 'selected_session', None) is not None and active != conn.selected_session:
+                    raise Closed()
+                requested, offset, before = params['requested'], params['offset'], params['before']
+                if ((requested is not None and not string(requested, 512)) or
+                        not 0 <= offset <= 1960 or
+                        (before is not None and (type(before) is not int or not 0 < before <= 4294967295))):
+                    raise Closed()
+                result = await inspector.inspect(conn, active, requested, offset, before,
+                    workspace.redact if workspace is not None else lambda value: value)
+            elif method in {'session.new', 'integrations.reload'}:
                 result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
             elif method == 'workspace.setup':
                 if workspace is None:
@@ -445,7 +461,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
                 await settle_receipt(conn, workspace, params, result, approvals)
-            if method == 'workspace.setup':
+            if method in {'workspace.setup', 'inspector.inspect'}:
                 pass
             elif method == 'runtime.describe':
                 if (type(result) is not dict or
@@ -547,6 +563,8 @@ async def serve():
                 await task
         if conn is not None:
             conn.lease.release()
+            if getattr(conn, 'inspector', None) is not None:
+                await conn.inspector.close()
         if workspace is not None:
             await workspace.stop()
 

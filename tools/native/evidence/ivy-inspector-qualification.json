@@ -1,0 +1,21 @@
+{
+  "issue": 302,
+  "measured_at": "2026-11-06T20:21:51.123793+00:00",
+  "history_available": true,
+  "catalog_page_count": 40,
+  "transcript_page_count": 9,
+  "native_journal_present": false,
+  "active_session_present": false,
+  "active_stored_identity_resolved": false,
+  "gateway_available": false,
+  "context_available": false,
+  "account_usage_available": true,
+  "inference_requests": 0,
+  "session_resume_requests": 0,
+  "gateway_discovery_state": "absent",
+  "auth_store_unchanged": true,
+  "limitations": [
+    "Availability qualification is read-only; it starts no inference, attaches no session and does not measure physical audio.",
+    "Context may be unavailable when the retained session has no live agent; account usage may be unavailable when its source cannot answer."
+  ]
+}

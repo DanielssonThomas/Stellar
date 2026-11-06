@@ -467,6 +467,24 @@ python -I tools/native/qualify-speech.py --run-local-engines
 
 It requires the existing local models and documented generated sample, writes its receipt under `artifacts/native`, and is excluded from automatic CI tests. It does not download missing assets or send a conversation prompt.
 
+## Ivy session inspector
+
+Press **C** outside editable fields, or **M → Ivy sessions · C**, to open the fixed-size gold session inspector. Press C again or Escape to close it. Modifier shortcuts, key repeats, IME composition and pending Ivy questions retain their existing behavior. The modal restores focus and keeps its conversation list and transcript independently scrollable. Browsing a historical session never resumes it or changes the active conversation. **New session** uses the existing confirmed native lifecycle, is disabled while work or voice composition is active, and preserves Ivy's profile and durable memory.
+
+The fixed `ivy_inspect` IPC reads only the installed Ivy profile. Its local SQLite connection is read-only and closes after each query; catalog and human/assistant transcript pages contain at most 40 rows, with one selected catalog row added when it falls outside the page. Worker, tool, system and reasoning rows are excluded. Titles and content are bounded in SQL before transfer. Workspace turn-token instructions and structurally recognized Desktop observation envelopes are removed from the displayed user text; structured assistant presentations expose only their text or a presentation placeholder. Paging does not attach, resume, submit or mutate a session. Active runtime identity is separate from its persisted transcript segment and resolves through the local creation receipt.
+
+The inspector refreshes while open every 2.5 seconds and stops on close. Context occupancy and compaction counts come from the current gateway's `session.stats`; cumulative session token totals are not treated as occupancy. Codex account allowance uses the installed provider's read-only usage fetcher with explicit credentials resolved without refresh or adoption. The UI reports remaining percentage and reset times for the Ivy profile account, shared across sessions. Context and quota refresh in owned background tasks; a slow network request cannot hold the foreground broker queue. Account refresh is limited to once per minute. Each source keeps its own observation timestamp; context older than 15 seconds and account data older than 120 seconds is marked stale. Unavailable metrics remain unavailable.
+
+`tools/native/ivy_inspector_test.py` covers bounded read-only history, runtime/transcript mapping, hidden/worker/unknown selectors, structured responses, input metadata removal, quota credential behavior, cancellation and nonblocking refresh. Run the installed-source read-only qualifier with the installed Hermes interpreter:
+
+```powershell
+& <installed-Hermes-python> -I tools/native/qualify-ivy-inspector.py
+```
+
+The [sanitized qualification receipt](../../tools/native/evidence/ivy-inspector-qualification.json) records actual local history and account-source availability without transcript text, credentials or allowance values. On 6 November 2026, catalog/history and account allowance were available and the auth store was unchanged. The configured gateway and native foreground journal were absent during qualification, so live active-context availability was not demonstrated; fixtures cover that mapping and the inspector reports the source limitation honestly.
+
+The overlay retains at most 2,000 catalog entries and the most recent 400 human messages for the selected conversation. It labels the transcript limit explicitly; it is a quick inspector rather than an unbounded transcript export.
+
 ## Voice-response latency qualification
 
 Issue [#254](https://github.com/DanielssonThomas/Stellar/issues/254) starts from develop `f2a781a`. PR [#248](https://github.com/DanielssonThomas/Stellar/pull/248) owns wake invocation and continuous microphone gating; this work does not change recognition, VAD thresholds, microphone ownership or emblem design. After a confirmed same-model selection, the native request handler now returns the verified snapshot without queuing a rotation or invalidating workspace tools. Busy/uncertain turns, pending rotations, errors, forced resets and unverified/different models still use their existing paths; prompt submission still verifies the gateway session route.
