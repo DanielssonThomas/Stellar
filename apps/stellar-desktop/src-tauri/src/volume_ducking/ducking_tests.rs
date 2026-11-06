@@ -150,6 +150,72 @@ fn shutdown_seals_future_dispatch() {
 }
 
 #[test]
+fn speaker_starting_during_enumeration_is_never_attenuated() {
+    struct Watched {
+        level: Arc<Mutex<f32>>,
+        writes: Arc<Mutex<Vec<f32>>>,
+    }
+    impl Endpoint for Watched {
+        fn read(&self) -> Result<f32, ()> {
+            Ok(*self.level.lock().unwrap())
+        }
+        fn write(&self, value: f32) -> Result<(), ()> {
+            self.writes.lock().unwrap().push(value);
+            *self.level.lock().unwrap() = value;
+            Ok(())
+        }
+        fn is_current(&self) -> bool {
+            true
+        }
+    }
+    let speaker = Arc::new(AtomicU32::new(0));
+    let identity = speaker.clone();
+    let level = Arc::new(Mutex::new(0.8));
+    let observed = level.clone();
+    let writes = Arc::new(Mutex::new(vec![]));
+    let recording = writes.clone();
+    let music = Arc::new(Mutex::new(0.7));
+    let (send, receive) = mpsc::channel();
+    let (scanned, ready) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let mut scans = 0;
+        run_with(
+            receive,
+            || {
+                scans += 1;
+                let mut sessions = vec![Session {
+                    id: "music".into(),
+                    process: u32::MAX,
+                    endpoint: endpoint(&music),
+                }];
+                if scans >= 2 {
+                    identity.store(5, Ordering::Release);
+                    sessions.push(Session {
+                        id: "new-ivy".into(),
+                        process: 5,
+                        endpoint: Box::new(Watched {
+                            level: observed.clone(),
+                            writes: recording.clone(),
+                        }),
+                    });
+                    if scans == 2 {
+                        scanned.send(()).unwrap();
+                    }
+                }
+                Ok(sessions)
+            },
+            speaker,
+        );
+    });
+    send.send(Message::Active(true)).unwrap();
+    ready.recv_timeout(Duration::from_secs(3)).unwrap();
+    send.send(Message::Shutdown).unwrap();
+    worker.join().unwrap();
+    near(&level, 0.8);
+    assert!(writes.lock().unwrap().is_empty());
+}
+
+#[test]
 fn ducking_contract_rejects_unknown_fields_and_wrong_types() {
     use crate::speech::contracts::SpeechDuckingRequest;
     for value in [

@@ -129,17 +129,20 @@ fn run_with(
         if !active {
             lease = None;
         }
-        let speaker = speaker.load(Ordering::Acquire);
         if active && now >= retry {
             if let Ok(sessions) = open() {
                 if mixer.is_empty() {
                     previous = now;
                 }
-                mixer.discover(sessions, speaker);
+                mixer.discover(sessions, speaker.load(Ordering::Acquire));
             }
             retry = now + Duration::from_millis(250);
         }
-        mixer.tick(active, now.duration_since(previous), speaker);
+        mixer.tick(
+            active,
+            now.duration_since(previous),
+            speaker.load(Ordering::Acquire),
+        );
         previous = now;
         if shutdown.is_some_and(|deadline| mixer.is_empty() || now >= deadline) {
             break;
