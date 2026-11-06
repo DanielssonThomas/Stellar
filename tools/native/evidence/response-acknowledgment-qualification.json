@@ -33,16 +33,16 @@
     "complete_ms": 4829.5,
     "working_set_bytes": 459550720,
     "peak_working_set_bytes": 459649024,
-    "idle_cpu_percent_one_core": 0.0,
+    "idle_cpu_percent_one_core": 0,
     "steady_idle_cpu_percent_one_core": null
   },
   "warm": {
     "samples": 12,
     "p50_first_playable_audio_ms": 399.645,
     "p95_first_playable_audio_ms": 501.93,
-    "p50_working_set_bytes": 473802752.0,
-    "steady_idle_cpu_percent_one_core": 0.0,
-    "max_idle_cpu_percent_one_core": 0.0,
+    "p50_working_set_bytes": 473802752,
+    "steady_idle_cpu_percent_one_core": 0,
+    "max_idle_cpu_percent_one_core": 0,
     "runs": [
       {
         "worker_timings": [
@@ -71,7 +71,7 @@
         "complete_ms": 380.09,
         "working_set_bytes": 473784320,
         "peak_working_set_bytes": 473890816,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -101,7 +101,7 @@
         "complete_ms": 450.77,
         "working_set_bytes": 473784320,
         "peak_working_set_bytes": 473890816,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -131,7 +131,7 @@
         "complete_ms": 438.25,
         "working_set_bytes": 473788416,
         "peak_working_set_bytes": 473894912,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -161,7 +161,7 @@
         "complete_ms": 474.1,
         "working_set_bytes": 473788416,
         "peak_working_set_bytes": 473894912,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -191,7 +191,7 @@
         "complete_ms": 325.48,
         "working_set_bytes": 473788416,
         "peak_working_set_bytes": 473894912,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -221,7 +221,7 @@
         "complete_ms": 419.25,
         "working_set_bytes": 473800704,
         "peak_working_set_bytes": 473903104,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -251,7 +251,7 @@
         "complete_ms": 368.5,
         "working_set_bytes": 473804800,
         "peak_working_set_bytes": 473911296,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -281,7 +281,7 @@
         "complete_ms": 350.93,
         "working_set_bytes": 473804800,
         "peak_working_set_bytes": 473911296,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -311,7 +311,7 @@
         "complete_ms": 350.43,
         "working_set_bytes": 473812992,
         "peak_working_set_bytes": 473919488,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -341,7 +341,7 @@
         "complete_ms": 378.84,
         "working_set_bytes": 473812992,
         "peak_working_set_bytes": 473919488,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -371,7 +371,7 @@
         "complete_ms": 437.68,
         "working_set_bytes": 473812992,
         "peak_working_set_bytes": 473919488,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -401,8 +401,8 @@
         "complete_ms": 501.96,
         "working_set_bytes": 473825280,
         "peak_working_set_bytes": 473931776,
-        "idle_cpu_percent_one_core": 0.0,
-        "steady_idle_cpu_percent_one_core": 0.0
+        "idle_cpu_percent_one_core": 0,
+        "steady_idle_cpu_percent_one_core": 0
       }
     ]
   },
@@ -440,16 +440,16 @@
     "complete_ms": 111.04,
     "working_set_bytes": 20000768,
     "peak_working_set_bytes": 20000768,
-    "idle_cpu_percent_one_core": 0.0,
+    "idle_cpu_percent_one_core": 0,
     "steady_idle_cpu_percent_one_core": null
   },
   "cached_warm": {
     "samples": 12,
     "p50_first_playable_audio_ms": 2.99,
     "p95_first_playable_audio_ms": 4.69,
-    "p50_working_set_bytes": 19785728.0,
-    "steady_idle_cpu_percent_one_core": 0.0,
-    "max_idle_cpu_percent_one_core": 0.0,
+    "p50_working_set_bytes": 19785728,
+    "steady_idle_cpu_percent_one_core": 0,
+    "max_idle_cpu_percent_one_core": 0,
     "runs": [
       {
         "worker_timings": [
@@ -478,7 +478,7 @@
         "complete_ms": 2.41,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -508,7 +508,7 @@
         "complete_ms": 3.07,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -538,7 +538,7 @@
         "complete_ms": 3.08,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -568,7 +568,7 @@
         "complete_ms": 2.19,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -598,7 +598,7 @@
         "complete_ms": 2.15,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -628,7 +628,7 @@
         "complete_ms": 3.63,
         "working_set_bytes": 19783680,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -658,7 +658,7 @@
         "complete_ms": 2.3,
         "working_set_bytes": 19787776,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -688,7 +688,7 @@
         "complete_ms": 2.29,
         "working_set_bytes": 19787776,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -718,7 +718,7 @@
         "complete_ms": 3.06,
         "working_set_bytes": 19795968,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -748,7 +748,7 @@
         "complete_ms": 3.14,
         "working_set_bytes": 19795968,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -778,7 +778,7 @@
         "complete_ms": 2.98,
         "working_set_bytes": 19795968,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
+        "idle_cpu_percent_one_core": 0,
         "steady_idle_cpu_percent_one_core": null
       },
       {
@@ -808,8 +808,8 @@
         "complete_ms": 4.72,
         "working_set_bytes": 19795968,
         "peak_working_set_bytes": 20004864,
-        "idle_cpu_percent_one_core": 0.0,
-        "steady_idle_cpu_percent_one_core": 0.0
+        "idle_cpu_percent_one_core": 0,
+        "steady_idle_cpu_percent_one_core": 0
       }
     ]
   },
@@ -817,7 +817,7 @@
     "phrase": "Mm, let me check.",
     "voice": "af_heart",
     "language": "en-us",
-    "speed": 1.0,
+    "speed": 1,
     "sample_rate_hz": 24000,
     "channels": 1,
     "sample_width_bytes": 2,
@@ -829,5 +829,104 @@
       "kokoro-v1.0.onnx": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
       "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
     }
+  },
+  "native_windows_host": {
+    "cached_playback_cancelled": true,
+    "cached_to_ordinary_worker_reused": true,
+    "cancellation_epoch_advanced": true,
+    "completed_samples": 3,
+    "late_state_after_stop": false,
+    "llm_requests": 0,
+    "microphone": false,
+    "physical_audibility_measured": false,
+    "recovery_used_new_worker": true,
+    "runs": [
+      {
+        "cached": true,
+        "completed_ms": 1819,
+        "first_audio_observed_ms": 209,
+        "playback_dispatched_observed_ms": 215,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 5,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 1609,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "cached": false,
+        "completed_ms": 5974,
+        "first_audio_observed_ms": 4402,
+        "playback_dispatched_observed_ms": 4408,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 4400,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 4400,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 4401,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 5968,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "cached": true,
+        "completed_ms": 1764,
+        "first_audio_observed_ms": 160,
+        "playback_dispatched_observed_ms": 165,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 1,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 1,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 3,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 1607,
+            "stage": "playback_completed"
+          }
+        ]
+      }
+    ],
+    "scratch_removed": true,
+    "windows_playback_api": true
   }
 }
