@@ -80,11 +80,44 @@ pub enum IvyActivityState {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityProvider {
+    Chrome,
+    Stellar,
+    Github,
+    Calendar,
+    Spotify,
+    Mcp,
+    Local,
+    Web,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityOperation {
+    Search,
+    Read,
+    Write,
+    Open,
+    List,
+    Inspect,
+    Update,
+    Execute,
+    Call,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvyActivity {
     pub id: String,
     pub kind: IvyActivityKind,
     pub state: IvyActivityState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<IvyActivityProvider>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub operation: Option<IvyActivityOperation>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]

@@ -67,6 +67,53 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
 }
 
 describe('desktop voice session composition', () => {
+  it('fences an acknowledgment queued behind a question before final narration', async () => {
+    const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
+    const speech = TestBed.inject(SpeechAdapterService);
+    const speak = vi.fn(async (text: string, id: string) => {
+      void text;
+      void id;
+      return {
+        ...initialSpeechSnapshot(),
+        revision: '1',
+        state: 'speaking' as const,
+      };
+    });
+    Object.assign(speech, { speak });
+    const conversation = Reflect.get(voice, 'conversation') as {
+      ports: {
+        speak: (
+          text: string,
+          id: string,
+          current?: () => boolean,
+        ) => Promise<unknown>;
+        stop: () => Promise<unknown>;
+      };
+    };
+    voice.notifyQuestion('q1');
+    let owned = true;
+    const queued = conversation.ports.speak(
+      'Mm, let me check.',
+      '11111111-2222-4333-8444-555555555555',
+      () => owned,
+    );
+    const question = Reflect.get(voice, 'questionCue') as {
+      observe: (snapshot: ReturnType<typeof initialSpeechSnapshot>) => void;
+    };
+    question.observe({ ...initialSpeechSnapshot(), revision: '2' });
+    owned = false;
+    await queued;
+    await conversation.ports.stop();
+    await conversation.ports.speak(
+      'Your first event is at ten.',
+      '22222222-2222-4333-8444-555555555555',
+    );
+    expect(speak.mock.calls.map((call) => call[0])).toEqual([
+      'Could you check this out?',
+      'Your first event is at ten.',
+    ]);
+    TestBed.resetTestingModule();
+  });
   it.each(['mute', 'stop', 'dispose'])(
     'does not start narration after %s while waiting for a question cue',
     async (operation) => {
