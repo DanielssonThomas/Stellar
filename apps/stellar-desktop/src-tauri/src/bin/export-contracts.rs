@@ -107,6 +107,8 @@ fn main() {
         IvyPresentation::decl(&config),
         IvyActivityKind::decl(&config),
         IvyActivityState::decl(&config),
+        IvyActivityProvider::decl(&config),
+        IvyActivityOperation::decl(&config),
         IvyActivity::decl(&config),
         IvySnapshot::decl(&config),
         IvyQuestion::decl(&config),

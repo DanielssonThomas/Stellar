@@ -158,12 +158,14 @@ const say = (page: Page, text: string) =>
     );
   }, text);
 
-test('short requests remain quiet and elapsed time never invents tool activity', async ({
+test('accepted requests show promptly and elapsed time never invents tool activity', async ({
   page,
 }) => {
   await install(page);
   await page.clock.install();
   await publish(page, 'admitted');
+  await expect(page.getByLabel('Ivy activity', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Ivy actions', { exact: true })).toHaveCount(0);
   await page.clock.runFor(2000);
   await publish(page, 'completed');
   await page.clock.runFor(6000);
@@ -196,7 +198,7 @@ test('rapid real actions preserve emblem geometry and stale snapshots cannot reo
     await publish(page, 'admitted', [
       { ...row, state: i === 11 ? 'failed' : 'running' },
     ]);
-  await expect(page.locator('.action-state')).toHaveText('failed');
+  await expect(page.locator('.action-state')).toHaveText(/^failed · \d+s$/);
   await expect(page.locator('.activity-overlay')).toHaveCSS('opacity', '1');
   await page.screenshot({
     path: testInfo.outputPath('ivy-activity-desktop.png'),
@@ -206,6 +208,51 @@ test('rapid real actions preserve emblem geometry and stale snapshots cannot reo
   await publish(page, 'admitted', [row], true);
   await expect(page.locator('[data-ivy-activity]')).toHaveCount(0);
   expect(await emblem.boundingBox()).toEqual(before);
+});
+
+test('provider actions retain fixed height and reveal running overflow as new calls arrive', async ({
+  page,
+}, testInfo) => {
+  await install(page);
+  await publish(page, 'admitted', [
+    { ...row, kind: 'mcp', provider: 'chrome', operation: 'open' },
+  ]);
+  const panel = page.getByLabel('Ivy actions', { exact: true });
+  await expect(panel.getByRole('img', { name: 'Chrome' })).toBeVisible();
+  await expect(panel.locator('.action-label')).toHaveText('Opening Chrome…');
+  const height = (await panel.boundingBox())?.height;
+  for (const count of [4, 12]) {
+    await publish(
+      page,
+      'admitted',
+      Array.from({ length: count }, (_, index) => ({
+        ...row,
+        id: index.toString(16).padStart(16, '0'),
+        kind: 'mcp',
+        provider: index === count - 1 ? 'stellar' : 'calendar',
+        operation: 'list',
+      })),
+    );
+    await expect(panel.locator('li')).toHaveCount(4);
+    expect((await panel.boundingBox())?.height).toBe(height);
+  }
+  await expect(
+    panel.getByRole('status').filter({ hasText: '+8 more running' }),
+  ).toBeVisible();
+  await expect(panel.getByRole('img', { name: 'Stellar' })).toBeVisible();
+  await expect(page.locator('.activity-overlay')).toHaveCSS('opacity', '1');
+  await page.screenshot({
+    path: testInfo.outputPath('ivy-fixed-activity-desktop.png'),
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(panel.locator('li').first()).toHaveCSS('animation-name', 'none');
+  await page.setViewportSize({ width: 480, height: 360 });
+  await expect(panel.locator('.compact-overflow')).toHaveText(
+    '+10 more running',
+  );
+  await page.screenshot({
+    path: testInfo.outputPath('ivy-fixed-activity-compact.png'),
+  });
 });
 
 test('activity is absent throughout presentation transitions and returns without moving the emblem', async ({

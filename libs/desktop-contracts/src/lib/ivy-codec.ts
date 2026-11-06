@@ -2,6 +2,8 @@ import type {
   IvyActivity,
   IvyActivityKind,
   IvyActivityState,
+  IvyActivityProvider,
+  IvyActivityOperation,
   IvyConnectionState,
   IvyComponent,
   IvyTurnState,
@@ -212,17 +214,48 @@ const activityStates: Record<IvyActivityState, true> = {
   failed: true,
   finished: true,
 };
+const activityProviders: Record<IvyActivityProvider, true> = {
+  chrome: true,
+  stellar: true,
+  github: true,
+  calendar: true,
+  spotify: true,
+  mcp: true,
+  local: true,
+  web: true,
+};
+const activityOperations: Record<IvyActivityOperation, true> = {
+  search: true,
+  read: true,
+  write: true,
+  open: true,
+  list: true,
+  inspect: true,
+  update: true,
+  execute: true,
+  call: true,
+};
 function activity(value: unknown): IvyActivity[] {
   if (!Array.isArray(value) || value.length > 12)
     throw new DesktopContractError('malformed');
   const result = value.map((row): IvyActivity => {
-    const data = record(row, ['id', 'kind', 'state']);
+    const data = record(
+      row,
+      ['id', 'kind', 'state'],
+      ['provider', 'operation'],
+    );
     const id = boundedString(data['id'], 16);
     if (!/^[0-9a-f]{16}$/.test(id)) throw new DesktopContractError('malformed');
     return {
       id,
       kind: variant(data['kind'], activityKinds),
       state: variant(data['state'], activityStates),
+      ...(Object.hasOwn(data, 'provider')
+        ? { provider: variant(data['provider'], activityProviders) }
+        : {}),
+      ...(Object.hasOwn(data, 'operation')
+        ? { operation: variant(data['operation'], activityOperations) }
+        : {}),
     };
   });
   if (new Set(result.map((row) => row.id)).size !== result.length)

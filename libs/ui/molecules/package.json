@@ -5,6 +5,7 @@
     "@angular/core": "^21.2.0",
     "@stellar/ui-atoms": "workspace:^",
     "@stellar/desktop-interaction": "workspace:^",
+    "@stellar/desktop-contracts": "workspace:^",
     "clsx": "^2.1.1"
   },
   "sideEffects": false

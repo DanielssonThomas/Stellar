@@ -1970,6 +1970,68 @@ describe('voice conversation ownership', () => {
     expect(f.ports.speak).toHaveBeenCalledOnce();
   });
 
+  it('acknowledges only an admitted Terra voice turn and finishes the short cue before the final answer', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.update({
+        assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
+      });
+      await vi.advanceTimersByTimeAsync(700);
+      expect(f.ports.speak.mock.calls[0][0]).toBe('Mm, let me check.');
+      f.completed();
+      await flush();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          revision: '2',
+          operation_id: f.ports.speak.mock.calls[0][1],
+        },
+      });
+      await flush();
+      expect(f.ports.stop).not.toHaveBeenCalled();
+      expect(f.ports.speak.mock.calls.map(([text]) => text)).toEqual([
+        'Mm, let me check.',
+        'A local reply',
+      ]);
+      f.completed();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    } finally {
+      f.controller.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a scheduled acknowledgment on mute and reset without replaying the request', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      f.update({
+        assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
+      });
+      f.controller.setMuted(true);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.controller.setMuted(false);
+      f.controller.stopVoice();
+      f.completed();
+      await flush();
+      expect(f.ports.submit).toHaveBeenCalledOnce();
+      expect(f.ports.speak).not.toHaveBeenCalled();
+    } finally {
+      f.controller.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('discards a late transcript after microphone stop and clears its samples', async () => {
     const pending = deferred<SpeechTranscript>();
     const f = fixture();

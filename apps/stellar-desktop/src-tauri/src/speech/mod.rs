@@ -1,3 +1,4 @@
+mod acknowledgment;
 pub mod contracts;
 mod frames;
 mod host;
