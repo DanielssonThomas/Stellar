@@ -22,6 +22,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_inspector.rs"]
+mod inspector;
 #[path = "host_questions.rs"]
 mod questions;
 #[path = "host_requests.rs"]
@@ -34,6 +36,10 @@ mod startup;
 mod route_tests;
 
 pub enum Action {
+    Inspect(
+        super::inspector_contracts::IvyInspectorRequest,
+        mpsc::SyncSender<Result<super::inspector_contracts::IvyInspectorSnapshot, IvyErrorCode>>,
+    ),
     Connect,
     Submit(IvySubmitRequest),
     Cancel,
@@ -163,6 +169,11 @@ impl IvyHost {
                         session.epoch = work.epoch;
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
+                            Action::Inspect(request, reply) => {
+                                let result = super::inspector::inspect(&mut session, request);
+                                let _ = reply.send(result);
+                                Ok(())
+                            }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => session.submit(request),
                             Action::Cancel => session.cancel(),

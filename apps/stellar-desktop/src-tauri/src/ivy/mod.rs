@@ -4,6 +4,8 @@ mod activity_tests;
 mod connection;
 pub mod contracts;
 mod host;
+pub(crate) mod inspector;
+pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
 #[cfg(test)]

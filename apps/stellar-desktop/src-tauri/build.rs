@@ -16,6 +16,7 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        "ivy_inspect",
         "reflex_infer",
         "reflex_route",
         "reflex_prepare",

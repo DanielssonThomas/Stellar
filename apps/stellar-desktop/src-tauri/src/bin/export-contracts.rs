@@ -38,6 +38,7 @@ use app_info_contracts::{
 use command_name::APP_INFO_COMMAND;
 use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::contracts::*;
+use ivy::inspector_contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
 use ivy::workspace_contracts::*;
 use speech::*;
@@ -97,6 +98,15 @@ fn main() {
         IvyActivityState::decl(&config),
         IvyActivity::decl(&config),
         IvySnapshot::decl(&config),
+        IvyInspectorRequest::decl(&config),
+        IvySessionSummary::decl(&config),
+        IvySessionRole::decl(&config),
+        IvySessionMessage::decl(&config),
+        IvySessionContext::decl(&config),
+        IvyUsageState::decl(&config),
+        IvyUsageWindow::decl(&config),
+        IvyAccountUsage::decl(&config),
+        IvyInspectorSnapshot::decl(&config),
         IvyQuestion::decl(&config),
         IvyQuestionAction::decl(&config),
         IvyQuestionReplyRequest::decl(&config),
@@ -202,6 +212,7 @@ fn main() {
         serde_json::to_string(IVY_EVENT).unwrap()
     );
     println!("export const workspaceBatchMaxOperations = {BATCH_MAX_OPERATIONS} as const;");
+    println!("export const ivyInspectCommand = \"ivy_inspect\" as const;");
     println!("export const workspaceBatchMaxPayloadBytes = {BATCH_MAX_PAYLOAD_BYTES} as const;");
     println!(
         "export const workspaceToolEvent = {} as const;",

@@ -220,6 +220,9 @@ export class DesktopVoice {
     }
   }
 
+  newSession(): Promise<boolean> {
+    return this.conversation.newSession();
+  }
   submitText(text: string): Promise<boolean> {
     return this.conversation.withCaptureReleased(async (signal) => {
       const inputId = crypto.randomUUID();

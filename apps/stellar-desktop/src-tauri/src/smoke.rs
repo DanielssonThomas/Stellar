@@ -189,6 +189,18 @@ fn check_page(window: Webview) {
                 catch (error) { malformedRejected = error.code === 'malformed_request'; }
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
+                let inspectorRejected=0;
+                for(const request of [
+                  {version:2,session_id:null,offset:0,before_message:null},
+                  {version:1,session_id:'',offset:0,before_message:null}
+                ]) {
+                  try { await invoke('ivy_inspect',{request}); }
+                  catch(error) { if(error==='malformed_request')inspectorRejected++; }
+                }
+                let inspectorUnavailable=false;
+                try { await invoke('ivy_inspect',{request:{version:1,session_id:null,offset:0,before_message:null}}); }
+                catch(error) { inspectorUnavailable=error==='unavailable'; }
+                if(inspectorRejected!==2 || !inspectorUnavailable)throw Error('Inspector read-only contract failed');
                 let lifecycleRejected = 0;
                 for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
                     try { await invoke(name, { request: { version: 2 } }); }

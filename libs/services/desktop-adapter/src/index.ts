@@ -1,4 +1,9 @@
 export * from './lib/services/desktop-adapter.service';
+export {
+  IvyInspectorService,
+  IVY_INSPECTOR_READ,
+} from './lib/services/ivy-inspector.service';
+export type { IvyInspectorRead } from './lib/services/ivy-inspector.service';
 export { IvyReflexService } from './lib/services/ivy-reflex.service';
 export { LocalActionRegistry } from './lib/reflex/action-registry';
 export type { LocalAction } from './lib/reflex/action-registry';

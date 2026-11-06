@@ -31,12 +31,16 @@ import {
   type EmblemManifest,
   RequestStatusMolecule,
   IvyQuestionMolecule,
+  IvySessionInspectorMolecule,
   type RequestStatusEntry,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
 import type {
   IvyQuestion,
   IvyQuestionAction,
+  IvyInspectorSnapshot,
+  IvySessionSummary,
+  IvySessionMessage,
 } from '@stellar/desktop-contracts';
 
 export interface MicrophoneOption {
@@ -57,6 +61,7 @@ export interface MicrophoneOption {
     VoiceTranscriptMolecule,
     RequestStatusMolecule,
     IvyQuestionMolecule,
+    IvySessionInspectorMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -66,11 +71,24 @@ export interface MicrophoneOption {
     '(keydown.escape)': 'dismiss($event)',
     '(keydown)': 'menu.keydown($event)',
     tabindex: '-1',
-    'aria-keyshortcuts': 'M P S',
+    'aria-keyshortcuts': 'M P S C',
     '(document:keydown)': 'controlsShortcut($event)',
   },
 })
 export class DesktopExperienceTemplate {
+  readonly sessionsVisible = signal(false);
+  readonly sessionSnapshot = input<IvyInspectorSnapshot | null>(null);
+  readonly sessionRows = input<readonly IvySessionSummary[]>([]);
+  readonly sessionMessages = input<readonly IvySessionMessage[]>([]);
+  readonly sessionLoading = input(false);
+  readonly sessionError = input('');
+  readonly verifiedModel = input('Unverified');
+  readonly sessionVisibilityChange = output<boolean>();
+  readonly sessionSelected = output<string | null>();
+  readonly sessionRefresh = output<void>();
+  readonly sessionMore = output<void>();
+  readonly sessionOlderMessages = output<void>();
+  readonly sessionNew = output<void>();
   readonly questions = input<readonly IvyQuestion[]>([]);
   readonly questionShown = output<string>();
   readonly questionAnswer = output<{ id: string; action: IvyQuestionAction }>();
@@ -225,6 +243,7 @@ export class DesktopExperienceTemplate {
   constructor() {
     effect(() => {
       if (this.questions().length) {
+        this.setSessionsVisible(false);
         this.menu.close();
         this.musicControls().close();
       }
@@ -257,7 +276,7 @@ export class DesktopExperienceTemplate {
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      !['m', 'p', 's'].includes(event.key.toLowerCase())
+      !['m', 'p', 's', 'c'].includes(event.key.toLowerCase())
     )
       return;
     if (
@@ -269,12 +288,23 @@ export class DesktopExperienceTemplate {
       return;
     if (['suspended', 'shutdown'].includes(this.state().phase)) return;
     event.preventDefault();
-    if (event.key.toLowerCase() === 's') this.toggleStatus();
+    if (event.key.toLowerCase() === 'c')
+      this.setSessionsVisible(!this.sessionsVisible());
+    else if (event.key.toLowerCase() === 's') this.toggleStatus();
     else if (event.key.toLowerCase() === 'p') this.openMusicControls();
     else {
       this.musicControls().close();
       this.menu.toggle();
     }
+  }
+  setSessionsVisible(visible: boolean) {
+    if (this.sessionsVisible() === visible) return;
+    if (visible) {
+      this.menu.close();
+      this.musicControls().close();
+    }
+    this.sessionsVisible.set(visible);
+    this.sessionVisibilityChange.emit(visible);
   }
   toggleStatus() {
     this.menu.close();

@@ -146,6 +146,7 @@ fn main() {
         app_info::app_info,
         ivy::ivy_connect,
         ivy::ivy_snapshot,
+        ivy::inspector::ivy_inspect,
         ivy::ivy_submit,
         ivy::ivy_cancel,
         ivy::ivy_reconcile,
