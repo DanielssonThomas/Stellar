@@ -31,7 +31,12 @@ pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u
     let mut line = serde_json::to_vec(&json!({"id":sequence,"method":method,"params":params}))
         .map_err(|_| IvyErrorCode::Protocol)?;
     line.push(b'\n');
-    if line.len() > 16_384 {
+    let limit = if method == "clarify.respond" {
+        65_536
+    } else {
+        16_384
+    };
+    if line.len() > limit {
         return Err(IvyErrorCode::MalformedRequest);
     }
     Ok(line)
@@ -61,6 +66,10 @@ impl Broker {
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
             ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),
+            (
+                "stellar_ivy_profile_tools",
+                include_str!("ivy_profile_tools.py"),
+            ),
             (
                 "stellar_ivy_edit_policy",
                 include_str!("ivy_edit_policy.py"),

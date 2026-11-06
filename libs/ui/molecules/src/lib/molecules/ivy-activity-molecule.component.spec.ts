@@ -20,6 +20,23 @@ async function fixture() {
   return fixture;
 }
 describe('IvyActivityMolecule', () => {
+  it('holds the working anchor during terminal fade instead of jumping to the idle layout', async () => {
+    const f = await fixture();
+    const working = { x: 400, y: 200, width: 320, height: 320 };
+    f.componentRef.setInput('emblem', working);
+    await f.whenStable();
+    f.componentRef.setInput('active', false);
+    f.componentRef.setInput('emblem', {
+      x: 320,
+      y: 120,
+      width: 480,
+      height: 480,
+    });
+    await f.whenStable();
+    expect(f.componentInstance.view().leaving).toBe(true);
+    expect(f.componentInstance.anchor()).toEqual(working);
+    f.destroy();
+  });
   it('renders only actual sanitized actions and suppresses all chrome over presentations', async () => {
     const f = await fixture();
     expect(f.nativeElement.textContent).toContain('Updating memory');

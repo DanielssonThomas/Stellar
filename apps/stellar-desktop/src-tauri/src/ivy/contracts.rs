@@ -1,3 +1,4 @@
+pub use super::question_contracts::{IvyQuestion, IvyQuestionAction, IvyQuestionReplyRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -126,6 +127,9 @@ pub struct IvySnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub first_text_observed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub questions: Option<Vec<IvyQuestion>>,
 }
 
 impl Default for IvySnapshot {
@@ -145,6 +149,7 @@ impl Default for IvySnapshot {
             items: vec![],
             error: None,
             first_text_observed: None,
+            questions: None,
         }
     }
 }

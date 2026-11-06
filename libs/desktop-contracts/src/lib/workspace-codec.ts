@@ -1,11 +1,17 @@
 import type {
   WorkspacePaneMetadata,
   WorkspacePaneOperation,
+  WorkspaceRenderState,
   WorkspaceProminence,
   WorkspaceSurface,
   WorkspaceToolOperation,
   WorkspaceToolOutcome,
   WorkspaceToolRequest,
+  WorkspaceMutationStatus,
+} from '../generated';
+import {
+  workspaceBatchMaxOperations,
+  workspaceBatchMaxPayloadBytes,
 } from '../generated';
 import {
   boundedString,
@@ -29,6 +35,13 @@ const prominence: Record<WorkspaceProminence, true> = {
   primary: true,
   secondary: true,
 };
+const renderStates: Record<WorkspaceRenderState, true> = {
+  ready: true,
+  loading: true,
+  error: true,
+  hidden: true,
+  unavailable: true,
+};
 const payloadLimits: Record<WorkspaceSurface, number> = {
   'rich-text': 65536,
   image: 65536,
@@ -39,6 +52,20 @@ const payloadLimits: Record<WorkspaceSurface, number> = {
   session: 2048,
   'activity-summary': 0,
 };
+const mutations = new Set([
+  'open',
+  'update',
+  'remove',
+  'focus',
+  'minimize',
+  'restore',
+  'maximize',
+  'resize',
+  'swap',
+  'restore_layout',
+  'arrange',
+  'clear',
+]);
 
 function choice<T extends string>(value: unknown, choices: Record<T, true>): T {
   if (typeof value !== 'string' || !Object.hasOwn(choices, value))
@@ -55,14 +82,63 @@ function operation(value: unknown): WorkspaceToolOperation {
   if (typeof value !== 'object' || value === null)
     throw new DesktopContractError('malformed');
   const kind = (value as Record<string, unknown>)['kind'];
+  if (kind === 'batch') {
+    const data = record(value, ['kind', 'operations']);
+    const entries = data['operations'];
+    if (
+      !Array.isArray(entries) ||
+      entries.length < 1 ||
+      entries.length > workspaceBatchMaxOperations ||
+      entries.some(
+        (entry) =>
+          typeof entry !== 'object' ||
+          entry === null ||
+          !mutations.has(entry['kind']),
+      )
+    )
+      throw new DesktopContractError('malformed');
+    const operations = entries.map(operation);
+    if (
+      operations.reduce(
+        (bytes, entry) =>
+          bytes +
+          ('payload_json' in entry
+            ? new TextEncoder().encode(entry.payload_json).length
+            : 0),
+        0,
+      ) > workspaceBatchMaxPayloadBytes
+    )
+      throw new DesktopContractError('malformed');
+    return { kind, operations };
+  }
   if (
     kind === 'clear' ||
     kind === 'inspect' ||
     kind === 'capture_window' ||
+    kind === 'capture_foreground' ||
+    kind === 'list_displays' ||
     kind === 'restore_layout'
   ) {
     record(value, ['kind']);
     return { kind };
+  }
+  if (kind === 'capture_display') {
+    const data = record(value, ['kind', 'display_id']);
+    const display_id =
+      data['display_id'] === null
+        ? null
+        : boundedString(data['display_id'], 128);
+    if (
+      display_id !== null &&
+      (!display_id ||
+        Array.from(display_id).some(
+          (char) =>
+            char.charCodeAt(0) < 32 ||
+            (char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159),
+        ))
+    )
+      throw new DesktopContractError('malformed');
+    return { kind, display_id };
   }
   if (
     kind === 'focus' ||
@@ -196,10 +272,34 @@ export function decodeWorkspaceToolOutcome(
     kind === 'rejected' ||
     (kind === 'applied' &&
       request.operation.kind !== 'inspect' &&
-      request.operation.kind !== 'capture_window')
+      ![
+        'capture_window',
+        'capture_display',
+        'capture_foreground',
+        'list_displays',
+        'batch',
+      ].includes(request.operation.kind))
   ) {
     record(value, ['kind']);
     return { kind };
+  }
+  if (kind === 'batch' && request.operation.kind === 'batch') {
+    const data = record(value, ['kind', 'outcomes', 'panes']);
+    if (
+      !Array.isArray(data['outcomes']) ||
+      data['outcomes'].length !== request.operation.operations.length
+    )
+      throw new DesktopContractError('malformed');
+    const statuses: Record<WorkspaceMutationStatus, true> = {
+      applied: true,
+      rejected: true,
+      uncertain: true,
+    };
+    return {
+      kind,
+      outcomes: data['outcomes'].map((entry) => choice(entry, statuses)),
+      panes: data['panes'] === null ? null : decodePanes(data['panes']),
+    };
   }
   if (kind === 'content' && request.operation.kind === 'inspect_content') {
     const data = record(value, [
@@ -225,14 +325,23 @@ export function decodeWorkspaceToolOutcome(
   if (kind !== 'inspection' || request.operation.kind !== 'inspect')
     throw new DesktopContractError('malformed');
   const data = record(value, ['kind', 'panes']);
-  if (!Array.isArray(data['panes']) || data['panes'].length > 4)
+  return { kind, panes: decodePanes(data['panes']) };
+}
+
+function decodePanes(value: unknown): WorkspacePaneMetadata[] {
+  if (!Array.isArray(value) || value.length > 4)
     throw new DesktopContractError('malformed');
-  const panes: WorkspacePaneMetadata[] = data['panes'].map((item) => {
+  const panes: WorkspacePaneMetadata[] = value.map((item) => {
     const pane = record(item, [
       'instance_id',
       'surface',
       'prominence',
       'minimized',
+      ...(typeof item === 'object' &&
+      item !== null &&
+      Object.hasOwn(item, 'render_state')
+        ? ['render_state']
+        : []),
       ...(typeof item === 'object' &&
       item !== null &&
       Object.hasOwn(item, 'layout')
@@ -251,6 +360,9 @@ export function decodeWorkspaceToolOutcome(
       surface: choice(pane['surface'], surfaces),
       prominence: choice(pane['prominence'], prominence),
       minimized: pane['minimized'],
+      ...(pane['render_state'] == null
+        ? {}
+        : { render_state: choice(pane['render_state'], renderStates) }),
       ...(pane['operations'] === undefined
         ? {}
         : { operations: paneOperations(pane['operations']) }),
@@ -261,7 +373,7 @@ export function decodeWorkspaceToolOutcome(
   });
   if (new Set(panes.map((pane) => pane.instance_id)).size !== panes.length)
     throw new DesktopContractError('malformed');
-  return { kind, panes };
+  return panes;
 }
 
 function integer(value: unknown, max: number): number {

@@ -126,6 +126,13 @@ img {
   pointer-events: none;
   color: var(--stellar-color-accent);
   animation: waiting-orbit 16s linear infinite;
+  opacity: 0;
+  transition: opacity 240ms ease;
+  animation-play-state: paused;
+}
+.waiting-ring.waiting-visible {
+  opacity: 1;
+  animation-play-state: running;
 }
 .waiting-ring circle {
   fill: none;
@@ -146,6 +153,20 @@ img {
 }
 .motion-reduced .emblem-presence {
   transition: none;
+}
+.motion-reduced .waiting-ring {
+  animation: none;
+  animation-play-state: paused;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .waiting-ring.waiting-visible,
+  .waiting-ring,
+  .emblem-presence {
+    animation: none;
+    animation-play-state: paused;
+    transition: none;
+  }
 }
 @keyframes waiting-orbit {
   to {

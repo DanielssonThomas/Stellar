@@ -97,14 +97,21 @@ fn main() {
         IvyActivityState::decl(&config),
         IvyActivity::decl(&config),
         IvySnapshot::decl(&config),
+        IvyQuestion::decl(&config),
+        IvyQuestionAction::decl(&config),
+        IvyQuestionReplyRequest::decl(&config),
         WorkspaceSurface::decl(&config),
         WorkspaceProminence::decl(&config),
         WorkspaceToolOperation::decl(&config),
+        WorkspaceDisplay::decl(&config),
         WorkspaceToolRequest::decl(&config),
         WorkspacePaneMetadata::decl(&config),
+        WorkspaceRenderState::decl(&config),
         WorkspacePaneOperation::decl(&config),
         WorkspacePaneLayout::decl(&config),
         WorkspaceToolOutcome::decl(&config),
+        WorkspaceMutationStatus::decl(&config),
+        WorkspaceCaptureFailure::decl(&config),
         WorkspaceToolReply::decl(&config),
         TelemetryProject::decl(&config),
         TelemetryState::decl(&config),
@@ -180,6 +187,7 @@ fn main() {
         "ivyClearConversationCommand",
         "ivyNewSessionCommand",
         "ivyReloadMcpCommand",
+        "ivyQuestionReplyCommand",
     ]
     .iter()
     .zip(IVY_COMMANDS)
@@ -193,6 +201,8 @@ fn main() {
         "export const ivyEvent = {} as const;",
         serde_json::to_string(IVY_EVENT).unwrap()
     );
+    println!("export const workspaceBatchMaxOperations = {BATCH_MAX_OPERATIONS} as const;");
+    println!("export const workspaceBatchMaxPayloadBytes = {BATCH_MAX_PAYLOAD_BYTES} as const;");
     println!(
         "export const workspaceToolEvent = {} as const;",
         serde_json::to_string(WORKSPACE_EVENT).unwrap()
@@ -202,7 +212,7 @@ fn main() {
         serde_json::to_string(WORKSPACE_REPLY_COMMAND).unwrap()
     );
     println!(
-        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest }};"
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest }};"
     );
     for (name, command) in [
         "speechTranscribeCommand",

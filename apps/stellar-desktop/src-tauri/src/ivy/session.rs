@@ -356,6 +356,7 @@ impl Session {
                 Ok(())
             }
             Some("stellar.activity") => self.activity(params),
+            Some("clarify.request" | "clarify.settled") => self.question_event(params),
             Some("message.complete") => self.complete(
                 params
                     .pointer("/payload/outcome")
@@ -366,7 +367,7 @@ impl Session {
                     .and_then(Value::as_str)
                     .unwrap_or(""),
             ),
-            Some("approval.request" | "clarify.request") => {
+            Some("approval.request") => {
                 self.shared.update(self.epoch, |view| {
                     view.error = Some(IvyErrorCode::ApprovalRequired)
                 });
@@ -394,6 +395,7 @@ impl Session {
         self.shared.update(self.epoch, |view| {
             view.activity.clear();
             view.turn = turn;
+            view.questions = None;
             view.turn_id = self.record.input_id.clone();
             view.items = items;
             view.error = if failed {

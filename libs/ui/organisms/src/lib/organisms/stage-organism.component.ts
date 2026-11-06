@@ -28,6 +28,7 @@ import { StageResult } from './stage-contract';
 import { type StageDivider, directStage } from './stage-director';
 import { createStageRegistry } from './stage-registry';
 import { createStageMotion } from './stage-motion';
+import { stageRenderState, settleStage } from './stage-observation';
 
 @Component({
   selector: 'stellar-stage-organism',
@@ -321,6 +322,14 @@ export class StageOrganism {
           surface: instance.surface,
           prominence: instance.prominence,
           minimized: instance.minimized,
+          render_state: stageRenderState(
+            this.host.nativeElement,
+            instance.instanceId,
+            instance.minimized ||
+              !this.layout().surfaces.some(
+                (pane) => pane.instanceId === instance.instanceId,
+              ),
+          ),
           revision: instance.revision,
           selected: this.layoutState().focusedId === instance.instanceId,
           maximized: this.layoutState().maximizedId === instance.instanceId,
@@ -352,6 +361,14 @@ export class StageOrganism {
     const instances = this.registry.snapshot();
     const instance = instances.find((entry) => entry.minimized) ?? instances[0];
     if (instance) this.control('focus', instance.instanceId);
+  }
+
+  settlePresentations(current: () => boolean): Promise<void> {
+    return settleStage(
+      this.host.nativeElement,
+      () => this.inspectPresentations(),
+      current,
+    );
   }
 
   escape(event: Event) {

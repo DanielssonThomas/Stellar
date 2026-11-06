@@ -272,11 +272,11 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
           .length,
     )
     .toBe(1);
-  await expect(page.locator('.waiting-ring')).toBeVisible();
+  await expect(page.locator('.waiting-ring.waiting-visible')).toBeVisible();
   expect((await fixture()).ducking).toContain(true);
   expect((await fixture()).ducking).not.toContain(false);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
-  await expect(page.locator('.waiting-ring')).toHaveCount(0);
+  await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCount(0);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   await expect
     .poll(async () => (await fixture()).playbackFrames)

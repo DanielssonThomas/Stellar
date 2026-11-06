@@ -231,6 +231,7 @@ impl IvyHost {
             view.snapshot.connection = connection;
         }
         if let Some(id) = turn_id {
+            view.snapshot.questions = None;
             view.snapshot.first_text_observed = None;
             view.snapshot.turn = IvyTurnState::Submitting;
             view.snapshot.turn_id = Some(id);
@@ -238,6 +239,7 @@ impl IvyHost {
             view.snapshot.activity.clear();
         }
         if disconnect || cancel {
+            view.snapshot.questions = None;
             view.snapshot.activity.clear();
         }
         if disconnect {
@@ -265,4 +267,22 @@ impl IvyHost {
         self.shared.update(epoch, |_| {});
         Ok(snapshot)
     }
+}
+pub(in crate::ivy) fn validate_submit(request: &IvySubmitRequest) -> Result<(), IvyErrorCode> {
+    let valid_id = request.input_id.len() == 36
+        && request.input_id.bytes().enumerate().all(|(index, byte)| {
+            if [8, 13, 18, 23].contains(&index) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
+            }
+        });
+    if request.version != 1
+        || !valid_id
+        || request.text.trim().is_empty()
+        || request.text.len() > 8192
+    {
+        return Err(IvyErrorCode::MalformedRequest);
+    }
+    Ok(())
 }

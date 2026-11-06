@@ -1,10 +1,36 @@
 use super::contracts::IvyErrorCode;
+use super::workspace_contracts::{WorkspaceDisplay, WorkspaceToolOperation};
 
-const MAX_DIMENSION: u32 = 4096;
+pub enum Captured {
+    Image(Vec<u8>),
+    Displays(Vec<WorkspaceDisplay>),
+}
+
+pub fn is_image(operation: &WorkspaceToolOperation) -> bool {
+    matches!(
+        operation,
+        WorkspaceToolOperation::CaptureWindow
+            | WorkspaceToolOperation::CaptureDisplay { .. }
+            | WorkspaceToolOperation::CaptureForeground
+    )
+}
+
+pub fn is_native(operation: &WorkspaceToolOperation) -> bool {
+    is_image(operation) || matches!(operation, WorkspaceToolOperation::ListDisplays)
+}
+
+const MAX_DIMENSION: u32 = 8192;
 pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
+#[path = "workspace_capture_image.rs"]
+mod image;
 
 fn dimensions(width: u32, height: u32, stride: usize, size: usize) -> bool {
-    if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
+    if width == 0
+        || height == 0
+        || width > MAX_DIMENSION
+        || height > MAX_DIMENSION
+        || u64::from(width) * u64::from(height) > 36_000_000
+    {
         return false;
     }
     let Some(row) = (width as usize).checked_mul(4) else {
@@ -18,12 +44,11 @@ fn dimensions(width: u32, height: u32, stride: usize, size: usize) -> bool {
 
 #[cfg(windows)]
 mod platform {
-    use super::{IvyErrorCode, MAX_DIMENSION, MAX_IMAGE_BYTES, dimensions};
+    use super::{IvyErrorCode, MAX_DIMENSION, dimensions, image::encode as encode_pixels};
     use std::{sync::mpsc, time::Duration};
     use tauri::{AppHandle, Manager};
     use windows_capture::{
         capture::{Context, GraphicsCaptureApiHandler},
-        encoder::{ImageEncoder, ImageEncoderPixelFormat, ImageFormat},
         frame::Frame,
         graphics_capture_api::InternalCaptureControl,
         settings::{
@@ -33,12 +58,18 @@ mod platform {
         window::Window,
     };
 
+    struct Pixels {
+        bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+    }
+    type FrameResult = Result<Pixels, IvyErrorCode>;
     type CaptureResult = Result<Vec<u8>, IvyErrorCode>;
     struct Capture {
-        reply: mpsc::SyncSender<CaptureResult>,
+        reply: mpsc::SyncSender<FrameResult>,
     }
     impl GraphicsCaptureApiHandler for Capture {
-        type Flags = mpsc::SyncSender<CaptureResult>;
+        type Flags = mpsc::SyncSender<FrameResult>;
         type Error = Box<dyn std::error::Error + Send + Sync>;
 
         fn new(context: Context<Self::Flags>) -> Result<Self, Self::Error> {
@@ -52,14 +83,14 @@ mod platform {
             frame: &mut Frame,
             control: InternalCaptureControl,
         ) -> Result<(), Self::Error> {
-            let result = encode(frame);
+            let result = pixels(frame);
             let _ = self.reply.try_send(result);
             control.stop();
             Ok(())
         }
     }
 
-    fn encode(frame: &mut Frame) -> CaptureResult {
+    fn pixels(frame: &mut Frame) -> FrameResult {
         let width = frame.width();
         let height = frame.height();
         if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
@@ -76,13 +107,11 @@ mod platform {
         for offset in (0..height as usize).map(|y| y * stride) {
             pixels.extend_from_slice(&raw[offset..offset + row]);
         }
-        let bytes = ImageEncoder::new(ImageFormat::Png, ImageEncoderPixelFormat::Rgba8)
-            .and_then(|encoder| encoder.encode(&pixels, width, height))
-            .map_err(|_| IvyErrorCode::Unavailable)?;
-        if bytes.len() > MAX_IMAGE_BYTES {
-            return Err(IvyErrorCode::Unavailable);
-        }
-        Ok(bytes)
+        Ok(Pixels {
+            bytes: pixels,
+            width,
+            height,
+        })
     }
 
     pub fn capture(app: &AppHandle) -> CaptureResult {
@@ -103,9 +132,29 @@ mod platform {
         {
             return Err(IvyErrorCode::Unavailable);
         }
+        let image = capture_item(window)?;
+        let current = app
+            .get_window("main")
+            .ok_or(IvyErrorCode::Unavailable)?
+            .hwnd()
+            .map_err(|_| IvyErrorCode::Unavailable)?;
+        if current.0 != hwnd.0
+            || !window.is_valid()
+            || window.process_id().map_err(|_| IvyErrorCode::Unavailable)? != std::process::id()
+        {
+            return Err(IvyErrorCode::Unavailable);
+        }
+        Ok(image)
+    }
+
+    pub(super) fn capture_item<
+        T: TryInto<windows_capture::settings::GraphicsCaptureItemType> + Send + 'static,
+    >(
+        target: T,
+    ) -> CaptureResult {
         let (sender, receiver) = mpsc::sync_channel(1);
         let settings = Settings::new(
-            window,
+            target,
             CursorCaptureSettings::WithoutCursor,
             DrawBorderSettings::Default,
             SecondaryWindowSettings::Exclude,
@@ -120,24 +169,34 @@ mod platform {
             .recv_timeout(Duration::from_secs(8))
             .map_err(|_| IvyErrorCode::Timeout);
         control.stop().map_err(|_| IvyErrorCode::Unavailable)?;
-        let image = result??;
-        let current = app
-            .get_window("main")
-            .ok_or(IvyErrorCode::Unavailable)?
-            .hwnd()
-            .map_err(|_| IvyErrorCode::Unavailable)?;
-        if current.0 != hwnd.0
-            || !window.is_valid()
-            || window.process_id().map_err(|_| IvyErrorCode::Unavailable)? != std::process::id()
-        {
-            return Err(IvyErrorCode::Unavailable);
-        }
-        Ok(image)
+        let frame = result??;
+        // Release Windows capture before bounded CPU encoding; the frame deadline covers acquisition.
+        encode_pixels(frame.bytes, frame.width, frame.height)
     }
 }
 
 #[cfg(windows)]
 pub use platform::capture;
+
+#[cfg(windows)]
+#[path = "workspace_screens.rs"]
+mod screens;
+
+#[cfg(windows)]
+pub fn capture_operation(
+    app: &tauri::AppHandle,
+    operation: &WorkspaceToolOperation,
+) -> Result<Captured, IvyErrorCode> {
+    match operation {
+        WorkspaceToolOperation::CaptureWindow => capture(app).map(Captured::Image),
+        WorkspaceToolOperation::ListDisplays => screens::list().map(Captured::Displays),
+        WorkspaceToolOperation::CaptureDisplay { display_id } => {
+            screens::display(display_id.as_deref()).map(Captured::Image)
+        }
+        WorkspaceToolOperation::CaptureForeground => screens::foreground().map(Captured::Image),
+        _ => Err(IvyErrorCode::MalformedRequest),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -147,7 +206,9 @@ mod tests {
     fn rejects_bad_dimensions_stride_and_truncated_frames() {
         assert!(dimensions(4, 3, 20, 60));
         assert!(!dimensions(0, 3, 20, 60));
-        assert!(!dimensions(4097, 3, 20000, 60000));
+        assert!(dimensions(4097, 3, 20000, 60000));
+        assert!(!dimensions(8193, 1, 40000, 40000));
+        assert!(!dimensions(8192, 8192, 32768, 268435456));
         assert!(!dimensions(4, 3, 15, 60));
         assert!(!dimensions(4, 3, 20, 59));
         assert!(!dimensions(4, 2, usize::MAX, usize::MAX));

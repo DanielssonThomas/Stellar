@@ -134,6 +134,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-ivy-clear-conversation',
     'allow-ivy-new-session',
     'allow-ivy-reload-mcp',
+    'allow-ivy-question-reply',
     'allow-workspace-tool-reply',
     'allow-speech-transcribe',
     'allow-speech-collect',

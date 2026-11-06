@@ -2,6 +2,7 @@ import type {
   WorkspaceSurface,
   WorkspaceToolOutcome,
   WorkspaceToolRequest,
+  WorkspaceMutationStatus,
 } from '@stellar/desktop-contracts';
 import type { WorkspaceToolHandler } from '@stellar/service-desktop-adapter';
 import type { StageOrganism, StageResult } from '@stellar/ui-organisms';
@@ -11,7 +12,7 @@ type WorkspacePort = {
     StageOrganism,
     'nextCommandId' | 'inspectPresentations'
   > &
-    Partial<Pick<StageOrganism, 'inspectContent'>>;
+    Partial<Pick<StageOrganism, 'inspectContent' | 'settlePresentations'>>;
   readonly present: (command: unknown) => StageResult;
   readonly available: () => boolean;
   readonly isCurrent: (request: WorkspaceToolRequest) => boolean;
@@ -31,11 +32,20 @@ const supported = (surface: string): surface is WorkspaceSurface =>
   surfaces.includes(surface);
 
 export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
-  return (request): WorkspaceToolOutcome => {
+  const handle = (request: WorkspaceToolRequest): WorkspaceToolOutcome => {
     if (!port.available() || !port.isCurrent(request))
       return { kind: 'rejected' };
     const operation = request.operation;
-    if (operation.kind === 'capture_window') return { kind: 'rejected' };
+    if (operation.kind === 'batch') return { kind: 'rejected' };
+    if (
+      [
+        'capture_window',
+        'capture_display',
+        'capture_foreground',
+        'list_displays',
+      ].includes(operation.kind)
+    )
+      return { kind: 'rejected' };
     if (operation.kind === 'inspect') {
       const panes = port.stage.inspectPresentations();
       if (panes.some((pane) => !supported(pane.surface)))
@@ -50,6 +60,9 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
                   surface: pane.surface,
                   prominence: pane.prominence,
                   minimized: pane.minimized,
+                  ...('render_state' in pane
+                    ? { render_state: pane.render_state }
+                    : {}),
                   operations: [
                     'focus',
                     'minimize',
@@ -190,5 +203,44 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
     return port.present(command).status === 'applied'
       ? { kind: 'applied' }
       : { kind: 'rejected' };
+  };
+  return (request) => {
+    if (request.operation.kind === 'batch') {
+      let halted = false;
+      const outcomes: WorkspaceMutationStatus[] =
+        request.operation.operations.map((operation) => {
+          if (halted) return 'rejected';
+          try {
+            return handle({ ...request, operation }).kind === 'applied'
+              ? 'applied'
+              : 'rejected';
+          } catch {
+            halted = true;
+            return 'uncertain';
+          }
+        });
+      return (async () => {
+        await port.stage.settlePresentations?.(
+          () => port.available() && port.isCurrent(request),
+        );
+        const observation = handle({
+          ...request,
+          operation: { kind: 'inspect' },
+        });
+        return {
+          kind: 'batch' as const,
+          outcomes,
+          panes: observation.kind === 'inspection' ? observation.panes : null,
+        };
+      })().catch(() => ({ kind: 'batch' as const, outcomes, panes: null }));
+    }
+    return request.operation.kind === 'inspect' &&
+      port.stage.settlePresentations
+      ? port.stage
+          .settlePresentations(
+            () => port.available() && port.isCurrent(request),
+          )
+          .then(() => handle(request))
+      : handle(request);
   };
 }

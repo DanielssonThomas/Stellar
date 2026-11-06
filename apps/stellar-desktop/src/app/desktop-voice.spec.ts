@@ -67,6 +67,37 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
 }
 
 describe('desktop voice session composition', () => {
+  it.each(['mute', 'stop', 'dispose'])(
+    'does not start narration after %s while waiting for a question cue',
+    async (operation) => {
+      const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
+      const speech = TestBed.inject(SpeechAdapterService);
+      const speak = vi.fn(async () => ({
+        ...initialSpeechSnapshot(),
+        revision: '1',
+        state: 'speaking' as const,
+      }));
+      Object.assign(speech, { speak });
+      voice.notifyQuestion('q1');
+      const conversation = Reflect.get(voice, 'conversation') as {
+        ports: { speak: (text: string, id: string) => Promise<unknown> };
+      };
+      const pending = conversation.ports.speak(
+        'Final narration',
+        '11111111-2222-4333-8444-555555555555',
+      );
+      if (operation === 'mute') voice.setMuted(true);
+      else if (operation === 'stop') voice.stop();
+      else TestBed.resetTestingModule();
+      await pending;
+      expect(speak).toHaveBeenCalledTimes(1);
+      expect(speak.mock.calls[0]).toEqual([
+        'Could you check this out?',
+        expect.any(String),
+      ]);
+      TestBed.resetTestingModule();
+    },
+  );
   it('starts continuous microphone capture only after local speech initialization succeeds', async () => {
     const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
     const speech = TestBed.inject(SpeechAdapterService);

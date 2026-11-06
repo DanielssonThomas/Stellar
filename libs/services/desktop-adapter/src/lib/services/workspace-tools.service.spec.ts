@@ -60,6 +60,26 @@ function fixture() {
 }
 
 describe('workspace tool adapter', () => {
+  it('waits for renderer observation and rejects it if its turn retires before settlement', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    let finish!: () => void;
+    const handler = vi.fn(
+      () =>
+        new Promise<{ kind: 'inspection'; panes: [] }>((resolve) => {
+          finish = () => resolve({ kind: 'inspection', panes: [] });
+        }),
+    );
+    f.service.bind(handler);
+    f.deliver({ ...request, operation: { kind: 'inspect' } });
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
+    expect(f.reply).not.toHaveBeenCalled();
+    f.state.update((state) => ({ ...state, workspace_epoch: '3' }));
+    finish();
+    await vi.waitFor(() => expect(f.reply).toHaveBeenCalledOnce());
+    expect(f.reply.mock.calls[0][0].outcome).toEqual({ kind: 'rejected' });
+    TestBed.resetTestingModule();
+  });
   it('delivers the full request synchronously only after an authoritative matching snapshot', async () => {
     const f = fixture();
     await vi.waitFor(() => expect(f.service.ready()).toBe(true));

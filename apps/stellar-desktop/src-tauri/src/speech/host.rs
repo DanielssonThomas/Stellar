@@ -15,6 +15,10 @@ pub struct SpeechHost {
 }
 
 impl SpeechHost {
+    pub fn audio_process(&self) -> Arc<std::sync::atomic::AtomicU32> {
+        self.inner.voice.audio_process.clone()
+    }
+
     pub fn new(scratch: PathBuf, publish: Publisher) -> Self {
         Self {
             inner: Arc::new(Inner {

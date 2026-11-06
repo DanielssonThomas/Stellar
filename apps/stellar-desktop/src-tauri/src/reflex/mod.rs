@@ -2,6 +2,7 @@ mod admission;
 pub mod contracts;
 mod media_host;
 mod model;
+mod notebook;
 mod process;
 mod prompt;
 mod scope;
@@ -15,7 +16,7 @@ use contracts::*;
 pub use media_host::MediaHost;
 pub use model::ReflexHost;
 #[cfg(windows)]
-pub(crate) use windows_volume::duck_endpoint;
+pub(crate) use windows_volume::duck_sessions;
 
 #[tauri::command]
 pub fn reflex_route(request: ReflexRequest) -> ReflexRouting {
@@ -110,7 +111,7 @@ pub async fn reflex_media_execute(
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(windows)]
         {
-            host.execute(&request, &windows_media::WindowsMedia)
+            host.execute_observed(&request, &windows_media::WindowsMedia, notebook::record)
         }
         #[cfg(not(windows))]
         {

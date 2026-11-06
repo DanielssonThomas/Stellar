@@ -14,6 +14,7 @@ import {
   IvyAdapterService,
   IvyReflexService,
   VoiceConversation,
+  QuestionVoiceCue,
   type VoiceComposition,
   type PromptPresentation,
   type VoiceModel,
@@ -39,6 +40,14 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
+  private playbackGeneration = 0;
+  private disposed = false;
+  private readonly questionCue = new QuestionVoiceCue({
+    enabled: () => !this.current().muted && !this.current().error,
+    state: () => this.speech.state(),
+    speak: (text, id) => this.speech.speak(text, id),
+    stop: () => this.speech.stop(),
+  });
   private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
   readonly state = computed(() =>
@@ -88,7 +97,15 @@ export class DesktopVoice {
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: (text, id) => {
+    speak: async (text, id) => {
+      const generation = this.playbackGeneration;
+      await this.questionCue.wait();
+      if (
+        generation !== this.playbackGeneration ||
+        this.disposed ||
+        this.current().muted
+      )
+        return this.speech.state();
       const before = this.speech.state();
       this.narration = {
         id,
@@ -120,6 +137,8 @@ export class DesktopVoice {
         });
     },
     stop: () => {
+      this.playbackGeneration++;
+      this.questionCue.dispose();
       this.finishNarration('cancelled');
       return this.speech.stop();
     },
@@ -169,16 +188,27 @@ export class DesktopVoice {
     );
     effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
+      this.disposed = true;
+      this.playbackGeneration++;
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
       this.speech.setDucking(false);
+      this.questionCue.cancel();
       this.foregroundCleared = undefined;
     });
   }
 
   setMuted(muted: boolean) {
+    if (muted) this.playbackGeneration++;
     this.conversation.setMuted(muted);
+    if (muted) {
+      this.questionCue.cancel();
+    }
+  }
+
+  notifyQuestion(promptId: string) {
+    this.questionCue.notify(promptId);
   }
 
   async startListening(): Promise<void> {
@@ -212,6 +242,7 @@ export class DesktopVoice {
 
   private updateContext() {
     const speech = this.speech.state();
+    this.questionCue.observe(speech);
     const narration = this.narration;
     if (narration && BigInt(speech.revision) > narration.revision) {
       if (speech.epoch !== narration.epoch) this.finishNarration('cancelled');
@@ -240,6 +271,8 @@ export class DesktopVoice {
     this.narration = undefined;
   }
   stop() {
+    this.playbackGeneration++;
+    this.questionCue.cancel();
     this.conversation.stopVoice();
   }
   async retry(): Promise<void> {

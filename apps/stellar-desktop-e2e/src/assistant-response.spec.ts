@@ -99,9 +99,9 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     .getByLabel('Message Ivy', { exact: true })
     .fill('Show all of this content');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('.waiting-ring')).toBeVisible();
+  await expect(page.locator('.waiting-ring.waiting-visible')).toBeVisible();
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
-  await expect(page.locator('.waiting-ring')).toHaveCSS(
+  await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCSS(
     'animation-play-state',
     'paused',
   );
@@ -132,6 +132,9 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
   const body =
     '🪐 <script>literal</script> "\\\n'.repeat(10000) + 'COMPLETE END';
+  await page.locator('.waiting-ring').evaluate((ring) => {
+    (ring as SVGElement).dataset['retainedOrbit'] = 'yes';
+  });
   await page.evaluate((body) => {
     (
       window as unknown as { __responseFixture: ResponseFixture }
@@ -149,7 +152,11 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
   const panel = page.getByRole('region', { name: 'Long requested content' });
   const content = panel.locator('.surface-content');
   await expect(panel).toBeVisible();
-  await expect(page.locator('.waiting-ring')).toHaveCount(0);
+  await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCount(0);
+  await expect(page.locator('.waiting-ring')).toHaveAttribute(
+    'data-retained-orbit',
+    'yes',
+  );
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   await expect(panel.locator('article p')).toHaveJSProperty(
     'textContent',
@@ -179,7 +186,7 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
     .getByLabel('Message Ivy', { exact: true })
     .fill('Close this activity');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('.waiting-ring')).toBeVisible();
+  await expect(page.locator('.waiting-ring.waiting-visible')).toBeVisible();
   await page.evaluate(() =>
     (
       window as unknown as { __responseFixture: ResponseFixture }
@@ -191,6 +198,6 @@ test('waiting restores full presence, long content scrolls intact and Ivy closes
   await expect(
     page.getByRole('button', { name: 'Show content', exact: true }),
   ).toHaveCount(0);
-  await expect(page.locator('.waiting-ring')).toHaveCount(0);
+  await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCount(0);
   await expect(page.locator('[data-instance-id]')).toHaveCount(0);
 });

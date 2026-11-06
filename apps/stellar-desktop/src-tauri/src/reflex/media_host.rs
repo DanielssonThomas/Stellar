@@ -49,7 +49,17 @@ impl MediaHost {
         Ok(snapshot)
     }
 
+    #[cfg(test)]
     pub fn execute(&self, r: &ReflexMediaRequest, port: &impl MediaPort) -> ReflexMediaResult {
+        self.execute_observed(r, port, |_, _, _| {})
+    }
+
+    pub fn execute_observed(
+        &self,
+        r: &ReflexMediaRequest,
+        port: &impl MediaPort,
+        observe: impl FnOnce(&ReflexMediaRequest, &ReflexMediaState, &ReflexMediaResult),
+    ) -> ReflexMediaResult {
         let Ok(mut s) = self.0.try_lock() else {
             return ReflexMediaResult::Rejected;
         };
@@ -117,6 +127,8 @@ impl MediaHost {
         if let Ok(mut s) = self.0.lock() {
             s.active = None;
         }
+        // Receipt failures cannot revoke an effect or authorize a replay.
+        observe(r, &expected, &result);
         result
     }
 

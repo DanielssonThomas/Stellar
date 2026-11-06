@@ -1,19 +1,30 @@
 #[cfg(test)]
 mod ducking_tests;
+mod mixer;
+#[cfg(test)]
+mod mixer_tests;
+#[cfg(all(test, windows))]
+mod native_probe;
 mod ramp;
 
 use std::{
     sync::{
-        Mutex,
-        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU32, Ordering},
         mpsc,
     },
     thread::JoinHandle,
     time::{Duration, Instant},
 };
 
+use mixer::Mixer;
 pub(super) use ramp::Endpoint;
-use ramp::Ramp;
+
+pub(crate) struct Session {
+    pub id: String,
+    pub process: u32,
+    pub endpoint: Box<dyn Endpoint>,
+}
 
 const TICK: Duration = Duration::from_millis(20);
 const LEASE: Duration = Duration::from_secs(6);
@@ -27,9 +38,18 @@ enum Message {
 pub struct VolumeDucking {
     worker: Mutex<Option<(mpsc::Sender<Message>, JoinHandle<()>)>>,
     closed: AtomicBool,
+    speaker: Arc<AtomicU32>,
 }
 
 impl VolumeDucking {
+    pub fn new(speaker: Arc<AtomicU32>) -> Self {
+        Self {
+            speaker,
+            worker: Mutex::new(None),
+            closed: AtomicBool::new(false),
+        }
+    }
+
     pub fn set_active(&self, active: bool) -> Result<(), ()> {
         let mut worker = self.worker.lock().map_err(|_| ())?;
         if self.closed.load(Ordering::Acquire) {
@@ -37,9 +57,10 @@ impl VolumeDucking {
         }
         if worker.is_none() && active {
             let (send, receive) = mpsc::channel();
+            let speaker = self.speaker.clone();
             let handle = std::thread::Builder::new()
                 .name("ivy-volume".into())
-                .spawn(move || run(receive))
+                .spawn(move || run_with(receive, open, speaker))
                 .map_err(|_| ())?;
             *worker = Some((send, handle));
         }
@@ -66,29 +87,25 @@ impl Drop for VolumeDucking {
     }
 }
 
-fn open() -> Result<Box<dyn Endpoint>, ()> {
+fn open() -> Result<Vec<Session>, ()> {
     #[cfg(windows)]
-    return crate::reflex::duck_endpoint();
+    return crate::reflex::duck_sessions();
     #[cfg(not(windows))]
     Err(())
 }
 
-fn run(receive: mpsc::Receiver<Message>) {
-    run_with(receive, open);
-}
-
 fn run_with(
     receive: mpsc::Receiver<Message>,
-    mut open: impl FnMut() -> Result<Box<dyn Endpoint>, ()>,
+    mut open: impl FnMut() -> Result<Vec<Session>, ()>,
+    speaker: Arc<AtomicU32>,
 ) {
-    let mut ramp: Option<Ramp> = None;
+    let mut mixer = Mixer::default();
     let mut lease = None;
-    let mut inhibited = false;
     let mut shutdown = None;
     let mut previous = Instant::now();
     let mut retry = previous;
     loop {
-        let wait = if ramp.is_none() && lease.is_none() {
+        let wait = if mixer.is_empty() && lease.is_none() {
             LEASE
         } else {
             TICK
@@ -99,7 +116,6 @@ fn run_with(
             }
             Ok(Message::Active(false)) => {
                 lease = None;
-                inhibited = false;
             }
             Ok(Message::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                 lease = None;
@@ -113,29 +129,19 @@ fn run_with(
         if !active {
             lease = None;
         }
-        if active && !inhibited && ramp.is_none() && now >= retry {
-            ramp = open().ok().and_then(|endpoint| Ramp::new(endpoint).ok());
-            previous = now;
-            retry = now + Duration::from_secs(1);
-        }
-        if let Some(current) = ramp.as_mut() {
-            if !current.is_current() {
-                // Restore the retained endpoint before inspecting the new default.
-                current.restore();
-                ramp = None;
-            } else {
-                match current.tick(active, now.duration_since(previous)) {
-                    ramp::Progress::Restored => ramp = None,
-                    ramp::Progress::Overridden => {
-                        ramp = None;
-                        inhibited = active;
-                    }
-                    ramp::Progress::Pending => {}
+        let speaker = speaker.load(Ordering::Acquire);
+        if active && now >= retry {
+            if let Ok(sessions) = open() {
+                if mixer.is_empty() {
+                    previous = now;
                 }
+                mixer.discover(sessions, speaker);
             }
+            retry = now + Duration::from_millis(250);
         }
+        mixer.tick(active, now.duration_since(previous), speaker);
         previous = now;
-        if shutdown.is_some_and(|deadline| ramp.is_none() || now >= deadline) {
+        if shutdown.is_some_and(|deadline| mixer.is_empty() || now >= deadline) {
             break;
         }
     }

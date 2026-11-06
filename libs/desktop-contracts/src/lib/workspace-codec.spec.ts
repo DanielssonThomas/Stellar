@@ -20,6 +20,111 @@ const envelope = {
 };
 
 describe('workspace tool contract', () => {
+  it('validates bounded leaf-only batches and ordered partial outcomes', () => {
+    const operation = {
+      kind: 'batch',
+      operations: [envelope.operation, { kind: 'clear' }],
+    };
+    const request = decodeWorkspaceToolRequest({ ...envelope, operation });
+    expect(request.operation).toEqual(operation);
+    const outcome = {
+      kind: 'batch',
+      outcomes: ['applied', 'uncertain'],
+      panes: [],
+    };
+    expect(decodeWorkspaceToolOutcome(outcome, request)).toEqual(outcome);
+    for (const invalid of [
+      { kind: 'batch', operations: [] },
+      { kind: 'batch', operations: Array(9).fill({ kind: 'clear' }) },
+      { kind: 'batch', operations: [operation] },
+      { kind: 'batch', operations: [{ kind: 'capture_window' }] },
+      { kind: 'batch', operations: [{ kind: 'inspect' }] },
+      { kind: 'batch', operations: [{ kind: 'clear', extra: true }] },
+      {
+        kind: 'batch',
+        operations: Array(3).fill({
+          ...envelope.operation,
+          payload_json: JSON.stringify({ text: 'x'.repeat(65500) }),
+        }),
+      },
+    ])
+      expect(() =>
+        decodeWorkspaceToolRequest({ ...envelope, operation: invalid }),
+      ).toThrow();
+    for (const invalid of [
+      { ...outcome, outcomes: ['applied'] },
+      { ...outcome, outcomes: ['applied', 'success'] },
+      { ...outcome, panes: [{}] },
+      { kind: 'applied' },
+    ])
+      expect(() => decodeWorkspaceToolOutcome(invalid, request)).toThrow();
+  });
+  it('validates render observations without promoting loading/error to ready', () => {
+    const request = decodeWorkspaceToolRequest({
+      ...envelope,
+      operation: { kind: 'inspect' },
+    });
+    for (const render_state of [
+      'ready',
+      'loading',
+      'error',
+      'hidden',
+      'unavailable',
+    ]) {
+      const outcome = {
+        kind: 'inspection',
+        panes: [
+          {
+            instance_id: 'image',
+            surface: 'image',
+            prominence: 'primary',
+            minimized: false,
+            render_state,
+          },
+        ],
+      };
+      expect(decodeWorkspaceToolOutcome(outcome, request)).toEqual(outcome);
+    }
+    for (const render_state of ['success', 1, {}, 'loaded'])
+      expect(() =>
+        decodeWorkspaceToolOutcome(
+          {
+            kind: 'inspection',
+            panes: [
+              {
+                instance_id: 'image',
+                surface: 'image',
+                prominence: 'primary',
+                minimized: false,
+                render_state,
+              },
+            ],
+          },
+          request,
+        ),
+      ).toThrow();
+  });
+  it('validates native monitor targets without permitting renderer capture replies', () => {
+    for (const operation of [
+      { kind: 'list_displays' },
+      { kind: 'capture_foreground' },
+      { kind: 'capture_display', display_id: null },
+      { kind: 'capture_display', display_id: '\\\\.\\DISPLAY1' },
+    ]) {
+      const request = decodeWorkspaceToolRequest({ ...envelope, operation });
+      expect(request.operation).toEqual(operation);
+      expect(() =>
+        decodeWorkspaceToolOutcome({ kind: 'applied' }, request),
+      ).toThrow();
+    }
+    for (const display_id of ['', 'x'.repeat(129), '\0bad', 1])
+      expect(() =>
+        decodeWorkspaceToolRequest({
+          ...envelope,
+          operation: { kind: 'capture_display', display_id },
+        }),
+      ).toThrow();
+  });
   it('rejects extra authority, invalid surfaces and over-budget content', () => {
     expect(decodeWorkspaceToolRequest(envelope)).toEqual(envelope);
     for (const value of [

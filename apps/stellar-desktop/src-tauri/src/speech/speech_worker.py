@@ -385,6 +385,7 @@ def main():
                     transcribe(request(), protocol)
                 else:
                     watch_parent()
+                    emit(protocol, {'audio_process': os.getpid()})
                     engine = VoiceEngine()
                     while (req := request(eof=True)) is not None:
                         speak(req, protocol, engine)

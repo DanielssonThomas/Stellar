@@ -1,6 +1,6 @@
 use super::workspace_contracts::{
-    WorkspaceSurface, WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply,
-    WorkspaceToolRequest,
+    BATCH_MAX_OPERATIONS, BATCH_MAX_PAYLOAD_BYTES, WorkspacePaneMetadata, WorkspaceSurface,
+    WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply, WorkspaceToolRequest,
 };
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::{collections::HashSet, fmt};
@@ -62,7 +62,45 @@ pub fn request(value: &WorkspaceToolRequest) -> bool {
     {
         return false;
     }
-    match &value.operation {
+    operation(&value.operation)
+}
+
+pub(super) fn mutation(value: &WorkspaceToolOperation) -> bool {
+    matches!(
+        value,
+        WorkspaceToolOperation::Open { .. }
+            | WorkspaceToolOperation::Update { .. }
+            | WorkspaceToolOperation::Remove { .. }
+            | WorkspaceToolOperation::Focus { .. }
+            | WorkspaceToolOperation::Minimize { .. }
+            | WorkspaceToolOperation::Restore { .. }
+            | WorkspaceToolOperation::Maximize { .. }
+            | WorkspaceToolOperation::Resize { .. }
+            | WorkspaceToolOperation::Swap { .. }
+            | WorkspaceToolOperation::RestoreLayout
+            | WorkspaceToolOperation::Arrange { .. }
+            | WorkspaceToolOperation::Clear
+    )
+}
+
+fn operation(value: &WorkspaceToolOperation) -> bool {
+    match value {
+        WorkspaceToolOperation::Batch { operations } => {
+            !operations.is_empty()
+                && operations.len() <= BATCH_MAX_OPERATIONS
+                && operations
+                    .iter()
+                    .all(|entry| mutation(entry) && operation(entry))
+                && operations
+                    .iter()
+                    .map(|entry| match entry {
+                        WorkspaceToolOperation::Open { payload_json, .. }
+                        | WorkspaceToolOperation::Update { payload_json, .. } => payload_json.len(),
+                        _ => 0,
+                    })
+                    .sum::<usize>()
+                    <= BATCH_MAX_PAYLOAD_BYTES
+        }
         WorkspaceToolOperation::Open {
             instance_id,
             payload_json,
@@ -95,9 +133,14 @@ pub fn request(value: &WorkspaceToolRequest) -> bool {
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
         WorkspaceToolOperation::Clear
+        | WorkspaceToolOperation::ListDisplays
+        | WorkspaceToolOperation::CaptureForeground
         | WorkspaceToolOperation::RestoreLayout
         | WorkspaceToolOperation::Inspect
         | WorkspaceToolOperation::CaptureWindow => true,
+        WorkspaceToolOperation::CaptureDisplay { display_id } => {
+            display_id.as_deref().is_none_or(display_id_valid)
+        }
     }
 }
 
@@ -111,31 +154,25 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
         return false;
     }
     match (&request.operation, &reply.outcome) {
-        (WorkspaceToolOperation::CaptureWindow, _) => false,
+        (
+            WorkspaceToolOperation::Batch { operations },
+            WorkspaceToolOutcome::Batch { outcomes, panes },
+        ) => {
+            outcomes.len() == operations.len()
+                && panes.as_ref().is_none_or(|value| valid_panes(value))
+        }
+        (WorkspaceToolOperation::Batch { .. }, WorkspaceToolOutcome::Rejected) => true,
+        (WorkspaceToolOperation::Batch { .. }, _) => false,
+        (
+            WorkspaceToolOperation::CaptureWindow
+            | WorkspaceToolOperation::CaptureForeground
+            | WorkspaceToolOperation::CaptureDisplay { .. }
+            | WorkspaceToolOperation::ListDisplays,
+            _,
+        ) => false,
         (_, WorkspaceToolOutcome::Rejected) => true,
         (WorkspaceToolOperation::Inspect, WorkspaceToolOutcome::Inspection { panes }) => {
-            panes.len() <= MAX_PANES
-                && panes.iter().all(|pane| {
-                    identifier(&pane.instance_id)
-                        && pane.operations.len() <= 14
-                        && pane.operations.iter().collect::<HashSet<_>>().len()
-                            == pane.operations.len()
-                        && pane.layout.as_ref().is_none_or(|layout| {
-                            layout.title.chars().count() <= 240
-                                && layout.position < 4
-                                && [layout.x, layout.y, layout.width, layout.height]
-                                    .iter()
-                                    .all(|n| *n <= 1000)
-                                && layout.x + layout.width <= 1001
-                                && layout.y + layout.height <= 1001
-                        })
-                })
-                && panes
-                    .iter()
-                    .map(|pane| &pane.instance_id)
-                    .collect::<HashSet<_>>()
-                    .len()
-                    == panes.len()
+            valid_panes(panes)
         }
         (WorkspaceToolOperation::Inspect, _) => false,
         (
@@ -153,6 +190,34 @@ pub fn reply(request: &WorkspaceToolRequest, reply: &WorkspaceToolReply) -> bool
         (_, WorkspaceToolOutcome::Applied) => true,
         _ => false,
     }
+}
+
+fn valid_panes(panes: &[WorkspacePaneMetadata]) -> bool {
+    panes.len() <= MAX_PANES
+        && panes.iter().all(|pane| {
+            identifier(&pane.instance_id)
+                && pane.operations.len() <= 14
+                && pane.operations.iter().collect::<HashSet<_>>().len() == pane.operations.len()
+                && pane.layout.as_ref().is_none_or(|layout| {
+                    layout.title.chars().count() <= 240
+                        && layout.position < 4
+                        && [layout.x, layout.y, layout.width, layout.height]
+                            .iter()
+                            .all(|n| *n <= 1000)
+                        && layout.x + layout.width <= 1001
+                        && layout.y + layout.height <= 1001
+                })
+        })
+        && panes
+            .iter()
+            .map(|pane| &pane.instance_id)
+            .collect::<HashSet<_>>()
+            .len()
+            == panes.len()
+}
+
+pub fn display_id_valid(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control)
 }
 
 struct StrictJson {

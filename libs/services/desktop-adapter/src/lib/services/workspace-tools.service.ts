@@ -19,7 +19,7 @@ import { IvyAdapterService } from './ivy-adapter.service';
 
 export type WorkspaceToolHandler = (
   request: WorkspaceToolRequest,
-) => WorkspaceToolOutcome;
+) => WorkspaceToolOutcome | Promise<WorkspaceToolOutcome>;
 export interface WorkspaceToolTransport {
   listen(callback: (value: unknown) => void): Promise<() => void>;
   reply(value: WorkspaceToolReply): Promise<void>;
@@ -143,9 +143,18 @@ export class WorkspaceToolsService {
       if (
         this.isCurrent(request) &&
         this.handler &&
-        request.operation.kind !== 'capture_window'
+        ![
+          'capture_window',
+          'capture_display',
+          'capture_foreground',
+          'list_displays',
+        ].includes(request.operation.kind)
       )
-        outcome = decodeWorkspaceToolOutcome(this.handler(request), request);
+        outcome = decodeWorkspaceToolOutcome(
+          await this.handler(request),
+          request,
+        );
+      if (!this.isCurrent(request)) outcome = { kind: 'rejected' };
     } catch {
       outcome = { kind: 'rejected' };
     }

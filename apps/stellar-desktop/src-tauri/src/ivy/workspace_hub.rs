@@ -2,8 +2,10 @@ use super::{
     contracts::{IvyErrorCode, IvyTurnState, WorkspaceToolsState},
     process::{self, SharedInput},
     state::Shared,
+    workspace_capture::{self, Captured},
     workspace_contracts::{
-        WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply, WorkspaceToolRequest,
+        WorkspaceCaptureFailure, WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply,
+        WorkspaceToolRequest,
     },
     workspace_data::{self, SharedImageEndpoint},
     workspace_validate,
@@ -15,7 +17,8 @@ use std::{
 };
 
 pub type Publisher = Arc<dyn Fn(WorkspaceToolRequest) -> bool + Send + Sync>;
-pub type Capture = Arc<dyn Fn() -> Result<Vec<u8>, IvyErrorCode> + Send + Sync>;
+pub type Capture =
+    Arc<dyn Fn(&WorkspaceToolOperation) -> Result<Captured, IvyErrorCode> + Send + Sync>;
 struct Pending {
     request: WorkspaceToolRequest,
     started: Instant,
@@ -118,9 +121,11 @@ impl WorkspaceHub {
             )
         {
             drop(current);
-            if matches!(request.operation, WorkspaceToolOperation::CaptureWindow) {
-                let header = json!({"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id});
-                let _ = self.send(&json!({"control":"workspace_capture_failed","header":header}));
+            if workspace_capture::is_image(&request.operation) {
+                let _ = self.send(&capture_failed(
+                    &request,
+                    WorkspaceCaptureFailure::StaleRequest,
+                ));
                 return Ok(());
             }
             let reply = WorkspaceToolReply {
@@ -150,7 +155,7 @@ impl WorkspaceHub {
         self.shared.update(connection_epoch, |view| {
             view.workspace_tools = WorkspaceToolsState::Available
         });
-        if matches!(request.operation, WorkspaceToolOperation::CaptureWindow) {
+        if workspace_capture::is_native(&request.operation) {
             let capture = self
                 .capture
                 .lock()
@@ -159,13 +164,18 @@ impl WorkspaceHub {
             if let Some(capture) = capture {
                 let hub = self.clone();
                 std::thread::spawn(move || {
-                    let result =
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| capture()))
-                            .unwrap_or(Err(IvyErrorCode::Unavailable));
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        capture(&request.operation)
+                    }))
+                    .unwrap_or(Err(IvyErrorCode::Unavailable));
                     let _ = hub.finish_capture(&request, result);
                 });
             } else {
-                self.reject_capture(&request)?;
+                if workspace_capture::is_image(&request.operation) {
+                    self.reject_capture(&request)?;
+                } else {
+                    self.finish_capture(&request, Err(IvyErrorCode::Unavailable))?;
+                }
             }
         } else {
             let sent = self
@@ -188,8 +198,10 @@ impl WorkspaceHub {
     }
 
     fn reject_capture(&self, request: &WorkspaceToolRequest) -> Result<(), IvyErrorCode> {
-        let header = json!({"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id});
-        self.send(&json!({"control":"workspace_capture_failed","header":header}))?;
+        self.send(&capture_failed(
+            request,
+            WorkspaceCaptureFailure::CaptureUnavailable,
+        ))?;
         *self.pending.lock().map_err(|_| IvyErrorCode::Unavailable)? = None;
         Ok(())
     }
@@ -197,7 +209,7 @@ impl WorkspaceHub {
     fn finish_capture(
         &self,
         request: &WorkspaceToolRequest,
-        result: Result<Vec<u8>, IvyErrorCode>,
+        result: Result<Captured, IvyErrorCode>,
     ) -> Result<(), IvyErrorCode> {
         let mut pending = self.pending.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         let entry = pending.as_ref().ok_or(IvyErrorCode::Unavailable)?;
@@ -223,13 +235,39 @@ impl WorkspaceHub {
         *pending = None;
         drop(pending);
         match result {
-            Ok(image) => {
+            Ok(Captured::Image(image)) => {
                 if workspace_data::send(&self.image_endpoint, &header, &image).is_err() {
-                    let _ =
-                        self.send(&json!({"control":"workspace_capture_failed","header":header}));
+                    let _ = self.send(&capture_failed(
+                        request,
+                        WorkspaceCaptureFailure::ImageTransferFailed,
+                    ));
                 }
             }
-            Err(_) => self.send(&json!({"control":"workspace_capture_failed","header":header}))?,
+            result => {
+                if matches!(request.operation, WorkspaceToolOperation::ListDisplays) {
+                    let outcome = match result {
+                        Ok(Captured::Displays(displays)) => {
+                            WorkspaceToolOutcome::Displays { displays }
+                        }
+                        _ => WorkspaceToolOutcome::Rejected,
+                    };
+                    let reply = WorkspaceToolReply {
+                        version: 1,
+                        request_id: request.request_id.clone(),
+                        epoch: request.epoch.clone(),
+                        turn_id: request.turn_id.clone(),
+                        outcome,
+                    };
+                    self.send(&json!({"control":"workspace_reply","reply":reply}))?;
+                } else {
+                    let reason = if matches!(result, Err(IvyErrorCode::Timeout)) {
+                        WorkspaceCaptureFailure::CaptureTimeout
+                    } else {
+                        WorkspaceCaptureFailure::CaptureUnavailable
+                    };
+                    self.send(&capture_failed(request, reason))?;
+                }
+            }
         }
         Ok(())
     }
@@ -266,4 +304,9 @@ impl WorkspaceHub {
         let input = self.input.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         process::control(input.as_ref().ok_or(IvyErrorCode::Unavailable)?, frame)
     }
+}
+
+fn capture_failed(request: &WorkspaceToolRequest, reason: WorkspaceCaptureFailure) -> Value {
+    json!({"control":"workspace_capture_failed", "reason":reason,
+        "header":{"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id}})
 }

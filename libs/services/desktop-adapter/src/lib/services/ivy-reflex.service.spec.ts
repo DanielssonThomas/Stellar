@@ -79,6 +79,84 @@ describe('Ivy Reflex beta preference and admission', () => {
     vi.unstubAllGlobals();
     localStorage.removeItem(key);
   });
+  it('closes all panes through paint aliases without waiting for the model and honors Reflex Off', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    service.bind(
+      () => ({
+        context: '[]',
+        actions: [
+          {
+            id: 'layout.clear',
+            description: 'Close all panes',
+            valid: () => true,
+            execute,
+          },
+        ],
+      }),
+      () => 'panes',
+    );
+    for (const text of [
+      'close panes',
+      'close all panes',
+      'close paint',
+      'close paints',
+      'close all paints',
+    ]) {
+      expect((await service.run(text, crypto.randomUUID())).outcome).toBe(
+        'confirmed',
+      );
+    }
+    expect(execute).toHaveBeenCalledTimes(5);
+    expect(invoke.mock.calls.map(([name]) => name)).not.toContain(
+      'reflex_infer',
+    );
+    expect(invoke.mock.calls.map(([name]) => name)).not.toContain(
+      'reflex_route',
+    );
+    expect(invoke.mock.calls.map(([name]) => name)).not.toContain(
+      'reflex_media_snapshot',
+    );
+    await service.setEnabled(false);
+    expect(
+      (await service.run('close panes', crypto.randomUUID())).outcome,
+    ).not.toBe('confirmed');
+    expect(execute).toHaveBeenCalledTimes(5);
+    ready.resolve({ version: 1, configured: true });
+  });
+  it('executes two-pane swaps without waiting for model readiness or media inspection', async () => {
+    const ready = deferred<unknown>();
+    const { service, invoke, execute } = fixture({
+      prepare: () => ready.promise,
+    });
+    service.bind(
+      () => ({
+        context: '[]',
+        actions: [
+          {
+            id: 'pane.swap_pair',
+            description: 'Swap visible pair',
+            valid: () => true,
+            execute,
+          },
+        ],
+      }),
+      () => 'pair',
+    );
+    const outcome = await service.run(
+      'swap the pane positions',
+      crypto.randomUUID(),
+    );
+    expect(outcome.outcome).toBe('confirmed');
+    expect(execute).toHaveBeenCalledOnce();
+    const commands = invoke.mock.calls.map(([command]) => command);
+    expect(commands).not.toContain('reflex_route');
+    expect(commands).not.toContain('reflex_infer');
+    expect(commands).not.toContain('reflex_media_snapshot');
+    ready.resolve({ version: 1, configured: true });
+  });
   it('warms the enabled model on construction without a request or action', async () => {
     const ready = deferred<unknown>();
     const { service, invoke, execute } = fixture({

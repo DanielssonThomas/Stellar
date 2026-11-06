@@ -17,6 +17,7 @@ import {
 } from '@stellar/desktop-contracts';
 import type { LocalAction } from '../reflex/action-registry';
 import { mediaActionDescriptions } from '../reflex/media-actions';
+import { paneShortcut } from '../reflex/pane-shortcuts';
 import { captureReflexDiagnostics } from '../reflex/reflex-diagnostics';
 import { RequestTimeline, type RequestTrace } from '../reflex/request-timeline';
 import {
@@ -76,7 +77,10 @@ export class IvyReflexService {
       | 'action_complete',
   ) => void;
   private readonly controller = new ReflexController({
-    environment: (signal) => this.environment(signal),
+    environment: (signal, text) =>
+      paneShortcut(text)
+        ? Promise.resolve({ epoch: this.epoch(), ...this.workspace() })
+        : this.environment(signal),
     currentEpoch: () => this.epoch(),
     point: (stage) => this.point?.(stage),
     infer: async (request, signal) => {
@@ -231,55 +235,59 @@ export class IvyReflexService {
     const revision = this.settingRevision;
     const epoch = this.epoch();
     const workspace = this.workspace();
-    try {
-      const route = decodeReflexRouting(
-        await this.invoke('reflex_route', {
-          request: {
-            version: 1,
-            input_id: id,
-            text,
-            mode: this.mode(),
-            context: JSON.stringify({
-              workspace: JSON.parse(workspace.context),
-            }),
-            history: this.controller.recentInteractions(),
-            actions: workspace.actions.map(({ id, description }) => ({
-              id,
-              description,
-            })),
-          },
-        }),
-      );
+    const shortcut = paneShortcut(text);
+    if (!shortcut) {
+      try {
+        const route = decodeReflexRouting(
+          await this.invoke('reflex_route', {
+            request: {
+              version: 1,
+              input_id: id,
+              text,
+              mode: this.mode(),
+              context: JSON.stringify({
+                workspace: JSON.parse(workspace.context),
+              }),
+              history: this.controller.recentInteractions(),
+              actions: workspace.actions.map(({ id, description }) => ({
+                id,
+                description,
+              })),
+            },
+          }),
+        );
+        if (
+          revision !== this.settingRevision ||
+          epoch !== this.epoch() ||
+          signal?.aborted
+        )
+          return cancelled();
+        if (!route.local) return fallback('outside local scope', 'hermes');
+      } catch {
+        if (
+          revision !== this.settingRevision ||
+          epoch !== this.epoch() ||
+          signal?.aborted
+        ) {
+          return cancelled();
+        }
+        return fallback('routing unavailable');
+      }
+      this.timeline.route(id, 'Reflex');
+      if (this.available() === null)
+        this.timeline.step(id, 'model-wait', 'Waiting for local readiness');
+      await this.preparation;
+      // A toggle during admission cancels this request instead of replaying it through Hermes.
       if (
         revision !== this.settingRevision ||
         epoch !== this.epoch() ||
         signal?.aborted
       )
         return cancelled();
-      if (!route.local) return fallback('outside local scope', 'hermes');
-    } catch {
-      if (
-        revision !== this.settingRevision ||
-        epoch !== this.epoch() ||
-        signal?.aborted
-      ) {
-        return cancelled();
-      }
-      return fallback('routing unavailable');
+      if (!this.invoke || !this.available())
+        return fallback('Reflex unavailable');
     }
     this.timeline.route(id, 'Reflex');
-    if (this.available() === null)
-      this.timeline.step(id, 'model-wait', 'Waiting for local readiness');
-    await this.preparation;
-    // A toggle during admission cancels this request instead of replaying it through Hermes.
-    if (
-      revision !== this.settingRevision ||
-      epoch !== this.epoch() ||
-      signal?.aborted
-    )
-      return cancelled();
-    if (!this.invoke || !this.available())
-      return fallback('Reflex unavailable');
     let workspaceCurrent = false;
     try {
       workspaceCurrent =

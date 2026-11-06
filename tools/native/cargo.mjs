@@ -97,6 +97,7 @@ if (action === 'smoke') {
               'allow-ivy-clear-conversation',
               'allow-ivy-new-session',
               'allow-ivy-reload-mcp',
+              'allow-ivy-question-reply',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
               'allow-smoke-hold-ivy',
@@ -173,7 +174,9 @@ if (action === 'smoke') {
         u64Precision: true,
         malformedInputRejected: true,
         invalidVersionRejected: true,
-        systemVolumeDucking: output.includes('STELLAR_DUCKING_PROBE true')
+        duckingIpcPreservesMasterVolume: output.includes(
+          'STELLAR_DUCKING_PROBE true',
+        )
           ? 'passed'
           : 'skipped-no-render-endpoint',
       };

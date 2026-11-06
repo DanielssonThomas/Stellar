@@ -1,5 +1,6 @@
 import {
   Component,
+  effect,
   computed,
   ElementRef,
   inject,
@@ -29,9 +30,14 @@ import {
   type PromptComposerStatus,
   type EmblemManifest,
   RequestStatusMolecule,
+  IvyQuestionMolecule,
   type RequestStatusEntry,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
+import type {
+  IvyQuestion,
+  IvyQuestionAction,
+} from '@stellar/desktop-contracts';
 
 export interface MicrophoneOption {
   readonly deviceId: string;
@@ -50,6 +56,7 @@ export interface MicrophoneOption {
     FaultLogMolecule,
     VoiceTranscriptMolecule,
     RequestStatusMolecule,
+    IvyQuestionMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -64,6 +71,9 @@ export interface MicrophoneOption {
   },
 })
 export class DesktopExperienceTemplate {
+  readonly questions = input<readonly IvyQuestion[]>([]);
+  readonly questionShown = output<string>();
+  readonly questionAnswer = output<{ id: string; action: IvyQuestionAction }>();
   readonly statusVisible = signal(false);
   readonly paneControlsVisible = signal(false);
   readonly requestTimeline = input<readonly RequestStatusEntry[]>([]);
@@ -212,6 +222,15 @@ export class DesktopExperienceTemplate {
   readonly stage = viewChild.required(StageOrganism);
   readonly focusFallback = this.host.nativeElement;
 
+  constructor() {
+    effect(() => {
+      if (this.questions().length) {
+        this.menu.close();
+        this.musicControls().close();
+      }
+    });
+  }
+
   dispatch(command: unknown) {
     return this.stage().dispatch(command);
   }
@@ -232,6 +251,7 @@ export class DesktopExperienceTemplate {
   controlsShortcut(event: KeyboardEvent) {
     if (
       event.defaultPrevented ||
+      this.questions().length > 0 ||
       event.repeat ||
       event.isComposing ||
       event.ctrlKey ||

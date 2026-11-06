@@ -15,6 +15,8 @@ import {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyQuestionReplyCommand,
+  decodeIvyQuestionReply,
   type IvyCommands,
   type IvyErrorCode,
   type IvySnapshot,
@@ -45,6 +47,7 @@ const commands: Record<keyof IvyCommands, true> = {
   [ivyClearConversationCommand]: true,
   [ivyNewSessionCommand]: true,
   [ivyReloadMcpCommand]: true,
+  [ivyQuestionReplyCommand]: true,
 };
 
 export class IvyAdapter {
@@ -61,11 +64,13 @@ export class IvyAdapter {
     try {
       if (!Object.hasOwn(commands, command)) throw new Error();
       request = (
-        command === ivySubmitCommand
-          ? decodeIvySubmitRequest(input)
-          : command === ivySelectSessionCommand
-            ? decodeIvySelectRequest(input)
-            : decodeIvyRequest(input)
+        command === ivyQuestionReplyCommand
+          ? decodeIvyQuestionReply(input)
+          : command === ivySubmitCommand
+            ? decodeIvySubmitRequest(input)
+            : command === ivySelectSessionCommand
+              ? decodeIvySelectRequest(input)
+              : decodeIvyRequest(input)
       ) as IvyCommands[K];
     } catch {
       throw new IvyAdapterError('contract');

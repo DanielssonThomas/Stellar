@@ -12,6 +12,12 @@ import time
 MAX_PAYLOAD = 65536
 MAX_FRAME = 400000
 MAX_PANES = 4
+MAX_BATCH_OPERATIONS = 8
+MAX_BATCH_PAYLOAD = 131072
+MUTATIONS = frozenset({'open', 'update', 'remove', 'focus', 'minimize', 'restore',
+                       'maximize', 'resize', 'swap', 'restore_layout', 'arrange', 'clear'})
+CAPTURE_FAILURES = frozenset({'capture_unavailable', 'capture_timeout', 'image_transfer_failed', 'stale_request'})
+IMAGE_OPERATIONS = {'capture_window', 'capture_display', 'capture_foreground'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
 SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'workflow',
                       'session', 'assistant-message'})
@@ -23,6 +29,14 @@ PAYLOAD_LIMITS = {'rich-text': 65536, 'image': 65536, 'assistant-message': 65536
 
 class WorkspaceRefused(Exception):
     pass
+
+
+class WorkspaceCaptureFailed(WorkspaceRefused):
+    def __init__(self, reason):
+        if type(reason) is not str or reason not in CAPTURE_FAILURES:
+            raise WorkspaceRefused()
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _unique(pairs):
@@ -74,6 +88,16 @@ def validate_operation(operation):
     if type(operation) is not dict or type(operation.get('kind')) is not str:
         raise WorkspaceRefused()
     kind = operation['kind']
+    if kind == 'batch':
+        entries = operation.get('operations')
+        if (set(operation) != {'kind', 'operations'} or type(entries) is not list or
+                not 1 <= len(entries) <= MAX_BATCH_OPERATIONS or
+                any(type(entry) is not dict or type(entry.get('kind')) is not str or entry['kind'] not in MUTATIONS for entry in entries)):
+            raise WorkspaceRefused()
+        validated = [validate_operation(entry) for entry in entries]
+        if sum(len(entry.get('payload_json', '').encode('utf-8')) for entry in validated) > MAX_BATCH_PAYLOAD:
+            raise WorkspaceRefused()
+        return {'kind': 'batch', 'operations': validated}
     fields = {
         'open': {'instance_id', 'surface', 'payload_json', 'prominence'},
         'update': {'instance_id', 'surface', 'payload_json'},
@@ -83,6 +107,7 @@ def validate_operation(operation):
         'restore_layout': set(), 'inspect_content': {'instance_id'},
         'arrange': {'instance_ids'}, 'clear': set(), 'inspect': set(),
         'capture_window': set(),
+        'capture_foreground': set(), 'capture_display': {'display_id'}, 'list_displays': set(),
     }
     if kind == 'update' and 'expected_revision' in operation:
         fields['update'] = fields['update'] | {'expected_revision'}
@@ -90,6 +115,10 @@ def validate_operation(operation):
             raise WorkspaceRefused()
     if kind not in fields or set(operation) != fields[kind] | {'kind'}:
         raise WorkspaceRefused()
+    if kind == 'capture_display' and operation['display_id'] is not None:
+        value = operation['display_id']
+        if type(value) is not str or not value or len(value.encode('utf-8')) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+            raise WorkspaceRefused()
     if 'instance_id' in operation and not _identity(operation['instance_id']):
         raise WorkspaceRefused()
     if kind == 'resize' and (type(operation['percent']) is not int or not 10 <= operation['percent'] <= 90):
@@ -114,9 +143,37 @@ def validate_outcome(outcome, operation):
     if type(outcome) is not dict:
         raise WorkspaceRefused()
     kind = outcome.get('kind')
+    requested = operation if type(operation) is str else operation['kind']
+    if requested == 'batch':
+        if kind == 'rejected' and set(outcome) == {'kind'}:
+            return outcome
+        if (kind != 'batch' or set(outcome) != {'kind', 'outcomes', 'panes'} or
+                type(outcome['outcomes']) is not list or type(operation) is not dict or
+                len(outcome['outcomes']) != len(operation['operations']) or
+                any(type(status) is not str or status not in {'applied', 'rejected', 'uncertain'} for status in outcome['outcomes'])):
+            raise WorkspaceRefused()
+        if outcome['panes'] is not None:
+            validate_outcome({'kind': 'inspection', 'panes': outcome['panes']}, 'inspect')
+        return outcome
+    operation = requested
     if type(kind) is not str:
         raise WorkspaceRefused()
     if kind in ('applied', 'rejected') and set(outcome) == {'kind'}:
+        return outcome
+    if kind == 'displays' and operation == 'list_displays':
+        displays = outcome.get('displays')
+        if set(outcome) != {'kind', 'displays'} or type(displays) is not list or not 1 <= len(displays) <= 16:
+            raise WorkspaceRefused()
+        ids = set()
+        for display in displays:
+            if (type(display) is not dict or set(display) != {'id','name','width','height','primary','foreground'} or
+                    type(display['id']) is not str or not display['id'] or len(display['id'].encode('utf-8')) > 128 or
+                    any(ord(c) < 32 or ord(c) == 127 for c in display['id']) or display['id'] in ids or
+                    type(display['name']) is not str or not 1 <= len(display['name']) <= 240 or
+                    any(type(display[k]) is not int or not 1 <= display[k] <= 32768 for k in ('width','height')) or
+                    any(type(display[k]) is not bool for k in ('primary','foreground'))):
+                raise WorkspaceRefused()
+            ids.add(display['id'])
         return outcome
     if kind == 'content' and operation == 'inspect_content':
         if (set(outcome) != {'kind','instance_id','surface','revision','payload_json'} or
@@ -132,11 +189,13 @@ def validate_outcome(outcome, operation):
         raise WorkspaceRefused()
     ids = set()
     for pane in panes:
-        if (type(pane) is not dict or not {'instance_id', 'surface', 'prominence', 'minimized'} <= set(pane) or set(pane) - {'instance_id', 'surface', 'prominence', 'minimized', 'layout', 'operations'}
+        if (type(pane) is not dict or not {'instance_id', 'surface', 'prominence', 'minimized'} <= set(pane) or set(pane) - {'instance_id', 'surface', 'prominence', 'minimized', 'layout', 'operations', 'render_state'}
                 or not _identity(pane['instance_id']) or pane['instance_id'] in ids
                 or type(pane['surface']) is not str or pane['surface'] not in METADATA_SURFACES
                 or type(pane['prominence']) is not str or pane['prominence'] not in PROMINENCE
                 or type(pane['minimized']) is not bool):
+            raise WorkspaceRefused()
+        if pane.get('render_state') is not None and (type(pane['render_state']) is not str or pane['render_state'] not in {'ready', 'loading', 'error', 'hidden', 'unavailable'}):
             raise WorkspaceRefused()
         operations = pane.get('operations', [])
         allowed = {'focus','minimize','restore','close','arrange','swap','resize','maximize','restore_layout','update','inspect_content','gallery','browser_navigation','focus_agent'}
@@ -191,8 +250,9 @@ class WorkspaceGate:
     async def call(self, operation, turn_token):
         operation = validate_operation(operation)
         self.authorize(turn_token)
+        leaves = operation['operations'] if operation['kind'] == 'batch' else [operation]
         if (_contains_token(operation, turn_token) or
-                ('payload_json' in operation and _contains_token(json.loads(operation['payload_json']), turn_token))):
+                any('payload_json' in leaf and _contains_token(json.loads(leaf['payload_json']), turn_token) for leaf in leaves)):
             raise WorkspaceRefused()
         epoch, turn_id, _ = self.active
         request_id = secrets.token_hex(16)
@@ -204,7 +264,7 @@ class WorkspaceGate:
         if len(json.dumps(frame, ensure_ascii=True, separators=(',', ':')).encode('utf-8')) + 1 > MAX_FRAME:
             raise WorkspaceRefused()
         future = asyncio.get_running_loop().create_future()
-        pending = (request_id, epoch, turn_id, future, operation['kind'])
+        pending = (request_id, epoch, turn_id, future, operation['kind'], operation)
         self.pending = pending
         try:
             self.emit(frame)
@@ -221,14 +281,14 @@ class WorkspaceGate:
                 (reply['request_id'], reply['epoch'], reply['turn_id']) != pending[:3] or
                 self.active is None or self.active[:2] != pending[1:3] or pending[3].done()):
             raise WorkspaceRefused()
-        if pending[4] == 'capture_window':
+        if pending[4] in IMAGE_OPERATIONS:
             raise WorkspaceRefused()
-        outcome = validate_outcome(reply['outcome'], pending[4])
+        outcome = validate_outcome(reply['outcome'], pending[5])
         pending[3].set_result(outcome)
 
     def reply_image(self, header, image):
         pending = self.pending
-        if (pending is None or pending[4] != 'capture_window' or type(header) is not dict or
+        if (pending is None or pending[4] not in IMAGE_OPERATIONS or type(header) is not dict or
                 set(header) != {'version', 'request_id', 'epoch', 'turn_id'} or
                 type(header['version']) is not int or header['version'] != 1 or
                 (header['request_id'], header['epoch'], header['turn_id']) != pending[:3] or
@@ -238,12 +298,14 @@ class WorkspaceGate:
             raise WorkspaceRefused()
         pending[3].set_result(image)
 
-    def reject_image(self, header):
+    def reject_image(self, header, reason='capture_unavailable'):
         pending = self.pending
-        if (pending is None or pending[4] != 'capture_window' or type(header) is not dict or
+        if (pending is None or pending[4] not in IMAGE_OPERATIONS or type(header) is not dict or
                 set(header) != {'version', 'request_id', 'epoch', 'turn_id'} or
                 type(header['version']) is not int or header['version'] != 1 or
                 (header['request_id'], header['epoch'], header['turn_id']) != pending[:3] or
                 self.active is None or self.active[:2] != pending[1:3] or pending[3].done()):
             raise WorkspaceRefused()
-        pending[3].set_exception(WorkspaceRefused())
+        if type(reason) is not str or reason not in CAPTURE_FAILURES:
+            raise WorkspaceRefused()
+        pending[3].set_exception(WorkspaceCaptureFailed(reason))

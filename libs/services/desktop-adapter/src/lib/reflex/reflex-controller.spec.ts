@@ -8,6 +8,78 @@ const plan: ReflexPlan = {
   action_id: 'media.next',
   reply: 'That song had it coming.',
 };
+
+it.each(['close panes', 'close all panes', 'close paints', 'close paint'])(
+  'dispatches %s once without inference and honors cancellation',
+  async (text) => {
+    const execute = vi.fn(() => 'confirmed' as const),
+      infer = vi.fn();
+    const controller = new ReflexController({
+      environment: async () => ({
+        epoch: 'one',
+        context: '[]',
+        actions: [
+          {
+            id: 'layout.clear',
+            description: 'Close Stellar panes',
+            valid: () => true,
+            execute,
+          },
+        ],
+      }),
+      currentEpoch: () => 'one',
+      infer,
+    });
+    expect((await controller.run(text, 'first', 'professional')).outcome).toBe(
+      'confirmed',
+    );
+    expect((await controller.run(text, 'first', 'professional')).outcome).toBe(
+      'rejected',
+    );
+    const abort = new AbortController();
+    abort.abort();
+    expect(
+      (await controller.run(text, 'cancelled', 'professional', abort.signal))
+        .outcome,
+    ).toBe('cancelled');
+    expect(execute).toHaveBeenCalledOnce();
+    expect(infer).not.toHaveBeenCalled();
+  },
+);
+
+it('swaps the exact registered pair without inference, refuses duplicates and clarifies absent pairs', async () => {
+  const execute = vi.fn(() => 'confirmed' as const);
+  const infer = vi.fn();
+  const environment = {
+    epoch: 'pair',
+    context: '{}',
+    actions: [
+      {
+        id: 'pane.swap_pair',
+        description: 'Swap the visible pair',
+        valid: () => true,
+        execute,
+      },
+    ],
+  };
+  const controller = new ReflexController({
+    environment: async () => environment,
+    currentEpoch: () => 'pair',
+    infer,
+  });
+  expect((await controller.run('swap', 'one', 'professional')).outcome).toBe(
+    'confirmed',
+  );
+  expect((await controller.run('swap', 'one', 'professional')).outcome).toBe(
+    'rejected',
+  );
+  environment.actions = [];
+  expect(
+    (await controller.run('swap pane', 'two', 'professional')).outcome,
+  ).toBe('clarify');
+  expect(infer).not.toHaveBeenCalled();
+  expect(execute).toHaveBeenCalledOnce();
+});
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => (resolve = r));

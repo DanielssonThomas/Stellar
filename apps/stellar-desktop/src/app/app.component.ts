@@ -20,7 +20,10 @@ import {
   IvyReflexService,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
-import { capabilityLabel } from '@stellar/desktop-contracts';
+import {
+  capabilityLabel,
+  type IvyQuestionAction,
+} from '@stellar/desktop-contracts';
 import {
   PRESENTATION_DATA,
   PRESENTATION_WORKSPACE,
@@ -61,6 +64,27 @@ import { DesktopFaults } from './desktop-faults';
   },
 })
 export class AppComponent {
+  async questionShown(id: string) {
+    try {
+      const state = await this.ivy.questionReply(id, { kind: 'shown' });
+      if (
+        state.questions?.some(
+          (question) => question.id === id && question.shown,
+        )
+      )
+        this.voice.notifyQuestion(id);
+    } catch {
+      /* The card remains visible while the native connection recovers. */
+    }
+  }
+
+  async answerQuestion(id: string, action: IvyQuestionAction) {
+    try {
+      await this.ivy.questionReply(id, action);
+    } catch {
+      /* The adapter exposes native recovery state. */
+    }
+  }
   readonly title = 'Stellar Desktop';
   readonly experience = inject(DesktopExperience);
   readonly assistant = inject(DesktopAssistant);

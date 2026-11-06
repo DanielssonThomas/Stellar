@@ -54,14 +54,34 @@ fn smoke_hold_ivy(
 
 #[cfg(windows)]
 #[tauri::command]
-async fn smoke_capture_window(app: tauri::AppHandle) -> bool {
-    tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
-        .await
-        .is_ok_and(|result| {
-            result.is_ok_and(|image| {
-                image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
-            })
-        })
+async fn smoke_capture_window(app: tauri::AppHandle, detailed: Option<bool>) -> bool {
+    println!("STELLAR_SMOKE_STAGE capture-window-start");
+    let captured =
+        tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
+            .await
+            .is_ok_and(|result| {
+                result.is_ok_and(|image| {
+                    if detailed == Some(true) {
+                        let Ok(decoded) = ::image::load_from_memory(&image) else {
+                            return false;
+                        };
+                        println!(
+                            "STELLAR_SMOKE_STAGE detailed-capture-{}x{}-bytes{}",
+                            decoded.width(),
+                            decoded.height(),
+                            image.len()
+                        );
+                        if std::fs::write("artifacts/native/detailed-workspace.png", &image)
+                            .is_err()
+                        {
+                            return false;
+                        }
+                    }
+                    image.starts_with(b"\x89PNG\r\n\x1a\n") && image.len() <= 4 * 1024 * 1024
+                })
+            });
+    println!("STELLAR_SMOKE_STAGE capture-window-end");
+    captured
 }
 
 fn check_page(window: Webview) {
@@ -95,8 +115,8 @@ fn check_page(window: Webview) {
                     await invoke('speech_set_ducking', {request:{version:1,active:true}});
                     await new Promise(resolve=>setTimeout(resolve,100));
                     const held = await invoke('reflex_media_snapshot');
-                    if (lowered.endpoint_id !== reflexMedia.endpoint_id || lowered.muted !== reflexMedia.muted || Math.abs(lowered.volume-reflexMedia.volume*0.2)>1 || held.volume !== lowered.volume)
-                        throw Error('System volume fade or hold failed');
+                    if (lowered.endpoint_id !== reflexMedia.endpoint_id || lowered.muted !== reflexMedia.muted || lowered.volume !== reflexMedia.volume || held.volume !== reflexMedia.volume)
+                        throw Error('Ducking changed master volume or mute');
                   } finally { await invoke('speech_set_ducking', {request:{version:1,active:false}}); }
                   await new Promise(resolve=>setTimeout(resolve,1000));
                   const restored = await invoke('reflex_media_snapshot');
@@ -170,7 +190,7 @@ fn check_page(window: Webview) {
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
                 let lifecycleRejected = 0;
-                for (const name of ['ivy_new_session', 'ivy_reload_mcp']) {
+                for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
                     try { await invoke(name, { request: { version: 2 } }); }
                     catch (error) { if (error === 'malformed_request') lifecycleRejected++; }
                 }
@@ -215,11 +235,21 @@ fn check_page(window: Webview) {
                     fillsViewport(experience, 'grid') &&
                     !!nonce && componentStyles.length > 0 && componentStyles.every(style => style.nonce === nonce) &&
                     !document.querySelector('link[rel="stylesheet"][media="print"]');
-                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===2,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 2 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                if (__WORKSPACE_LIVE__) {
+                    stage='detailed-window-capture';
+                    if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
+                }
+                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
     "#;
+    let script = script.replace(
+        "__DETAILED_CAPTURE__",
+        include_str!("smoke_capture.js")
+            .trim()
+            .trim_end_matches(';'),
+    );
     let script = script.replace(
         "__TELEMETRY_EXPECT_LIVE__",
         if std::env::var_os("STELLAR_TELEMETRY_SMOKE_EXPECT_LIVE").is_some() {
@@ -265,6 +295,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_clear_conversation,
             crate::ivy::ivy_new_session,
             crate::ivy::ivy_reload_mcp,
+            crate::ivy::ivy_question_reply,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
             smoke_hold_ivy,
@@ -275,6 +306,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             if window.label() == "main"
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
             {
+                if std::env::var_os("STELLAR_WORKSPACE_SMOKE_LIVE").is_some() {
+                    let _ = window
+                        .window()
+                        .set_size(tauri::LogicalSize::new(1920., 1080.));
+                }
                 check_page(window.clone());
             }
         })

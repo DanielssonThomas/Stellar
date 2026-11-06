@@ -5,6 +5,7 @@ import type {
 } from '@stellar/desktop-contracts';
 import { LocalActionRegistry, type LocalAction } from './action-registry';
 import { ReflexLatency, type ReflexTimingStage } from './reflex-latency';
+import { paneShortcut } from './pane-shortcuts';
 
 export interface ReflexEnvironment {
   readonly epoch: string;
@@ -30,7 +31,10 @@ export interface ReflexEvent {
   readonly reply: string;
 }
 export interface ReflexPorts {
-  readonly environment: (signal: AbortSignal) => Promise<ReflexEnvironment>;
+  readonly environment: (
+    signal: AbortSignal,
+    text: string,
+  ) => Promise<ReflexEnvironment>;
   readonly currentEpoch: () => string;
   readonly infer: (
     request: ReflexRequest,
@@ -143,23 +147,36 @@ export class ReflexController {
       !controller.signal.aborted && epoch === this.ports.currentEpoch();
     let actionMayHaveRun = false;
     try {
-      const environment = await this.ports.environment(controller.signal);
+      const environment = await this.ports.environment(controller.signal, text);
       if (!current() || environment.epoch !== epoch) return result('cancelled');
       const registry = new LocalActionRegistry(environment.actions);
-      point('inference_start');
-      const plan = await this.ports.infer(
-        {
-          version: 1,
-          input_id: inputId,
-          text,
-          mode,
-          context: environment.context,
-          history: this.interactions,
-          actions: registry.choices(),
-        },
-        controller.signal,
-      );
-      point('inference_complete');
+      const shortcut = paneShortcut(text);
+      if (!shortcut) point('inference_start');
+      const plan: ReflexPlan | null = shortcut
+        ? registry.choices().some((choice) => choice.id === shortcut.id)
+          ? {
+              route: 'action',
+              action_id: shortcut.id,
+              reply: shortcut.reply,
+            }
+          : {
+              route: 'clarify',
+              action_id: null,
+              reply: shortcut.unavailable,
+            }
+        : await this.ports.infer(
+            {
+              version: 1,
+              input_id: inputId,
+              text,
+              mode,
+              context: environment.context,
+              history: this.interactions,
+              actions: registry.choices(),
+            },
+            controller.signal,
+          );
+      if (!shortcut) point('inference_complete');
       if (!current()) return result('cancelled');
       if (!plan) return result('unavailable');
       if (plan.route === 'hermes') return result('hermes');

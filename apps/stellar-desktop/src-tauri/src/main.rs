@@ -21,7 +21,7 @@ mod volume_ducking;
 
 fn main() {
     use tauri::{Emitter, Manager};
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 10);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 11);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
         "workspace_tool_reply"
@@ -38,7 +38,6 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(navigation)
         .setup(|app| {
-            app.manage(volume_ducking::VolumeDucking::default());
             let music_handle = app.handle().clone();
             app.manage(music::MusicHost::new(std::sync::Arc::new(
                 move |snapshot| {
@@ -70,8 +69,8 @@ fn main() {
             #[cfg(windows)]
             {
                 let handle = app.handle().clone();
-                ivy_host.set_workspace_capture(std::sync::Arc::new(move || {
-                    ivy::capture_workspace_window(&handle)
+                ivy_host.set_workspace_capture(std::sync::Arc::new(move |operation| {
+                    ivy::capture_workspace_operation(&handle, operation)
                 }));
             }
             app.manage(ivy_host);
@@ -81,12 +80,16 @@ fn main() {
             #[cfg(feature = "recognition-smoke")]
             let speech_directory = std::env::temp_dir()
                 .join(format!("stellar-recognition-smoke-{}", std::process::id()));
-            app.manage(speech::SpeechHost::new(
+            let speech_host = speech::SpeechHost::new(
                 speech_directory,
                 std::sync::Arc::new(move |snapshot| {
                     let _ = handle.emit_to("main", speech::contracts::SPEECH_EVENT, snapshot);
                 }),
+            );
+            app.manage(volume_ducking::VolumeDucking::new(
+                speech_host.audio_process(),
             ));
+            app.manage(speech_host);
             #[cfg(feature = "recognition-smoke")]
             recognition_smoke::create_window(app)?;
             Ok(())
@@ -151,6 +154,7 @@ fn main() {
         ivy::ivy_clear_conversation,
         ivy::ivy_new_session,
         ivy::ivy_reload_mcp,
+        ivy::ivy_question_reply,
         ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_collect,

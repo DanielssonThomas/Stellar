@@ -1,4 +1,7 @@
-use super::{ramp::Progress, *};
+use super::{
+    ramp::{Progress, Ramp},
+    *,
+};
 use std::sync::{Arc, Mutex};
 
 struct Fake {
@@ -24,7 +27,7 @@ impl Endpoint for Fake {
     }
 }
 
-fn endpoint(level: &Arc<Mutex<f32>>) -> Box<dyn Endpoint> {
+pub(super) fn endpoint(level: &Arc<Mutex<f32>>) -> Box<dyn Endpoint> {
     Box::new(Fake {
         level: level.clone(),
         current: true,
@@ -32,7 +35,7 @@ fn endpoint(level: &Arc<Mutex<f32>>) -> Box<dyn Endpoint> {
     })
 }
 
-fn near(level: &Arc<Mutex<f32>>, expected: f32) {
+pub(super) fn near(level: &Arc<Mutex<f32>>, expected: f32) {
     assert!((*level.lock().unwrap() - expected).abs() < 0.0001);
 }
 
@@ -113,7 +116,19 @@ fn abandoned_renderer_lease_and_shutdown_restore_volume() {
         let level = Arc::new(Mutex::new(0.7));
         let copy = level.clone();
         let (send, receive) = mpsc::channel();
-        let thread = std::thread::spawn(move || run_with(receive, || Ok(endpoint(&copy))));
+        let thread = std::thread::spawn(move || {
+            run_with(
+                receive,
+                || {
+                    Ok(vec![Session {
+                        id: "test".into(),
+                        process: u32::MAX,
+                        endpoint: endpoint(&copy),
+                    }])
+                },
+                Arc::new(AtomicU32::new(0)),
+            )
+        });
         send.send(Message::Active(true)).unwrap();
         std::thread::sleep(Duration::from_millis(1000));
         near(&level, 0.14);

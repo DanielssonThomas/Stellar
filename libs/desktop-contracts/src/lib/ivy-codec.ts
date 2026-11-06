@@ -12,6 +12,8 @@ import type {
   IvyRequest,
   IvySubmitRequest,
   IvySnapshot,
+  IvyQuestion,
+  IvyQuestionReplyRequest,
   WorkspaceToolsState,
 } from '../generated';
 import {
@@ -111,6 +113,67 @@ export function decodeIvyError(value: unknown): IvyErrorCode {
   return variant(value, errors);
 }
 
+export function decodeIvyQuestionReply(
+  value: unknown,
+): IvyQuestionReplyRequest {
+  const data = record(value, ['version', 'prompt_id', 'action']);
+  const action = data['action'];
+  if (typeof action !== 'object' || action === null)
+    throw new DesktopContractError('malformed');
+  const kind = (action as Record<string, unknown>)['kind'];
+  if (kind === 'answer') {
+    const answer = record(action, ['kind', 'answer']);
+    return {
+      version: version(data['version']),
+      prompt_id: text(data['prompt_id'], 512),
+      action: { kind, answer: text(answer['answer'], 16384) },
+    };
+  }
+  if (kind !== 'shown' && kind !== 'skip' && kind !== 'cancel')
+    throw new DesktopContractError('unknown-variant');
+  record(action, ['kind']);
+  return {
+    version: version(data['version']),
+    prompt_id: text(data['prompt_id'], 512),
+    action: { kind },
+  };
+}
+
+function questions(value: unknown): IvyQuestion[] {
+  if (!Array.isArray(value) || value.length > 5)
+    throw new DesktopContractError('malformed');
+  const rows: IvyQuestion[] = value.map((entry) => {
+    const row = record(entry, [
+      'id',
+      'text',
+      'choices',
+      'multi_select',
+      'shown',
+      'answering',
+    ]);
+    const choices = row['choices'];
+    if (
+      !Array.isArray(choices) ||
+      choices.length > 4 ||
+      typeof row['multi_select'] !== 'boolean' ||
+      typeof row['shown'] !== 'boolean' ||
+      typeof row['answering'] !== 'boolean'
+    )
+      throw new DesktopContractError('malformed');
+    return {
+      id: text(row['id'], 512),
+      text: text(row['text'], 32768),
+      choices: choices.map((choice) => text(choice, 8192)),
+      multi_select: row['multi_select'],
+      shown: row['shown'],
+      answering: row['answering'],
+    };
+  });
+  if (new Set(rows.map((row) => row.id)).size !== rows.length)
+    throw new DesktopContractError('malformed');
+  return rows;
+}
+
 function presentation(value: unknown): IvyPresentation {
   if (typeof value !== 'object' || value === null)
     throw new DesktopContractError('malformed');
@@ -185,7 +248,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
       'reset_id',
       'error',
     ],
-    ['first_text_observed'],
+    ['first_text_observed', 'questions'],
   );
   if (
     Object.hasOwn(data, 'first_text_observed') &&
@@ -201,6 +264,9 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   if (decoded.filter((item) => item.kind !== 'text').length > 1)
     throw new DesktopContractError('malformed');
   const snapshot: IvySnapshot = {
+    ...(Object.hasOwn(data, 'questions')
+      ? { questions: questions(data['questions']) }
+      : {}),
     ...(data['first_text_observed'] === true
       ? { first_text_observed: true }
       : {}),

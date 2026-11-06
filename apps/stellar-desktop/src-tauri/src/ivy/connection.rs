@@ -71,6 +71,7 @@ pub(super) fn fail(session: &mut Session, error: IvyErrorCode) {
     session.shared.update(session.epoch, |view| {
         view.connection = IvyConnectionState::Unavailable;
         view.activity.clear();
+        view.questions = None;
         view.verified_model = None;
         view.workspace_tools = WorkspaceToolsState::Unavailable;
         view.error = Some(error);

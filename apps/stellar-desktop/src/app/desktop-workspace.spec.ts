@@ -27,6 +27,7 @@ function setup() {
         title: 'Pane',
         selected: false,
         maximized: false,
+        render_state: 'ready' as const,
         position: index,
         rect: null,
         viewport: { width: 1100, height: 760 },
@@ -55,10 +56,96 @@ function setup() {
       blocks: [{ kind: 'paragraph', text: 'Private pane content' }],
     }),
   } as const;
-  return { registry, isCurrent, available, present, call, open };
+  return { registry, isCurrent, available, present, call, open, stage };
 }
 
 describe('native workspace composition', () => {
+  it('applies the whole batch before one settlement and returns ordered partial results with final metadata', async () => {
+    const f = setup();
+    let finish!: () => void;
+    const settle = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    Object.assign(f.stage, { settlePresentations: settle });
+    const result = f.call({
+      kind: 'batch',
+      operations: [
+        f.open,
+        { ...f.open, instance_id: 'reference' },
+        { kind: 'focus', instance_id: 'missing' },
+      ],
+    });
+    expect(f.registry.snapshot().map((pane) => pane.instanceId)).toEqual([
+      'plan',
+      'reference',
+    ]);
+    expect(settle).toHaveBeenCalledOnce();
+    finish();
+    expect(await result).toMatchObject({
+      kind: 'batch',
+      outcomes: ['applied', 'applied', 'rejected'],
+      panes: [
+        { instance_id: 'plan', render_state: 'ready' },
+        { instance_id: 'reference', render_state: 'ready' },
+      ],
+    });
+    settle.mockResolvedValueOnce(undefined);
+    expect(
+      await f.call({ kind: 'batch', operations: [{ kind: 'clear' }] }),
+    ).toEqual({ kind: 'batch', outcomes: ['applied'], panes: [] });
+    expect(f.registry.snapshot()).toEqual([]);
+  });
+  it('retains applied outcomes when ownership retires or an unexpected executor failure interrupts a batch', async () => {
+    const f = setup();
+    f.present.mockImplementationOnce((command) => {
+      const result = f.registry.dispatch(command);
+      f.isCurrent.mockReturnValue(false);
+      return result;
+    });
+    expect(
+      await f.call({
+        kind: 'batch',
+        operations: [f.open, { ...f.open, instance_id: 'second' }],
+      }),
+    ).toEqual({
+      kind: 'batch',
+      outcomes: ['applied', 'rejected'],
+      panes: null,
+    });
+    expect(f.present).toHaveBeenCalledOnce();
+    f.isCurrent.mockReturnValue(true);
+    f.present.mockImplementationOnce(() => {
+      throw Error('unavailable');
+    });
+    expect(
+      await f.call({ kind: 'batch', operations: [{ kind: 'clear' }, f.open] }),
+    ).toMatchObject({
+      kind: 'batch',
+      outcomes: ['uncertain', 'rejected'],
+    });
+    expect(f.present).toHaveBeenCalledTimes(2);
+  });
+  it('waits for renderer settlement and fences a retired owner before returning inspection', async () => {
+    const f = setup();
+    f.call(f.open);
+    let finish!: () => void;
+    const settle = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    Object.assign(f.stage, { settlePresentations: settle });
+    const observation = f.call({ kind: 'inspect' });
+    expect(settle).toHaveBeenCalledOnce();
+    f.isCurrent.mockReturnValue(false);
+    finish();
+    expect(await observation).toEqual({ kind: 'rejected' });
+    expect(f.present).toHaveBeenCalledOnce();
+  });
   it('maps each assistant layout command to its exact Stage behavior', () => {
     const { call, open, registry, present } = setup();
     call(open);
@@ -157,6 +244,11 @@ describe('native workspace composition', () => {
     ).toEqual({ kind: 'rejected' });
     const calls = present.mock.calls.length;
     expect(call({ kind: 'capture_window' })).toEqual({ kind: 'rejected' });
+    expect(call({ kind: 'capture_foreground' })).toEqual({ kind: 'rejected' });
+    expect(call({ kind: 'capture_display', display_id: null })).toEqual({
+      kind: 'rejected',
+    });
+    expect(call({ kind: 'list_displays' })).toEqual({ kind: 'rejected' });
     expect(present).toHaveBeenCalledTimes(calls);
     expect(registry.snapshot()).toEqual([]);
   });

@@ -1,7 +1,15 @@
 #![allow(unsafe_code)]
 use super::contracts::*;
+use std::rc::Rc;
 use wasapi::{DeviceEnumerator, Direction};
-use windows::Win32::{Media::Audio::Endpoints::IAudioEndpointVolume, System::Com::CLSCTX_ALL};
+use windows::Win32::{
+    Media::Audio::{
+        AudioSessionStateExpired, Endpoints::IAudioEndpointVolume, IAudioSessionControl2,
+        IAudioSessionManager2, ISimpleAudioVolume,
+    },
+    System::Com::{CLSCTX_ALL, CoTaskMemFree},
+};
+use windows_core::Interface;
 
 struct Apartment;
 impl Drop for Apartment {
@@ -10,28 +18,94 @@ impl Drop for Apartment {
     }
 }
 
-struct DuckEndpoint {
-    volume: IAudioEndpointVolume,
-    id: String,
+struct DuckSession {
+    volume: ISimpleAudioVolume,
+    control: IAudioSessionControl2,
     // Drop the interface before releasing this thread's COM apartment.
-    _apartment: Apartment,
+    _apartment: Rc<Apartment>,
 }
 
-pub(crate) fn duck_endpoint() -> Result<Box<dyn crate::volume_ducking::Endpoint>, ()> {
+pub(crate) fn duck_sessions() -> Result<Vec<crate::volume_ducking::Session>, ()> {
     wasapi::initialize_mta().ok().map_err(|_| ())?;
-    let apartment = Apartment;
-    let (volume, id) = endpoint()?;
-    Ok(Box::new(DuckEndpoint {
-        volume,
-        id,
-        _apartment: apartment,
-    }))
+    let apartment = Rc::new(Apartment);
+    let devices = DeviceEnumerator::new()
+        .map_err(|_| ())?
+        .get_device_collection(&Direction::Render)
+        .map_err(|_| ())?;
+    let mut sessions = Vec::new();
+    for device in &devices {
+        let Ok(device) = device else {
+            continue;
+        };
+        let Ok(id) = device.get_id() else {
+            continue;
+        };
+        // Interfaces stay on this MTA; every COM allocation is freed after copying.
+        let Ok(manager) = (unsafe {
+            device
+                .as_immdevice()
+                .Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)
+        }) else {
+            continue;
+        };
+        let Ok(enumerator) = (unsafe { manager.GetSessionEnumerator() }) else {
+            continue;
+        };
+        let Ok(count) = (unsafe { enumerator.GetCount() }) else {
+            continue;
+        };
+        for index in 0..count.min(256) {
+            if sessions.len() >= 256 {
+                break;
+            }
+            let Ok(control) = (unsafe { enumerator.GetSession(index) })
+                .and_then(|c| c.cast::<IAudioSessionControl2>())
+            else {
+                continue;
+            };
+            let mut process = 0;
+            let ownership = unsafe {
+                (Interface::vtable(&control).GetProcessId)(
+                    Interface::as_raw(&control),
+                    &mut process,
+                )
+            };
+            if ownership.0 != 0 && unsafe { control.IsSystemSoundsSession() }.0 != 0 {
+                continue;
+            }
+            // Unknown cross-process ownership cannot safely exclude Ivy.
+            if process == 0 && unsafe { control.IsSystemSoundsSession() }.0 != 0 {
+                continue;
+            }
+            let Ok(raw) = (unsafe { control.GetSessionInstanceIdentifier() }) else {
+                continue;
+            };
+            let instance = unsafe { raw.to_string() };
+            unsafe { CoTaskMemFree(Some(raw.0.cast())) };
+            let Ok(instance) = instance else {
+                continue;
+            };
+            let Ok(volume) = control.cast::<ISimpleAudioVolume>() else {
+                continue;
+            };
+            sessions.push(crate::volume_ducking::Session {
+                id: format!("{id}/{instance}"),
+                process,
+                endpoint: Box::new(DuckSession {
+                    volume,
+                    control,
+                    _apartment: apartment.clone(),
+                }),
+            });
+        }
+    }
+    Ok(sessions)
 }
 
-impl crate::volume_ducking::Endpoint for DuckEndpoint {
+impl crate::volume_ducking::Endpoint for DuckSession {
     fn read(&self) -> Result<f32, ()> {
         // The owned interface and MTA stay alive on the worker thread.
-        unsafe { self.volume.GetMasterVolumeLevelScalar() }.map_err(|_| ())
+        unsafe { self.volume.GetMasterVolume() }.map_err(|_| ())
     }
 
     fn write(&self, level: f32) -> Result<(), ()> {
@@ -39,18 +113,11 @@ impl crate::volume_ducking::Endpoint for DuckEndpoint {
             return Err(());
         }
         // The optional event-context GUID is null; mute is never changed.
-        unsafe {
-            self.volume
-                .SetMasterVolumeLevelScalar(level, std::ptr::null())
-        }
-        .map_err(|_| ())
+        unsafe { self.volume.SetMasterVolume(level, std::ptr::null()) }.map_err(|_| ())
     }
 
     fn is_current(&self) -> bool {
-        DeviceEnumerator::new()
-            .and_then(|e| e.get_default_device(&Direction::Render))
-            .and_then(|d| d.get_id())
-            .is_ok_and(|id| id == self.id)
+        unsafe { self.control.GetState() }.is_ok_and(|state| state != AudioSessionStateExpired)
     }
 }
 
