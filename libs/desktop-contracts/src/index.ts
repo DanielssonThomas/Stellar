@@ -13,6 +13,24 @@ export type {
 export { ivyInspectCommand } from './generated';
 export { decodeIvyInspectorSnapshot } from './lib/ivy-inspector-codec';
 export type {
+  AwarenessApp,
+  AwarenessMedia,
+  AwarenessHealth,
+  AwarenessPane,
+  AwarenessWorkspace,
+  AwarenessRequest,
+  AwarenessSetEnabled,
+  AwarenessSnapshot,
+  AwarenessError,
+} from './generated';
+export {
+  awarenessSnapshotCommand,
+  awarenessSetEnabledCommand,
+  awarenessWorkspaceCommand,
+  awarenessEvent,
+} from './generated';
+export { decodeAwarenessSnapshot } from './lib/awareness-codec';
+export type {
   ReflexChoice,
   ReflexAvailability,
   ReflexRouting,

@@ -61,11 +61,13 @@ pub enum Action {
     SmokeHold(mpsc::SyncSender<()>),
 }
 struct Work {
+    context: Option<super::workspace_context::ContextLease>,
     epoch: u64,
     workspace_epoch: u64,
     action: Action,
 }
 pub struct IvyHost {
+    context_provider: Arc<Mutex<Option<super::workspace_context::ContextProvider>>>,
     shared: Shared,
     child: OwnedChild,
     sender: SyncSender<Work>,
@@ -131,6 +133,9 @@ impl IvyHost {
         let pending_rotation: Pending = Arc::new(Mutex::new(None));
         let rotations = pending_rotation.clone();
         let state = shared.clone();
+        let context_provider = Arc::new(Mutex::new(
+            None::<super::workspace_context::ContextProvider>,
+        ));
         let owned = child.clone();
         std::thread::spawn(move || {
             let Some((journal, record, first)) =
@@ -173,7 +178,9 @@ impl IvyHost {
                                 inspector::run(&mut session, request, reply)
                             }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
-                            Action::Submit(request) => session.submit(request),
+                            Action::Submit(request) => {
+                                session.submit_with_context(request, work.context)
+                            }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
                             Action::Question(request) => session.answer_question(request),
@@ -246,6 +253,7 @@ impl IvyHost {
             }
         });
         Self {
+            context_provider,
             shared,
             child,
             sender,
@@ -257,6 +265,12 @@ impl IvyHost {
 
     pub fn set_workspace_publisher(&self, publisher: workspace_hub::Publisher) {
         self.workspace.set_publisher(publisher);
+    }
+
+    pub fn set_context_provider(&self, provider: super::workspace_context::ContextProvider) {
+        if let Ok(mut slot) = self.context_provider.lock() {
+            *slot = Some(provider);
+        }
     }
 
     pub fn set_workspace_capture(&self, capture: workspace_hub::Capture) {

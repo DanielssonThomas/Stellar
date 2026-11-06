@@ -35,6 +35,9 @@
     (sessionMore)="inspector.moreSessions()"
     (sessionOlderMessages)="inspector.olderMessages()"
     (sessionNew)="newInspectorSession()"
+    [awarenessEnabled]="awareness.enabled()"
+    [awarenessStatus]="awareness.status()"
+    (toggleAwareness)="awareness.setEnabled($event)"
     [questions]="
       assistant.state().connection === 'ready' &&
       assistant.state().turn === 'admitted' &&

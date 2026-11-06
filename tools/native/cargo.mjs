@@ -84,6 +84,9 @@ if (action === 'smoke') {
               'allow-reflex-set-enabled',
               'allow-reflex-cancel',
               'allow-shell-status',
+              'allow-awareness-snapshot',
+              'allow-awareness-set-enabled',
+              'allow-awareness-workspace',
               'allow-workspace-browser',
               'allow-workspace-image',
               'allow-smoke-media-probe',
@@ -151,7 +154,7 @@ if (action === 'smoke') {
     clearTimeout(deadline);
     for (const line of output.split(/\r?\n/)) {
       if (
-        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
+        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|AWARENESS_CHECKS|AWARENESS_SOURCE|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
           line,
         )
       )

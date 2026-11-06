@@ -185,6 +185,19 @@
       <button type="button" (click)="copyReflexDiagnostics.emit()">
         Copy Reflex diagnostics
       </button>
+      <button
+        type="button"
+        role="switch"
+        aria-label="Ivy awareness"
+        [attr.aria-checked]="awarenessEnabled()"
+        aria-describedby="ivy-awareness-status"
+        (click)="toggleAwareness.emit(!awarenessEnabled())"
+      >
+        Ivy awareness · {{ awarenessEnabled() ? 'On' : 'Paused' }}
+      </button>
+      <p id="ivy-awareness-status" class="status" aria-live="polite">
+        {{ awarenessStatus() }}
+      </p>
       <span class="status" aria-live="polite">{{
         reflexDiagnosticNotice()
       }}</span>

@@ -4,6 +4,7 @@ import {
   DestroyRef,
   effect,
   inject,
+  Injector,
   signal,
   viewChild,
 } from '@angular/core';
@@ -13,6 +14,7 @@ import { DesktopAssistant } from './desktop-assistant';
 import { DesktopVoice } from './desktop-voice';
 import {
   DesktopAdapterService,
+  DesktopAwarenessService,
   IvyAdapterService,
   WorkspaceToolsService,
   MusicVisualizerService,
@@ -75,6 +77,7 @@ export class AppComponent {
       this.inspector.select(null);
     }
   }
+  private readonly injector = inject(Injector);
   async questionShown(id: string) {
     try {
       const state = await this.ivy.questionReply(id, { kind: 'shown' });
@@ -103,6 +106,7 @@ export class AppComponent {
   readonly faults = inject(DesktopFaults);
   readonly music = inject(MusicVisualizerService);
   readonly reflex = inject(IvyReflexService);
+  readonly awareness = inject(DesktopAwarenessService);
   readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
   readonly desktopReady = signal(false);
@@ -173,6 +177,7 @@ export class AppComponent {
     });
     afterNextRender(() => {
       void this.ivy.connect().catch(() => undefined);
+      void this.awareness.start();
     });
     const destroy = inject(DestroyRef);
     afterNextRender(() => {
@@ -180,6 +185,40 @@ export class AppComponent {
         (command) => this.view().dispatch(command),
         () => this.view().stage().nextCommandId(),
       );
+      let signature = '';
+      const observeWorkspace = () => {
+        const value = {
+          version: 1,
+          epoch: this.assistant.state().workspace_epoch,
+          panes: this.view()
+            .stage()
+            .inspectPresentations()
+            .slice(0, 8)
+            .map((pane) => ({
+              title: [...pane.title]
+                .filter((char) => {
+                  const code = char.codePointAt(0) ?? 0;
+                  return code >= 32 && (code < 127 || code > 159);
+                })
+                .slice(0, 80)
+                .join(''),
+              surface: pane.surface,
+              selected: pane.selected,
+              minimized: pane.minimized,
+            })),
+        };
+        const next = JSON.stringify(value);
+        if (next !== signature) {
+          signature = next;
+          this.awareness.workspace(value);
+        }
+      };
+      const awarenessTimer = setInterval(() => {
+        signature = '';
+        observeWorkspace();
+      }, 5000);
+      destroy.onDestroy(() => clearInterval(awarenessTimer));
+      effect(observeWorkspace, { injector: this.injector });
       destroy.onDestroy(
         this.voice.bindPromptPresentation((text, signal) =>
           text.model === 'sol'
