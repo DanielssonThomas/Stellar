@@ -40,6 +40,7 @@ impl IvyHost {
         if self
             .sender
             .try_send(Work {
+                context: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Lifecycle(control, ticket.clone(), tx),
@@ -109,6 +110,7 @@ impl IvyHost {
         if self
             .sender
             .try_send(Work {
+                context: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Rotate(model, force, ticket.clone(), tx),
@@ -218,8 +220,18 @@ impl IvyHost {
             Action::Disconnect => (Some(IvyConnectionState::Disconnected), None),
             _ => (None, None),
         };
+        let context = if matches!(&action, Action::Submit(_)) {
+            self.context_provider.lock().ok().and_then(|provider| {
+                provider
+                    .as_ref()
+                    .and_then(|provide| provide(&previous_workspace_epoch.to_string()))
+            })
+        } else {
+            None
+        };
         self.sender
             .try_send(Work {
+                context,
                 epoch,
                 workspace_epoch,
                 action,

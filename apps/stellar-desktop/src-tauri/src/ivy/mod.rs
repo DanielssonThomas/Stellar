@@ -2,6 +2,8 @@ mod activity;
 #[cfg(test)]
 mod activity_tests;
 mod connection;
+#[cfg(all(test, windows))]
+mod context_submit_tests;
 pub mod contracts;
 mod host;
 mod journal;
@@ -37,6 +39,7 @@ use contracts::{
 };
 use host::Action;
 pub use host::IvyHost;
+pub use workspace_context::{ContextLease, ContextProvider};
 
 #[cfg(test)]
 mod text_timing_tests;

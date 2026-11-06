@@ -44,6 +44,7 @@ impl IvyHost {
             }
             self.sender
                 .try_send(Work {
+                    context: None,
                     epoch,
                     workspace_epoch,
                     action: Action::Question(request),

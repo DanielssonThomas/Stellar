@@ -152,6 +152,9 @@ export class DesktopExperienceTemplate {
   readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
   readonly reflexEnabled = input(false);
+  readonly awarenessEnabled = input(true);
+  readonly awarenessStatus = input('Awareness unavailable');
+  readonly toggleAwareness = output<boolean>();
   readonly reflexStatus = input('Unavailable');
   readonly reflexLastRoute = input('');
   readonly toggleReflex = output<boolean>();

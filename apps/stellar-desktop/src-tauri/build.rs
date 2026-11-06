@@ -1,4 +1,7 @@
 #![forbid(unsafe_code)]
+#[allow(dead_code)]
+#[path = "src/awareness/command_names.rs"]
+mod awareness;
 #[path = "src/cleanup/command_name.rs"]
 mod cleanup_name;
 #[path = "src/app_info/command_name.rs"]
@@ -16,6 +19,9 @@ mod telemetry_name;
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        awareness::AWARENESS_COMMANDS[0],
+        awareness::AWARENESS_COMMANDS[1],
+        awareness::AWARENESS_COMMANDS[2],
         "reflex_infer",
         "reflex_route",
         "reflex_prepare",
