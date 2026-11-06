@@ -7,7 +7,11 @@ fn smoke_result(
     workspace_metrics: Option<Vec<f64>>,
     stage: Option<String>,
     diagnostics: Option<Vec<bool>>,
+    volume_probe: Option<bool>,
 ) {
+    if let Some(performed) = volume_probe {
+        println!("STELLAR_DUCKING_PROBE {performed}");
+    }
     if let Some(metrics) = workspace_metrics
         && metrics.len() == 5
         && metrics
@@ -84,7 +88,7 @@ fn check_page(window: Webview) {
     let script = r#"
         (async () => {
             const invoke = window.__TAURI__.core.invoke;
-            let stage='startup';let workspaceChecks=[];
+            let stage='startup';let workspaceChecks=[];let volumeProbe=false;
             try {
                 for (let n = 0; n < 100 && !(document.querySelector('stellar-root')?.getAttribute('data-desktop-ready') === 'true' &&
                     document.querySelector('stellar-root')?.getAttribute('data-desktop-event') === 'true'); n++)
@@ -99,6 +103,26 @@ fn check_page(window: Webview) {
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
                 const reflexMedia = await invoke('reflex_media_snapshot');
+                let duckingRejected = false;
+                try { await invoke('speech_set_ducking', {request:{version:2,active:true}}); }
+                catch(error) { duckingRejected = error === 'unsupported_version'; }
+                if (!duckingRejected) throw Error('Ducking version validation failed');
+                if (reflexMedia.volume !== null) {
+                  try {
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,1000));
+                    const lowered = await invoke('reflex_media_snapshot');
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,100));
+                    const held = await invoke('reflex_media_snapshot');
+                    if (lowered.endpoint_id !== reflexMedia.endpoint_id || lowered.muted !== reflexMedia.muted || lowered.volume !== reflexMedia.volume || held.volume !== reflexMedia.volume)
+                        throw Error('Ducking changed master volume or mute');
+                  } finally { await invoke('speech_set_ducking', {request:{version:1,active:false}}); }
+                  await new Promise(resolve=>setTimeout(resolve,1000));
+                  const restored = await invoke('reflex_media_snapshot');
+                  if (restored.volume !== reflexMedia.volume || restored.muted !== reflexMedia.muted) throw Error('System volume restoration failed');
+                  volumeProbe=true;
+                } else await invoke('speech_set_ducking', {request:{version:1,active:false}});
                 const reflexRoute = await invoke('reflex_route',{request:{version:1,input_id:'smoke-substantive',text:'Please show me my latest github issue',mode:'professional',context:'{}',history:[],actions:[]}});
                 if(reflexRoute.version!==1 || reflexRoute.local!==false) throw Error('Substantive request did not delegate');
                 const reflexStatus = await invoke('reflex_status');
@@ -215,7 +239,7 @@ fn check_page(window: Webview) {
                     stage='detailed-window-capture';
                     if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
                 }
-                await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
@@ -251,6 +275,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::reflex::reflex_media_snapshot,
+            crate::speech::speech_set_ducking,
             crate::reflex::reflex_media_execute,
             crate::reflex::reflex_infer,
             crate::reflex::reflex_route,

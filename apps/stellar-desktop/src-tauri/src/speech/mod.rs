@@ -13,6 +13,17 @@ use contracts::*;
 pub use host::SpeechHost;
 
 #[tauri::command]
+pub fn speech_set_ducking(
+    host: tauri::State<'_, crate::volume_ducking::VolumeDucking>,
+    request: Option<serde_json::Value>,
+) -> Result<(), SpeechError> {
+    let request: SpeechDuckingRequest = validation::decode(request)?;
+    validation::version(request.version)?;
+    host.set_active(request.active)
+        .map_err(|_| SpeechError::Unavailable)
+}
+
+#[tauri::command]
 pub async fn speech_keywords(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,

@@ -19,6 +19,7 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
       submitActive: -1,
       synthesisFrames: 0,
       playbackFrames: 0,
+      ducking: [] as boolean[],
     };
     const callbacks = new Map<
       string,
@@ -112,6 +113,10 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
             if (command === 'ivy_select_session')
               return { ...ivy(), model: request['model'] };
             if (command === 'speech_snapshot') return currentSpeech;
+            if (command === 'speech_set_ducking') {
+              results.ducking.push(request['active'] === true);
+              return null;
+            }
             if (command === 'speech_keywords')
               return {
                 sequence: request['sequence'],
@@ -268,12 +273,16 @@ test('continuous synthetic audio reaches one Ivy turn, local playback and reques
     )
     .toBe(1);
   await expect(page.locator('.waiting-ring.waiting-visible')).toBeVisible();
+  expect((await fixture()).ducking).toContain(true);
+  expect((await fixture()).ducking).not.toContain(false);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '0.68');
   await expect(page.locator('.waiting-ring.waiting-visible')).toHaveCount(0);
   await expect(page.locator('.emblem-presence')).toHaveCSS('opacity', '1');
   await expect
     .poll(async () => (await fixture()).playbackFrames)
     .toBeGreaterThan(5);
+  expect((await fixture()).ducking).not.toContain(false);
+  await expect.poll(async () => (await fixture()).ducking.at(-1)).toBe(false);
   expect((await fixture()).synthesisFrames).toBeGreaterThan(0);
   const result = await fixture();
   expect(result.inputId).toBe(result.speechId);

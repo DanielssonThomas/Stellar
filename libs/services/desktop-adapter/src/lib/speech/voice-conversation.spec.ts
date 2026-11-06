@@ -685,6 +685,61 @@ function fixture(extra: Partial<VoicePorts> = {}) {
   };
 }
 
+describe('voice volume ducking intent', () => {
+  it('keeps passive speech untouched and ducks an admitted voice turn through playback', async () => {
+    const f = fixture();
+    f.feed(true, 5);
+    expect(f.view().ducking).toBe(false);
+    f.feed(false, 35);
+    await flush();
+    expect(f.view().ducking).toBe(true);
+    f.completed();
+    await flush();
+    expect(f.view().ducking).toBe(true);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        state: 'speaking',
+        revision: '2',
+        operation_id: id,
+      },
+    });
+    expect(f.view().ducking).toBe(true);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        state: 'idle',
+        revision: '3',
+        operation_id: id,
+      },
+    });
+    expect(f.view().ducking).toBe(false);
+    f.controller.dispose();
+  });
+
+  it('ducks foreground speech, permits brief quiet, and releases on failure, stop and suspension', async () => {
+    for (const end of ['stop', 'failure', 'suspend', 'capture'] as const) {
+      const f = fixture();
+      f.controller.setDraft('foreground draft');
+      f.feed(true, 1);
+      expect(f.view().ducking).toBe(true);
+      f.feed(false, 1);
+      expect(f.view()).toMatchObject({
+        ducking: false,
+        duckingListening: true,
+      });
+      if (end === 'stop') f.controller.stopVoice();
+      if (end === 'failure') f.controller.accept({ type: 'unavailable' });
+      if (end === 'suspend') f.update({ available: false });
+      if (end === 'capture')
+        f.update({ audio: { ...f.context().audio, status: 'idle' } });
+      expect(f.view().ducking).toBe(false);
+      expect(f.view().duckingListening).toBe(false);
+      f.controller.dispose();
+    }
+  });
+});
+
 describe('wake-word session lifecycle', () => {
   it('shows raw Whisper previews and final words without admitting passive speech', async () => {
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

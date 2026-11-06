@@ -111,6 +111,7 @@ export type {
   SpeechState,
   SpeechError,
   SpeechRequest,
+  SpeechDuckingRequest,
   SpeechStopRequest,
   SpeechTranscribeRequest,
   SpeechTranscript,
@@ -130,10 +131,12 @@ export {
   speechSpeakCommand,
   speechStopCommand,
   speechSnapshotCommand,
+  speechSetDuckingCommand,
   speechEvent,
 } from './generated';
 export {
   decodeSpeechRequest,
+  decodeSpeechDuckingRequest,
   decodeSpeechStopRequest,
   decodeSpeechTranscribeRequest,
   decodeSpeechTranscript,

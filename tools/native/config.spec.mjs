@@ -142,6 +142,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-speech-speak',
     'allow-speech-stop',
     'allow-speech-snapshot',
+    'allow-speech-set-ducking',
     'core:event:allow-listen',
     'core:event:allow-unlisten',
     'allow-workspace-browser',

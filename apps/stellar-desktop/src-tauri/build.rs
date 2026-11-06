@@ -53,6 +53,7 @@ fn main() {
         speech_names::SPEECH_COMMANDS[3],
         speech_names::SPEECH_COMMANDS[4],
         speech_names::SPEECH_COMMANDS[5],
+        speech_names::SPEECH_COMMANDS[6],
     ];
     let _ = ivy_names::IVY_EVENT;
     let _ = ivy_names::WORKSPACE_EVENT;

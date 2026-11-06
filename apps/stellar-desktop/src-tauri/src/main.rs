@@ -17,6 +17,7 @@ mod shell;
 mod smoke;
 mod speech;
 mod telemetry;
+mod volume_ducking;
 
 fn main() {
     use tauri::{Emitter, Manager};
@@ -79,17 +80,26 @@ fn main() {
             #[cfg(feature = "recognition-smoke")]
             let speech_directory = std::env::temp_dir()
                 .join(format!("stellar-recognition-smoke-{}", std::process::id()));
-            app.manage(speech::SpeechHost::new(
+            let speech_host = speech::SpeechHost::new(
                 speech_directory,
                 std::sync::Arc::new(move |snapshot| {
                     let _ = handle.emit_to("main", speech::contracts::SPEECH_EVENT, snapshot);
                 }),
+            );
+            app.manage(volume_ducking::VolumeDucking::new(
+                speech_host.audio_process(),
             ));
+            app.manage(speech_host);
             #[cfg(feature = "recognition-smoke")]
             recognition_smoke::create_window(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {
@@ -152,6 +162,7 @@ fn main() {
         speech::speech_speak,
         speech::speech_stop,
         speech::speech_snapshot,
+        speech::speech_set_ducking,
         cleanup::cleanup_refine,
         reflex::reflex_infer,
         reflex::reflex_route,
@@ -167,6 +178,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {

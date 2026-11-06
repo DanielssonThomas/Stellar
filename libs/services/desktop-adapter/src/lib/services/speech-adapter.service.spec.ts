@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   speechSpeakCommand,
+  speechSetDuckingCommand,
   speechSnapshotCommand,
   speechStopCommand,
   speechTranscribeCommand,
@@ -72,6 +73,7 @@ describe('speech service ownership', () => {
       },
       invoke: vi.fn(async (command) => {
         order.push(command);
+        if (command === speechSetDuckingCommand) return null;
         if (command === speechSnapshotCommand) return initialSpeechSnapshot();
         receive({
           ...initialSpeechSnapshot(),
@@ -97,6 +99,7 @@ describe('speech service ownership', () => {
       'listen',
       speechSnapshotCommand,
       speechSpeakCommand,
+      speechSetDuckingCommand,
     ]);
     expect(service.state().state).toBe('speaking');
     receive({ ...initialSpeechSnapshot(), revision: '1' });
@@ -183,6 +186,7 @@ describe('speech service ownership', () => {
     let epoch = '9';
     let revision = 20;
     const invoke = vi.fn<SpeechTransport['invoke']>(async (command, args) => {
+      if (command === speechSetDuckingCommand) return null;
       if (command === speechSnapshotCommand)
         return {
           ...initialSpeechSnapshot(),
@@ -223,5 +227,84 @@ describe('speech service ownership', () => {
     await service.stop();
     await service.transcribe(new Int16Array([1]), id);
     expect(epoch).toBe('10');
+  });
+
+  it('ducks for unprompted speech without a microphone and retains ownership through playback', async () => {
+    let receive!: (payload: unknown) => void;
+    const levels: boolean[] = [];
+    const invoke = vi.fn<SpeechTransport['invoke']>(async (command, args) => {
+      if (command === speechSetDuckingCommand) {
+        levels.push((args.request as { active: boolean }).active);
+        return null;
+      }
+      if (command === speechSpeakCommand)
+        return {
+          ...initialSpeechSnapshot(),
+          state: 'synthesizing',
+          operation_id: id,
+          revision: '1',
+        };
+      return initialSpeechSnapshot();
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: SPEECH_TRANSPORT,
+          useValue: {
+            invoke,
+            listen: async (
+              _event: string,
+              callback: (payload: unknown) => void,
+            ) => {
+              receive = callback;
+              return () => undefined;
+            },
+          },
+        },
+      ],
+    });
+    const service = TestBed.inject(SpeechAdapterService);
+    await service.speak('Your delegated task is finished.', id);
+    await vi.waitFor(() => expect(levels).toEqual([true]));
+    service.setDucking(false);
+    receive({
+      ...initialSpeechSnapshot(),
+      state: 'speaking',
+      operation_id: id,
+      revision: '2',
+    });
+    await Promise.resolve();
+    expect(levels).toEqual([true]);
+    receive({ ...initialSpeechSnapshot(), revision: '3' });
+    await vi.waitFor(() => expect(levels).toEqual([true, false]));
+  });
+
+  it('releases failed speech and preserves an overlapping foreground voice lease', async () => {
+    const levels: boolean[] = [];
+    const invoke = vi.fn<SpeechTransport['invoke']>(async (command, args) => {
+      if (command === speechSetDuckingCommand) {
+        levels.push((args.request as { active: boolean }).active);
+        return null;
+      }
+      if (command === speechSpeakCommand) throw 'unavailable';
+      return initialSpeechSnapshot();
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: SPEECH_TRANSPORT,
+          useValue: {
+            invoke,
+            listen: async () => () => undefined,
+          },
+        },
+      ],
+    });
+    const service = TestBed.inject(SpeechAdapterService);
+    service.setDucking(true);
+    await expect(service.speak('Update', id)).rejects.toThrow();
+    await vi.waitFor(() => expect(levels).toEqual([true]));
+    service.setDucking(false);
+    await vi.waitFor(() => expect(levels).toEqual([true, false]));
   });
 });

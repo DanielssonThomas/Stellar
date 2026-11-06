@@ -12,6 +12,7 @@ import type {
   KeywordReply,
 } from '@stellar/desktop-contracts';
 import { SpeechAdapter, SpeechAdapterError } from '../speech/speech-adapter';
+import { VolumeDucking } from '../speech/volume-ducking';
 import {
   browserSpeechTransport,
   initialSpeechSnapshot,
@@ -38,6 +39,10 @@ export class SpeechAdapterService {
   readonly keywordsAvailable =
     inject(SPEECH_TRANSPORT).keywordsAvailable === true;
   private readonly adapter = new SpeechAdapter(inject(SPEECH_TRANSPORT));
+  private readonly ducking = new VolumeDucking(inject(SPEECH_TRANSPORT));
+  private foregroundDucking = false;
+  private foregroundListening = false;
+  private readonly pendingSpeech = new Set<symbol>();
   private readonly current = signal(initialSpeechSnapshot());
   readonly state = this.current.asReadonly();
   private disposed = false;
@@ -50,6 +55,7 @@ export class SpeechAdapterService {
   constructor() {
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
+      this.ducking.dispose();
       ++this.generation;
       try {
         this.adapter.dispose();
@@ -61,6 +67,21 @@ export class SpeechAdapterService {
 
   transcribe(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
     return this.transcribeWith(pcm, utteranceId, false);
+  }
+
+  setDucking(active: boolean, listening = false) {
+    this.foregroundDucking = active;
+    this.foregroundListening = listening;
+    this.updateDucking();
+  }
+
+  private updateDucking() {
+    this.ducking.set(
+      this.foregroundDucking ||
+        this.pendingSpeech.size > 0 ||
+        ['synthesizing', 'speaking'].includes(this.current().state),
+      this.foregroundListening,
+    );
   }
 
   initialize(): Promise<void> {
@@ -121,19 +142,30 @@ export class SpeechAdapterService {
     return this.run(async () => {
       await this.prepare();
       this.assertCurrent(generation);
-      const snapshot = await this.adapter.speak({
-        version: 1,
-        epoch: this.current().epoch,
-        utterance_id: utteranceId,
-        text,
-      });
-      this.accept(snapshot, true);
-      return this.current();
+      const request = Symbol();
+      this.pendingSpeech.add(request);
+      this.updateDucking();
+      try {
+        const snapshot = await this.adapter.speak({
+          version: 1,
+          epoch: this.current().epoch,
+          utterance_id: utteranceId,
+          text,
+        });
+        this.accept(snapshot, true);
+        return this.current();
+      } finally {
+        this.pendingSpeech.delete(request);
+        this.updateDucking();
+      }
     });
   }
 
   stop(): Promise<SpeechSnapshot> {
     ++this.generation;
+    this.pendingSpeech.clear();
+    this.foregroundDucking = false;
+    this.foregroundListening = false;
     return this.run(async () => {
       this.accept(await this.adapter.snapshot(), true);
       const snapshot = await this.adapter.stop(this.current().epoch);
@@ -190,6 +222,7 @@ export class SpeechAdapterService {
     this.highestRevision = revision;
     this.localFailure = false;
     this.current.set(snapshot);
+    this.updateDucking();
   }
 
   private failed(error: unknown) {
@@ -207,6 +240,7 @@ export class SpeechAdapterService {
             ? error.code
             : 'protocol',
       }));
+      this.updateDucking();
     }
   }
 
