@@ -1,4 +1,9 @@
 export * from './lib/services/desktop-adapter.service';
+export {
+  DesktopAwarenessService,
+  AWARENESS_TRANSPORT,
+} from './lib/services/desktop-awareness.service';
+export type { AwarenessTransport } from './lib/services/desktop-awareness.service';
 export { IvyReflexService } from './lib/services/ivy-reflex.service';
 export { LocalActionRegistry } from './lib/reflex/action-registry';
 export type { LocalAction } from './lib/reflex/action-registry';

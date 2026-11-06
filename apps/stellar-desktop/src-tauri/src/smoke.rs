@@ -181,6 +181,7 @@ fn check_page(window: Webview) {
                     console.log('STELLAR_WORKSPACE_LIVE',JSON.stringify({creationMs,boundsMs:operations,loaded,isolated:probe,retained}));
                 }
                 stage='local-checks';
+                const awarenessOk = await (__AWARENESS_SMOKE__);
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
@@ -239,11 +240,17 @@ fn check_page(window: Webview) {
                     stage='detailed-window-capture';
                     if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
                 }
-                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, diagnostics:[awarenessOk,musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: awarenessOk && musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
     "#;
+    let script = script.replace(
+        "__AWARENESS_SMOKE__",
+        include_str!("awareness/smoke.js")
+            .trim()
+            .trim_end_matches(';'),
+    );
     let script = script.replace(
         "__DETAILED_CAPTURE__",
         include_str!("smoke_capture.js")
@@ -284,6 +291,9 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::reflex::reflex_set_enabled,
             crate::reflex::reflex_cancel,
             crate::commands::shell_status,
+            crate::awareness::awareness_snapshot,
+            crate::awareness::awareness_set_enabled,
+            crate::awareness::awareness_workspace,
             crate::music::music_set_enabled,
             crate::media::workspace_browser,
             crate::media::workspace_image,

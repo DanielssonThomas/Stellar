@@ -1,5 +1,23 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
 export type {
+  AwarenessApp,
+  AwarenessMedia,
+  AwarenessHealth,
+  AwarenessPane,
+  AwarenessWorkspace,
+  AwarenessRequest,
+  AwarenessSetEnabled,
+  AwarenessSnapshot,
+  AwarenessError,
+} from './generated';
+export {
+  awarenessSnapshotCommand,
+  awarenessSetEnabledCommand,
+  awarenessWorkspaceCommand,
+  awarenessEvent,
+} from './generated';
+export { decodeAwarenessSnapshot } from './lib/awareness-codec';
+export type {
   ReflexChoice,
   ReflexAvailability,
   ReflexRouting,

@@ -23,6 +23,9 @@
     [selectedInputLabel]="experience.inputs.selectedLabel()"
     [activityStatus]="experience.activityStatus()"
     [ivyActivity]="assistant.activity()"
+    [awarenessEnabled]="awareness.enabled()"
+    [awarenessStatus]="awareness.status()"
+    (toggleAwareness)="awareness.setEnabled($event)"
     [questions]="
       assistant.state().connection === 'ready' &&
       assistant.state().turn === 'admitted' &&

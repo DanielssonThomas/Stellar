@@ -45,7 +45,16 @@ impl Session {
         )
     }
 
+    #[cfg(test)]
     pub fn submit(&mut self, request: IvySubmitRequest) -> Result<(), IvyErrorCode> {
+        self.submit_with_context(request, None)
+    }
+
+    pub fn submit_with_context(
+        &mut self,
+        request: IvySubmitRequest,
+        context: Option<&str>,
+    ) -> Result<(), IvyErrorCode> {
         if self.record.input_id.as_deref() == Some(&request.input_id) {
             return Ok(());
         }
@@ -53,7 +62,19 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
-        let text = super::workspace_context::prompt(request.text, self.record.workspace.is_some());
+        let ivy_state = self.shared.view.lock().ok().map(|view| {
+            json!({
+                "model":view.snapshot.model, "turn":view.snapshot.turn,
+                "workspace_tools":view.snapshot.workspace_tools,
+                "pending_questions":view.snapshot.questions.as_ref().map_or(0, Vec::len),
+            })
+        });
+        let text = super::workspace_context::observed_prompt(
+            request.text,
+            self.record.workspace.is_some(),
+            context,
+            ivy_state,
+        );
         let params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();

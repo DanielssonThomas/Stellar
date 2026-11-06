@@ -37,6 +37,7 @@ use contracts::{
 };
 use host::Action;
 pub use host::IvyHost;
+pub use workspace_context::ContextProvider;
 
 #[cfg(test)]
 mod text_timing_tests;

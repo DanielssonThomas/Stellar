@@ -60,6 +60,7 @@ struct Work {
     action: Action,
 }
 pub struct IvyHost {
+    context_provider: Arc<Mutex<Option<super::workspace_context::ContextProvider>>>,
     shared: Shared,
     child: OwnedChild,
     sender: SyncSender<Work>,
@@ -125,6 +126,10 @@ impl IvyHost {
         let pending_rotation: Pending = Arc::new(Mutex::new(None));
         let rotations = pending_rotation.clone();
         let state = shared.clone();
+        let context_provider = Arc::new(Mutex::new(
+            None::<super::workspace_context::ContextProvider>,
+        ));
+        let provider = context_provider.clone();
         let owned = child.clone();
         std::thread::spawn(move || {
             let Some((journal, record, first)) =
@@ -164,7 +169,16 @@ impl IvyHost {
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
-                            Action::Submit(request) => session.submit(request),
+                            Action::Submit(request) => {
+                                let context = provider.lock().ok().and_then(|slot| {
+                                    slot.as_ref().and_then(|provide| {
+                                        provide(
+                                            &session.workspace_epoch.saturating_sub(1).to_string(),
+                                        )
+                                    })
+                                });
+                                session.submit_with_context(request, context.as_deref())
+                            }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
                             Action::Question(request) => session.answer_question(request),
@@ -241,6 +255,7 @@ impl IvyHost {
             }
         });
         Self {
+            context_provider,
             shared,
             child,
             sender,
@@ -252,6 +267,12 @@ impl IvyHost {
 
     pub fn set_workspace_publisher(&self, publisher: workspace_hub::Publisher) {
         self.workspace.set_publisher(publisher);
+    }
+
+    pub fn set_context_provider(&self, provider: super::workspace_context::ContextProvider) {
+        if let Ok(mut slot) = self.context_provider.lock() {
+            *slot = Some(provider);
+        }
     }
 
     pub fn set_workspace_capture(&self, capture: workspace_hub::Capture) {
