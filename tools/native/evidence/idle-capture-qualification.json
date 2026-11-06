@@ -16,8 +16,8 @@
     "test": "ivy::workspace_capture::screens::tests::qualify_visible_pc_capture",
     "passed": true,
     "capture_count": 4,
-    "capture_api_start_count": 4,
-    "capture_api_close_count": 4,
+    "capture_api_event_id_1_count": 4,
+    "capture_api_event_id_11_count": 4,
     "capture_server_start_count": 4,
     "capture_server_stop_count": 8,
     "first_stop_after_start_ms": [14.581, 13.872, 19.065, 9.76],
@@ -31,7 +31,7 @@
   "limitations": [
     "The idle trace is a bounded observation, not proof that another application cannot start capture later.",
     "Capture-server event intervals are not physical border visibility measurements.",
-    "Repeated stop events are retained as observed; four API close events independently match four capture sessions.",
+    "Repeated capture-server stop events are retained as observed. API events are identified by numeric ID; lifecycle claims use capture-server start/stop events.",
     "This probe exercises real capture success and invalid-target rejection; timeout, OS access denial and process death were not forced."
   ]
 }
