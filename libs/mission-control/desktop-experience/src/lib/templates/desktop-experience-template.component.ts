@@ -174,12 +174,15 @@ export class DesktopExperienceTemplate {
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
   readonly voiceInputText = input('');
-  readonly voiceNotice = input('');
-  readonly voiceMuted = input(false);
+  readonly recognitionVisible = input(false);
+  readonly recognitionText = input('');
+  readonly recognitionStatus = input('');
   readonly wakeSensitivity = input<'standard' | 'high'>('standard');
   readonly showRecognition = input(false);
   readonly wakeSensitivityChange = output<'standard' | 'high'>();
   readonly showRecognitionChange = output<boolean>();
+  readonly voiceNotice = input('');
+  readonly voiceMuted = input(false);
   readonly reflexEnabled = input(false);
   readonly awarenessEnabled = input(true);
   readonly awarenessStatus = input('Awareness unavailable');

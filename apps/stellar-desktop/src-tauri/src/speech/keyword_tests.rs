@@ -92,3 +92,32 @@ fn invalid_worker_detections_are_rejected_before_dispatch() {
         ));
     }
 }
+
+#[test]
+fn sensitive_passive_mode_can_only_report_wake_not_mutating_commands() {
+    let mut request = request();
+    request.mode = KeywordMode::PassiveSensitive;
+    for command in [
+        "clear",
+        "done",
+        "prompt",
+        "new session",
+        "reload mcp",
+        "prompt cancel",
+    ] {
+        assert!(matches!(
+            decode_reply(
+                json!({"sequence":0,"detection":{"command":command,"end_sample":640}}),
+                &request
+            ),
+            Err(SpeechError::Protocol)
+        ));
+    }
+    assert!(
+        decode_reply(
+            json!({"sequence":0,"detection":{"command":"ivy","end_sample":640}}),
+            &request
+        )
+        .is_ok()
+    );
+}
