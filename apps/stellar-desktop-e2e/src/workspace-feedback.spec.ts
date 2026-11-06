@@ -463,3 +463,62 @@ test('charts resize in compact panes and retain their mounted content through mi
   await expect(canvas).toBeVisible();
   expect((await canvas.boundingBox())?.width).toBeGreaterThan(100);
 });
+
+test('the documented 64 by 8 chart limit reaches both standalone and multiple inline Stage renderers', async ({
+  page,
+}) => {
+  const chart = {
+    type: 'line',
+    labels: Array.from({ length: 64 }, (_, i) => 'L' + i),
+    datasets: Array.from({ length: 8 }, (_, i) => ({
+      label: 'Series' + i,
+      values: Array.from({ length: 64 }, (_, j) => j + i),
+    })),
+  };
+  const outcome = await request(page, {
+    kind: 'batch',
+    operations: [
+      {
+        kind: 'open',
+        instance_id: 'maximum',
+        surface: 'chart',
+        prominence: 'primary',
+        payload_json: JSON.stringify({ title: 'Maximum chart', chart }),
+      },
+      {
+        kind: 'open',
+        instance_id: 'inline_maximum',
+        surface: 'rich-text',
+        prominence: 'secondary',
+        payload_json: JSON.stringify({
+          title: 'Maximum inline charts',
+          blocks: [
+            {
+              kind: 'paragraph',
+              text: 'Both charts preserve the complete dataset.',
+            },
+            { kind: 'chart', chart },
+            { kind: 'chart', chart },
+          ],
+        }),
+      },
+    ],
+  });
+  expect(outcome.kind).toBe('batch');
+  if (outcome.kind === 'batch')
+    expect(outcome.outcomes).toEqual(['applied', 'applied']);
+  await expect(
+    page.locator(
+      '[data-instance-id="maximum"] stellar-presentation-chart-atom',
+    ),
+  ).toHaveAttribute('data-render-state', 'ready');
+  const inline = page.locator(
+    '[data-instance-id="inline_maximum"] stellar-presentation-chart-atom',
+  );
+  await expect(inline).toHaveCount(2);
+  for (const item of await inline.all())
+    await expect(item).toHaveAttribute('data-render-state', 'ready');
+  await expect(
+    page.getByText('Both charts preserve the complete dataset.'),
+  ).toBeVisible();
+});
