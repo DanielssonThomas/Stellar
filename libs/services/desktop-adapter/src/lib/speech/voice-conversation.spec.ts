@@ -1578,6 +1578,44 @@ describe('voice conversation ownership', () => {
     expect(await failed.controller.withCaptureReleased(action)).toBe(false);
     expect(action).not.toHaveBeenCalled();
   });
+
+  it('keeps genuine foreground draft collection authoritative over typed submission', async () => {
+    const pending = deferred<SpeechTranscript>();
+    const collect = vi.fn(() => pending.promise);
+    const action = vi.fn(async () => true);
+    const f = fixture({ collect });
+    f.controller.setDraft('Keep my active draft');
+    f.utterance();
+    expect(collect).toHaveBeenCalledOnce();
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        state: 'collecting',
+      },
+    });
+    expect(await f.controller.withCaptureReleased(action)).toBe(false);
+    expect(action).not.toHaveBeenCalled();
+    expect(f.composition().raw).toBe('Keep my active draft');
+    f.controller.dispose();
+    pending.resolve({ version: 1, utterance_id: id, text: 'stale words' });
+    await flush();
+    expect(f.composition().raw).toBe('Keep my active draft');
+  });
+
+  it.each(['collecting', 'transcribing', 'synthesizing', 'speaking'] as const)(
+    'rejects unowned native %s instead of bypassing the foreground guard',
+    async (state) => {
+      const f = fixture();
+      const action = vi.fn(async () => true);
+      f.update({
+        speech: { ...initialSpeechSnapshot(), operation_id: id, state },
+      });
+      expect(await f.controller.withCaptureReleased(action)).toBe(false);
+      expect(action).not.toHaveBeenCalled();
+      f.controller.dispose();
+    },
+  );
   it('retains native cleanup serialization across reset and refines the new draft', async () => {
     const old = deferred<unknown>();
     const invoke = vi

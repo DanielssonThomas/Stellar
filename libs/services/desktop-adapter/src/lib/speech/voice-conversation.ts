@@ -745,6 +745,13 @@ export class VoiceConversation {
     action: (signal: AbortSignal) => Promise<boolean>,
   ): Promise<boolean> {
     const context = this.context;
+    const passive = this.passiveRecognition?.pending();
+    const speechOccupied = (speech: SpeechSnapshot) =>
+      (speech.state === 'collecting' &&
+        (!passive ||
+          speech.operation_id !== passive.id ||
+          speech.epoch !== context?.speech.epoch)) ||
+      ['transcribing', 'synthesizing', 'speaking'].includes(speech.state);
     if (
       this.disposed ||
       !context?.available ||
@@ -764,21 +771,20 @@ export class VoiceConversation {
       preparing(this.composition.status) ||
       this.draftRecognition?.isBusy() ||
       this.draftCleanups.size ||
-      ['collecting', 'transcribing', 'synthesizing', 'speaking'].includes(
-        context.speech.state,
-      )
+      speechOccupied(context.speech)
     )
       return false;
     this.fastCommands?.reset();
     this.resetSpeechActivity();
     const controller = new AbortController();
     this.typedLease = controller;
+    this.passiveRecognition?.reset();
     const generation = this.generation;
     this.publish();
     let onAbort: (() => void) | undefined;
     try {
       await Promise.race([
-        this.ports.waitForCapturePause?.() ?? Promise.resolve(),
+        Promise.all([this.ports.waitForCapturePause?.(), passive?.promise]),
         new Promise<never>((_, reject) => {
           onAbort = () =>
             reject(new DOMException('Capture lease cancelled', 'AbortError'));
@@ -790,7 +796,11 @@ export class VoiceConversation {
         controller.signal.aborted ||
         !this.current(generation) ||
         !this.context?.available ||
-        this.typedLease !== controller
+        this.typedLease !== controller ||
+        ['submitting', 'admitted', 'uncertain'].includes(
+          this.context.assistant.turn,
+        ) ||
+        speechOccupied(this.context.speech)
       )
         return false;
       const accepted = await action(controller.signal);

@@ -9,7 +9,7 @@ import type { SpeechTranscript } from '@stellar/desktop-contracts';
 export class PassiveRecognition {
   private readonly assembler = createUtteranceAssembler({ silenceMs: 800 });
   private generation = 0;
-  private running?: Promise<void>;
+  private running?: { readonly id: string; readonly promise: Promise<void> };
   constructor(
     private readonly ports: {
       collect: (pcm: Int16Array, id: string) => Promise<SpeechTranscript>;
@@ -35,11 +35,14 @@ export class PassiveRecognition {
       .catch(() => undefined)
       .finally(() => {
         pcm.fill(0);
-        if (this.running === pending) this.running = undefined;
+        if (this.running?.promise === pending) this.running = undefined;
       });
-    this.running = pending;
+    this.running = { id, promise: pending };
   }
   wait() {
+    return this.running?.promise;
+  }
+  pending() {
     return this.running;
   }
   reset() {
