@@ -384,7 +384,7 @@
               <stellar-toggle-switch-atom
                 [loading]="loading()"
                 label="Higher wake sensitivity"
-                description="Help Ivy recognize quieter wake words. Standard sensitivity is used when off."
+                description="Accept more words that sound like Ivy. May wake during other speech."
                 [checked]="wakeSensitivity() === 'high'"
                 [disabled]="
                   voiceBusy() || state().microphone.status === 'requesting'

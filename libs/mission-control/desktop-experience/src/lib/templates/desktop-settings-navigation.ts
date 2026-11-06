@@ -69,8 +69,23 @@ export class DesktopSettingsNavigation {
   }
   keydown(event: KeyboardEvent) {
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const dialog = this.dialog();
+    const focused = [event.target, dialog.ownerDocument.activeElement]
+      .filter((target): target is Element => target instanceof Element)
+      .map((target) => target.closest('[data-settings-nav]'))
+      .find(
+        (target) =>
+          target &&
+          dialog.contains(target) &&
+          this.sections.some(
+            (section) =>
+              section.id === target.getAttribute('data-settings-nav'),
+          ),
+      );
     const index = this.sections.findIndex(
-      (section) => section.id === this.selected(),
+      (section) =>
+        section.id ===
+        (focused?.getAttribute('data-settings-nav') ?? this.selected()),
     );
     const next =
       event.key === 'Home'

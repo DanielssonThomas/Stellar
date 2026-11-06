@@ -1,5 +1,35 @@
 import { expect, test } from '@playwright/test';
 
+test('arrow navigation follows keyboard focus after tabbing and during section scrolling', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.keyboard.press('m');
+  const navigation = page.getByRole('navigation', {
+    name: 'Settings sections',
+  });
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(
+    navigation.getByRole('button', { name: 'Ivy', exact: true }),
+  ).toBeFocused();
+  await expect(
+    navigation.getByRole('button', { name: 'Overview', exact: true }),
+  ).toHaveAttribute('aria-current', 'location');
+  await page.keyboard.press('ArrowDown');
+  await expect(
+    navigation.getByRole('button', { name: 'App awareness', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(
+    navigation.getByRole('button', { name: 'App awareness', exact: true }),
+  ).toBeFocused();
+});
+
 test('section navigation keeps settings in a fixed gold frame and follows keyboard and scrolling', async ({
   page,
 }, testInfo) => {

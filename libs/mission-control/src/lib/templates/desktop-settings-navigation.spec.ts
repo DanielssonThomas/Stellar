@@ -79,4 +79,45 @@ describe('settings section navigation', () => {
     navigation.keydown(event);
     expect(event.defaultPrevented).toBe(false);
   });
+
+  it('navigates from the focused button after tabbing without activating its section', () => {
+    const { navigation, dialog } = setup();
+    const ivy = dialog.querySelector<HTMLButtonElement>(
+      '[data-settings-nav="ivy"]',
+    ) as HTMLButtonElement;
+    ivy.innerHTML = '<span>Ivy</span>';
+    ivy.focus();
+    dialog.addEventListener('keydown', (event) => navigation.keydown(event));
+    expect(navigation.selected()).toBe('overview');
+    ivy.querySelector('span')?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(document.activeElement).toBe(
+      dialog.querySelector('[data-settings-nav="awareness"]'),
+    );
+    expect(navigation.selected()).toBe('awareness');
+  });
+
+  it('keeps rapid arrows relative to focus while smooth scrolling updates the current section', () => {
+    const { navigation, dialog, viewport } = setup();
+    const overview = dialog.querySelector<HTMLButtonElement>(
+      '[data-settings-nav="overview"]',
+    ) as HTMLButtonElement;
+    overview.focus();
+    for (const id of ['microphone', 'ivy', 'awareness']) {
+      viewport.scrollTop = 0;
+      navigation.scrolled();
+      expect(navigation.selected()).toBe('overview');
+      navigation.keydown(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }),
+      );
+      expect(document.activeElement).toBe(
+        dialog.querySelector(`[data-settings-nav="${id}"]`),
+      );
+    }
+  });
 });
