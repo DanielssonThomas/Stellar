@@ -125,6 +125,8 @@ pub struct SpeechStopRequest {
 #[serde(rename_all = "lowercase")]
 pub enum KeywordMode {
     Passive,
+    #[serde(rename = "passive_sensitive")]
+    PassiveSensitive,
     Listening,
     Composing,
 }

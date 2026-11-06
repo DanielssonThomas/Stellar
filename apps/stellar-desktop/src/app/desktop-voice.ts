@@ -15,6 +15,9 @@ import {
   IvyReflexService,
   VoiceConversation,
   QuestionVoiceCue,
+  VoicePreferences,
+  type WakeSensitivity,
+  type RecognitionObservation,
   type VoiceComposition,
   type PromptPresentation,
   type VoiceModel,
@@ -33,6 +36,12 @@ export class DesktopVoice {
   private readonly assistant = inject(DesktopAssistant);
   private readonly experience = inject(DesktopExperience);
   private readonly zone = inject(NgZone);
+  private readonly preferences = new VoicePreferences();
+  readonly wakeSensitivity = signal<WakeSensitivity>(
+    this.preferences.wakeSensitivity,
+  );
+  readonly showRecognition = signal(this.preferences.showRecognition);
+  readonly recognition = signal<RecognitionObservation | null>(null);
   private readonly current = signal<VoiceView>({
     status: 'Local voice idle',
     muted: false,
@@ -171,9 +180,14 @@ export class DesktopVoice {
       this.zone.run(() => {
         this.compositionState.set(value);
       }),
+    onRecognition: (value) => this.zone.run(() => this.recognition.set(value)),
   });
 
   constructor() {
+    this.conversation.setRecognitionOptions(
+      this.wakeSensitivity(),
+      this.showRecognition(),
+    );
     const request = ++this.sessionRequest;
     void this.readSession()
       .then((model) => {
@@ -198,6 +212,22 @@ export class DesktopVoice {
       this.questionCue.cancel();
       this.foregroundCleared = undefined;
     });
+  }
+
+  setWakeSensitivity(value: WakeSensitivity) {
+    this.preferences.setSensitivity(value);
+    this.wakeSensitivity.set(this.preferences.wakeSensitivity);
+    this.conversation.setRecognitionOptions(
+      this.wakeSensitivity(),
+      this.showRecognition(),
+    );
+  }
+
+  setShowRecognition(value: boolean) {
+    this.preferences.setRecognition(value);
+    this.showRecognition.set(value);
+    if (!value) this.recognition.set(null);
+    this.conversation.setRecognitionOptions(this.wakeSensitivity(), value);
   }
 
   setMuted(muted: boolean) {

@@ -38,6 +38,7 @@ export class DraftRecognition {
     private readonly timing?: (
       stage: 'queued' | 'started' | 'completed',
     ) => void,
+    private readonly waitForCollect?: () => Promise<void> | undefined,
   ) {}
 
   canPreview(): boolean {
@@ -132,9 +133,16 @@ export class DraftRecognition {
     if (!work) return;
     if (this.preview === work) this.preview = undefined;
     this.running = work;
-    if (work.final) this.timing?.('started');
-    void this.collect(work.pcm, work.id)
+    const dispatch = () => {
+      if (work.generation !== this.generation) return;
+      if (work.final) this.timing?.('started');
+      return this.collect(work.pcm, work.id);
+    };
+    const pending = this.waitForCollect?.();
+    const request = pending ? pending.then(dispatch) : dispatch();
+    void Promise.resolve(request)
       .then(async (result) => {
+        if (!result) return;
         if (work.final && work.generation === this.generation)
           this.timing?.('completed');
         if (

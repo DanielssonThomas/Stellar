@@ -41,8 +41,8 @@ function fixture() {
 describe('cloud voice acknowledgment', () => {
   it('hands off natural completion without restarting the warm voice and ignores unrelated idle', async () => {
     const f = fixture();
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     let finished = false;
     const ready = f.cue.handoff().then((result) => {
       finished = result;
@@ -62,16 +62,16 @@ describe('cloud voice acknowledgment', () => {
   it('revokes an undispatched queued cue without waiting for another owner', async () => {
     const f = fixture();
     f.speak.mockImplementationOnce(() => new Promise(() => undefined));
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     expect(await f.cue.handoff()).toBe(true);
     expect(f.speak.mock.calls[0][2]?.()).toBe(false);
     expect(f.stop).not.toHaveBeenCalled();
   });
   it('bounds a missing cue completion and waits for the native cancellation result', async () => {
     const f = fixture();
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     const ready = f.cue.handoff();
     await vi.advanceTimersByTimeAsync(5000);
     expect(await ready).toBe(true);
@@ -79,8 +79,8 @@ describe('cloud voice acknowledgment', () => {
   });
   it('keeps ownership through unrelated idle snapshots and revokes queued dispatch on cancel', async () => {
     const f = fixture();
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     const current = f.speak.mock.calls[0][2];
     expect(current?.()).toBe(true);
     f.cue.observe({ ...f.state, revision: '2', operation_id: 'question-cue' });
@@ -91,13 +91,13 @@ describe('cloud voice acknowledgment', () => {
   });
   it('waits briefly, acknowledges once and records speech separately from the answer', async () => {
     const f = fixture();
-    f.cue.schedule('turn');
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(699);
+    f.cue.schedule('turn', 'Check my calendar');
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(2999);
     expect(f.speak).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(f.speak).toHaveBeenCalledExactlyOnceWith(
-      'Mm, let me check.',
+      'One moment.',
       expect.any(String),
       expect.any(Function),
     );
@@ -118,32 +118,32 @@ describe('cloud voice acknowledgment', () => {
     });
     await f.cue.cancel();
     expect(f.stop).not.toHaveBeenCalled();
-    f.cue.schedule('turn');
+    f.cue.schedule('turn', 'Check my calendar');
     await vi.advanceTimersByTimeAsync(1000);
     expect(f.speak).toHaveBeenCalledOnce();
   });
   it('skips fast answers, mute and other active speech', async () => {
     const fast = fixture();
-    fast.cue.schedule('turn');
+    fast.cue.schedule('turn', 'Check my calendar');
     expect(await fast.cue.cancel()).toBe(true);
     await vi.advanceTimersByTimeAsync(1000);
     expect(fast.speak).not.toHaveBeenCalled();
     expect(fast.stop).not.toHaveBeenCalled();
     const muted = fixture();
-    muted.cue.schedule('turn');
+    muted.cue.schedule('turn', 'Check my calendar');
     muted.disable();
     await vi.advanceTimersByTimeAsync(1000);
     expect(muted.speak).not.toHaveBeenCalled();
     const busy = fixture();
     busy.state.state = 'speaking';
-    busy.cue.schedule('turn');
+    busy.cue.schedule('turn', 'Check my calendar');
     await vi.advanceTimersByTimeAsync(1000);
     expect(busy.speak).not.toHaveBeenCalled();
   });
   it('waits for owned native stop before releasing final narration and reports failure', async () => {
     const f = fixture();
-    f.cue.schedule('turn');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('turn', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     let finish: () => void = () => undefined;
     f.stop.mockImplementationOnce(
       () =>
@@ -160,8 +160,8 @@ describe('cloud voice acknowledgment', () => {
     finish();
     await cancelled;
     expect(released).toBe(true);
-    f.cue.schedule('another');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('another', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     f.stop.mockRejectedValueOnce(new Error('unavailable'));
     expect(await f.cue.cancel()).toBe(false);
   });
@@ -174,11 +174,11 @@ describe('cloud voice acknowledgment', () => {
           failOld = reject;
         }),
     );
-    f.cue.schedule('old');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('old', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     f.cue.clear();
-    f.cue.schedule('new');
-    await vi.advanceTimersByTimeAsync(700);
+    f.cue.schedule('new', 'Check my calendar');
+    await vi.advanceTimersByTimeAsync(3000);
     failOld(new Error('old'));
     await Promise.resolve();
     await f.cue.cancel();
