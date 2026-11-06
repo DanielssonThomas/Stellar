@@ -93,7 +93,7 @@ describe('desktop voice session composition', () => {
     voice.notifyQuestion('q1');
     let owned = true;
     const queued = conversation.ports.speak(
-      'Mm, let me check.',
+      'One moment.',
       '11111111-2222-4333-8444-555555555555',
       () => owned,
     );

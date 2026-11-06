@@ -130,7 +130,7 @@ fn installed_cached_acknowledgment_hands_off_cancels_and_recovers() {
         root.clone(),
         Arc::new(move |snapshot| capture.lock().unwrap().push(snapshot)),
     );
-    let mut runs = vec![installed_utterance(&host, "Mm, let me check.", 301)];
+    let mut runs = vec![installed_utterance(&host, "One moment.", 301)];
     let first_pid = installed_pid(&host);
     runs.push(installed_utterance(&host, "Your answer is ready.", 302));
     assert_eq!(installed_pid(&host), first_pid);
@@ -141,7 +141,7 @@ fn installed_cached_acknowledgment_hands_off_cancels_and_recovers() {
         version: 1,
         epoch: old_epoch.clone(),
         utterance_id: "00000000-0000-0000-0000-000000000303".into(),
-        text: "Mm, let me check.".into(),
+        text: "One moment.".into(),
     })
     .unwrap();
     let start = Instant::now();
@@ -161,7 +161,7 @@ fn installed_cached_acknowledgment_hands_off_cancels_and_recovers() {
     assert_eq!(after.revision, stopped.revision);
     assert_eq!(after.state, SpeechState::Idle);
 
-    runs.push(installed_utterance(&host, "Mm, let me check.", 304));
+    runs.push(installed_utterance(&host, "One moment.", 304));
     let recovered_pid = installed_pid(&host);
     assert_ne!(recovered_pid, first_pid);
     for index in [301, 302, 304] {
@@ -238,7 +238,7 @@ fn installed_utterance(host: &SpeechHost, text: &str, index: u32) -> serde_json:
                     .iter()
                     .any(|item| { item.stage == SpeechTimingStage::PlaybackCompleted })
             );
-            return json!({"cached":text == "Mm, let me check.","first_audio_observed_ms":first_audio_ms,
+            return json!({"cached":text == "One moment.","first_audio_observed_ms":first_audio_ms,
                 "playback_dispatched_observed_ms":playback_ms,"completed_ms":start.elapsed().as_millis() as u64,
                 "worker_timings":snapshot.timings});
         }

@@ -22,7 +22,7 @@ VOICE = PROFILE / 'voice'
 MAX_REQUEST = 3 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024
 MAX_WAV = 8 * 1024 * 1024
-CACHED_ACKNOWLEDGMENT_SHA256 = '762c2f8958c715db47b92c4f80028b38eb0e4e84c09bdb11531e1696d783eee8'
+CACHED_ACKNOWLEDGMENT_SHA256 = 'cb4800c5f53419b46a9c8e914636098fda83a993591c70f3b72cde11c543ed81'
 PROTOCOL_LOCK = threading.Lock()
 
 for _key, _value in {
@@ -288,7 +288,7 @@ def speak(req, protocol, engine=None):
 
 def cached_acknowledgment(req, target, protocol):
     encoded = req['cached_wav']
-    if (req['text'] != 'Mm, let me check.' or type(encoded) is not str
+    if (req['text'] != "One moment." or type(encoded) is not str
             or len(encoded) > 100_000):
         reject()
     try:

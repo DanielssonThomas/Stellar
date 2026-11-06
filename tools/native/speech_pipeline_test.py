@@ -28,7 +28,7 @@ def wav(path):
 class PipelineTests(unittest.TestCase):
     def test_fixed_cached_acknowledgment_uses_validated_playback_without_model_loading(self):
         audio = source.with_name('acknowledgment.wav').read_bytes()
-        req = {'text': 'Mm, let me check.', 'cached_wav': base64.b64encode(audio).decode()}
+        req = {'text': "One moment.", 'cached_wav': base64.b64encode(audio).decode()}
         with tempfile.TemporaryDirectory(prefix='stellar-cached-cue-') as directory:
             target = Path(directory) / 'reply.wav'
             output = io.BytesIO()

@@ -14,6 +14,7 @@ import { SkeletonAtom } from '@stellar/ui-atoms';
 })
 export class VoiceTranscriptMolecule {
   readonly text = input('');
+  readonly status = input('');
   readonly loading = input(false);
   readonly reducedMotion = input(false);
 }

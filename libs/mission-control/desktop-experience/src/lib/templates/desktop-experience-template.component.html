@@ -110,13 +110,22 @@
   />
 
   @if (
-    voiceInputText() &&
-    (!solActive() || promptStatus() === 'idle') &&
+    (recognitionVisible() || voiceInputText()) &&
+    (recognitionVisible() || !solActive() || promptStatus() === 'idle') &&
     !['suspended', 'shutdown'].includes(state().phase)
   ) {
     <stellar-voice-transcript-molecule
       class="absolute bottom-4 left-4 z-2 max-w-[calc(100%-2rem)]"
-      [text]="voiceInputText()"
+      [text]="
+        recognitionVisible()
+          ? recognitionText() || 'Listening for speech…'
+          : voiceInputText()
+      "
+      [status]="
+        recognitionVisible()
+          ? recognitionStatus() || 'Local recognition · no speech sent'
+          : ''
+      "
       [loading]="loading()"
       [reducedMotion]="state().reducedMotion"
     />
@@ -222,6 +231,33 @@
       @if (voiceError()) {
         <button type="button" (click)="retryVoice.emit()">Retry voice</button>
       }
+      <button
+        type="button"
+        role="switch"
+        aria-label="Higher wake sensitivity"
+        [attr.aria-checked]="wakeSensitivity() === 'high'"
+        [disabled]="voiceBusy() || assistantBusy()"
+        (click)="
+          wakeSensitivityChange.emit(
+            wakeSensitivity() === 'high' ? 'standard' : 'high'
+          )
+        "
+      >
+        Higher wake sensitivity ·
+        {{ wakeSensitivity() === 'high' ? 'On' : 'Off' }}
+      </button>
+      <p class="status">
+        High mode also hears “I mean”, “eerie” and “I've” as a wake prefix.
+      </p>
+      <button
+        type="button"
+        role="switch"
+        aria-label="Show recognition results"
+        [attr.aria-checked]="showRecognition()"
+        (click)="showRecognitionChange.emit(!showRecognition())"
+      >
+        Show recognition results · {{ showRecognition() ? 'On' : 'Off' }}
+      </button>
       <button
         type="button"
         [disabled]="assistantBusy() && !assistantUncertain()"
