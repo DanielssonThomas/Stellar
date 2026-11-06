@@ -1978,8 +1978,15 @@ describe('voice conversation ownership', () => {
       text: 'I mean, send this passive text',
     }));
     const keywords = vi.fn(
-      async (_pcm: Int16Array, _stream: string, sequence: number, threshold: number, mode: unknown) => {
-        void threshold; void mode;
+      async (
+        _pcm: Int16Array,
+        _stream: string,
+        sequence: number,
+        threshold: number,
+        mode: unknown,
+      ) => {
+        void threshold;
+        void mode;
         return { sequence, detection: null };
       },
     );
