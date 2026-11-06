@@ -1970,6 +1970,69 @@ describe('voice conversation ownership', () => {
     expect(f.ports.speak).toHaveBeenCalledOnce();
   });
 
+  it('keeps passive diagnostics local and selects the high-sensitivity wake-only mode', async () => {
+    const observations = vi.fn();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'I mean, send this passive text',
+    }));
+    const keywords = vi.fn(
+      async (_pcm: Int16Array, _stream: string, sequence: number, threshold: number, mode: unknown) => {
+        void threshold; void mode;
+        return { sequence, detection: null };
+      },
+    );
+    const f = fixture({ collect, keywords, onRecognition: observations });
+    f.controller.setRecognitionOptions('high', true);
+    f.utterance();
+    await flush();
+    expect(collect).toHaveBeenCalledOnce();
+    expect(observations).toHaveBeenCalledWith({
+      text: 'I mean, send this passive text',
+      status: 'No wake detected',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(
+      keywords.mock.calls.some((call) => call[4] === 'passive_sensitive'),
+    ).toBe(true);
+    f.controller.setRecognitionOptions('standard', false);
+    f.utterance();
+    await flush();
+    expect(collect).toHaveBeenCalledOnce();
+    f.controller.dispose();
+  });
+
+  it.each(['Hello', 'Hello there', 'Thanks', 'Cancel that'])(
+    'never adds waiting speech to an admitted %s turn',
+    async (text) => {
+      vi.useFakeTimers();
+      const f = fixture();
+      try {
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: `Ivy, ${text}`,
+        });
+        f.utterance();
+        await flush();
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn: 'admitted',
+            turn_id: id,
+          },
+        });
+        await vi.advanceTimersByTimeAsync(6000);
+        expect(f.ports.speak).not.toHaveBeenCalled();
+        expect(f.ports.submit).toHaveBeenCalledOnce();
+      } finally {
+        f.controller.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('acknowledges only an admitted Terra voice turn and finishes the short cue before the final answer', async () => {
     vi.useFakeTimers();
     const f = fixture();
@@ -1981,8 +2044,8 @@ describe('voice conversation ownership', () => {
       f.update({
         assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
       });
-      await vi.advanceTimersByTimeAsync(700);
-      expect(f.ports.speak.mock.calls[0][0]).toBe('Mm, let me check.');
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(f.ports.speak.mock.calls[0][0]).toBe('One moment.');
       f.completed();
       await flush();
       expect(f.ports.speak).toHaveBeenCalledOnce();
@@ -1996,7 +2059,7 @@ describe('voice conversation ownership', () => {
       await flush();
       expect(f.ports.stop).not.toHaveBeenCalled();
       expect(f.ports.speak.mock.calls.map(([text]) => text)).toEqual([
-        'Mm, let me check.',
+        'One moment.',
         'A local reply',
       ]);
       f.completed();

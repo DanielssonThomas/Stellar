@@ -1,4 +1,9 @@
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
+import {
+  waitingCueDelayMs,
+  waitingCueEligible,
+  waitingCueText,
+} from './waiting-cue';
 
 /** A local acknowledgment owns no assistant answer and never consumes model output. */
 export class CloudVoiceCue {
@@ -32,7 +37,8 @@ export class CloudVoiceCue {
     },
   ) {}
 
-  schedule(turnId: string) {
+  schedule(turnId: string, text: string) {
+    if (!waitingCueEligible(text)) return;
     if (this.seen.has(turnId) || this.timer || this.active || this.stopping)
       return;
     if (this.seen.size >= 64)
@@ -57,7 +63,7 @@ export class CloudVoiceCue {
       this.active = ticket;
       this.ports.stage('acknowledgment_requested');
       void this.ports
-        .speak('Mm, let me check.', ticket.id, () => {
+        .speak(waitingCueText, ticket.id, () => {
           const current = this.active === ticket && this.ports.enabled();
           if (current) ticket.dispatched = true;
           return current;
@@ -70,7 +76,7 @@ export class CloudVoiceCue {
             if (this.active === ticket) this.clear();
           },
         );
-    }, 700);
+    }, waitingCueDelayMs);
   }
 
   observe(snapshot: SpeechSnapshot) {

@@ -2,7 +2,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 use std::path::Path;
 
-const TEXT: &str = "Mm, let me check.";
+const TEXT: &str = "One moment.";
 const AUDIO: &[u8] = include_bytes!("acknowledgment.wav");
 
 pub(super) fn payload(text: String, output: &Path) -> Value {
@@ -26,11 +26,11 @@ mod tests {
         assert!(encoded.len() < 100_000);
         assert_eq!(
             format!("{:x}", Sha256::digest(AUDIO)),
-            "762c2f8958c715db47b92c4f80028b38eb0e4e84c09bdb11531e1696d783eee8"
+            "cb4800c5f53419b46a9c8e914636098fda83a993591c70f3b72cde11c543ed81"
         );
         for text in [
             "Let me check.",
-            "Mm, let me check. More text",
+            "One moment. More text",
             "mm, let me check.",
         ] {
             assert!(

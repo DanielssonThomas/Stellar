@@ -2,6 +2,15 @@
 export class VoiceInvocation {
   private invoked = false;
   private acoustic = false;
+  private sensitivity: 'standard' | 'high' = 'standard';
+
+  setSensitivity(value: 'standard' | 'high') {
+    this.sensitivity = value;
+  }
+
+  matches(text: string): boolean {
+    return wakePrefix(text, this.sensitivity) !== null;
+  }
 
   active(): boolean {
     return this.invoked;
@@ -26,11 +35,7 @@ export class VoiceInvocation {
     text: string,
     composing: boolean,
   ): { text: string; invoked: boolean } | null {
-    const wake =
-      !composing &&
-      /^\s*(?:ivy(?=$|[\s,.:;!?])|i\.v(?=\.*(?:$|[\s,:;!?])))[\s,.:;!?]*/iu.exec(
-        text,
-      );
+    const wake = !composing && wakePrefix(text, this.sensitivity);
     if (wake) {
       this.activate();
       return { text: text.slice(wake[0].length), invoked: true };
@@ -40,6 +45,20 @@ export class VoiceInvocation {
     this.activate();
     return { text, invoked };
   }
+}
+
+export function wakePrefix(
+  text: string,
+  sensitivity: 'standard' | 'high' = 'standard',
+): RegExpExecArray | null {
+  const standard =
+    /^\s*(?:hey[\s,]+)?(?:ivy(?=$|[\s,.:;!?])|i\.\s*v(?=\.*(?:$|[\s,:;!?])))[\s,.:;!?]*/iu;
+  const sensitive =
+    /^\s*(?:hey[\s,]+)?(?:i\s+mean|eerie|i['’]ve)(?=$|[\s,.:;!?])[\s,.:;!?]*/iu;
+  return (
+    standard.exec(text) ??
+    (sensitivity === 'high' ? sensitive.exec(text) : null)
+  );
 }
 
 /** A suffix is deliberately fail-closed against dispatch, even after dictation. */

@@ -32,6 +32,11 @@ import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
 import { SpeechActivity } from './speech-activity';
 import { CloudVoiceCue } from './cloud-voice-cue';
+import { PassiveRecognition } from './passive-recognition';
+import type {
+  RecognitionObservation,
+  WakeSensitivity,
+} from './voice-preferences';
 import type { ReflexOutcome } from '../reflex/reflex-controller';
 
 const preparing = (status: VoiceComposition['status']) =>
@@ -100,6 +105,7 @@ export interface VoicePorts {
   readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
   readonly presentFinalized?: PromptPresentation;
   readonly onComposition?: (state: VoiceComposition) => void;
+  readonly onRecognition?: (observation: RecognitionObservation) => void;
 }
 
 export class VoiceConversation {
@@ -165,8 +171,30 @@ export class VoiceConversation {
   private draftRevision = 0;
   private typedLease?: AbortController;
   private readonly acknowledgment: CloudVoiceCue;
+  private cueText = '';
+  private wakeSensitivity: WakeSensitivity = 'standard';
+  private showRecognition = false;
+  private readonly passiveRecognition?: PassiveRecognition;
 
   constructor(private readonly ports: VoicePorts) {
+    if (ports.collect)
+      this.passiveRecognition = new PassiveRecognition({
+        collect: ports.collect,
+        id: ports.id,
+        completed: (text) => {
+          if (
+            !this.showRecognition ||
+            !this.awaitingWake ||
+            !this.context?.available
+          )
+            return;
+          if (text.trim())
+            this.ports.onRecognition?.({
+              text: text.trim().slice(0, 320),
+              status: 'No wake detected',
+            });
+        },
+      });
     this.acknowledgment = new CloudVoiceCue({
       enabled: () =>
         !this.muted &&
@@ -246,6 +274,16 @@ export class VoiceConversation {
     }
     if (ports.presentFinalized)
       this.presentation = { handler: ports.presentFinalized };
+  }
+
+  setRecognitionOptions(sensitivity: WakeSensitivity, visible: boolean) {
+    if (this.wakeSensitivity !== sensitivity) {
+      this.wakeSensitivity = sensitivity;
+      this.invocation.setSensitivity(sensitivity);
+      this.fastCommands?.reset();
+    }
+    if (this.showRecognition !== visible) this.passiveRecognition?.reset();
+    this.showRecognition = visible;
   }
 
   bindPromptPresentation(handler: PromptPresentation): () => void {
@@ -426,6 +464,9 @@ export class VoiceConversation {
           }
         }
         this.latency.activity(activity.active);
+        if (this.showRecognition && this.awaitingWake && this.fastCommands) {
+          this.passiveRecognition?.push(event.chunk, activity);
+        }
         if (this.fastCommands && !context.audio.activity.calibrating) {
           this.speechResourcesUsed = true;
           this.fastCommands.push(
@@ -435,7 +476,9 @@ export class VoiceConversation {
               Math.max(0.008, context.audio.activity.noiseFloor * 3),
             ),
             this.awaitingWake
-              ? 'passive'
+              ? this.wakeSensitivity === 'high'
+                ? 'passive_sensitive'
+                : 'passive'
               : this.composition.status === 'composing'
                 ? 'composing'
                 : 'listening',
@@ -513,6 +556,9 @@ export class VoiceConversation {
     try {
       if (!context || !this.canCollect(context) || this.awaitingQuiet) return;
       if (detection.command === 'ivy') {
+        this.passiveRecognition?.reset();
+        if (this.showRecognition)
+          this.ports.onRecognition?.({ text: 'Ivy', status: 'Wake detected' });
         if (!this.awaitingWake) return;
         this.invocation.activateAcoustically();
         this.setComposition({ ...this.composition, model: 'terra' });
@@ -1467,6 +1513,7 @@ export class VoiceConversation {
   ): Promise<boolean> {
     this.settledTurn = null;
     this.voiceTurn = id;
+    this.cueText = text;
     this.phase = 'waiting';
     this.publish();
     if (!this.current(generation)) return false;
@@ -1528,6 +1575,11 @@ export class VoiceConversation {
         if (!this.current(generation)) return;
       }
       this.latency.point('stt_request');
+      const pendingPassive = this.passiveRecognition?.wait();
+      if (pendingPassive) {
+        await pendingPassive;
+        if (!this.current(generation)) return;
+      }
       const transcript = await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
       this.latency.point('stt_completed');
@@ -1561,7 +1613,7 @@ export class VoiceConversation {
     if (snapshot.first_text_observed) this.latency.point('first_model_delta');
     if (snapshot.turn === 'admitted') this.latency.point('hermes_admitted');
     if (snapshot.turn === 'admitted' && this.composition.model === 'terra')
-      this.acknowledgment.schedule(this.voiceTurn);
+      this.acknowledgment.schedule(this.voiceTurn, this.cueText);
     if (
       ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
     )
@@ -1682,6 +1734,7 @@ export class VoiceConversation {
   }
 
   private invalidate(stopWarmWorkers = true) {
+    this.passiveRecognition?.reset();
     this.acknowledgment.clear();
     this.ports.cancelReflex?.();
     this.pcmSequence = null;
@@ -1758,9 +1811,22 @@ export class VoiceConversation {
   }
 
   private observeInput(text: string) {
+    this.observeRecognition(text);
     if (this.promptOpen || !text.trim()) return;
     this.inputText = text;
     this.publish();
+  }
+
+  private observeRecognition(text: string) {
+    if (!this.showRecognition || !text.trim()) return;
+    this.ports.onRecognition?.({
+      text: text.trim().slice(0, 320),
+      status: this.invocation.active()
+        ? 'Active conversation'
+        : this.invocation.matches(text)
+          ? 'Wake detected'
+          : 'No wake detected',
+    });
   }
 
   private publish() {

@@ -82,9 +82,13 @@ fn decode_reply(
     if reply.sequence != request.sequence {
         return Err(SpeechError::Protocol);
     }
+    let passive = matches!(
+        request.mode,
+        KeywordMode::Passive | KeywordMode::PassiveSensitive
+    );
     if let Some(detection) = &reply.detection
-        && ((request.mode == KeywordMode::Passive && detection.command != KeywordCommand::Ivy)
-            || (request.mode != KeywordMode::Passive && detection.command == KeywordCommand::Ivy)
+        && ((passive && detection.command != KeywordCommand::Ivy)
+            || (!passive && detection.command == KeywordCommand::Ivy)
             || (request.mode != KeywordMode::Composing
                 && detection.command == KeywordCommand::PromptCancel)
             || (request.mode == KeywordMode::Composing
