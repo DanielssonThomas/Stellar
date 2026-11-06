@@ -1,0 +1,37 @@
+{
+  "issue": 307,
+  "qualified_on": "2026-11-07",
+  "source_revision": "0cb3edb426436299e37f84f0aef7d6fe5cf26190",
+  "platform": "windows",
+  "metadata_awareness_uses_graphics_capture": false,
+  "actual_desktop_remained_running_during_cleanup": true,
+  "owned_testing_helpers_stopped": 2,
+  "cleanup_capture_server_stopped_observed": true,
+  "idle_trace": {
+    "elapsed_seconds": 21,
+    "capture_api_events": 0,
+    "events_lost": 0
+  },
+  "on_demand_native_probe": {
+    "test": "ivy::workspace_capture::screens::tests::qualify_visible_pc_capture",
+    "passed": true,
+    "capture_count": 4,
+    "capture_api_start_count": 4,
+    "capture_api_close_count": 4,
+    "capture_server_start_count": 4,
+    "capture_server_stop_count": 8,
+    "first_stop_after_start_ms": [14.581, 13.872, 19.065, 9.76],
+    "invalid_display_rejected": true,
+    "foreground_focus_preserved": true,
+    "screenshots_retained_only_in_ignored_local_artifacts": true
+  },
+  "privacy_indicator_suppressed": false,
+  "windows_privacy_settings_changed": false,
+  "stellar_capture_implementation_changed": false,
+  "limitations": [
+    "The idle trace is a bounded observation, not proof that another application cannot start capture later.",
+    "Capture-server event intervals are not physical border visibility measurements.",
+    "Repeated stop events are retained as observed; four API close events independently match four capture sessions.",
+    "This probe exercises real capture success and invalid-target rejection; timeout, OS access denial and process death were not forced."
+  ]
+}
