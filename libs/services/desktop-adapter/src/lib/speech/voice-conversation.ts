@@ -294,6 +294,10 @@ export class VoiceConversation {
 
   setRecognitionOptions(sensitivity: WakeSensitivity, visible: boolean) {
     if (this.wakeSensitivity !== sensitivity) {
+      if (this.pendingFallback) {
+        this.retireFallback();
+        this.publish();
+      }
       this.wakeSensitivity = sensitivity;
       this.invocation.setSensitivity(sensitivity);
       this.fastCommands?.reset();

@@ -433,6 +433,43 @@ describe('coordinator local transcript wake admission after KWS misses', () => {
     f.controller.dispose();
   });
 
+  it.each(['capture', 'Reflex'] as const)(
+    'a sensitivity change fences High admission during the pending %s handoff',
+    async (stage) => {
+      for (const changed of [false, true]) {
+        const pause = deferred<void>();
+        const local = deferred<ReflexOutcome>();
+        const reflex = vi.fn(() => local.promise);
+        const f = fixture('Heidi, read my current pane', {
+          waitForCapturePause: () =>
+            stage === 'capture' ? pause.promise : Promise.resolve(),
+          ...(stage === 'Reflex' ? { reflex } : {}),
+        });
+        f.controller.setRecognitionOptions('high', false);
+        f.utterance();
+        await settle();
+        expect(f.submit).not.toHaveBeenCalled();
+        expect(f.view().busy).toBe(true);
+        if (stage === 'Reflex') expect(reflex).toHaveBeenCalledOnce();
+        f.controller.setRecognitionOptions(changed ? 'standard' : 'high', true);
+        pause.resolve();
+        local.resolve({ handled: false, reply: '', outcome: 'hermes' });
+        await settle();
+        expect(f.submit).toHaveBeenCalledTimes(changed ? 0 : 1);
+        if (changed) {
+          expect(f.view().foregroundActive).toBe(false);
+          expect(f.view().busy).toBe(false);
+        } else {
+          expect(f.submit).toHaveBeenCalledExactlyOnceWith(
+            'read my current pane',
+            expect.any(String),
+          );
+        }
+        f.controller.dispose();
+      }
+    },
+  );
+
   it('permits its own native Terra routing after the fallback handoff', async () => {
     const select = vi.fn(async () => {
       routed.update({
