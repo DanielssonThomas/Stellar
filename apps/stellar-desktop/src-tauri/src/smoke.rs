@@ -105,6 +105,13 @@ fn check_page(window: Webview) {
                 let telemetryOk = false;
                 try { const snapshot = await invoke('telemetry_snapshot'); telemetryOk = snapshot.schemaVersion === 1; }
                 catch (error) { telemetryOk = !__TELEMETRY_EXPECT_LIVE__ && ['unavailable', 'timeout', 'invalid'].includes(error); }
+                stage='microphone-review-validation';
+                let microphoneRejected=0;
+                for (const [request, expected] of [[{version:2},'unsupported_version'],[{version:1,allow:true},'malformed'],[{version:1,origin:'https://remote.example'},'malformed'],[{version:1,kind:'camera'},'malformed'],[{version:1},'unsupported']]) {
+                    try { await invoke('microphone_permission_review',{request}); }
+                    catch(error) { if(error===expected) microphoneRejected++; }
+                }
+                if(microphoneRejected!==5)throw Error('Microphone review validation failed');
                 const reply = await invoke('shell_status', { request: { version: 1 } });
                 const music = await invoke('music_set_enabled', { request: { version: 1, enabled: false } });
                 let musicRejected = false;
@@ -318,6 +325,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::reflex::reflex_set_enabled,
             crate::reflex::reflex_cancel,
             crate::commands::shell_status,
+            crate::microphone_permission::microphone_permission_review,
             crate::awareness::awareness_snapshot,
             crate::awareness::awareness_set_enabled,
             crate::awareness::awareness_workspace,

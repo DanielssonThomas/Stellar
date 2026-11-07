@@ -449,10 +449,17 @@ test('charts resize in compact panes and retain their mounted content through mi
   await canvas.evaluate((element) =>
     element.setAttribute('data-retained', 'yes'),
   );
-  const bounds = await canvas.boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(bounds?.x).toBeGreaterThanOrEqual(0);
-  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(391);
+  // Chart drawing can finish before the pane's resize or restore layout settles.
+  const expectCompactCanvas = async () => {
+    await expect(async () => {
+      const bounds = await canvas.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds?.x).toBeGreaterThanOrEqual(0);
+      expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(391);
+      expect(bounds?.width).toBeGreaterThan(100);
+    }).toPass({ timeout: 5000 });
+  };
+  await expectCompactCanvas();
   expect(
     (await request(page, { kind: 'minimize', instance_id: 'chart' })).kind,
   ).toBe('applied');
@@ -461,7 +468,7 @@ test('charts resize in compact panes and retain their mounted content through mi
   ).toBe('applied');
   await expect(canvas).toHaveAttribute('data-retained', 'yes');
   await expect(canvas).toBeVisible();
-  expect((await canvas.boundingBox())?.width).toBeGreaterThan(100);
+  await expectCompactCanvas();
 });
 
 test('the documented 64 by 8 chart limit reaches both standalone and multiple inline Stage renderers', async ({

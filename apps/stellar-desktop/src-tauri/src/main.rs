@@ -8,6 +8,7 @@ mod commands;
 mod contracts;
 mod ivy;
 mod media;
+mod microphone_permission;
 mod music;
 mod owned_child;
 #[cfg(feature = "recognition-smoke")]
@@ -47,6 +48,7 @@ fn main() {
                 },
             )));
             app.manage(cleanup::CleanupHost::default());
+            app.manage(microphone_permission::ReviewHost::default());
             app.manage(reflex::ReflexHost::default());
             app.manage(std::sync::Arc::new(reflex::MediaHost::default()));
             app.manage(media::MediaHost::default());
@@ -106,6 +108,12 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "main"
+                && matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<microphone_permission::ReviewHost>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<awareness::AwarenessHost>()
             {
@@ -156,6 +164,7 @@ fn main() {
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::shell_status,
+        microphone_permission::microphone_permission_review,
         awareness::awareness_snapshot,
         awareness::awareness_set_enabled,
         awareness::awareness_workspace,
@@ -198,6 +207,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<microphone_permission::ReviewHost>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<awareness::AwarenessHost>()
             {

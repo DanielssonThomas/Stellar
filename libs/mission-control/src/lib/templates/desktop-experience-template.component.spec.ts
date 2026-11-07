@@ -47,6 +47,34 @@ describe('DesktopExperienceTemplate', () => {
     expect(change).toHaveBeenCalledWith(false);
   });
 
+  it('delegates manual microphone review and exposes its pending state', async () => {
+    const review = vi.fn();
+    fixture.componentInstance.reviewMicrophonePermission.subscribe(review);
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find(
+      (button) => button.textContent?.trim() === 'Review microphone access',
+    );
+    expect(button).toBeDefined();
+    button?.click();
+    expect(review).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('microphoneReviewPending', true);
+    fixture.componentRef.setInput(
+      'microphoneReviewMessage',
+      'Choose in the native permission window.',
+    );
+    await fixture.whenStable();
+    expect(button?.disabled).toBe(true);
+    expect(button?.getAttribute('aria-busy')).toBe('true');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Choose in the native permission window.',
+    );
+    button?.click();
+    expect(review).toHaveBeenCalledOnce();
+  });
+
   it('delegates recognition preferences and blocks sensitivity changes while voice is busy', async () => {
     const sensitivity = vi.fn();
     const recognition = vi.fn();

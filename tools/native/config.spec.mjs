@@ -121,6 +121,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-reflex-media-execute',
     'allow-music-set-enabled',
     'allow-shell-status',
+    'allow-microphone-permission-review',
     'allow-awareness-snapshot',
     'allow-awareness-set-enabled',
     'allow-awareness-workspace',

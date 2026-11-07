@@ -345,6 +345,29 @@
                   }}
                 </button>
               </div>
+              <div class="settings-button-row">
+                <button
+                  type="button"
+                  [disabled]="
+                    microphoneReviewPending() ||
+                    voiceBusy() ||
+                    ['requesting', 'capturing'].includes(
+                      state().microphone.status
+                    )
+                  "
+                  [attr.aria-busy]="microphoneReviewPending()"
+                  (click)="reviewMicrophonePermission.emit()"
+                >
+                  {{
+                    microphoneReviewPending()
+                      ? 'Reviewing access…'
+                      : 'Review microphone access'
+                  }}
+                </button>
+              </div>
+              <p class="settings-note" role="status">
+                {{ microphoneReviewMessage() }}
+              </p>
               @if (inputsVisible()) {
                 <div class="input-choice">
                   <label
