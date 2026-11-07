@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PresentationChartAtom } from './presentation-chart-atom.component';
+import type { ChartConfiguration } from 'chart.js';
 const mocks = vi.hoisted(() => ({
   created: [] as unknown[],
   destroy: vi.fn(),
@@ -63,6 +64,49 @@ describe('PresentationChartAtom', () => {
     expect(mocks.destroy).toHaveBeenCalledTimes(1);
     fixture.destroy();
     expect(mocks.destroy).toHaveBeenCalledTimes(2);
+  });
+  it('resolves every series and category from overridden semantic theme tokens', async () => {
+    const palette = Array.from({ length: 8 }, (_, index) => `#10000${index}`);
+    const style = (fixture.nativeElement as HTMLElement).style;
+    style.setProperty('--stellar-color-foreground', '#112233');
+    style.setProperty('--stellar-color-line', '#445566');
+    palette.forEach((color, index) =>
+      style.setProperty(`--stellar-color-chart-series-${index + 1}`, color),
+    );
+    fixture.componentRef.setInput('chart', {
+      type: 'line',
+      labels: ['Day'],
+      datasets: palette.map((_, index) => ({
+        label: `Series ${index}`,
+        values: [index],
+      })),
+    });
+    await fixture.whenStable();
+    const line = mocks.created.at(-1) as ChartConfiguration;
+    expect(line.data.datasets.map((series) => series.borderColor)).toEqual(
+      palette,
+    );
+    expect(line.data.datasets.map((series) => series.backgroundColor)).toEqual(
+      palette,
+    );
+    expect(line.options?.color).toBe('#112233');
+
+    const categories = palette.map((_, index) => `#20000${index}`);
+    categories.forEach((color, index) =>
+      style.setProperty(`--stellar-color-chart-series-${index + 1}`, color),
+    );
+    fixture.componentRef.setInput('chart', {
+      type: 'doughnut',
+      labels: Array.from({ length: 9 }, (_, index) => `Category ${index}`),
+      datasets: [{ label: 'Share', values: Array(9).fill(1) }],
+    });
+    await fixture.whenStable();
+    const circular = mocks.created.at(-1) as ChartConfiguration;
+    expect(circular.data.datasets[0].backgroundColor).toEqual([
+      ...categories,
+      categories[0],
+    ]);
+    expect(circular.data.datasets[0].borderColor).toBe('#445566');
   });
   it('rejects arbitrary chart options before calling the drawing library', async () => {
     fixture.componentRef.setInput('chart', {

@@ -193,7 +193,7 @@ def make_server(gate, bearer, port):
         workflow: {"title":"Workflow","project":"stellar"}; optional project stellar or stellar-design and agentId equal to an observed agent ID to focus that source.
         session: {"title":"Session"}; assistant-message: {"title":"Answer","body":"Complete plain text"}.
         image, browser, workflow and session optionally accept kind equal to the surface. Workflow/session are source-backed; do not invent metrics.
-        UTF-8 payload_json limits: 65536 bytes rich-text/image/assistant-message, 16384 diagram, 4096 browser, 2048 workflow/session. Stage also limits depth to 8 and total nodes to 256. Text must be nonblank and exclude control characters except tab, CR and LF, DEL, and unpaired surrogates.
+        UTF-8 payload_json limits: 65536 bytes rich-text/image/assistant-message, 16384 diagram/chart, 4096 browser, 2048 workflow/session. Stage limits depth to 8 and ordinary JSON nodes to 256; validated chart data receives an additional bounded allowance so the documented chart limits fit, including multiple inline charts. Non-chart content still shares the ordinary node budget. Text must be nonblank and exclude control characters except tab, CR and LF, DEL, and unpaired surrogates.
         activity-summary may appear in inspection but cannot be opened or updated through tools.
         """
         return await changed({'kind': 'open', 'instance_id': instance_id, 'surface': surface,

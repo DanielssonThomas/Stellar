@@ -183,6 +183,7 @@ pub(super) fn workspace_valid(request: &AwarenessWorkspace) -> bool {
                         | "image"
                         | "browser"
                         | "diagram"
+                        | "chart"
                         | "workflow"
                         | "session"
                         | "assistant-message"

@@ -28,7 +28,7 @@ import {
   type WorkspaceChart,
 } from '@stellar/desktop-contracts';
 import { SkeletonAtom } from './skeleton-atom.component';
-import { chartConfiguration } from './presentation-chart-config';
+import { chartColors, chartConfiguration } from './presentation-chart-config';
 
 Chart.register(
   LineController,
@@ -82,17 +82,7 @@ export class PresentationChartAtom {
         const style = getComputedStyle(this.host.nativeElement);
         const chart = new Chart(
           canvas,
-          chartConfiguration(validated, {
-            foreground:
-              style.getPropertyValue('--stellar-color-foreground').trim() ||
-              '#eee9dc',
-            primary:
-              style.getPropertyValue('--stellar-color-primary').trim() ||
-              '#d6b96d',
-            line:
-              style.getPropertyValue('--stellar-color-line').trim() ||
-              '#534b36',
-          }),
+          chartConfiguration(validated, chartColors(style)),
         );
         if (!chart.ctx) {
           chart.destroy();

@@ -4,21 +4,33 @@ import type {
   WorkspaceChartType,
 } from '@stellar/desktop-contracts';
 
+interface ChartColors {
+  foreground: string;
+  line: string;
+  series: readonly string[];
+}
+
+export function chartColors(style: CSSStyleDeclaration): ChartColors {
+  const token = (name: string) =>
+    style.getPropertyValue(`--stellar-color-${name}`).trim();
+  const foreground = token('foreground') || style.color;
+  const primary = token('primary') || foreground;
+  return {
+    foreground,
+    line: token('line') || foreground,
+    series: Array.from(
+      { length: 8 },
+      (_, index) => token(`chart-series-${index + 1}`) || primary,
+    ),
+  };
+}
+
 export function chartConfiguration(
   chart: WorkspaceChart,
-  colors: { foreground: string; primary: string; line: string },
+  colors: ChartColors,
 ): ChartConfiguration<WorkspaceChartType, number[], string> {
   const circular = chart.type === 'pie' || chart.type === 'doughnut';
-  const palette = [
-    colors.primary,
-    '#71b9ad',
-    '#b99de3',
-    '#e39a74',
-    '#8cb1dc',
-    '#d794af',
-    '#9ebf7c',
-    '#cdc2a9',
-  ];
+  const palette = colors.series;
   return {
     type: chart.type,
     data: {

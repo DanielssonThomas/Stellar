@@ -580,6 +580,8 @@ The standard native smoke rejects local/private/protocol browser requests throug
 
 ### Chart presentations
 
+Chart series and circular categories resolve `--stellar-color-chart-series-1` through `--stellar-color-chart-series-8` from the current theme; palettes cycle for additional categories. The desktop theme binds the first series to its gold primary color. Dedicated chart panes remain part of Ivy's bounded workspace awareness alongside text and other panes.
+
 Ivy can open a dedicated `chart` surface or embed `{"kind":"chart","chart":...}` among rich-text blocks. The same Rust-owned data contract is validated in the bridge, native boundary and renderer. A standalone payload is:
 
 ```json

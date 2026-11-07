@@ -47,6 +47,69 @@ fn malformed_workspace_does_not_replace_cache() {
 }
 
 #[test]
+fn mixed_chart_workspace_replaces_cache_and_reaches_deferred_request_context() {
+    let directory = std::env::temp_dir().join(format!(
+        "stellar-awareness-chart-{}-{}",
+        std::process::id(),
+        state::now()
+    ));
+    let host = AwarenessHost::new(&directory, Arc::new(|_| {}));
+    let pending = host.provider()("3").unwrap();
+    let workspace = AwarenessWorkspace {
+        version: 1,
+        epoch: "3".into(),
+        panes: vec![
+            AwarenessPane {
+                title: "Weekly visits".into(),
+                surface: "chart".into(),
+                selected: true,
+                minimized: false,
+            },
+            AwarenessPane {
+                title: "Report".into(),
+                surface: "rich-text".into(),
+                selected: false,
+                minimized: true,
+            },
+        ],
+    };
+    host.workspace(workspace.clone()).unwrap();
+    assert_eq!(host.snapshot().unwrap().workspace, Some(workspace.clone()));
+    let context: serde_json::Value = serde_json::from_str(&pending().unwrap()).unwrap();
+    assert_eq!(
+        context["workspace"],
+        serde_json::to_value(&workspace).unwrap()
+    );
+    for invalid in [
+        AwarenessWorkspace {
+            panes: vec![AwarenessPane {
+                surface: "unknown-chart".into(),
+                ..workspace.panes[0].clone()
+            }],
+            ..workspace.clone()
+        },
+        AwarenessWorkspace {
+            panes: vec![workspace.panes[0].clone(); 9],
+            ..workspace.clone()
+        },
+        AwarenessWorkspace {
+            panes: vec![AwarenessPane {
+                title: "x".repeat(81),
+                ..workspace.panes[0].clone()
+            }],
+            ..workspace.clone()
+        },
+    ] {
+        assert_eq!(
+            host.workspace(invalid),
+            Err(AwarenessError::MalformedRequest)
+        );
+        assert_eq!(host.snapshot().unwrap().workspace, Some(workspace.clone()));
+    }
+    host.shutdown();
+}
+
+#[test]
 fn deferred_context_lease_rereads_freshness_and_cannot_survive_pause_resume() {
     let shared = Arc::new((Mutex::new(State::new(true)), Condvar::new()));
     let seed = |name: &str, stamp: u64| {
