@@ -38,6 +38,7 @@ fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
     let limit = match surface {
         WorkspaceSurface::ActivitySummary => return false,
         WorkspaceSurface::Diagram => 16384,
+        WorkspaceSurface::Chart => 16384,
         WorkspaceSurface::Browser => 4096,
         WorkspaceSurface::Workflow | WorkspaceSurface::Session => 2048,
         WorkspaceSurface::RichText
@@ -50,6 +51,11 @@ fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
     let mut deserializer = serde_json::Deserializer::from_str(value);
     StrictJson::deserialize(&mut deserializer).is_ok_and(|value| value.object)
         && deserializer.end().is_ok()
+        && match surface {
+            WorkspaceSurface::Chart => super::chart_validate::payload(value),
+            WorkspaceSurface::RichText => super::chart_validate::inline(value),
+            _ => true,
+        }
 }
 
 pub fn request(value: &WorkspaceToolRequest) -> bool {

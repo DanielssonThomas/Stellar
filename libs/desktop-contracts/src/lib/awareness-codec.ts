@@ -72,6 +72,7 @@ function workspace(value: unknown): AwarenessWorkspace | null {
           'image',
           'browser',
           'diagram',
+          'chart',
           'workflow',
           'session',
           'assistant-message',

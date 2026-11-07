@@ -1,5 +1,15 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
 export type {
+  WorkspaceChartType,
+  WorkspaceChartDataset,
+  WorkspaceChart,
+  WorkspaceChartPayload,
+} from './generated';
+export {
+  decodeWorkspaceChart,
+  decodeWorkspaceChartPayload,
+} from './lib/chart-codec';
+export type {
   IvyInspectorRequest,
   IvyInspectorSnapshot,
   IvySessionSummary,

@@ -577,3 +577,28 @@ Use `STELLAR_DESKTOP_E2E_PORT` to run Playwright against an isolated local port 
 The standard native smoke rejects local/private/protocol browser requests through real IPC. Set `STELLAR_WORKSPACE_SMOKE_LIVE=1` when explicitly qualifying public-network browsing: the isolated smoke journal opens example.com in a child, verifies its title and that website IPC is denied, resizes it repeatedly, checks retained state, native selection, fragment/history/reload navigation, remote raster decoding and owned-window capture, then closes it. A fixed page-side HTTPS loopback probe must never reach an owned test listener. Ordinary CI smoke remains independent of public network availability.
 
 [Interactive workspace qualification](../../tools/native/evidence/interactive-workspace-qualification.json) records the source revision, independent review, native operation timings and scoped WebView2 process observations. Memory measurements must include the `public-browser-v1` profile and its descendants; the native executable's working set alone excludes browser overhead. Summed working sets include shared pages. These brief probes do not qualify arbitrary websites, long-duration resource stability or physical voice-driven conversation; those require separate representative native acceptance. No merge is authorized by a passing smoke.
+
+### Chart presentations
+
+Chart series and circular categories resolve `--stellar-color-chart-series-1` through `--stellar-color-chart-series-8` from the current theme; palettes cycle for additional categories. The desktop theme binds the first series to its gold primary color. Dedicated chart panes remain part of Ivy's bounded workspace awareness alongside text and other panes.
+
+Ivy can open a dedicated `chart` surface or embed `{"kind":"chart","chart":...}` among rich-text blocks. The same Rust-owned data contract is validated in the bridge, native boundary and renderer. A standalone payload is:
+
+```json
+{
+  "title": "Weekly visits",
+  "chart": {
+    "type": "line",
+    "labels": ["Mon", "Tue", "Wed"],
+    "datasets": [{ "label": "Visits", "values": [12, 18, 9] }],
+    "x_label": "Day",
+    "y_label": "Visits"
+  }
+}
+```
+
+For inline content, use surface `rich-text` and payload `{"title":"Report","blocks":[{"kind":"paragraph","text":"Illustrative visits."},{"kind":"chart","chart":{"type":"bar","labels":["Mon","Tue"],"datasets":[{"label":"Visits","values":[12,18]}]}}]}`. These are application data schemas: datasets use `values`, not raw Chart.js `data` or configuration. Existing open/update/batch and revision controls apply.
+
+Supported types are line, bar, pie and doughnut. Labels contain 1–64 entries; line/bar accept 1–8 datasets, each with exactly one finite value per label and absolute magnitude at most 10^12. Pie/doughnut accept one nonnegative dataset with at least one positive value. Category, dataset and optional axis labels are at most 120 UTF-8 bytes; titles are at most 240 bytes. A dedicated chart payload is at most 16 KiB; inline charts share the existing 64 KiB rich-text budget. Unknown fields, callbacks, arbitrary options/plugins and malformed data are rejected. Model-supplied strings are literal labels, never HTML or executable code.
+
+The trusted renderer uses pinned Chart.js 4.6.1 (MIT) and its color dependency, with semantic theme colors, a dedicated responsive canvas container and a keyboard-accessible data table. Chart instances are destroyed on replacement/removal. Motion is disabled for charts, including updates, and pane inspection waits for every inline chart's render state. The implementation follows the official [responsive container guidance](https://www.chartjs.org/docs/latest/configuration/responsive.html) and [lifecycle API](https://www.chartjs.org/docs/latest/developers/api.html). Browser qualification verifies all four types, real painted canvas pixels, inline text, malformed-option rejection, compact sizing and retained content through minimize/restore. Actual Ivy/tool selection and Windows rendering are qualified separately on the final integrated application.

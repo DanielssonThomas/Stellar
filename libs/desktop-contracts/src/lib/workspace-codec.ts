@@ -13,6 +13,7 @@ import {
   workspaceBatchMaxOperations,
   workspaceBatchMaxPayloadBytes,
 } from '../generated';
+import { validateWorkspaceChartContent } from './chart-codec';
 import {
   boundedString,
   DesktopContractError,
@@ -26,6 +27,7 @@ const surfaces: Record<WorkspaceSurface, true> = {
   image: true,
   browser: true,
   diagram: true,
+  chart: true,
   workflow: true,
   session: true,
   'assistant-message': true,
@@ -47,6 +49,7 @@ const payloadLimits: Record<WorkspaceSurface, number> = {
   image: 65536,
   'assistant-message': 65536,
   diagram: 16384,
+  chart: 16384,
   browser: 4096,
   workflow: 2048,
   session: 2048,
@@ -200,6 +203,7 @@ function operation(value: unknown): WorkspaceToolOperation {
   const payload = boundedString(data['payload_json'], payloadLimits[surface]);
   try {
     const parsed: unknown = JSON.parse(payload);
+    validateWorkspaceChartContent(surface, parsed);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
       throw new Error();
     const remaining: unknown[] = [parsed];
@@ -314,12 +318,20 @@ export function decodeWorkspaceToolOutcome(
     const surface = choice(data['surface'], surfaces);
     if (surface === 'activity-summary')
       throw new DesktopContractError('malformed');
+    const payload = boundedString(data['payload_json'], payloadLimits[surface]);
+    if (surface === 'chart' || surface === 'rich-text') {
+      try {
+        validateWorkspaceChartContent(surface, JSON.parse(payload));
+      } catch {
+        throw new DesktopContractError('malformed');
+      }
+    }
     return {
       kind,
       instance_id: id(data['instance_id']),
       surface,
       revision: integer(data['revision'], 4294967295),
-      payload_json: boundedString(data['payload_json'], payloadLimits[surface]),
+      payload_json: payload,
     };
   }
   if (kind !== 'inspection' || request.operation.kind !== 'inspect')

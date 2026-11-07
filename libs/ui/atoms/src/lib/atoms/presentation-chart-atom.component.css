@@ -1,0 +1,65 @@
+:host {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+figure {
+  margin: 0;
+  min-width: 0;
+  color: var(--stellar-color-foreground);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.chart-canvas {
+  position: relative;
+  width: 100%;
+  height: var(--stellar-chart-height, clamp(15rem, 35vh, 32rem));
+  flex: 1 1 auto;
+  min-height: 12rem;
+  min-width: 0;
+}
+canvas {
+  display: block;
+}
+.chart-data {
+  margin-top: 1rem;
+  color: var(--stellar-color-muted);
+}
+summary {
+  cursor: pointer;
+  padding: 0.5rem 0;
+  color: var(--stellar-color-primary);
+}
+summary:focus-visible {
+  outline: 2px solid var(--stellar-color-primary);
+  outline-offset: 3px;
+}
+.chart-table {
+  overflow-x: auto;
+  max-height: 20rem;
+}
+table {
+  border-collapse: collapse;
+  text-align: left;
+  width: 100%;
+}
+caption {
+  text-align: left;
+  padding: 0.5rem 0;
+  color: var(--stellar-color-foreground);
+}
+th,
+td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--stellar-color-line);
+  white-space: nowrap;
+}
+.chart-error {
+  color: var(--stellar-color-muted);
+}
+@media (max-width: 600px) {
+  .chart-canvas {
+    height: var(--stellar-chart-height, 17rem);
+  }
+}

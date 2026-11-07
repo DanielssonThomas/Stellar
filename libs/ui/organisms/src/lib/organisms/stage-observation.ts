@@ -21,11 +21,13 @@ export function stageRenderState(
     return 'unavailable';
   if (panel.inert || panel.getAttribute('aria-hidden') === 'true')
     return 'hidden';
-  const state = panel.querySelector<HTMLElement>('[data-render-state]')
-    ?.dataset['renderState'];
-  if (state === 'error' || state === 'unavailable') return state;
+  const states = Array.from(
+    panel.querySelectorAll<HTMLElement>('[data-render-state]'),
+  ).map((element) => element.dataset['renderState']);
+  if (states.includes('error')) return 'error';
+  if (states.includes('unavailable')) return 'unavailable';
   if (
-    state === 'loading' ||
+    states.includes('loading') ||
     panel
       .getAnimations?.({ subtree: true })
       .some(

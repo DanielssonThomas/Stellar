@@ -1,3 +1,4 @@
+pub mod chart_contracts;
 pub mod contracts;
 pub mod inspector_contracts;
 pub mod presentation;

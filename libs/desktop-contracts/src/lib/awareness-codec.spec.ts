@@ -64,4 +64,39 @@ describe('awareness wire validation', () => {
       }),
     ).toThrow();
   });
+  it('preserves a mixed chart and text workspace through snapshot decoding', () => {
+    const workspace = {
+      version: 1,
+      epoch: '4',
+      panes: [
+        {
+          title: 'Weekly visits',
+          surface: 'chart',
+          selected: true,
+          minimized: false,
+        },
+        {
+          title: 'Report',
+          surface: 'rich-text',
+          selected: false,
+          minimized: true,
+        },
+      ],
+    };
+    expect(
+      decodeAwarenessSnapshot({ ...snapshot(), workspace }).workspace,
+    ).toEqual(workspace);
+    for (const panes of [
+      [...workspace.panes, { ...workspace.panes[0], surface: 'unknown-chart' }],
+      Array(9).fill(workspace.panes[0]),
+      [{ ...workspace.panes[0], title: 'x'.repeat(81) }],
+    ]) {
+      expect(() =>
+        decodeAwarenessSnapshot({
+          ...snapshot(),
+          workspace: { ...workspace, panes },
+        }),
+      ).toThrow();
+    }
+  });
 });

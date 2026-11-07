@@ -1,0 +1,16 @@
+@import './presentation-content.css';
+:host {
+  height: 100%;
+  min-height: 20rem;
+}
+.chart-presentation {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.chart-presentation stellar-presentation-chart-atom {
+  flex: 1;
+  min-height: 0;
+  --stellar-chart-height: 100%;
+}

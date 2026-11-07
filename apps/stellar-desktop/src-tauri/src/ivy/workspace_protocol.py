@@ -19,12 +19,12 @@ MUTATIONS = frozenset({'open', 'update', 'remove', 'focus', 'minimize', 'restore
 CAPTURE_FAILURES = frozenset({'capture_unavailable', 'capture_timeout', 'image_transfer_failed', 'stale_request'})
 IMAGE_OPERATIONS = {'capture_window', 'capture_display', 'capture_foreground'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
-SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'workflow',
+SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'chart', 'workflow',
                       'session', 'assistant-message'})
 METADATA_SURFACES = SURFACES | {'activity-summary'}
 PROMINENCE = frozenset({'primary', 'secondary'})
 PAYLOAD_LIMITS = {'rich-text': 65536, 'image': 65536, 'assistant-message': 65536,
-                  'diagram': 16384, 'browser': 4096, 'workflow': 2048, 'session': 2048}
+                  'diagram': 16384, 'chart': 16384, 'browser': 4096, 'workflow': 2048, 'session': 2048}
 
 
 class WorkspaceRefused(Exception):
@@ -52,7 +52,37 @@ def _identity(value):
     return type(value) is str and ID.fullmatch(value) is not None
 
 
-def _payload(value, limit):
+def _chart_text(value, limit=120):
+    if type(value) is not str or not value.strip():
+        return False
+    try:
+        return (len(value.encode('utf-8')) <= limit
+                and not any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value))
+    except UnicodeError:
+        return False
+
+
+def _chart(value):
+    if (type(value) is not dict or not {'type','labels','datasets'} <= set(value) or
+            set(value) - {'type','labels','datasets','x_label','y_label'} or
+            value['type'] not in ('line','bar','pie','doughnut') or
+            type(value['labels']) is not list or not 1 <= len(value['labels']) <= 64 or
+            not all(_chart_text(label) for label in value['labels'])):
+        raise WorkspaceRefused()
+    circular = value['type'] in ('pie','doughnut')
+    if (type(value['datasets']) is not list or not 1 <= len(value['datasets']) <= (1 if circular else 8)
+            or any(key in value and not _chart_text(value[key]) for key in ('x_label','y_label'))):
+        raise WorkspaceRefused()
+    for dataset in value['datasets']:
+        if (type(dataset) is not dict or set(dataset) != {'label','values'} or not _chart_text(dataset['label'])
+                or type(dataset['values']) is not list or len(dataset['values']) != len(value['labels'])
+                or any(type(number) not in (int,float) or abs(number)>1e12 or not math.isfinite(number)
+                       or (circular and number<0) for number in dataset['values'])
+                or (circular and not any(number>0 for number in dataset['values']))):
+            raise WorkspaceRefused()
+
+
+def _payload(value, limit, surface=None):
     if type(value) is not str:
         raise WorkspaceRefused()
     try:
@@ -70,6 +100,17 @@ def _payload(value, limit):
         raise WorkspaceRefused() from None
     if type(parsed) is not dict:
         raise WorkspaceRefused()
+    if surface == 'chart':
+        title = parsed.get('title')
+        if set(parsed) != {'title','chart'} or not _chart_text(title,240):
+            raise WorkspaceRefused()
+        _chart(parsed['chart'])
+    if surface == 'rich-text' and type(parsed.get('blocks')) is list:
+        for block in parsed['blocks']:
+            if type(block) is dict and block.get('kind') == 'chart':
+                if set(block) != {'kind','chart'}:
+                    raise WorkspaceRefused()
+                _chart(block['chart'])
     return value
 
 
@@ -135,7 +176,7 @@ def validate_operation(operation):
     if 'prominence' in operation and (type(operation['prominence']) is not str or operation['prominence'] not in PROMINENCE):
         raise WorkspaceRefused()
     if 'payload_json' in operation:
-        _payload(operation['payload_json'], PAYLOAD_LIMITS[operation['surface']])
+        _payload(operation['payload_json'], PAYLOAD_LIMITS[operation['surface']], operation['surface'])
     return dict(operation)
 
 
@@ -180,7 +221,7 @@ def validate_outcome(outcome, operation):
                 not _identity(outcome['instance_id']) or outcome['surface'] not in SURFACES or
                 type(outcome['revision']) is not int or not 0 <= outcome['revision'] <= 4294967295):
             raise WorkspaceRefused()
-        _payload(outcome['payload_json'], PAYLOAD_LIMITS[outcome['surface']])
+        _payload(outcome['payload_json'], PAYLOAD_LIMITS[outcome['surface']], outcome['surface'])
         return outcome
     if kind != 'inspection' or operation != 'inspect' or set(outcome) != {'kind', 'panes'}:
         raise WorkspaceRefused()

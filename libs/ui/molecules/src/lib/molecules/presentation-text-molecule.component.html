@@ -6,6 +6,12 @@
     @for (block of content.blocks; track $index) {
       @let blockIndex = $index;
       @switch (block.kind) {
+        @case ('chart') {
+          <stellar-presentation-chart-atom
+            [chart]="block.chart"
+            [title]="content.title"
+          />
+        }
         @case ('heading') {
           <h3>{{ block.text }}</h3>
         }
