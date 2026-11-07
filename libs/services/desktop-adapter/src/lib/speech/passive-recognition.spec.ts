@@ -50,7 +50,10 @@ describe('bounded passive recognition', () => {
     const f = fixture();
     f.utterance();
     await f.observer.wait();
-    expect(f.completed).toHaveBeenCalledExactlyOnceWith('Passive speech');
+    expect(f.completed).toHaveBeenCalledExactlyOnceWith(
+      'Passive speech',
+      'utterance',
+    );
     expect(f.collect.mock.calls[0][0].every((sample) => sample === 0)).toBe(
       true,
     );
@@ -71,6 +74,9 @@ describe('bounded passive recognition', () => {
     f.utterance();
     const pending = f.observer.wait();
     f.observer.reset();
+    expect(f.collect.mock.calls[0][0].every((sample) => sample === 0)).toBe(
+      true,
+    );
     f.utterance();
     expect(f.collect).toHaveBeenCalledOnce();
     complete({
@@ -80,6 +86,32 @@ describe('bounded passive recognition', () => {
     });
     await pending;
     expect(f.completed).not.toHaveBeenCalled();
+    f.utterance();
+    await f.observer.wait();
+    expect(f.completed).toHaveBeenCalledOnce();
+  });
+  it('releases collection ownership before notifying admission', async () => {
+    const f = fixture();
+    let released = false;
+    f.completed.mockImplementation(() => {
+      released =
+        f.observer.pending() === undefined &&
+        f.observer.wait() === undefined &&
+        f.collect.mock.calls[0][0].every((sample) => sample === 0);
+    });
+    f.utterance();
+    await f.observer.wait();
+    expect(released).toBe(true);
+    expect(f.completed).toHaveBeenCalledOnce();
+  });
+  it('requires a full quiet boundary before a capped continuation can invoke', async () => {
+    const f = fixture();
+    f.feed(true, 510);
+    f.feed(false, 1);
+    f.feed(true, 10);
+    f.feed(false, 21);
+    await f.observer.wait();
+    expect(f.collect).not.toHaveBeenCalled();
     f.utterance();
     await f.observer.wait();
     expect(f.completed).toHaveBeenCalledOnce();

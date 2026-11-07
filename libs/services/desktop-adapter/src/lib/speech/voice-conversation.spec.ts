@@ -2081,12 +2081,12 @@ describe('voice conversation ownership', () => {
     },
   );
 
-  it('keeps passive diagnostics local and selects the high-sensitivity wake-only mode', async () => {
+  it('keeps non-wake passive diagnostics local and selects the high-sensitivity wake-only mode', async () => {
     const observations = vi.fn();
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
       version: 1,
       utterance_id,
-      text: 'I mean, send this passive text',
+      text: 'Ambient speech without an invocation',
     }));
     const keywords = vi.fn(
       async (
@@ -2107,7 +2107,7 @@ describe('voice conversation ownership', () => {
     await flush();
     expect(collect).toHaveBeenCalledOnce();
     expect(observations).toHaveBeenCalledWith({
-      text: 'I mean, send this passive text',
+      text: 'Ambient speech without an invocation',
       status: 'No wake detected',
     });
     expect(f.ports.submit).not.toHaveBeenCalled();
@@ -2117,7 +2117,7 @@ describe('voice conversation ownership', () => {
     f.controller.setRecognitionOptions('standard', false);
     f.utterance();
     await flush();
-    expect(collect).toHaveBeenCalledOnce();
+    expect(collect).toHaveBeenCalledTimes(2);
     f.controller.dispose();
   });
 
