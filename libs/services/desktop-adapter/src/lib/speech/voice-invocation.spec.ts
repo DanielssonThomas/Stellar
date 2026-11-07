@@ -11,7 +11,7 @@ describe('exact Ivy invocation', () => {
     gate.reset();
     expect(gate.accept('They said hey Ivy yesterday', false)).toBeNull();
   });
-  it.each(['I mean', 'eerie', "I've"])(
+  it.each(['I mean', 'I think', 'Heidi', 'IV', 'eerie', "I've"])(
     'accepts %s only as a high-sensitivity prefix and preserves following text',
     (alias) => {
       const gate = new VoiceInvocation();

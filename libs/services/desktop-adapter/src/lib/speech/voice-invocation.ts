@@ -54,7 +54,7 @@ export function wakePrefix(
   const standard =
     /^\s*(?:hey[\s,]+)?(?:ivy(?=$|[\s,.:;!?])|i\.\s*v(?=\.*(?:$|[\s,:;!?])))[\s,.:;!?]*/iu;
   const sensitive =
-    /^\s*(?:hey[\s,]+)?(?:i\s+mean|eerie|i['’]ve)(?=$|[\s,.:;!?])[\s,.:;!?]*/iu;
+    /^\s*(?:hey[\s,]+)?(?:iv|i\s+(?:mean|think)|heidi|eerie|i['’]ve)(?=$|[\s,.:;!?])[\s,.:;!?]*/iu;
   return (
     standard.exec(text) ??
     (sensitivity === 'high' ? sensitive.exec(text) : null)

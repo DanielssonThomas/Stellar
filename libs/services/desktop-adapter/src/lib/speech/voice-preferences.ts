@@ -1,7 +1,11 @@
 export type WakeSensitivity = 'standard' | 'high';
 export interface RecognitionObservation {
   text: string;
-  status: 'Wake detected' | 'No wake detected' | 'Active conversation';
+  status:
+    | 'Wake detected'
+    | 'Wake suppressed'
+    | 'No wake detected'
+    | 'Active conversation';
 }
 
 function localStoragePort(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
