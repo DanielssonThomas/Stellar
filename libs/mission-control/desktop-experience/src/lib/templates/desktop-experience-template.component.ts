@@ -177,6 +177,9 @@ export class DesktopExperienceTemplate {
   readonly recognitionVisible = input(false);
   readonly recognitionText = input('');
   readonly recognitionStatus = input('');
+  readonly microphoneReviewPending = input(false);
+  readonly microphoneReviewMessage = input('');
+  readonly reviewMicrophonePermission = output<void>();
   readonly wakeSensitivity = input<'standard' | 'high'>('standard');
   readonly showRecognition = input(false);
   readonly wakeSensitivityChange = output<'standard' | 'high'>();

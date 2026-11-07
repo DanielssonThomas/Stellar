@@ -221,3 +221,12 @@ export type {
 } from './generated';
 export { decodeBrowserEvent, decodeImagePreview } from './lib/media-codec';
 export type { WorkspacePaneOperation, WorkspacePaneLayout } from './generated';
+
+export type {
+  MicrophoneReviewRequest,
+  MicrophoneReviewOutcome,
+  MicrophoneReviewReply,
+  MicrophoneReviewError,
+} from './generated';
+export { microphoneReviewCommand } from './generated';
+export { decodeMicrophoneReviewReply } from './lib/microphone-permission-codec';

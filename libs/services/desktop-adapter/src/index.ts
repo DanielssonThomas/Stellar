@@ -104,3 +104,9 @@ export type {
   WakeSensitivity,
   RecognitionObservation,
 } from './lib/speech/voice-preferences';
+
+export {
+  MicrophonePermissionService,
+  MICROPHONE_PERMISSION_TRANSPORT,
+} from './lib/services/microphone-permission.service';
+export type { MicrophonePermissionTransport } from './lib/services/microphone-permission.service';
