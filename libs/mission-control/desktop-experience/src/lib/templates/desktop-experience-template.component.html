@@ -241,6 +241,12 @@
               >
                 <span>Music visualizer</span><kbd>P</kbd>
               </button>
+              <button
+                type="button"
+                (click)="menu.close(); spatialBriefing.emit()"
+              >
+                <span>Morning AI briefing</span><span>Sample</span>
+              </button>
             </div>
             @if (faultEntries().length) {
               <button type="button" (click)="showFaults.emit(); menu.close()">

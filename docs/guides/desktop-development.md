@@ -210,6 +210,14 @@ The embedded artwork copies the reviewed #176 hybrid production-v1 pack into `ap
 
 `DesktopExperienceTemplate` uses `@stellar/ui-templates/desktop-experience`, a public secondary entry point, so the desktop does not compile unrelated mission-control screens. Browser E2E covers real Web Audio processing fed by a deterministic mock media stream, silence-to-ambient, capture release, permission denial/manual fallback, interruption, keyboard dismissal and resize. Native development evidence covers embedded startup markers, repeated manual loops, reduced motion, summary minimize/restore, and owned-window lifecycle checks. Neither mocked media nor a manual native demonstration qualifies physical microphones or final artwork.
 
+## Ivy spatial presentations
+
+Press **M**, then choose **Morning AI briefing** in **Experience controls** to see the five fictional stories. Select a panel title to bring it forward, or choose **Details** to reveal supporting material. **Overview** returns to the full composition. **Compact** puts the stage in an inset window, and **Stop narration** keeps the current cards available for exploration. Escape returns from a focused view to overview and closes the stage from overview. Desktop and system reduced-motion settings disable transitions.
+
+Ivy can use the scoped `present_spatial` workspace tool during an admitted turn. A score can open a scene, prepare panels immediately, and supply narration segments with visual actions at the start or completion of playback. Later calls can update a panel by ID or append segments as information arrives. Rich text, code blocks, charts, images and diagrams reuse the Stage renderers. The canvas accepts up to eight panels and the narration queue holds up to 24 segments.
+
+The local speech operation ID and epoch associate a visual cue with an observed playback event. Cue timing is at the segment level. A new session, cancelled turn, disconnection or narration interruption cancels pending cues. Manual focus and detail choices take precedence until the user chooses **Follow Ivy**. When local playback is unavailable, **Next segment** advances the captions and visual cues manually. The sample uses fictional data. Live information comes from Ivy’s existing retrieval tools.
+
 ## Verified Ivy activity and voice lifecycle
 
 Activity panels interpolate changes to the emblem anchor and retain their last working anchor during terminal fade-out. The waiting ring keeps the same mounted SVG and paused orbit across replies, fading opacity instead of disappearing and restarting at another angle. Application and system reduced-motion preferences suppress these transitions and orbital motion.

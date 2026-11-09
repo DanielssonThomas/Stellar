@@ -17,6 +17,28 @@ fn open(payload: &str) -> WorkspaceToolRequest {
 }
 
 #[test]
+fn spatial_scores_are_bounded_standalone_objects() {
+    let mut request = open("{}");
+    let valid = WorkspaceToolOperation::Present {
+        score_json: r#"{"prepare":[{"kind":"overview"}]}"#.into(),
+    };
+    request.operation = valid.clone();
+    assert!(workspace_validate::request(&request));
+    for score in [
+        "[]".into(),
+        r#"{"begin":{},"begin":{}}"#.into(),
+        " ".repeat(32769),
+    ] {
+        request.operation = WorkspaceToolOperation::Present { score_json: score };
+        assert!(!workspace_validate::request(&request));
+    }
+    request.operation = WorkspaceToolOperation::Batch {
+        operations: vec![valid],
+    };
+    assert!(!workspace_validate::request(&request));
+}
+
+#[test]
 fn batches_allow_only_bounded_leaf_mutations_and_aggregate_payloads() {
     let mut request = open("{}");
     let leaf = request.operation.clone();

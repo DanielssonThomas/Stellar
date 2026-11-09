@@ -45,17 +45,21 @@ fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
         | WorkspaceSurface::Image
         | WorkspaceSurface::AssistantMessage => MAX_PAYLOAD,
     };
+    object_payload(value, limit)
+        && match surface {
+            WorkspaceSurface::Chart => super::chart_validate::payload(value),
+            WorkspaceSurface::RichText => super::chart_validate::inline(value),
+            _ => true,
+        }
+}
+
+fn object_payload(value: &str, limit: usize) -> bool {
     if value.len() > limit {
         return false;
     }
     let mut deserializer = serde_json::Deserializer::from_str(value);
     StrictJson::deserialize(&mut deserializer).is_ok_and(|value| value.object)
         && deserializer.end().is_ok()
-        && match surface {
-            WorkspaceSurface::Chart => super::chart_validate::payload(value),
-            WorkspaceSurface::RichText => super::chart_validate::inline(value),
-            _ => true,
-        }
 }
 
 pub fn request(value: &WorkspaceToolRequest) -> bool {
@@ -138,6 +142,7 @@ fn operation(value: &WorkspaceToolOperation) -> bool {
                 && instance_ids.iter().all(|id| identifier(id))
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
+        WorkspaceToolOperation::Present { score_json } => object_payload(score_json, 32768),
         WorkspaceToolOperation::Clear
         | WorkspaceToolOperation::ListDisplays
         | WorkspaceToolOperation::CaptureForeground

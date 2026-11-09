@@ -1,0 +1,179 @@
+.spatial-card {
+  position: absolute;
+  transform-origin: top left;
+  opacity: 1;
+  transition: opacity 0.36s ease;
+}
+.spatial-card:nth-child(3n + 2) {
+  --light: var(--stellar-color-chart-series-5);
+}
+.spatial-card:nth-child(3n) {
+  --light: var(--stellar-color-chart-series-3);
+}
+.spatial-card.periphery {
+  opacity: 0.78;
+}
+.spatial-card.periphery:hover,
+.spatial-card.periphery:focus-within {
+  opacity: 1;
+}
+.spatial-card.foreground {
+  z-index: 2;
+}
+.card-face {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: clamp(0.8rem, 1.25vw, 1.2rem);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--stellar-color-panel-raised) 90%, var(--light)),
+    var(--stellar-color-panel) 72%
+  );
+  box-shadow:
+    0 14px 36px rgb(0 0 0 / 0.27),
+    inset 0 1px rgb(255 255 255 / 0.045);
+  transition:
+    transform 0.52s var(--ease),
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+  overflow: hidden;
+}
+.middle:nth-child(even) .card-face {
+  transform: perspective(1100px) rotateY(-2deg) rotateX(0.8deg);
+}
+.middle:nth-child(odd) .card-face,
+.periphery .card-face {
+  transform: perspective(1100px) rotateY(2deg);
+}
+.periphery .card-face {
+  padding: 0.85rem 1rem;
+}
+.foreground .card-face {
+  border-color: color-mix(in srgb, var(--light) 42%, var(--line));
+  box-shadow:
+    0 22px 54px rgb(0 0 0 / 0.36),
+    0 0 32px color-mix(in srgb, var(--light) 8%, transparent);
+}
+.foreground .card-face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.62;
+  background: repeating-radial-gradient(
+    circle at 97% 6%,
+    transparent 0 20px,
+    color-mix(in srgb, var(--light) 18%, transparent) 21px,
+    transparent 22px 39px
+  );
+  mask-image: linear-gradient(135deg, transparent 40%, black 95%);
+  pointer-events: none;
+}
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--light);
+}
+.card-sequence {
+  border: 1px solid var(--line);
+  padding: 0.22rem 0.36rem;
+  border-radius: 0.26rem;
+}
+.card-category {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+}
+.card-dismiss {
+  flex: 0 0 1.6rem;
+  height: 1.6rem;
+  margin-left: auto;
+  border-radius: 0.3rem;
+  color: var(--soft);
+}
+.card-dismiss:hover {
+  background: var(--stellar-color-panel-raised);
+}
+.card-scroll {
+  overflow: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  padding: 0.36rem 0.25rem 0.15rem;
+  margin-inline: -0.25rem;
+  overflow-wrap: anywhere;
+}
+h3 {
+  margin: 0.22rem 0;
+  font-size: clamp(1rem, 1.53vw, 1.34rem);
+  line-height: 1.17;
+  font-weight: 610;
+  letter-spacing: -0.025em;
+}
+.foreground h3 {
+  font-size: clamp(1.4rem, 2.85vw, 2.75rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  max-width: 25ch;
+  margin-block: 0.48rem;
+}
+.card-title {
+  text-align: left;
+  cursor: pointer;
+}
+.spatial-card:not(.is-expanded) .card-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.card-dismiss,
+.card-actions {
+  position: relative;
+  z-index: 1;
+}
+.card-summary {
+  margin: 0.42rem 0;
+  color: var(--soft);
+  font-size: 0.86rem;
+  line-height: 1.48;
+  max-width: 64ch;
+}
+.spatial-card:not(.foreground):not(.is-expanded) .card-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.foreground .card-summary {
+  font-size: clamp(0.9rem, 1.16vw, 1.08rem);
+}
+.card-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--light);
+}
+.card-actions a,
+.card-actions button {
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 0.24em;
+  padding-block: 0.18rem;
+}
+.card-detail {
+  border-top: 1px solid var(--line);
+  margin-top: 0.7rem;
+  padding-top: 0.45rem;
+}

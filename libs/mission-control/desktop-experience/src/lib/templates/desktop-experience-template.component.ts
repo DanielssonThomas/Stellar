@@ -254,6 +254,8 @@ export class DesktopExperienceTemplate {
   readonly action = output<InteractionEvent>();
   readonly stopMicrophone = output<void>();
   readonly restoreSummary = output<void>();
+  readonly spatialBriefing = output<void>();
+  readonly spatialActive = input(false);
   readonly stage = viewChild.required(StageOrganism);
   readonly focusFallback = this.host.nativeElement;
 
@@ -287,6 +289,7 @@ export class DesktopExperienceTemplate {
   }
   controlsShortcut(event: KeyboardEvent) {
     if (
+      this.spatialActive() ||
       event.defaultPrevented ||
       this.questions().length > 0 ||
       event.repeat ||

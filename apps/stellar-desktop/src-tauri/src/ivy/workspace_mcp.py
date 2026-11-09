@@ -64,6 +64,7 @@ def make_server(gate, bearer, port):
         'errors or missing capture specifically, without generic unverified-request disclaimers. '
         'Use snapshot_workspace for an immediate fresh view of this application when needed. '
         'For multiple panes or changes, use one apply_workspace call with all operations, not one call per pane. '
+        'For a narrated spatial briefing or guided comparison, use present_spatial with committed user-facing narration. '
         'It loads the view concurrently and returns one final image. For closing everything use a single clear '
         'operation or clear_panes. Ready/layout receipts confirm display even if screenshot capture fails; '
         'never claim to have inspected pixels without an image. Do not retry an unavailable screenshot of an '
@@ -119,6 +120,28 @@ def make_server(gate, bearer, port):
     async def changed(operation, turn_token):
         outcome = await gate.call(operation, turn_token)
         return await snapshot(turn_token, outcome, operation['kind'] == 'batch')
+
+    @server.tool()
+    async def present_spatial(turn_token: str, score_json: str):
+        """Direct an opt-in spatial presentation in Stellar Desktop using the current turn token.
+
+        Use for guided briefings, comparisons and similar presentations. Send a JSON object string
+        (max 32 KiB). Start with begin {title,label,description?,sample?}; omit begin when appending
+        to the current presentation. Optional prepare is an array of immediate actions. Optional
+        segments is an ordered array of {text,actions,after?}. The renderer speaks text using local
+        voice, applies actions at segment playback start, and applies after at playback completion.
+        Submit additional segments as verified information arrives. Avoid repeating the tool's
+        narration in your final chat message. An applied receipt means the score was accepted.
+
+        Actions: {kind:"show",panel:{id,title,category,summary,group?,emphasis?,source?,detail?}};
+        {kind:"focus"|"defocus"|"expand"|"collapse"|"dismiss",id}; {kind:"compare",ids:[first,second]};
+        {kind:"overview"}; {kind:"clear"}. Up to eight visible panels. Reuse IDs for updates.
+        Emphasis is lead or supporting. Source is a public HTTPS attribution URL. Detail is
+        {surface,payload}, using the rich-text, chart, image or diagram schemas in open_pane.
+        Use sample:true and a clear label for fictional information. The user can take over focus
+        or stop narration at any point.
+        """
+        return await gate.call({'kind': 'present', 'score_json': score_json}, turn_token)
 
     @server.tool(structured_output=False)
     async def apply_workspace(turn_token: str, operations: list[dict]):

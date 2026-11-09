@@ -1,0 +1,29 @@
+.scene-enter {
+  animation: scene-in 350ms ease both;
+}
+.scene-leave {
+  pointer-events: none;
+  animation: scene-in 230ms ease reverse both;
+}
+.card-enter {
+  animation: card-in 480ms var(--ease) both;
+  animation-delay: calc(var(--order) * 34ms);
+}
+.card-leave {
+  pointer-events: none;
+  animation: scene-in 210ms ease reverse both;
+}
+.detail-enter {
+  animation: scene-in 280ms ease both;
+}
+@keyframes scene-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    translate: 0 13px;
+  }
+}

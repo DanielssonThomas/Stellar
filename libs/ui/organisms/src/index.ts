@@ -3,3 +3,5 @@ export * from './lib/organisms/stage-contract';
 export * from './lib/organisms/stage-catalogue';
 export * from './lib/organisms/stage-director';
 export { createStageRegistry } from './lib/organisms/stage-registry';
+export { decodeSpatialScore } from './lib/organisms/spatial-score';
+export * from './lib/organisms/spatial-presentation-organism.component';
