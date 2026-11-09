@@ -4,7 +4,9 @@
     [class.is-compact]="compact()"
     role="region"
     aria-labelledby="spatial-title"
+    aria-keyshortcuts="Escape Alt+S F"
     (keydown.escape)="escape($event)"
+    (keydown)="shortcut($event)"
     animate.enter="scene-enter"
     animate.leave="scene-leave"
   >
@@ -35,42 +37,109 @@
       <span class="projection-label microtype">{{ current.label }}</span>
     </header>
 
-    <nav class="projection-controls" aria-label="Presentation controls">
+    <div #context class="projection-context">
       <button
-        #overview
+        #contextTrigger
         type="button"
-        (click)="action.emit({ kind: 'overview' })"
-      >
-        Overview
-      </button>
-      <button
-        type="button"
-        [attr.aria-pressed]="compact()"
-        (click)="toggleCompact()"
-      >
-        Compact
-      </button>
-      <button
-        type="button"
-        aria-label="Close presentation"
-        class="icon-button"
-        (click)="action.emit({ kind: 'clear' })"
+        class="context-trigger"
+        aria-label="Presentation actions"
+        title="Presentation actions"
+        [attr.aria-expanded]="contextOpen()"
+        (click)="toggleContext()"
       >
         <svg
           viewBox="0 0 20 20"
-          width="17"
-          height="17"
-          fill="none"
+          width="16"
+          height="16"
+          fill="currentColor"
           aria-hidden="true"
         >
-          <path
-            d="m5 5 10 10M15 5 5 15"
-            stroke="currentColor"
-            stroke-width="1.3"
-          />
+          <circle cx="4" cy="10" r="1.2" />
+          <circle cx="10" cy="10" r="1.2" />
+          <circle cx="16" cy="10" r="1.2" />
         </svg>
       </button>
-    </nav>
+      @if (contextOpen()) {
+        <nav class="context-actions" aria-label="Presentation actions">
+          @if (state().manual) {
+            <button
+              type="button"
+              aria-keyshortcuts="F"
+              (click)="closeContext(); follow.emit()"
+            >
+              Follow Ivy <kbd>F</kbd>
+            </button>
+          }
+          @if (state().featured.length) {
+            <button type="button" (click)="contextAction({ kind: 'overview' })">
+              Return to overview
+            </button>
+          }
+          @if (state().featured.length === 1) {
+            <button
+              type="button"
+              (click)="
+                contextAction({ kind: 'dismiss', id: state().featured[0] })
+              "
+            >
+              Dismiss focused panel
+            </button>
+          }
+          <button
+            type="button"
+            [attr.aria-pressed]="compact()"
+            (click)="compact.set(!compact())"
+          >
+            Compact panels
+          </button>
+          @if (readAlong()) {
+            <button type="button" (click)="toggleReadAlong.emit()">
+              {{
+                mode() === 'paused' ? 'Resume read-along' : 'Pause read-along'
+              }}
+            </button>
+            <button type="button" (click)="next.emit()">Next segment</button>
+          }
+          @if (transcript().length) {
+            <button
+              type="button"
+              [attr.aria-expanded]="transcriptOpen()"
+              (click)="transcriptOpen.set(!transcriptOpen())"
+            >
+              {{ transcriptOpen() ? 'Hide transcript' : 'View transcript' }}
+            </button>
+          }
+          @if (mode() !== 'idle') {
+            <button
+              type="button"
+              aria-keyshortcuts="Alt+S"
+              (click)="closeContext(); stop.emit()"
+            >
+              Stop narration <kbd>Alt+S</kbd>
+            </button>
+          }
+          <button type="button" (click)="contextAction({ kind: 'clear' })">
+            Close presentation
+          </button>
+          @if (transcriptOpen()) {
+            <section
+              class="context-transcript"
+              aria-labelledby="spatial-transcript-title"
+              tabindex="0"
+            >
+              <h3 id="spatial-transcript-title" class="microtype">
+                Transcript
+              </h3>
+              <ol>
+                @for (line of transcript(); track $index) {
+                  <li>{{ line }}</li>
+                }
+              </ol>
+            </section>
+          }
+        </nav>
+      }
+    </div>
 
     <div
       #viewport
@@ -116,39 +185,32 @@
                     >
                     <span aria-hidden="true" class="card-tick"></span>
                     <span class="card-category">{{ panel.category }}</span>
-                    <button
-                      type="button"
-                      [attr.aria-label]="'Dismiss ' + panel.title"
-                      class="icon-button card-dismiss"
-                      (click)="dismiss(panel.id, $event)"
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        width="15"
-                        height="15"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <path
-                          d="m6 6 8 8m0-8-8 8"
-                          stroke="currentColor"
-                          stroke-width="1.3"
-                        />
-                      </svg>
-                    </button>
                   </div>
                   <div class="card-scroll">
                     <h3>
                       <button
                         type="button"
                         class="card-title"
+                        aria-keyshortcuts="Delete"
                         [attr.aria-pressed]="panel.focused"
-                        (click)="
-                          action.emit({
-                            kind: panel.focused ? 'defocus' : 'focus',
-                            id: panel.id,
-                          })
+                        [attr.aria-expanded]="
+                          panel.renderer ? panel.expanded : null
                         "
+                        [attr.title]="
+                          panel.focused && panel.renderer
+                            ? panel.expanded
+                              ? 'Collapse details'
+                              : 'Read more'
+                            : 'Focus panel'
+                        "
+                        (click)="
+                          activatePanel(
+                            panel.id,
+                            !!panel.renderer,
+                            panel.expanded
+                          )
+                        "
+                        (keydown.delete)="dismiss(panel.id, $event)"
                       >
                         {{ panel.title }}
                       </button>
@@ -165,25 +227,16 @@
                       </div>
                     }
                   </div>
-                  <div class="card-actions">
-                    @if (panel.renderer) {
-                      <button
-                        type="button"
-                        [attr.aria-expanded]="panel.expanded"
-                        (click)="toggleDetails(panel.id, panel.expanded)"
-                      >
-                        {{ panel.expanded ? 'Less' : 'Details' }}
-                      </button>
-                    }
-                    @if (panel.source) {
-                      <a
-                        [href]="panel.source"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        >Source <span aria-hidden="true">↗</span></a
-                      >
-                    }
-                  </div>
+                  @if (panel.source && (panel.focused || panel.expanded)) {
+                    <a
+                      class="panel-source"
+                      [href]="panel.source"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Source <span aria-hidden="true">↗</span>
+                    </a>
+                  }
                 </div>
               </div>
             </article>
@@ -200,51 +253,43 @@
       }
     </div>
 
-    <aside class="ivy-projection-activity" aria-label="Ivy narration">
-      <div class="narration-text">
-        <div class="narration-status microtype">
-          <span
-            class="status-light"
-            [class.is-speaking]="mode() === 'speaking'"
-            aria-hidden="true"
-          ></span>
-          @switch (mode()) {
-            @case ('speaking') {
-              Ivy speaking
-            }
-            @case ('preparing') {
-              Preparing narration
-            }
-            @case ('manual') {
-              Read along
-            }
-            @default {
-              Presentation ready
+    <p role="status" class="sr-only">
+      @switch (mode()) {
+        @case ('preparing') {
+          Preparing narration
+        }
+        @case ('speaking') {
+          Ivy speaking
+        }
+        @case ('idle') {
+          Presentation ready
+        }
+      }
+    </p>
+    <div class="projection-subtitles" aria-live="polite" aria-atomic="true">
+      @if ((caption() && mode() !== 'idle') || readAlong()) {
+        <div class="projection-caption" animate.leave="caption-leave">
+          @if (readAlong()) {
+            <div class="microtype">
+              {{
+                mode() === 'paused'
+                  ? 'Audio unavailable / Read-along paused'
+                  : 'Audio unavailable / Read along'
+              }}
+            </div>
+          }
+          @for (line of [caption()]; track line) {
+            @if (line) {
+              <p animate.enter="caption-enter">{{ line }}</p>
             }
           }
+          @if (state().manual) {
+            <div class="microtype selection-hint">
+              Manual focus · F to follow Ivy
+            </div>
+          }
         </div>
-        <p aria-live="polite" aria-atomic="true">
-          {{
-            caption() ||
-              (mode() === 'manual'
-                ? 'Voice is unavailable. Advance each segment with Next.'
-                : '')
-          }}
-        </p>
-      </div>
-      <div class="narration-controls">
-        @if (state().manual) {
-          <button type="button" (click)="follow.emit()">Follow Ivy</button>
-        }
-        @if (mode() === 'manual') {
-          <button type="button" (click)="next.emit()">Next segment</button>
-        }
-        @if (mode() !== 'idle') {
-          <button type="button" (click)="stopNarration()">
-            Stop narration
-          </button>
-        }
-      </div>
-    </aside>
+      }
+    </div>
   </section>
 }

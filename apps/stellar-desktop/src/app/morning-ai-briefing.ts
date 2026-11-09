@@ -88,11 +88,39 @@ export const morningAiBriefing: SpatialScore = {
       actions: [
         { kind: 'collapse', id: 'juniper' },
         { kind: 'focus', id: 'mosaic' },
+        { kind: 'expand', id: 'mosaic' },
       ],
     },
     {
       text: 'Side by side, Juniper changes how a model answers. Mosaic changes how we test the answer. Both make the evidence easier to inspect.',
-      actions: [{ kind: 'compare', ids: ['juniper', 'mosaic'] }],
+      actions: [
+        { kind: 'collapse', id: 'mosaic' },
+        { kind: 'compare', ids: ['juniper', 'mosaic'] },
+      ],
+    },
+    {
+      text: 'Relay Systems is exploring local inference. Keeping sensitive inputs close to the application changes where teams need to measure latency.',
+      actions: [
+        { kind: 'focus', id: 'relay' },
+        { kind: 'expand', id: 'relay' },
+      ],
+      after: [{ kind: 'collapse', id: 'relay' }],
+    },
+    {
+      text: 'Meridian Studio takes on attribution. A provenance card can travel with a generated image and show how it was edited.',
+      actions: [
+        { kind: 'focus', id: 'meridian' },
+        { kind: 'expand', id: 'meridian' },
+      ],
+      after: [{ kind: 'collapse', id: 'meridian' }],
+    },
+    {
+      text: 'Finally, Harbor’s sample audit looks at the human handoff. It asks whether someone can inspect, decline, and recover from a proposed action.',
+      actions: [
+        { kind: 'focus', id: 'harbor' },
+        { kind: 'expand', id: 'harbor' },
+      ],
+      after: [{ kind: 'collapse', id: 'harbor' }],
     },
     {
       text: 'That’s the briefing. I’ve left the five stories on the stage so you can explore them at your own pace.',

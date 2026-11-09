@@ -31,10 +31,12 @@ import { createSpatialMotion } from './spatial-motion';
   styleUrls: [
     './spatial-presentation-organism.component.css',
     './spatial-presentation-cards.css',
+    './spatial-presentation-context.css',
     './spatial-presentation-motion.css',
   ],
   host: {
     '[class.motion-reduced]': 'reducedMotion()',
+    '(document:pointerdown)': 'outsideContext($event)',
   },
 })
 export class SpatialPresentationOrganism {
@@ -42,16 +44,26 @@ export class SpatialPresentationOrganism {
   readonly state = input<SpatialState>(initialSpatialState);
   readonly reducedMotion = input(false);
   readonly loading = input(false);
-  readonly mode = input<'idle' | 'preparing' | 'speaking' | 'manual'>('idle');
+  readonly mode = input<
+    'idle' | 'preparing' | 'speaking' | 'reading' | 'paused'
+  >('idle');
   readonly caption = input('');
+  readonly transcript = input<readonly string[]>([]);
   readonly action = output<SpatialAction>();
   readonly stop = output();
   readonly next = output();
+  readonly toggleReadAlong = output();
   readonly follow = output();
   readonly compact = signal(false);
   private readonly title = viewChild<ElementRef<HTMLElement>>('title');
-  private readonly overview =
-    viewChild<ElementRef<HTMLButtonElement>>('overview');
+  readonly contextOpen = signal(false);
+  readonly transcriptOpen = signal(false);
+  readonly readAlong = computed(
+    () => this.mode() === 'reading' || this.mode() === 'paused',
+  );
+  private readonly contextTrigger =
+    viewChild<ElementRef<HTMLButtonElement>>('contextTrigger');
+  private readonly context = viewChild<ElementRef<HTMLElement>>('context');
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly cards = viewChildren<ElementRef<HTMLElement>>('card');
   private readonly size = signal({ width: 0, height: 0 });
@@ -148,6 +160,7 @@ export class SpatialPresentationOrganism {
       const current = this.size().width ? this.scene() : null;
       if (current && !lastScene)
         this.title()?.nativeElement.focus({ preventScroll: true });
+      else if (!current && lastScene) this.closeContext(false);
       lastScene = current;
       const focus = this.state().featured.join(':');
       if (viewport && focus !== lastFocus) viewport.scrollTop = 0;
@@ -167,35 +180,77 @@ export class SpatialPresentationOrganism {
     });
   }
 
-  toggleCompact() {
-    this.compact.update((value) => !value);
+  activatePanel(id: string, hasDetail: boolean, expanded: boolean) {
+    const featured = this.state().featured;
+    if (featured.length !== 1 || featured[0] !== id) {
+      this.action.emit({ kind: 'focus', id });
+    } else if (hasDetail) {
+      this.action.emit({ kind: expanded ? 'collapse' : 'expand', id });
+    }
   }
 
-  toggleDetails(id: string, expanded: boolean) {
-    this.action.emit({ kind: expanded ? 'collapse' : 'expand', id });
+  toggleContext() {
+    if (this.contextOpen()) this.closeContext();
+    else this.contextOpen.set(true);
   }
 
-  stopNarration() {
-    this.overview()?.nativeElement.focus({ preventScroll: true });
-    this.stop.emit();
+  closeContext(restore = true) {
+    if (!this.contextOpen()) return;
+    this.contextOpen.set(false);
+    this.transcriptOpen.set(false);
+    if (restore)
+      this.contextTrigger()?.nativeElement.focus({ preventScroll: true });
   }
 
-  dismiss(id: string, event: MouseEvent) {
-    if (
-      event.currentTarget instanceof HTMLElement &&
-      event.currentTarget
-        .closest('article')
-        ?.contains(this.host.nativeElement.ownerDocument.activeElement)
-    )
-      this.overview()?.nativeElement.focus({ preventScroll: true });
+  outsideContext(event: Event) {
+    if (!this.contextOpen() || !(event.target instanceof Node)) return;
+    if (!this.context()?.nativeElement.contains(event.target))
+      this.closeContext(false);
+  }
+
+  contextAction(action: SpatialAction) {
+    this.closeContext();
+    this.action.emit(action);
+  }
+
+  dismiss(id: string, event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.title()?.nativeElement.focus({ preventScroll: true });
     this.action.emit({ kind: 'dismiss', id });
+  }
+
+  shortcut(event: KeyboardEvent) {
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      event.isComposing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      (event.target instanceof Element &&
+        event.target.closest('input, textarea, select, [contenteditable]'))
+    )
+      return;
+    const key = event.key.toLowerCase();
+    if (key === 's' && event.altKey && this.mode() !== 'idle') {
+      event.preventDefault();
+      this.closeContext();
+      this.stop.emit();
+    } else if (key === 'f' && !event.altKey && this.state().manual) {
+      event.preventDefault();
+      this.closeContext();
+      this.follow.emit();
+    }
   }
 
   escape(event: Event) {
     event.stopPropagation();
     event.preventDefault();
-    this.action.emit({
-      kind: this.state().featured.length ? 'overview' : 'clear',
-    });
+    if (this.contextOpen()) this.closeContext();
+    else
+      this.action.emit({
+        kind: this.state().featured.length ? 'overview' : 'clear',
+      });
   }
 }

@@ -46,8 +46,8 @@ export function spatialEmblem(
 type Slot = readonly [x: number, y: number, width: number, height: number];
 
 const overview: readonly Slot[] = [
-  [0.07, 0.22, 0.305, 0.268],
-  [0.608, 0.06, 0.265, 0.22],
+  [0.07, 0.22, 0.305, 0.235],
+  [0.608, 0.06, 0.265, 0.195],
   [0.722, 0.43, 0.231, 0.21],
   [0.105, 0.61, 0.256, 0.21],
   [0.49, 0.755, 0.29, 0.21],
@@ -137,9 +137,9 @@ export function spatialLayout(
             index === 0 ? 0.105 : 0.526,
             0.112,
             0.369,
-            expanded.has(id) ? 0.36 : 0.255,
+            expanded.has(id) ? 0.36 : 0.23,
           ]
-        : [0.145, 0.233, 0.475, expanded.has(id) ? 0.42 : 0.29];
+        : [0.145, 0.233, 0.475, expanded.has(id) ? 0.4 : 0.275];
       place(id, project(slot), 'foreground');
     }
     for (const id of ordered.slice(featured.length)) {

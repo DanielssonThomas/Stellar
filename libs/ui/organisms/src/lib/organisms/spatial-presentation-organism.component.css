@@ -25,7 +25,7 @@
   color: var(--gold);
 }
 .projection-heading,
-.projection-controls {
+.projection-context {
   position: absolute;
   top: clamp(0.75rem, 3.1vh, 1.8rem);
 }
@@ -69,13 +69,7 @@ h2:focus {
   border-left: 1px solid var(--gold-line);
   padding-left: 1rem;
 }
-.projection-controls {
-  right: clamp(1rem, 3.8vw, 3.5rem);
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  pointer-events: auto;
-}
+
 button,
 a {
   color: inherit;
@@ -85,24 +79,6 @@ button:focus-visible,
 a:focus-visible {
   outline: 1px solid var(--gold);
   outline-offset: 2px;
-}
-.projection-controls button,
-.narration-controls button {
-  min-height: 2rem;
-  padding: 0.25rem 0.55rem;
-  color: var(--gold);
-  border: 1px solid transparent;
-  font-size: 0.73rem;
-}
-.projection-controls button:hover,
-.projection-controls button[aria-pressed='true'],
-.narration-controls button:hover {
-  border-color: var(--gold-line);
-  background: color-mix(in srgb, var(--gold) 6%, transparent);
-}
-.icon-button {
-  display: grid;
-  place-items: center;
 }
 .spatial-viewport {
   position: absolute;
@@ -137,52 +113,32 @@ a:focus-visible {
   display: block;
   min-height: 9rem;
 }
-.ivy-projection-activity {
+.projection-subtitles {
   position: absolute;
-  left: clamp(1rem, 3.8vw, 3.5rem);
-  bottom: clamp(0.7rem, 2.8vh, 1.6rem);
+  inset-inline: 1rem;
+  bottom: clamp(0.65rem, 2.7vh, 1.55rem);
   display: flex;
-  align-items: end;
-  gap: 0.45rem 1rem;
-  padding-left: 0.65rem;
+  justify-content: center;
+}
+.projection-caption {
+  max-width: min(72ch, 100%);
+  padding-left: 0.6rem;
   border-left: 1px solid var(--detail-line);
-  max-width: calc(100% - 2rem);
-  pointer-events: auto;
 }
-.narration-text {
-  width: min(60ch, 46vw);
-}
-.narration-status {
-  display: flex;
-  align-items: center;
-  gap: 0.38rem;
-}
-.status-light {
-  width: 0.34rem;
-  height: 0.34rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-}
-.status-light.is-speaking {
-  background: currentColor;
-}
-.narration-text p {
-  margin: 0.2rem 0 0;
-  font-size: 0.78rem;
-  color: var(--body-ink);
+.projection-caption p {
+  margin: 0.12rem 0 0;
+  font-size: 0.85rem;
   line-height: 1.4;
+  color: var(--ink);
   max-height: 4.2em;
   overflow: auto;
+  overflow-wrap: anywhere;
   scrollbar-width: thin;
   scrollbar-color: var(--gold-line) transparent;
-  overflow-wrap: anywhere;
+  pointer-events: auto;
 }
-.narration-text p:empty {
-  display: none;
-}
-.narration-controls {
-  display: flex;
-  gap: 0.12rem;
+.selection-hint {
+  margin-top: 0.22rem;
 }
 @media (max-width: 640px) {
   .projection-heading {
@@ -203,16 +159,6 @@ a:focus-visible {
     padding: 0;
     border: 0;
     white-space: nowrap;
-  }
-  .projection-controls {
-    top: 4.4rem;
-    right: 6.5rem;
-  }
-  .ivy-projection-activity {
-    flex-wrap: wrap;
-  }
-  .narration-text {
-    width: 100%;
   }
 }
 :host(.motion-reduced) *,

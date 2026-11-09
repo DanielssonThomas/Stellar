@@ -65,6 +65,7 @@ def make_server(gate, bearer, port):
         'Use snapshot_workspace for an immediate fresh view of this application when needed. '
         'For multiple panes or changes, use one apply_workspace call with all operations, not one call per pane. '
         'For a narrated spatial briefing or guided comparison, use present_spatial with committed user-facing narration. '
+        'For a request for today’s AI news, use the available research tools to verify current stories, then present the sourced briefing with present_spatial. '
         'It loads the view concurrently and returns one final image. For closing everything use a single clear '
         'operation or clear_panes. Ready/layout receipts confirm display even if screenshot capture fails; '
         'never claim to have inspected pixels without an image. Do not retry an unavailable screenshot of an '
@@ -130,8 +131,13 @@ def make_server(gate, bearer, port):
         to the current presentation. Optional prepare is an array of immediate actions. Optional
         segments is an ordered array of {text,actions,after?}. The renderer speaks text using local
         voice, applies actions at segment playback start, and applies after at playback completion.
-        Submit additional segments as verified information arrives. Avoid repeating the tool's
-        narration in your final chat message. An applied receipt means the score was accepted.
+        For a current news request, use your available research tools to verify timely, distinct
+        stories. Aim for five when there are enough verified stories. Give each panel a source URL,
+        concise summary and supporting detail. Introduce the briefing, focus each story when you
+        discuss it, reveal detail at the relevant segment, and finish in overview. Submit more panels
+        and segments as verified information arrives. Report retrieval gaps honestly.
+        Avoid repeating the tool's narration in your final chat message. An applied receipt means
+        the score was accepted.
 
         Actions: {kind:"show",panel:{id,title,category,summary,group?,emphasis?,source?,detail?}};
         {kind:"focus"|"defocus"|"expand"|"collapse"|"dismiss",id}; {kind:"compare",ids:[first,second]};

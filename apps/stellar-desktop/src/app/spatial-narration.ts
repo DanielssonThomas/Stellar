@@ -4,7 +4,23 @@ import type {
   SpatialSegment,
 } from '@stellar/desktop-interaction';
 
-export type SpatialNarrationMode = 'idle' | 'preparing' | 'speaking' | 'manual';
+export type SpatialNarrationMode =
+  | 'idle'
+  | 'preparing'
+  | 'speaking'
+  | 'reading'
+  | 'paused';
+
+type Reading = {
+  readonly segment: SpatialSegment;
+  remaining: number;
+  deadline: number;
+};
+
+export function readingTime(text: string): number {
+  const words = text.trim().split(/\s+/u).length;
+  return Math.max(3200, words * 290, Array.from(text).length * 42) + 450;
+}
 
 type Playback = {
   readonly segment: SpatialSegment;
@@ -22,6 +38,7 @@ interface NarrationPort {
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
   readonly apply: (actions: readonly SpatialAction[]) => void;
+  readonly record: (text: string) => void;
   readonly view: (mode: SpatialNarrationMode, caption: string) => void;
 }
 
@@ -32,13 +49,18 @@ export class SpatialNarration {
   private initializing = false;
   private stopping?: Promise<unknown>;
   private generation = 0;
-  private manual = false;
+  private readAlong = false;
+  private paused = false;
+  private reading?: Reading;
+  private readTimer?: ReturnType<typeof setTimeout>;
   private caption = '';
 
   constructor(private readonly port: NarrationPort) {}
 
   canAppend(count: number) {
-    return this.pending.length + (this.active ? 1 : 0) + count <= 24;
+    return (
+      this.pending.length + (this.active || this.reading ? 1 : 0) + count <= 24
+    );
   }
 
   append(segments: readonly SpatialSegment[]) {
@@ -58,7 +80,7 @@ export class SpatialNarration {
   whenQuiet(): Promise<void> {
     if (
       !this.stopping &&
-      (this.manual || (!this.active && !this.pending.length))
+      (this.readAlong || (!this.active && !this.pending.length))
     )
       return Promise.resolve();
     return new Promise((resolve) => this.waiters.add(resolve));
@@ -98,23 +120,34 @@ export class SpatialNarration {
     }
   }
 
-  next() {
-    if (!this.manual) return;
-    const segment = this.pending.shift();
-    if (!segment) return;
-    const generation = this.generation;
-    this.caption = segment.text;
-    this.port.apply(segment.actions);
-    if (this.generation !== generation) return;
-    this.port.apply(segment.after ?? []);
+  toggleReadAlong() {
+    if (!this.readAlong || (!this.reading && !this.pending.length)) return;
+    this.paused = !this.paused;
+    if (this.paused && this.reading && this.readTimer !== undefined) {
+      this.reading.remaining = Math.max(
+        0,
+        this.reading.deadline - performance.now(),
+      );
+      this.clearReadTimer();
+    }
     this.pump();
+  }
+
+  next() {
+    if (!this.readAlong || (!this.reading && !this.pending.length)) return;
+    this.paused = true;
+    if (this.reading) this.completeReading(this.reading, true);
+    else this.beginReading();
   }
 
   cancel() {
     this.generation++;
     this.initializing = false;
     this.pending.length = 0;
-    this.manual = false;
+    this.clearReadTimer();
+    this.readAlong = false;
+    this.paused = false;
+    this.reading = undefined;
     this.caption = '';
     const active = this.active;
     this.active = undefined;
@@ -139,25 +172,35 @@ export class SpatialNarration {
     if (active.started) return;
     active.started = true;
     this.caption = active.segment.text;
+    this.port.record(this.caption);
     this.port.apply(active.segment.actions);
     if (this.active === active) this.publish('speaking');
   }
 
   private fallback(active?: Playback) {
-    if (active && !active.started) this.pending.unshift(active.segment);
+    if (active?.started) {
+      this.reading = {
+        segment: active.segment,
+        remaining: readingTime(active.segment.text),
+        deadline: 0,
+      };
+    } else if (active) {
+      this.pending.unshift(active.segment);
+    }
     this.active = undefined;
-    this.manual = true;
+    this.readAlong = true;
     this.pump();
   }
 
   private pump() {
     if (this.active || this.initializing || this.stopping) return;
-    if (!this.pending.length) {
-      this.publish('idle');
+    if (this.readAlong && (this.reading || this.pending.length)) {
+      if (!this.reading && !this.paused) this.beginReading();
+      else this.scheduleReading();
       return;
     }
-    if (this.manual) {
-      this.publish('manual');
+    if (!this.pending.length) {
+      this.publish('idle');
       return;
     }
     const snapshot = this.port.read();
@@ -224,9 +267,54 @@ export class SpatialNarration {
       });
   }
 
+  private beginReading() {
+    const segment = this.pending.shift();
+    if (!segment) {
+      this.publish('idle');
+      return;
+    }
+    const reading: Reading = {
+      segment,
+      remaining: readingTime(segment.text),
+      deadline: 0,
+    };
+    this.reading = reading;
+    this.caption = segment.text;
+    this.port.record(this.caption);
+    this.port.apply(segment.actions);
+    if (this.reading === reading) this.scheduleReading();
+  }
+
+  private scheduleReading() {
+    const reading = this.reading;
+    this.publish(this.paused ? 'paused' : 'reading');
+    if (!reading || this.paused || this.readTimer !== undefined) return;
+    reading.deadline = performance.now() + reading.remaining;
+    this.readTimer = setTimeout(
+      () => this.completeReading(reading),
+      reading.remaining,
+    );
+  }
+
+  private completeReading(reading: Reading, step = false) {
+    if (this.reading !== reading) return;
+    this.clearReadTimer();
+    this.reading = undefined;
+    const generation = this.generation;
+    this.port.apply(reading.segment.after ?? []);
+    if (this.generation !== generation) return;
+    if (step) this.beginReading();
+    else this.pump();
+  }
+
+  private clearReadTimer() {
+    clearTimeout(this.readTimer);
+    this.readTimer = undefined;
+  }
+
   private publish(mode: SpatialNarrationMode) {
     this.port.view(mode, this.caption);
-    if (!this.stopping && (mode === 'idle' || mode === 'manual')) {
+    if (!this.stopping && (mode === 'idle' || this.readAlong)) {
       for (const resolve of this.waiters) resolve();
       this.waiters.clear();
     }

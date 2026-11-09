@@ -75,7 +75,7 @@
   display: flex;
   gap: 0.47rem;
   align-items: center;
-  min-height: 1.4rem;
+
   margin-bottom: 0.35rem;
 }
 .card-sequence {
@@ -90,18 +90,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.card-dismiss {
-  margin-left: auto;
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-  color: var(--gold);
-  opacity: 0.7;
-}
-.card-dismiss:hover,
-.card-dismiss:focus-visible {
-  opacity: 1;
 }
 .card-scroll {
   min-height: 0;
@@ -132,15 +120,10 @@ h3 {
 .card-title:hover {
   color: var(--gold);
 }
-.spatial-card:not(.is-expanded) .card-title::after {
+.card-title::after {
   content: '';
   position: absolute;
   inset: 0;
-}
-.card-dismiss,
-.card-actions {
-  position: relative;
-  z-index: 1;
 }
 .card-summary {
   margin: 0.4rem 0 0.15rem;
@@ -158,20 +141,21 @@ h3 {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.card-actions {
-  display: flex;
-  gap: 0.8rem;
-  margin-top: auto;
-  padding-top: 0.24rem;
+.panel-source {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  margin-top: 0.55rem;
   color: var(--gold);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
 }
-.card-actions a:hover,
-.card-actions button:hover {
+.panel-source:hover {
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
 .card-detail {
+  position: relative;
+  z-index: 1;
   --stellar-presentation-title: 1rem;
   --stellar-presentation-body: 0.88rem;
   border-top: 1px solid var(--gold-line);

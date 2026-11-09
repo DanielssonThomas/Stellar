@@ -38,6 +38,8 @@ export class DesktopSpatial {
     mode: SpatialNarrationMode;
     caption: string;
   }>({ mode: 'idle', caption: '' });
+  private readonly spoken = signal<readonly string[]>([]);
+  readonly transcript = this.spoken.asReadonly();
   private owner?: { epoch: string; turn: string };
   private stoppedTurn?: string;
   private muted = false;
@@ -52,6 +54,8 @@ export class DesktopSpatial {
     stop: () => this.speech.stop(),
     id: () => crypto.randomUUID(),
     apply: (actions) => this.apply(actions, 'ivy'),
+    record: (text) =>
+      this.spoken.update((segments) => [...segments.slice(-47), text]),
     view: (mode, caption) =>
       this.playback.update((current) =>
         current.mode === mode && current.caption === caption
@@ -111,6 +115,10 @@ export class DesktopSpatial {
     this.timeline.next();
   }
 
+  toggleReadAlong() {
+    this.timeline.toggleReadAlong();
+  }
+
   interrupt() {
     if (this.owner) this.stoppedTurn = this.owner.turn;
     this.timeline.cancel();
@@ -120,6 +128,7 @@ export class DesktopSpatial {
     this.interrupt();
     this.currentState.set(initialSpatialState);
     this.currentScene.set(null);
+    this.spoken.set([]);
   }
 
   setMuted(muted: boolean) {
@@ -152,6 +161,7 @@ export class DesktopSpatial {
       this.timeline.cancel();
     if (score.begin) {
       this.currentState.set(initialSpatialState);
+      this.spoken.set([]);
       this.currentScene.set(score.begin);
     }
     this.owner = owner;

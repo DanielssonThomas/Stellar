@@ -19,6 +19,12 @@
 .detail-enter {
   animation: reveal-projection 220ms ease both;
 }
+.caption-enter {
+  animation: reveal-projection 190ms ease both;
+}
+.caption-leave {
+  animation: reveal-projection 260ms ease reverse both;
+}
 @keyframes reveal-projection {
   from {
     opacity: 0;

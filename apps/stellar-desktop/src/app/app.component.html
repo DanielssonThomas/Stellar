@@ -115,10 +115,12 @@
       [state]="spatial.state()"
       [mode]="spatial.narration().mode"
       [caption]="spatial.narration().caption"
+      [transcript]="spatial.transcript()"
       [reducedMotion]="experience.state().reducedMotion"
       (action)="spatial.manual($event)"
       (stop)="spatial.interrupt()"
       (next)="spatial.next()"
+      (toggleReadAlong)="spatial.toggleReadAlong()"
       (follow)="spatial.follow()"
     />
   </stellar-desktop-experience-template>

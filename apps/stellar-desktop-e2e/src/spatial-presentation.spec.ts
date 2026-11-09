@@ -14,6 +14,8 @@ type ScorePort = {
 };
 const briefing = (page: Page) =>
   page.getByRole('region', { name: 'Morning AI briefing' });
+const context = (page: Page) =>
+  page.getByRole('button', { name: 'Presentation actions', exact: true });
 const card = (page: Page, id: string) =>
   page.locator(`[data-panel-id="${id}"]`);
 const pagePort = (page: Page) =>
@@ -171,7 +173,12 @@ test('directs the sample from overview through detail and comparison at playback
   await expect(emblem).toHaveCSS('width', '238px');
   await expect(dialog.getByText('Fictional sample')).toBeVisible();
   await expect.poll(() => pagePort(page)).toBe(1);
-  await expect(dialog.getByText('Preparing narration')).toBeVisible();
+  await expect(dialog.getByRole('status')).toHaveText('Preparing narration');
+  await expect(
+    dialog.getByRole('button', {
+      name: /Next segment|Stop narration|Close presentation|Compact panels|Details|Less|Dismiss/,
+    }),
+  ).toHaveCount(0);
   await dialog.screenshot({
     path: info.outputPath('overview.png'),
     animations: 'disabled',
@@ -180,7 +187,7 @@ test('directs the sample from overview through detail and comparison at playback
   const begin = async (number: number) => {
     await expect.poll(() => pagePort(page)).toBe(number);
     await speech(page, 'speaking');
-    await expect(dialog.getByText('Ivy speaking')).toBeVisible();
+    await expect(dialog.getByRole('status')).toHaveText('Ivy speaking');
   };
   await begin(1);
   await expect(dialog.locator('.is-focused')).toHaveCount(0);
@@ -209,33 +216,103 @@ test('directs the sample from overview through detail and comparison at playback
   });
   await speech(page, 'idle');
   await begin(6);
+  await expect(card(page, 'relay')).toHaveClass(
+    /is-focused is-expanded|is-expanded is-focused/,
+  );
   await speech(page, 'idle');
-  await expect(dialog.getByText('Presentation ready')).toBeVisible();
+  await begin(7);
+  await expect(card(page, 'meridian')).toHaveClass(/is-focused/);
+  await speech(page, 'idle');
+  await begin(8);
+  await expect(card(page, 'harbor')).toHaveClass(/is-focused/);
+  await speech(page, 'idle');
+  await begin(9);
+  await speech(page, 'idle');
+  await expect(dialog.getByRole('status')).toHaveText('Presentation ready');
+  await expect(dialog.locator('.projection-caption')).toHaveCount(0);
   await expect(dialog.locator('.is-focused')).toHaveCount(0);
   await expect(dialog.getByRole('article')).toHaveCount(5);
 
-  await card(page, 'juniper').locator('.card-title').dispatchEvent('click');
+  await card(page, 'juniper').click({ position: { x: 24, y: 75 } });
   await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
+  await card(page, 'juniper').locator('.card-title').click();
+  await expect(
+    card(page, 'juniper').getByText(/independent checker/),
+  ).toBeVisible();
   await card(page, 'relay').locator('.card-title').dispatchEvent('click');
   await expect(card(page, 'relay')).toHaveClass(/is-focused/);
   await expect(card(page, 'juniper')).not.toHaveClass(/is-focused/);
-  await dialog.getByRole('button', { name: 'Compact' }).click();
+  await context(page).click();
+  await dialog.getByRole('button', { name: 'Compact panels' }).click();
   await expect(dialog).toHaveClass(/is-compact/);
+  await dialog.getByRole('button', { name: 'View transcript' }).click();
+  await expect(
+    dialog.getByRole('region', { name: 'Transcript' }).getByRole('listitem'),
+  ).toHaveCount(9);
   await dialog.getByRole('button', { name: 'Close presentation' }).click();
   await expect(dialog).toBeHidden();
   await expect(emblem).toHaveCSS('width', '480px');
 });
 
-test('offers manual segment controls in a browser without native voice', async ({
+test('runs all five stories as automatic read-along when voice is unavailable', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
   await openSample(page);
   const dialog = briefing(page);
-  await expect(dialog.getByText('Read along')).toBeVisible();
-  const next = dialog.getByRole('button', { name: 'Next segment' });
-  await next.click();
-  await next.click();
+  await expect(
+    dialog.getByText('Audio unavailable / Read along'),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Next segment' }),
+  ).toHaveCount(0);
+  const advance = () => page.clock.fastForward(15000);
+  await advance();
   await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
+  await advance();
+  await expect(card(page, 'juniper')).toHaveClass(/is-expanded/);
+  await advance();
+  await expect(card(page, 'mosaic')).toHaveClass(/is-focused/);
+  await advance();
+  await expect(dialog.locator('.is-focused')).toHaveCount(2);
+  await advance();
+  await expect(card(page, 'relay')).toHaveClass(/is-focused/);
+  await advance();
+  await expect(card(page, 'meridian')).toHaveClass(/is-focused/);
+  await advance();
+  await expect(card(page, 'harbor')).toHaveClass(/is-focused/);
+  await advance();
+  await expect(dialog.locator('.is-focused')).toHaveCount(0);
+  await advance();
+  await expect(dialog.getByRole('status')).toHaveText('Presentation ready');
+  await expect(dialog.locator('.projection-caption')).toHaveCount(0);
+  await expect(dialog.getByRole('article')).toHaveCount(5);
+});
+
+test('offers pause and deliberate stepping through the contextual actions', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
+  await openSample(page);
+  const stage = briefing(page);
+  await expect(stage.getByText('Audio unavailable / Read along')).toBeVisible();
+  await context(page).focus();
+  await page.keyboard.press('Enter');
+  await stage.getByRole('button', { name: 'Pause read-along' }).click();
+  await page.clock.fastForward(15000);
+  await expect(
+    stage.getByText('Audio unavailable / Read-along paused'),
+  ).toBeVisible();
+  await expect(stage.locator('.is-focused')).toHaveCount(0);
+  await stage.getByRole('button', { name: 'Next segment' }).click();
+  await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
+  await stage.getByRole('button', { name: 'Resume read-along' }).click();
+  await page.keyboard.press('Escape');
+  await expect(context(page)).toBeFocused();
+  await page.clock.fastForward(15000);
+  await expect(card(page, 'juniper')).toHaveClass(/is-expanded/);
 });
 
 test('allows manual focus, interruption and dismissal with reduced motion on a narrow viewport', async ({
@@ -263,13 +340,19 @@ test('allows manual focus, interruption and dismissal with reduced motion on a n
   await expect.poll(() => pagePort(page)).toBe(2);
   await speech(page, 'speaking');
   await expect(card(page, 'mosaic')).toHaveClass(/is-focused/);
-  await dialog.getByRole('button', { name: 'Stop narration' }).click();
-  await expect(dialog.getByText('Presentation ready')).toBeVisible();
-  await card(page, 'mosaic')
-    .getByRole('button', { name: /Dismiss/ })
-    .click();
-  await expect(card(page, 'mosaic')).toHaveCount(0);
-  await expect(dialog.getByRole('button', { name: 'Overview' })).toBeFocused();
+  await page.keyboard.press('f');
+  await speech(page, 'idle');
+  await expect.poll(() => pagePort(page)).toBe(3);
+  await speech(page, 'speaking');
+  await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
+  await page.keyboard.press('Alt+s');
+  await expect(dialog.getByRole('status')).toHaveText('Presentation ready');
+  await card(page, 'juniper').locator('.card-title').focus();
+  await page.keyboard.press('Delete');
+  await expect(card(page, 'juniper')).toHaveCount(0);
+  await expect(
+    dialog.getByRole('heading', { name: 'Morning AI briefing' }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(
@@ -314,6 +397,7 @@ test('accepts an admitted score and a later workspace tool update', async ({
     title: 'Evidence is arriving',
     category: 'Research',
     summary: 'First verified result.',
+    source: 'https://example.com/research',
   };
   await submit({
     begin: { title: 'A developing story', label: 'Research' },
@@ -347,9 +431,16 @@ test('accepts an admitted score and a later workspace tool update', async ({
     card(page, 'signal').getByText('The second result has arrived.'),
   ).toBeVisible();
   await expect(card(page, 'signal')).not.toHaveClass(/is-focused/);
+  await expect(
+    card(page, 'signal').getByRole('link', { name: 'Source' }),
+  ).toHaveCount(0);
   await speech(page, 'speaking');
   await expect(card(page, 'signal')).toHaveClass(/is-focused/);
+  await expect(
+    card(page, 'signal').getByRole('link', { name: 'Source' }),
+  ).toHaveAttribute('href', panel.source);
   await speech(page, 'idle');
+  await context(page).click();
   await page.getByRole('button', { name: 'Close presentation' }).click();
   await expect(note).toBeVisible();
   await expect(note).toHaveAttribute('data-retained-node', '');

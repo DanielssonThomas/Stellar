@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
 import type { SpatialSegment } from '@stellar/desktop-interaction';
-import { SpatialNarration } from './spatial-narration';
+import { readingTime, SpatialNarration } from './spatial-narration';
+
+afterEach(() => vi.useRealTimers());
 
 const segment: SpatialSegment = {
   text: 'Look at the research.',
@@ -28,6 +30,7 @@ function fixture() {
   let index = 0;
   const apply = vi.fn();
   const view = vi.fn();
+  const record = vi.fn();
   const stop = vi.fn(async () => undefined);
   const speak = vi.fn(
     async (_text: string, id: string): Promise<SpeechSnapshot> => {
@@ -47,6 +50,7 @@ function fixture() {
     speak,
     stop,
     apply,
+    record,
     view,
   });
   function signal(state: SpeechSnapshot['state'], id: string | null) {
@@ -58,7 +62,7 @@ function fixture() {
     };
     controller.observe(snapshot);
   }
-  return { controller, apply, view, speak, stop, signal };
+  return { controller, apply, view, speak, stop, signal, record };
 }
 
 describe('spatial narration', () => {
@@ -95,15 +99,53 @@ describe('spatial narration', () => {
     expect(f.view).toHaveBeenLastCalledWith('idle', '');
   });
 
-  it('lets the user advance when speech fails before playback', async () => {
+  it('advances without input when audio fails and gives longer text more time', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const long = {
+      ...next,
+      text: 'Longer supporting details take time to read. '.repeat(8),
+    };
+    f.speak.mockRejectedValueOnce(new Error('Unavailable'));
+    f.controller.append([segment, long]);
+    await tick();
+    expect(f.view).toHaveBeenLastCalledWith('reading', segment.text);
+    expect(f.apply.mock.calls).toEqual([[segment.actions]]);
+    vi.advanceTimersByTime(readingTime(segment.text));
+    expect(f.apply.mock.calls).toEqual([
+      [segment.actions],
+      [segment.after],
+      [long.actions],
+    ]);
+    vi.advanceTimersByTime(readingTime(segment.text));
+    expect(f.view).toHaveBeenLastCalledWith('reading', long.text);
+    vi.advanceTimersByTime(readingTime(long.text) - readingTime(segment.text));
+    expect(f.view).toHaveBeenLastCalledWith('idle', long.text);
+    expect(f.record.mock.calls).toEqual([[segment.text], [long.text]]);
+    expect(f.speak).toHaveBeenCalledOnce();
+  });
+
+  it('pauses, steps, resumes and cancels the read-along clock', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
     const f = fixture();
     f.speak.mockRejectedValueOnce(new Error('Unavailable'));
-    f.controller.append([segment]);
+    f.controller.append([segment, next, segment]);
     await tick();
-    expect(f.view).toHaveBeenLastCalledWith('manual', '');
-    expect(f.apply).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(500);
+    f.controller.toggleReadAlong();
+    vi.advanceTimersByTime(30000);
+    expect(f.view).toHaveBeenLastCalledWith('paused', segment.text);
+    expect(f.apply).toHaveBeenCalledOnce();
     f.controller.next();
-    expect(f.apply.mock.calls).toEqual([[segment.actions], [segment.after]]);
-    expect(f.view).toHaveBeenLastCalledWith('idle', segment.text);
+    expect(f.view).toHaveBeenLastCalledWith('paused', next.text);
+    expect(f.apply).toHaveBeenLastCalledWith(next.actions);
+    f.controller.toggleReadAlong();
+    vi.advanceTimersByTime(readingTime(next.text));
+    expect(f.view).toHaveBeenLastCalledWith('reading', segment.text);
+    f.controller.cancel();
+    const applied = f.apply.mock.calls.length;
+    vi.runAllTimers();
+    expect(f.apply).toHaveBeenCalledTimes(applied);
+    expect(f.view).toHaveBeenLastCalledWith('idle', '');
   });
 });
