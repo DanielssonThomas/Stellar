@@ -5,7 +5,7 @@ import {
   type SpatialPanel,
   type SpatialState,
 } from '@stellar/desktop-interaction';
-import { spatialLayout } from './spatial-layout';
+import { spatialBand, spatialEmblem, spatialLayout } from './spatial-layout';
 
 const card = (id: string): SpatialPanel => ({
   id,
@@ -53,7 +53,15 @@ describe('spatial composition', () => {
           const layout = spatialLayout(state, width, compact);
           expect(layout).toHaveLength(8);
           expect(layout).toEqual(spatialLayout(state, width, compact));
+          const emblem = spatialEmblem(width, 900, state.featured.length);
+          const top = spatialBand(width, 900).top;
           for (const [i, a] of layout.entries()) {
+            expect(
+              a.x + a.width <= emblem.x ||
+                emblem.x + emblem.width <= a.x ||
+                top + a.y + a.height <= emblem.y ||
+                emblem.y + emblem.height <= top + a.y,
+            ).toBe(true);
             expect(a.x).toBeGreaterThanOrEqual(0);
             expect(a.x + a.width).toBeLessThanOrEqual(width);
             for (const b of layout.slice(i + 1)) {

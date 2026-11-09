@@ -1,250 +1,230 @@
 :host {
   display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .spatial-shell {
-  --light: var(--stellar-color-chart-series-2);
+  --gold: var(--stellar-color-primary);
+  --gold-line: var(--stellar-color-divider);
+  --detail-line: color-mix(in srgb, var(--gold) 52%, transparent);
   --ink: var(--stellar-color-foreground);
-  --soft: var(--stellar-color-muted);
-  --line: color-mix(in srgb, var(--light) 18%, var(--stellar-color-line));
-  --ease: cubic-bezier(0.18, 0.79, 0.26, 1.02);
-  position: fixed;
-  z-index: 90;
+  --body-ink: color-mix(in srgb, var(--ink) 76%, var(--stellar-color-canvas));
+  --projection-ease: cubic-bezier(0.21, 0.72, 0.25, 1);
+  position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
   color: var(--ink);
-  background:
-    radial-gradient(
-      ellipse at 45% 0%,
-      color-mix(in srgb, var(--light) 11%, transparent),
-      transparent 59%
-    ),
-    radial-gradient(
-      ellipse at 100% 68%,
-      color-mix(in srgb, var(--stellar-color-primary) 10%, transparent),
-      transparent 62%
-    ),
-    var(--stellar-color-canvas);
-  overflow: hidden;
 }
-.spatial-shell.is-compact {
-  inset: 5vh max(3vw, calc((100vw - 1180px) / 2));
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.58);
-}
-.spatial-header,
-.spatial-index,
-.narration {
-  width: min(100%, 1570px);
-  margin-inline: auto;
-  padding-inline: clamp(1rem, 3.4vw, 3.3rem);
-}
-.spatial-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1.5rem;
-  padding-top: clamp(1rem, 4.7vh, 3.4rem);
-}
-.heading {
-  min-width: 0;
-}
-.spatial-identity,
-.scene-label,
-.spatial-index,
-.card-top,
-.narration-status {
+.microtype {
   font:
-    600 0.7rem / 1.25 ui-monospace,
+    500 0.65rem / 1.35 ui-monospace,
     Consolas,
     monospace;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.105em;
   text-transform: uppercase;
+  color: var(--gold);
 }
-.spatial-identity,
-.scene-label,
-.narration-status {
+.projection-heading,
+.projection-controls {
+  position: absolute;
+  top: clamp(0.75rem, 3.1vh, 1.8rem);
+}
+.projection-heading {
+  left: clamp(1rem, 3.8vw, 3.5rem);
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  color: var(--light);
+  gap: 1.2rem;
 }
-.identity-divider {
-  opacity: 0.5;
-  margin-inline: 0.2rem;
+.projection-mark {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.projection-mark .microtype {
+  margin: 0 0 0.25rem;
+}
+.projection-mark .microtype span {
+  opacity: 0.6;
+  padding-inline: 0.15rem;
+}
+.locator {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: 0 0 0.55rem;
+  border: 1px solid var(--gold);
+  transform: rotate(45deg);
 }
 h2 {
-  font-size: clamp(1.9rem, 4.45vw, 4.15rem);
-  line-height: 1.02;
-  font-weight: 560;
-  letter-spacing: -0.055em;
-  margin: 0.56rem 0 0;
+  margin: 0;
+  font: 500 clamp(0.85rem, 1.35vw, 1.1rem) / 1.15 var(--stellar-font-family);
+  letter-spacing: 0.025em;
+  max-width: 44ch;
   overflow-wrap: anywhere;
 }
 h2:focus {
   outline: none;
 }
-.heading p {
-  color: var(--soft);
-  font-size: 0.94rem;
-  margin: 0.6rem 0 0;
-  max-width: 58ch;
+.projection-label {
+  border-left: 1px solid var(--gold-line);
+  padding-left: 1rem;
 }
-.header-aside {
-  display: grid;
-  justify-items: end;
-  gap: 0.7rem;
-  padding-top: 0.3rem;
-}
-.scene-label {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.44rem 0.68rem;
-  white-space: nowrap;
-}
-.scene-label > span,
-.status-light {
-  width: 0.38rem;
-  height: 0.38rem;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 0.75rem color-mix(in srgb, currentColor 55%, transparent);
-}
-.toolbar,
-.narration-controls {
+.projection-controls {
+  right: clamp(1rem, 3.8vw, 3.5rem);
   display: flex;
-  gap: 0.38rem;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  pointer-events: auto;
 }
 button,
 a {
   color: inherit;
-}
-.toolbar button,
-.narration-controls button {
-  padding: 0.48rem 0.69rem;
-  border: 1px solid var(--line);
-  border-radius: 0.45rem;
-  background: color-mix(
-    in srgb,
-    var(--stellar-color-panel-raised) 60%,
-    transparent
-  );
-  font-size: 0.75rem;
-  min-height: 2.2rem;
-}
-button:hover,
-a:hover {
-  color: var(--light);
+  cursor: pointer;
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--light);
-  outline-offset: 3px;
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
 }
-.toolbar button[aria-pressed='true'] {
-  border-color: var(--light);
-  color: var(--light);
+.projection-controls button,
+.narration-controls button {
+  min-height: 2rem;
+  padding: 0.25rem 0.55rem;
+  color: var(--gold);
+  border: 1px solid transparent;
+  font-size: 0.73rem;
 }
-.spatial-index {
-  display: flex;
-  align-items: center;
-  gap: 0.82rem;
-  color: var(--soft);
-  margin-top: clamp(0.8rem, 3vh, 2.2rem);
+.projection-controls button:hover,
+.projection-controls button[aria-pressed='true'],
+.narration-controls button:hover {
+  border-color: var(--gold-line);
+  background: color-mix(in srgb, var(--gold) 6%, transparent);
 }
-.index-rule {
-  height: 1px;
-  flex: 1;
-  background: linear-gradient(
-    90deg,
-    var(--line),
-    color-mix(in srgb, var(--line) 55%, transparent)
-  );
+.icon-button {
+  display: grid;
+  place-items: center;
 }
 .spatial-viewport {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset-inline: 0;
   overflow: auto;
-  scrollbar-width: thin;
   overscroll-behavior: contain;
-  margin-top: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-line) transparent;
+}
+.spatial-viewport:has(.spatial-field.is-scrollable) {
+  pointer-events: auto;
 }
 .spatial-field {
   position: relative;
-  max-width: 1540px;
-  margin-inline: auto;
   min-height: 100%;
+}
+.projection-link {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.28;
+}
+.empty-state,
+.stage-skeleton {
+  margin: 2rem;
 }
 .stage-skeleton {
   display: block;
-  margin: 2rem;
-  min-height: 15rem;
+  min-height: 9rem;
 }
-.empty-state {
-  padding: 1rem 2rem;
-  color: var(--soft);
-}
-.narration {
+.ivy-projection-activity {
+  position: absolute;
+  left: clamp(1rem, 3.8vw, 3.5rem);
+  bottom: clamp(0.7rem, 2.8vh, 1.6rem);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem 1.1rem;
-  padding-block: 0.82rem;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--stellar-color-canvas) 86%, transparent);
+  align-items: end;
+  gap: 0.45rem 1rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--detail-line);
+  max-width: calc(100% - 2rem);
+  pointer-events: auto;
 }
 .narration-text {
-  min-width: 0;
+  width: min(60ch, 46vw);
 }
 .narration-status {
-  color: var(--soft);
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+.status-light {
+  width: 0.34rem;
+  height: 0.34rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
 }
 .status-light.is-speaking {
-  color: var(--light);
+  background: currentColor;
 }
 .narration-text p {
-  margin: 0.28rem 0 0;
-  color: var(--ink);
-  font-size: 0.84rem;
-  max-height: 4.4em;
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--body-ink);
+  line-height: 1.4;
+  max-height: 4.2em;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-line) transparent;
   overflow-wrap: anywhere;
 }
-.narration-controls {
-  flex-shrink: 0;
+.narration-text p:empty {
+  display: none;
 }
-@media (max-width: 680px) {
-  .spatial-header {
-    flex-wrap: wrap;
-    gap: 0.75rem;
+.narration-controls {
+  display: flex;
+  gap: 0.12rem;
+}
+@media (max-width: 640px) {
+  .projection-heading {
+    gap: 0.55rem;
+    align-items: start;
+    max-width: 64vw;
   }
-  .header-aside {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+  .projection-mark {
+    align-items: start;
+  }
+  .locator {
+    margin-top: 0.25rem;
+  }
+  .projection-label {
+    position: absolute;
+    inset-inline-start: 1.2rem;
+    top: calc(100% + 0.35rem);
     padding: 0;
-    gap: 0.45rem;
+    border: 0;
+    white-space: nowrap;
   }
-  .spatial-shell.is-compact {
-    inset: 1vh 2vw;
+  .projection-controls {
+    top: 4.4rem;
+    right: 6.5rem;
   }
-  .narration {
+  .ivy-projection-activity {
     flex-wrap: wrap;
   }
-  .narration-controls {
-    flex-shrink: 1;
+  .narration-text {
+    width: 100%;
   }
 }
 :host(.motion-reduced) *,
-:host(.motion-reduced) *::before {
+:host(.motion-reduced) *::before,
+:host(.motion-reduced) *::after {
   animation: none !important;
   transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
-  *::before {
+  *::before,
+  *::after {
     animation: none !important;
     transition: none !important;
   }

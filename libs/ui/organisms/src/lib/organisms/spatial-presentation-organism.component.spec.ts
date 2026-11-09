@@ -19,9 +19,9 @@ describe(SpatialPresentationOrganism.name, () => {
 
     const element: HTMLElement = fixture.nativeElement;
     expect(
-      element.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby'),
+      element.querySelector('[role="region"]')?.getAttribute('aria-labelledby'),
     ).toBe('spatial-title');
-    expect(element.querySelector('h2')?.textContent).toBe(
+    expect(element.querySelector('h2')?.textContent?.trim()).toBe(
       'Morning AI briefing',
     );
     expect(element.querySelector('stellar-skeleton-atom')).not.toBeNull();

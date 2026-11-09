@@ -21,7 +21,7 @@ import { initialSpatialState } from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
 import clsx from 'clsx';
 import { STAGE_CATALOGUE } from './stage-catalogue';
-import { spatialLayout } from './spatial-layout';
+import { spatialBand, spatialEmblem, spatialLayout } from './spatial-layout';
 import { createSpatialMotion } from './spatial-motion';
 
 @Component({
@@ -54,7 +54,7 @@ export class SpatialPresentationOrganism {
     viewChild<ElementRef<HTMLButtonElement>>('overview');
   private readonly viewport = viewChild<ElementRef<HTMLElement>>('viewport');
   private readonly cards = viewChildren<ElementRef<HTMLElement>>('card');
-  private readonly width = signal(0);
+  private readonly size = signal({ width: 0, height: 0 });
   private readonly catalogue = inject(STAGE_CATALOGUE);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly motion = createSpatialMotion();
@@ -65,12 +65,29 @@ export class SpatialPresentationOrganism {
   private readonly systemReduced = signal(
     this.motionPreference?.matches ?? false,
   );
-  readonly placements = computed(() =>
-    spatialLayout(this.state(), this.width(), this.compact()),
+  readonly band = computed(() =>
+    spatialBand(this.size().width, this.size().height),
   );
+  readonly placements = computed(() => {
+    const { width, height } = this.size();
+    return spatialLayout(this.state(), width, this.compact(), height);
+  });
   readonly fieldHeight = computed(() =>
-    Math.max(0, ...this.placements().map((slot) => slot.y + slot.height + 32)),
+    Math.max(0, ...this.placements().map((slot) => slot.y + slot.height + 12)),
   );
+  readonly connector = computed(() => {
+    const featured = this.state().featured;
+    const { width, height } = this.size();
+    const slot = this.placements().find((panel) => panel.id === featured[0]);
+    if (featured.length !== 1 || !slot) return '';
+    const emblem = spatialEmblem(width, height, featured.length);
+    const x = slot.x + slot.width + 12;
+    const end = emblem.x - 14;
+    const y = emblem.y + emblem.height / 2 - this.band().top;
+    return end - x > 22 && y > slot.y && y < slot.y + slot.height
+      ? `M ${x} ${y} H ${end}`
+      : '';
+  });
   readonly panels = computed(() => {
     const state = this.state();
     const positions = new Map(this.placements().map((slot) => [slot.id, slot]));
@@ -115,16 +132,20 @@ export class SpatialPresentationOrganism {
         observer?.disconnect();
         observed = viewport;
         if (viewport) {
-          this.width.set(Math.min(1540, viewport.clientWidth));
+          const host = this.host.nativeElement;
+          const measure = () =>
+            this.size.set({
+              width: host.clientWidth,
+              height: host.clientHeight,
+            });
+          measure();
           if (typeof ResizeObserver !== 'undefined') {
-            observer = new ResizeObserver(() =>
-              this.width.set(Math.min(1540, viewport.clientWidth)),
-            );
-            observer.observe(viewport);
+            observer = new ResizeObserver(measure);
+            observer.observe(host);
           }
         }
       }
-      const current = this.scene();
+      const current = this.size().width ? this.scene() : null;
       if (current && !lastScene)
         this.title()?.nativeElement.focus({ preventScroll: true });
       lastScene = current;
@@ -154,31 +175,9 @@ export class SpatialPresentationOrganism {
     this.action.emit({ kind: expanded ? 'collapse' : 'expand', id });
   }
 
-  trapTab(event: Event) {
-    if (
-      !(event instanceof KeyboardEvent) ||
-      !(event.currentTarget instanceof HTMLElement)
-    )
-      return;
-    const controls = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>('button, a[href]'),
-    ).filter(
-      (control) =>
-        control.getClientRects().length && !control.closest('[inert]'),
-    );
-    const first = controls[0];
-    const last = controls.at(-1);
-    const active = event.currentTarget.ownerDocument.activeElement;
-    if (
-      event.shiftKey &&
-      (active === first || active === this.title()?.nativeElement)
-    ) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first?.focus();
-    }
+  stopNarration() {
+    this.overview()?.nativeElement.focus({ preventScroll: true });
+    this.stop.emit();
   }
 
   dismiss(id: string, event: MouseEvent) {

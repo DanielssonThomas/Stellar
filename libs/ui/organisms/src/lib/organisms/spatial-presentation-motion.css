@@ -1,29 +1,32 @@
 .scene-enter {
-  animation: scene-in 350ms ease both;
+  animation: reveal-projection 210ms ease both;
 }
 .scene-leave {
   pointer-events: none;
-  animation: scene-in 230ms ease reverse both;
+  animation: reveal-projection 180ms ease reverse both;
+}
+.scene-leave *,
+.card-leave {
+  pointer-events: none !important;
 }
 .card-enter {
-  animation: card-in 480ms var(--ease) both;
-  animation-delay: calc(var(--order) * 34ms);
+  animation: materialize 430ms var(--projection-ease) both;
+  animation-delay: calc(45ms + var(--order) * 34ms);
 }
 .card-leave {
-  pointer-events: none;
-  animation: scene-in 210ms ease reverse both;
+  animation: materialize 180ms ease reverse both;
 }
 .detail-enter {
-  animation: scene-in 280ms ease both;
+  animation: reveal-projection 220ms ease both;
 }
-@keyframes scene-in {
+@keyframes reveal-projection {
   from {
     opacity: 0;
   }
 }
-@keyframes card-in {
+@keyframes materialize {
   from {
     opacity: 0;
-    translate: 0 13px;
+    translate: 0 8px;
   }
 }

@@ -212,7 +212,7 @@ The embedded artwork copies the reviewed #176 hybrid production-v1 pack into `ap
 
 ## Ivy spatial presentations
 
-Press **M**, then choose **Morning AI briefing** in **Experience controls** to see the five fictional stories. Select a panel title to bring it forward, or choose **Details** to reveal supporting material. **Overview** returns to the full composition. **Compact** puts the stage in an inset window, and **Stop narration** keeps the current cards available for exploration. Escape returns from a focused view to overview and closes the stage from overview. Desktop and system reduced-motion settings disable transitions.
+Press **M**, then choose **Morning AI briefing** in **Experience controls** to see the five fictional stories. Select a panel title to bring it forward, or choose **Details** to reveal supporting material. **Overview** returns to the full composition. **Compact** makes the projected panels more compact, and **Stop narration** keeps the current cards available for exploration. Escape returns from a focused view to overview and closes the stage from overview. Desktop and system reduced-motion settings disable transitions. The existing desktop emblem moves within Stage as cards appear around it and returns to its idle position on dismissal.
 
 Ivy can use the scoped `present_spatial` workspace tool during an admitted turn. A score can open a scene, prepare panels immediately, and supply narration segments with visual actions at the start or completion of playback. Later calls can update a panel by ID or append segments as information arrives. Rich text, code blocks, charts, images and diagrams reuse the Stage renderers. The canvas accepts up to eight panels and the narration queue holds up to 24 segments.
 

@@ -4,6 +4,7 @@ import type {
   SpeechSnapshot,
   WorkspaceToolReply,
 } from '@stellar/desktop-contracts';
+import { openPane } from './stage-driver';
 
 type ScorePort = {
   publish(state: 'speaking' | 'idle'): void;
@@ -12,7 +13,7 @@ type ScorePort = {
   replies: WorkspaceToolReply[];
 };
 const briefing = (page: Page) =>
-  page.getByRole('dialog', { name: 'Morning AI briefing' });
+  page.getByRole('region', { name: 'Morning AI briefing' });
 const card = (page: Page, id: string) =>
   page.locator(`[data-panel-id="${id}"]`);
 const pagePort = (page: Page) =>
@@ -32,6 +33,9 @@ async function openSample(page: Page) {
     'data-desktop-ready',
     'true',
   );
+  await page.locator('.emblem-slot').evaluate((node) => {
+    node.setAttribute('data-original-emblem', '');
+  });
   await page.keyboard.press('m');
   await page.getByRole('button', { name: /Morning AI briefing/ }).click();
   await expect(briefing(page)).toBeVisible();
@@ -45,6 +49,7 @@ async function mockNative(page: Page) {
       listeners.get(event)?.({ payload });
     const turn = crypto.randomUUID();
     let ivyRevision = 0;
+    let admitted = false;
     const ivy = (): IvySnapshot => ({
       version: 1,
       revision: String(++ivyRevision),
@@ -53,9 +58,9 @@ async function mockNative(page: Page) {
       workspace_tools: 'available',
       workspace_epoch: '1',
       reset_id: null,
-      turn_id: turn,
+      turn_id: admitted ? turn : null,
       connection: 'ready',
-      turn: 'admitted',
+      turn: admitted ? 'admitted' : 'idle',
       activity: [],
       items: [],
       error: null,
@@ -86,6 +91,7 @@ async function mockNative(page: Page) {
         advance(state, state === 'idle' ? null : snapshot.operation_id);
       },
       present(score) {
+        admitted = true;
         emit('workspace-tool-request', {
           version: 1,
           epoch: '1',
@@ -157,6 +163,12 @@ test('directs the sample from overview through detail and comparison at playback
   await mockNative(page);
   await openSample(page);
   const dialog = briefing(page);
+  const emblem = page.locator('.emblem-slot[data-original-emblem]');
+  await expect(
+    dialog.locator('xpath=ancestor::stellar-stage-organism'),
+  ).toHaveCount(1);
+  await expect(page.locator('stellar-emblem-motion-molecule')).toHaveCount(1);
+  await expect(emblem).toHaveCSS('width', '238px');
   await expect(dialog.getByText('Fictional sample')).toBeVisible();
   await expect.poll(() => pagePort(page)).toBe(1);
   await expect(dialog.getByText('Preparing narration')).toBeVisible();
@@ -190,6 +202,7 @@ test('directs the sample from overview through detail and comparison at playback
   await speech(page, 'idle');
   await begin(5);
   await expect(dialog.locator('.is-focused')).toHaveCount(2);
+  await expect(emblem).toHaveCSS('width', '160px');
   await dialog.screenshot({
     path: info.outputPath('comparison.png'),
     animations: 'disabled',
@@ -208,6 +221,9 @@ test('directs the sample from overview through detail and comparison at playback
   await expect(card(page, 'juniper')).not.toHaveClass(/is-focused/);
   await dialog.getByRole('button', { name: 'Compact' }).click();
   await expect(dialog).toHaveClass(/is-compact/);
+  await dialog.getByRole('button', { name: 'Close presentation' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(emblem).toHaveCSS('width', '480px');
 });
 
 test('offers manual segment controls in a browser without native voice', async ({
@@ -282,6 +298,14 @@ test('accepts an admitted score and a later workspace tool update', async ({
         (reply) => reply.outcome.kind,
       ),
     );
+  expect(
+    await openPane(page, 1, 'retained-note', 'Desk note', 'Still here'),
+  ).toBe('applied');
+  const note = page.locator('[data-instance-id="retained-note"]');
+  await expect(note).toBeVisible();
+  await note.evaluate((element) =>
+    element.setAttribute('data-retained-node', ''),
+  );
   const controls = page.getByRole('dialog', { name: 'Experience controls' });
   await page.keyboard.press('m');
   await expect(controls).toBeVisible();
@@ -303,6 +327,8 @@ test('accepts an admitted score and a later workspace tool update', async ({
   });
   await expect.poll(statuses).toEqual(['applied']);
   await expect(controls).toBeHidden();
+  await expect(note).toBeHidden();
+  await expect(note).toHaveAttribute('inert', '');
   await expect(
     page.getByRole('heading', { name: 'A developing story' }),
   ).toBeFocused();
@@ -324,4 +350,8 @@ test('accepts an admitted score and a later workspace tool update', async ({
   await speech(page, 'speaking');
   await expect(card(page, 'signal')).toHaveClass(/is-focused/);
   await speech(page, 'idle');
+  await page.getByRole('button', { name: 'Close presentation' }).click();
+  await expect(note).toBeVisible();
+  await expect(note).toHaveAttribute('data-retained-node', '');
+  await expect(note).not.toHaveAttribute('inert', '');
 });

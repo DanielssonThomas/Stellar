@@ -2,134 +2,135 @@
   position: absolute;
   transform-origin: top left;
   opacity: 1;
-  transition: opacity 0.36s ease;
+  pointer-events: auto;
+  transition: opacity 0.36s var(--projection-ease);
+  --edge: var(--gold-line);
+  --corner: var(--detail-line);
 }
-.spatial-card:nth-child(3n + 2) {
-  --light: var(--stellar-color-chart-series-5);
-}
-.spatial-card:nth-child(3n) {
-  --light: var(--stellar-color-chart-series-3);
+.spatial-card.foreground {
+  z-index: 2;
+  --edge: var(--detail-line);
+  --corner: var(--gold);
 }
 .spatial-card.periphery {
-  opacity: 0.78;
+  opacity: 0.79;
 }
 .spatial-card.periphery:hover,
 .spatial-card.periphery:focus-within {
   opacity: 1;
 }
-.spatial-card.foreground {
-  z-index: 2;
-}
 .card-face {
   position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: clamp(0.8rem, 1.25vw, 1.2rem);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, var(--stellar-color-panel-raised) 90%, var(--light)),
-    var(--stellar-color-panel) 72%
-  );
-  box-shadow:
-    0 14px 36px rgb(0 0 0 / 0.27),
-    inset 0 1px rgb(255 255 255 / 0.045);
-  transition:
-    transform 0.52s var(--ease),
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
-  overflow: hidden;
+  transition: transform 0.48s var(--projection-ease);
+}
+.card-plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: top left;
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--stellar-color-canvas) 92%, transparent);
+  transition: border-color 0.3s ease;
+  pointer-events: none;
+}
+.foreground .card-plane {
+  background: color-mix(in srgb, var(--stellar-color-canvas) 96%, var(--gold));
+}
+.card-plane::before,
+.card-plane::after {
+  content: '';
+  position: absolute;
+  width: 0.65rem;
+  height: 0.65rem;
+  pointer-events: none;
+  border: solid var(--corner);
+}
+.card-plane::before {
+  inset: -1px auto auto -1px;
+  border-width: 1px 0 0 1px;
+}
+.card-plane::after {
+  inset: auto -1px -1px auto;
+  border-width: 0 1px 1px 0;
 }
 .middle:nth-child(even) .card-face {
-  transform: perspective(1100px) rotateY(-2deg) rotateX(0.8deg);
+  transform: perspective(1300px) rotateY(-0.75deg);
 }
 .middle:nth-child(odd) .card-face,
 .periphery .card-face {
-  transform: perspective(1100px) rotateY(2deg);
+  transform: perspective(1300px) rotateY(0.75deg);
 }
-.periphery .card-face {
+.card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.65rem 0.85rem;
+}
+.foreground .card-body {
   padding: 0.85rem 1rem;
-}
-.foreground .card-face {
-  border-color: color-mix(in srgb, var(--light) 42%, var(--line));
-  box-shadow:
-    0 22px 54px rgb(0 0 0 / 0.36),
-    0 0 32px color-mix(in srgb, var(--light) 8%, transparent);
-}
-.foreground .card-face::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.62;
-  background: repeating-radial-gradient(
-    circle at 97% 6%,
-    transparent 0 20px,
-    color-mix(in srgb, var(--light) 18%, transparent) 21px,
-    transparent 22px 39px
-  );
-  mask-image: linear-gradient(135deg, transparent 40%, black 95%);
-  pointer-events: none;
 }
 .card-top {
   display: flex;
+  gap: 0.47rem;
   align-items: center;
-  gap: 0.65rem;
-  color: var(--light);
+  min-height: 1.4rem;
+  margin-bottom: 0.35rem;
 }
 .card-sequence {
-  border: 1px solid var(--line);
-  padding: 0.22rem 0.36rem;
-  border-radius: 0.26rem;
+  color: var(--gold);
+}
+.card-tick {
+  width: 0.72rem;
+  height: 1px;
+  background: var(--detail-line);
 }
 .card-category {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.icon-button {
-  display: grid;
-  place-items: center;
-}
 .card-dismiss {
-  flex: 0 0 1.6rem;
-  height: 1.6rem;
   margin-left: auto;
-  border-radius: 0.3rem;
-  color: var(--soft);
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: var(--gold);
+  opacity: 0.7;
 }
-.card-dismiss:hover {
-  background: var(--stellar-color-panel-raised);
+.card-dismiss:hover,
+.card-dismiss:focus-visible {
+  opacity: 1;
 }
 .card-scroll {
-  overflow: auto;
   min-height: 0;
+  overflow: auto;
+  padding: 1px 3px 1px;
+  margin-inline: -3px;
   scrollbar-width: thin;
-  padding: 0.36rem 0.25rem 0.15rem;
-  margin-inline: -0.25rem;
+  scrollbar-color: var(--gold-line) transparent;
   overflow-wrap: anywhere;
 }
 h3 {
-  margin: 0.22rem 0;
-  font-size: clamp(1rem, 1.53vw, 1.34rem);
-  line-height: 1.17;
-  font-weight: 610;
-  letter-spacing: -0.025em;
+  margin: 0;
+  font-size: clamp(0.89rem, 1.15vw, 1.03rem);
+  line-height: 1.24;
+  font-weight: 550;
 }
 .foreground h3 {
-  font-size: clamp(1.4rem, 2.85vw, 2.75rem);
-  line-height: 1.04;
-  letter-spacing: -0.045em;
-  max-width: 25ch;
-  margin-block: 0.48rem;
+  font-size: clamp(1.05rem, 1.68vw, 1.52rem);
+  line-height: 1.16;
+  max-width: 35ch;
+}
+.is-focused h3 {
+  font-size: clamp(1.15rem, 1.82vw, 1.63rem);
 }
 .card-title {
   text-align: left;
-  cursor: pointer;
+}
+.card-title:hover {
+  color: var(--gold);
 }
 .spatial-card:not(.is-expanded) .card-title::after {
   content: '';
@@ -142,41 +143,46 @@ h3 {
   z-index: 1;
 }
 .card-summary {
-  margin: 0.42rem 0;
-  color: var(--soft);
-  font-size: 0.86rem;
-  line-height: 1.48;
-  max-width: 64ch;
-}
-.spatial-card:not(.foreground):not(.is-expanded) .card-summary {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-.spatial-card.periphery .card-summary {
-  -webkit-line-clamp: 1;
+  margin: 0.4rem 0 0.15rem;
+  color: var(--body-ink);
+  font-size: 0.8rem;
+  line-height: 1.42;
+  max-width: 62ch;
 }
 .foreground .card-summary {
-  font-size: clamp(0.9rem, 1.16vw, 1.08rem);
+  font-size: 0.88rem;
+}
+.periphery .card-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .card-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.8rem;
   margin-top: auto;
-  padding-top: 0.35rem;
+  padding-top: 0.24rem;
+  color: var(--gold);
   font-size: 0.72rem;
-  color: var(--light);
 }
-.card-actions a,
-.card-actions button {
+.card-actions a:hover,
+.card-actions button:hover {
   text-decoration: underline;
-  text-decoration-color: var(--line);
-  text-underline-offset: 0.24em;
-  padding-block: 0.18rem;
+  text-underline-offset: 0.18em;
 }
 .card-detail {
-  border-top: 1px solid var(--line);
+  --stellar-presentation-title: 1rem;
+  --stellar-presentation-body: 0.88rem;
+  border-top: 1px solid var(--gold-line);
   margin-top: 0.7rem;
-  padding-top: 0.45rem;
+  padding-top: 0.55rem;
+}
+:host(.motion-reduced) .card-face {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-face {
+    transform: none !important;
+  }
 }

@@ -2,99 +2,96 @@
   <section
     class="spatial-shell"
     [class.is-compact]="compact()"
-    role="dialog"
-    aria-modal="true"
+    role="region"
     aria-labelledby="spatial-title"
     (keydown.escape)="escape($event)"
-    (keydown.tab)="trapTab($event)"
     animate.enter="scene-enter"
     animate.leave="scene-leave"
   >
-    <header class="spatial-header">
-      <div class="heading">
-        <div class="spatial-identity">
-          <svg
-            viewBox="0 0 28 28"
-            width="23"
-            height="23"
-            fill="none"
-            aria-hidden="true"
+    <header class="projection-heading">
+      <div class="projection-mark">
+        <span class="locator" aria-hidden="true"></span>
+        <div>
+          <p class="microtype">
+            Ivy projection <span aria-hidden="true">/</span>
+            {{
+              state().featured.length === 2
+                ? 'Compare'
+                : state().featured.length
+                  ? 'In focus'
+                  : 'Overview'
+            }}
+          </p>
+          <h2
+            #title
+            id="spatial-title"
+            tabindex="-1"
+            [attr.title]="current.description"
           >
-            <path
-              d="M14 1.5 25 8v12l-11 6.5L3 20V8L14 1.5Z"
-              stroke="currentColor"
-              opacity=".6"
-            />
-            <path d="m14 5 8 14-8-4-8 4 8-14Z" stroke="currentColor" />
-          </svg>
-          <span>IVY <span class="identity-divider">/</span> SPATIAL STAGE</span>
-        </div>
-        <h2 #title id="spatial-title" tabindex="-1">{{ current.title }}</h2>
-        @if (current.description) {
-          <p>{{ current.description }}</p>
-        }
-      </div>
-      <div class="header-aside">
-        <span class="scene-label"
-          ><span aria-hidden="true"></span>{{ current.label }}</span
-        >
-        <div class="toolbar" role="group" aria-label="Presentation controls">
-          <button
-            #overview
-            type="button"
-            (click)="action.emit({ kind: 'overview' })"
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            [attr.aria-pressed]="compact()"
-            (click)="toggleCompact()"
-          >
-            Compact
-          </button>
-          <button
-            type="button"
-            aria-label="Close presentation"
-            (click)="action.emit({ kind: 'clear' })"
-            class="icon-button"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              width="18"
-              height="18"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="m5 5 10 10M15 5 5 15"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
-            </svg>
-          </button>
+            {{ current.title }}
+          </h2>
         </div>
       </div>
+      <span class="projection-label microtype">{{ current.label }}</span>
     </header>
-    <div class="spatial-index">
-      <span>{{
-        state().featured.length === 2
-          ? 'Side by side'
-          : state().featured.length
-            ? 'In focus'
-            : 'Overview'
-      }}</span>
-      <span class="index-rule"></span>
-      <span
-        >{{ state().panels.length }}
-        {{ state().panels.length === 1 ? 'panel' : 'panels' }}</span
+
+    <nav class="projection-controls" aria-label="Presentation controls">
+      <button
+        #overview
+        type="button"
+        (click)="action.emit({ kind: 'overview' })"
       >
-    </div>
-    <div #viewport class="spatial-viewport" [attr.aria-busy]="loading()">
+        Overview
+      </button>
+      <button
+        type="button"
+        [attr.aria-pressed]="compact()"
+        (click)="toggleCompact()"
+      >
+        Compact
+      </button>
+      <button
+        type="button"
+        aria-label="Close presentation"
+        class="icon-button"
+        (click)="action.emit({ kind: 'clear' })"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          width="17"
+          height="17"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="m5 5 10 10M15 5 5 15"
+            stroke="currentColor"
+            stroke-width="1.3"
+          />
+        </svg>
+      </button>
+    </nav>
+
+    <div
+      #viewport
+      class="spatial-viewport"
+      [style.top.px]="band().top"
+      [style.bottom.px]="band().bottom"
+      [attr.aria-busy]="loading()"
+    >
       @if (loading()) {
         <stellar-skeleton-atom class="stage-skeleton" />
       } @else {
-        <div class="spatial-field" [style.height.px]="fieldHeight()">
+        <div
+          class="spatial-field"
+          [class.is-scrollable]="fieldHeight() > band().height"
+          [style.height.px]="fieldHeight()"
+        >
+          @if (connector(); as path) {
+            <svg class="projection-link" aria-hidden="true">
+              <path [attr.d]="path" />
+            </svg>
+          }
           @for (panel of panels(); track panel.id) {
             <article
               #card
@@ -110,84 +107,88 @@
               animate.leave="card-leave"
             >
               <div class="card-face">
-                <div class="card-top">
-                  <span class="card-sequence"
-                    >{{ panel.index + 1 < 10 ? '0' : ''
-                    }}{{ panel.index + 1 }}</span
-                  >
-                  <span class="card-category">{{ panel.category }}</span>
-                  <button
-                    type="button"
-                    [attr.aria-label]="'Dismiss ' + panel.title"
-                    class="icon-button card-dismiss"
-                    (click)="dismiss(panel.id, $event)"
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      aria-hidden="true"
+                <div class="card-plane" aria-hidden="true"></div>
+                <div class="card-body">
+                  <div class="card-top microtype">
+                    <span class="card-sequence"
+                      >{{ panel.index + 1 < 10 ? '0' : ''
+                      }}{{ panel.index + 1 }}</span
                     >
-                      <path
-                        d="m5 5 10 10M15 5 5 15"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      />
-                    </svg>
-                  </button>
-                </div>
-                <div class="card-scroll">
-                  <h3>
+                    <span aria-hidden="true" class="card-tick"></span>
+                    <span class="card-category">{{ panel.category }}</span>
                     <button
                       type="button"
-                      class="card-title"
-                      [attr.aria-pressed]="panel.focused"
-                      (click)="
-                        action.emit({
-                          kind: panel.focused ? 'defocus' : 'focus',
-                          id: panel.id,
-                        })
-                      "
+                      [attr.aria-label]="'Dismiss ' + panel.title"
+                      class="icon-button card-dismiss"
+                      (click)="dismiss(panel.id, $event)"
                     >
-                      {{ panel.title }}
+                      <svg
+                        viewBox="0 0 20 20"
+                        width="15"
+                        height="15"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="m6 6 8 8m0-8-8 8"
+                          stroke="currentColor"
+                          stroke-width="1.3"
+                        />
+                      </svg>
                     </button>
-                  </h3>
-                  <p class="card-summary">{{ panel.summary }}</p>
-                  @if (panel.expanded && panel.renderer; as renderer) {
-                    <div class="card-detail" animate.enter="detail-enter">
-                      <ng-container
-                        *ngComponentOutlet="
-                          renderer.component;
-                          inputs: renderer.inputs
+                  </div>
+                  <div class="card-scroll">
+                    <h3>
+                      <button
+                        type="button"
+                        class="card-title"
+                        [attr.aria-pressed]="panel.focused"
+                        (click)="
+                          action.emit({
+                            kind: panel.focused ? 'defocus' : 'focus',
+                            id: panel.id,
+                          })
                         "
-                      />
-                    </div>
-                  }
-                </div>
-                <div class="card-actions">
-                  @if (panel.renderer) {
-                    <button
-                      type="button"
-                      [attr.aria-expanded]="panel.expanded"
-                      (click)="toggleDetails(panel.id, panel.expanded)"
-                    >
-                      {{ panel.expanded ? 'Less' : 'Details' }}
-                    </button>
-                  }
-                  @if (panel.source) {
-                    <a
-                      [href]="panel.source"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      >Source <span aria-hidden="true">↗</span></a
-                    >
-                  }
+                      >
+                        {{ panel.title }}
+                      </button>
+                    </h3>
+                    <p class="card-summary">{{ panel.summary }}</p>
+                    @if (panel.expanded && panel.renderer; as renderer) {
+                      <div class="card-detail" animate.enter="detail-enter">
+                        <ng-container
+                          *ngComponentOutlet="
+                            renderer.component;
+                            inputs: renderer.inputs
+                          "
+                        />
+                      </div>
+                    }
+                  </div>
+                  <div class="card-actions">
+                    @if (panel.renderer) {
+                      <button
+                        type="button"
+                        [attr.aria-expanded]="panel.expanded"
+                        (click)="toggleDetails(panel.id, panel.expanded)"
+                      >
+                        {{ panel.expanded ? 'Less' : 'Details' }}
+                      </button>
+                    }
+                    @if (panel.source) {
+                      <a
+                        [href]="panel.source"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Source <span aria-hidden="true">↗</span></a
+                      >
+                    }
+                  </div>
                 </div>
               </div>
             </article>
           } @empty {
-            <p class="empty-state">
+            <p class="empty-state microtype">
               {{
                 mode() === 'idle'
                   ? 'No panels on stage.'
@@ -198,9 +199,10 @@
         </div>
       }
     </div>
-    <footer class="narration">
+
+    <aside class="ivy-projection-activity" aria-label="Ivy narration">
       <div class="narration-text">
-        <div class="narration-status">
+        <div class="narration-status microtype">
           <span
             class="status-light"
             [class.is-speaking]="mode() === 'speaking'"
@@ -226,7 +228,7 @@
             caption() ||
               (mode() === 'manual'
                 ? 'Voice is unavailable. Advance each segment with Next.'
-                : 'Select a panel to bring it forward.')
+                : '')
           }}
         </p>
       </div>
@@ -238,9 +240,11 @@
           <button type="button" (click)="next.emit()">Next segment</button>
         }
         @if (mode() !== 'idle') {
-          <button type="button" (click)="stop.emit()">Stop narration</button>
+          <button type="button" (click)="stopNarration()">
+            Stop narration
+          </button>
         }
       </div>
-    </footer>
+    </aside>
   </section>
 }

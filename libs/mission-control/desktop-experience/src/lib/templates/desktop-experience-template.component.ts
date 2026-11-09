@@ -156,17 +156,19 @@ export class DesktopExperienceTemplate {
       (this.assistantWaiting() || this.assistantNarrating()),
   );
   readonly emblemPhase = computed(() =>
-    this.faultActive()
-      ? ('idle' as const)
-      : this.passiveListening() &&
-          !this.state().manualActive &&
-          !['suspended', 'shutdown'].includes(this.state().phase)
+    this.spatialVisible()
+      ? ('presenting' as const)
+      : this.faultActive()
         ? ('idle' as const)
-        : this.assistantActive() ||
-            (this.conversationActive() &&
-              !['suspended', 'shutdown'].includes(this.state().phase))
-          ? ('listening' as const)
-          : this.state().phase,
+        : this.passiveListening() &&
+            !this.state().manualActive &&
+            !['suspended', 'shutdown'].includes(this.state().phase)
+          ? ('idle' as const)
+          : this.assistantActive() ||
+              (this.conversationActive() &&
+                !['suspended', 'shutdown'].includes(this.state().phase))
+            ? ('listening' as const)
+            : this.state().phase,
   );
   readonly retryIvy = output<void>();
   readonly cancelIvy = output<void>();
@@ -255,7 +257,11 @@ export class DesktopExperienceTemplate {
   readonly stopMicrophone = output<void>();
   readonly restoreSummary = output<void>();
   readonly spatialBriefing = output<void>();
-  readonly spatialActive = input(false);
+  readonly spatialFocus = input<number | null>(null);
+  readonly spatialActive = computed(() => this.spatialFocus() !== null);
+  readonly spatialVisible = computed(
+    () => this.spatialActive() && !this.composing() && !this.questions().length,
+  );
   readonly stage = viewChild.required(StageOrganism);
   readonly focusFallback = this.host.nativeElement;
 
@@ -281,6 +287,7 @@ export class DesktopExperienceTemplate {
     return this.promptComposer().presentFinalized(text, signal);
   }
   dismiss(event: Event) {
+    if (this.spatialActive()) return;
     if (event.target instanceof Element && event.target.closest('dialog[open]'))
       return;
     if (this.state().phase === 'idle') return;
