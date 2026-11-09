@@ -261,7 +261,7 @@ export class DesktopExperienceTemplate {
 
   constructor() {
     effect(() => {
-      if (this.questions().length) {
+      if (this.questions().length || this.spatialActive()) {
         this.setSessionsVisible(false);
         this.menu.close();
         this.musicControls().close();

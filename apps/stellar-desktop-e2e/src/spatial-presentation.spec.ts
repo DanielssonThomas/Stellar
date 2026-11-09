@@ -282,6 +282,9 @@ test('accepts an admitted score and a later workspace tool update', async ({
         (reply) => reply.outcome.kind,
       ),
     );
+  const controls = page.getByRole('dialog', { name: 'Experience controls' });
+  await page.keyboard.press('m');
+  await expect(controls).toBeVisible();
   const panel = {
     id: 'signal',
     title: 'Evidence is arriving',
@@ -299,6 +302,10 @@ test('accepts an admitted score and a later workspace tool update', async ({
     ],
   });
   await expect.poll(statuses).toEqual(['applied']);
+  await expect(controls).toBeHidden();
+  await expect(
+    page.getByRole('heading', { name: 'A developing story' }),
+  ).toBeFocused();
   await expect(card(page, 'signal')).toBeVisible();
   await expect.poll(() => pagePort(page)).toBe(1);
   await submit({
