@@ -129,7 +129,8 @@ export class DesktopAssistant {
   readonly caption = computed(() => {
     const snapshot = this.state();
     const latest = snapshot.response_segments?.at(-1);
-    if (latest) return { text: latest.text, kind: latest.kind };
+    if (latest && (latest.kind === 'final' || snapshot.turn !== 'completed'))
+      return { text: latest.text, kind: latest.kind };
     return {
       text: snapshot.turn === 'completed' ? spokenResponse(snapshot.items) : '',
       kind: 'final' as const,
