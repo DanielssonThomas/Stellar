@@ -130,7 +130,7 @@ export function spatialLayout(
         ? home
         : (assigned ?? sideOrder[(index - 1) % sideOrder.length]);
     if (panel.group) groupColumns.set(panel.group, column);
-    const height = detailHeight(panel.id, index === 0 ? 252 : 193);
+    const height = detailHeight(panel.id, index === 0 ? 252 : 210);
     const offset = index >= columns ? Math.min(18, widths[column] * 0.05) : 0;
     const result = place(
       panel.id,

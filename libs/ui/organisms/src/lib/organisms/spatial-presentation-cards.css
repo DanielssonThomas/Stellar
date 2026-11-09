@@ -154,6 +154,9 @@ h3 {
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
+.spatial-card.periphery .card-summary {
+  -webkit-line-clamp: 1;
+}
 .foreground .card-summary {
   font-size: clamp(0.9rem, 1.16vw, 1.08rem);
 }
