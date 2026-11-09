@@ -60,6 +60,8 @@
     (dismissFaults)="faults.dismiss()"
     (showFaults)="faults.show()"
     [assistantReply]="reflex.reply() || assistant.reply()"
+    [responseCaptionText]="assistant.caption().text"
+    [responseCaptionKind]="assistant.caption().kind"
     [assistantBusy]="assistant.busy() || assistant.uncertain() || reflex.busy()"
     [assistantUncertain]="assistant.uncertain()"
     [assistantWaiting]="assistant.waiting() || voice.waiting() || reflex.busy()"

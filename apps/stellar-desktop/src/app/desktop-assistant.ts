@@ -9,6 +9,7 @@ import {
 import {
   IvyAdapterService,
   IvyReflexService,
+  spokenResponse,
 } from '@stellar/service-desktop-adapter';
 import {
   decodeIvySubmitRequest,
@@ -125,6 +126,15 @@ export class DesktopAssistant {
       .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
       .join('\n\n'),
   );
+  readonly caption = computed(() => {
+    const snapshot = this.state();
+    const latest = snapshot.response_segments?.at(-1);
+    if (latest) return { text: latest.text, kind: latest.kind };
+    return {
+      text: snapshot.turn === 'completed' ? spokenResponse(snapshot.items) : '',
+      kind: 'final' as const,
+    };
+  });
   readonly status = computed(() => {
     const snapshot = this.state();
     if (this.inputError())

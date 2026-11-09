@@ -27,6 +27,104 @@ describe('DesktopExperienceTemplate', () => {
     }
   });
 
+  it('shows interim and final response captions outside the menu without consuming a Stage pane', async () => {
+    fixture.componentRef.setInput(
+      'responseCaptionText',
+      'I found the calendar.',
+    );
+    fixture.componentRef.setInput('assistantBusy', true);
+    await fixture.whenStable();
+    const caption: HTMLElement = fixture.nativeElement.querySelector(
+      'stellar-response-caption-molecule',
+    );
+    expect(caption.textContent).toContain('I found the calendar.');
+    expect(caption.closest('dialog, stellar-stage-organism')).toBeNull();
+    expect(fixture.componentInstance.menu.open()).toBe(false);
+    expect(
+      fixture.componentInstance.stage().inspectPresentations(),
+    ).toHaveLength(0);
+    fixture.componentRef.setInput('responseCaptionKind', 'final');
+    fixture.componentRef.setInput(
+      'responseCaptionText',
+      'Your first meeting is at nine.',
+    );
+    await fixture.whenStable();
+    expect(caption.getAttribute('data-response-kind')).toBe('final');
+    expect(caption.textContent).toContain('Your first meeting is at nine.');
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        'stellar-response-caption-molecule',
+      ),
+    ).toHaveLength(1);
+    expect(
+      fixture.componentInstance.stage().inspectPresentations(),
+    ).toHaveLength(0);
+  });
+
+  it('stacks the response with persistent microphone recognition and preserves Sol visibility rules', async () => {
+    fixture.componentRef.setInput('responseCaptionText', 'I will check that.');
+    fixture.componentRef.setInput('recognitionVisible', true);
+    fixture.componentRef.setInput(
+      'recognitionText',
+      'hey ivy show my calendar',
+    );
+    fixture.componentRef.setInput('solActive', true);
+    fixture.componentRef.setInput('promptStatus', 'composing');
+    await fixture.whenStable();
+    const captions: HTMLElement = fixture.nativeElement.querySelector(
+      '.conversation-captions',
+    );
+    expect(
+      captions.querySelector(':scope > stellar-response-caption-molecule'),
+    ).not.toBeNull();
+    expect(
+      captions.querySelector(':scope > stellar-voice-transcript-molecule')
+        ?.textContent,
+    ).toContain('hey ivy show my calendar');
+    fixture.componentRef.setInput('recognitionVisible', false);
+    fixture.componentRef.setInput('voiceInputText', 'Draft speech');
+    await fixture.whenStable();
+    expect(
+      captions.querySelector('stellar-voice-transcript-molecule'),
+    ).toBeNull();
+    expect(
+      captions.querySelector('stellar-response-caption-molecule'),
+    ).not.toBeNull();
+  });
+
+  it('loads response captions through the shared skeleton state and hides captions on suspend/shutdown', async () => {
+    fixture.componentRef.setInput('responseCaptionText', 'A committed update.');
+    fixture.componentRef.setInput('recognitionVisible', true);
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      reducedMotion: true,
+    });
+    await fixture.whenStable();
+    const caption: HTMLElement = fixture.nativeElement.querySelector(
+      'stellar-response-caption-molecule',
+    );
+    expect(caption.querySelector('stellar-skeleton-atom')).not.toBeNull();
+    expect(caption.getAttribute('aria-busy')).toBe('true');
+    expect(caption.classList.contains('motion-reduced')).toBe(true);
+    for (const phase of ['suspended', 'shutdown']) {
+      fixture.componentRef.setInput('state', { ...initialState, phase });
+      await fixture.whenStable();
+      expect(
+        fixture.nativeElement.querySelector('.conversation-captions'),
+      ).toBeNull();
+    }
+  });
+
+  it('does not invent an empty caption when no response text has arrived', async () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('responseCaptionText', '   ');
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector('stellar-response-caption-molecule'),
+    ).toBeNull();
+  });
+
   it('exposes Reflex as a named switch with status and emits its next preference', async () => {
     fixture.componentRef.setInput('reflexEnabled', true);
     fixture.componentRef.setInput('reflexStatus', 'Ready');

@@ -16,6 +16,7 @@ import type {
   IvySnapshot,
   IvyQuestion,
   IvyQuestionReplyRequest,
+  IvyResponseSegment,
   WorkspaceToolsState,
 } from '../generated';
 import {
@@ -60,6 +61,10 @@ const workspaceStates: Record<WorkspaceToolsState, true> = {
 };
 
 const components: Record<IvyComponent, true> = { assistant_message: true };
+const segmentKinds: Record<IvyResponseSegment['kind'], true> = {
+  commentary: true,
+  final: true,
+};
 const kinds: Record<IvyPresentation['kind'], true> = {
   text: true,
   component: true,
@@ -281,7 +286,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
       'reset_id',
       'error',
     ],
-    ['first_text_observed', 'questions'],
+    ['first_text_observed', 'questions', 'response_segments'],
   );
   if (
     Object.hasOwn(data, 'first_text_observed') &&
@@ -316,6 +321,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     connection: variant(data['connection'], connections),
     turn: variant(data['turn'], turns),
     items: decoded,
+    response_segments: responseSegments(data['response_segments'] ?? []),
     activity: activity(data['activity']),
     reset_id: data['reset_id'] === null ? null : text(data['reset_id'], 128),
     error: data['error'] === null ? null : decodeIvyError(data['error']),
@@ -326,4 +332,36 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   )
     throw new DesktopContractError('malformed');
   return snapshot;
+}
+
+function responseSegments(value: unknown): IvyResponseSegment[] {
+  if (!Array.isArray(value) || value.length > 17)
+    throw new DesktopContractError('malformed');
+  const rows = value.map((entry): IvyResponseSegment => {
+    const row = record(entry, ['id', 'kind', 'text', 'sequence', 'reused']);
+    const id = boundedString(row['id'], 64);
+    if (!/^[0-9a-f]{64}$/.test(id) || typeof row['reused'] !== 'boolean')
+      throw new DesktopContractError('malformed');
+    const kind = variant(row['kind'], segmentKinds);
+    const order = row['sequence'] === null ? null : sequence(row['sequence']);
+    if ((kind === 'commentary') !== (order !== null))
+      throw new DesktopContractError('malformed');
+    const content = text(row['text'], kind === 'commentary' ? 4096 : undefined);
+    if (
+      /(?:^|\n)\s*(?:\{|\[|`|<)|stellar_presentation|<\/?(?:think|analysis|tool_call)\b/i.test(
+        content,
+      ) ||
+      (kind === 'commentary' && row['reused'])
+    )
+      throw new DesktopContractError('malformed');
+    return { id, kind, text: content, sequence: order, reused: row['reused'] };
+  });
+  if (
+    new Set(rows.map((row) => row.id)).size !== rows.length ||
+    rows.filter((row) => row.kind === 'commentary').length > 16 ||
+    rows.filter((row) => row.kind === 'final').length > 1 ||
+    rows.some((row, index) => row.kind === 'final' && index !== rows.length - 1)
+  )
+    throw new DesktopContractError('malformed');
+  return rows;
 }

@@ -59,6 +59,29 @@ class Connection:
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
 
+    async def test_interim_projection_does_not_settle_admission_or_forward_reasoning(self):
+        conn = Connection()
+        conn.active = {'session_id': 's', 'admission_id': 'a', 'execution_generation': 3}
+        for kind, payload in [
+            ('reasoning.delta', {'text': 'private reasoning'}),
+            ('message.interim', {'text': 'Morning! Let me check.', 'already_streamed': False, 'private': 'excluded'}),
+            ('message.interim', {'text': 'x' * 4097, 'already_streamed': False}),
+            ('message.interim', {'text': 'missing boundary flag'}),
+            ('message.interim', {'text': 'Your meeting is at ten.', 'already_streamed': True}),
+        ]:
+            await conn.events.put({'params': {'type': kind, 'session_id': 's', 'admission_id': 'a',
+                'execution_generation': 3, 'seq': conn.events.qsize() + 1, 'replay_epoch': 'e', 'payload': payload}})
+        await conn.events.put(RuntimeError('stop'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        rows = [json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual([row['payload'] for row in rows], [
+            {'text': 'Morning! Let me check.', 'already_streamed': False},
+            {'text': 'Your meeting is at ten.', 'already_streamed': True}])
+        self.assertIsNotNone(conn.active)
+        self.assertFalse(conn.lease.released)
+
     async def test_questions_project_only_public_fields_and_allow_bounded_answers(self):
         conn = Connection()
         payload = {'prompt_id': 'q1', 'question': 'Which?', 'choices': ['Left', 'Right'], 'multi_select': False, 'private': 'excluded'}
@@ -236,14 +259,14 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         text = '\U0001fa90"\\\n' * 100000
         conn = Connection()
         async def receipt(method, params):
-            return {'status': 'terminal', 'result': {'final_response': text, 'secret': 'excluded'}}
+            return {'status': 'terminal', 'result': {'final_response': text, 'response_reused': True, 'secret': 'excluded'}}
         conn.call = receipt
         stdin = Pipe(b'{"id":1,"method":"prompt.receipt","params":{"session_id":"s","admission_id":"a","include_result":true}}\n')
         stdout = Pipe()
         with patch.object(sys, 'stdin', stdin), patch.object(sys, 'stdout', stdout):
             await bridge.requests(conn)
         frame = json.loads(stdout.buffer.getvalue())
-        self.assertEqual(frame['result']['result'], {'final_response': text})
+        self.assertEqual(frame['result']['result'], {'final_response': text, 'response_reused': True})
         self.assertEqual(bridge.text_fields({'text': text, 'reasoning': 'excluded'}), {'text': text})
 
     async def test_timeout_is_uncertain_and_does_not_retry(self):
@@ -265,7 +288,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         await conn.events.put({'params': {'type': 'tool.complete', 'payload': {'secret': 'excluded'}}})
         await conn.events.put({'params': {'type': 'message.complete', 'session_id': 'session',
             'admission_id': 'admission', 'execution_generation': 1, 'replay_epoch': 'epoch', 'seq': 3,
-            'payload': {'text': 'visible', 'outcome': 'completed', 'content': ['excluded'], 'reasoning': 'excluded'}}})
+            'payload': {'text': 'visible', 'outcome': 'completed', 'response_reused': True, 'content': ['excluded'], 'reasoning': 'excluded'}}})
         await conn.events.put(RuntimeError('excluded'))
         stdout = Pipe()
         with patch.object(sys, 'stdout', stdout), self.assertRaises(bridge.Closed):
@@ -274,6 +297,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(frames), 1)
         self.assertNotIn(b'excluded', frames[0])
         self.assertEqual(json.loads(frames[0])['data']['params']['payload']['text'], 'visible')
+        self.assertTrue(json.loads(frames[0])['data']['params']['payload']['response_reused'])
 
     async def test_approval_is_denied_with_observed_fence(self):
         conn = Connection()

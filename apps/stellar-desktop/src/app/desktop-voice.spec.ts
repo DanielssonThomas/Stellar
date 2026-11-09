@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { AudioActivityService } from '@stellar/service-audio-activity';
 import {
@@ -67,81 +67,98 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
 }
 
 describe('desktop voice session composition', () => {
-  it('fences an acknowledgment queued behind a question before final narration', async () => {
+  it('fences a committed response queued behind a question before final narration', async () => {
     const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
     const speech = TestBed.inject(SpeechAdapterService);
-    const speak = vi.fn(async (text: string, id: string) => {
-      void text;
-      void id;
-      return {
-        ...initialSpeechSnapshot(),
-        revision: '1',
+    const state = speech.state as WritableSignal<
+      ReturnType<typeof initialSpeechSnapshot>
+    >;
+    const speak = vi.fn(async (_text: string, operation_id: string) => {
+      const snapshot = {
+        ...state(),
+        operation_id,
+        revision: String(BigInt(state().revision) + 1n),
         state: 'speaking' as const,
       };
+      state.set(snapshot);
+      return snapshot;
     });
     Object.assign(speech, { speak });
+    await voice.refreshSession();
+    TestBed.tick();
     const conversation = Reflect.get(voice, 'conversation') as {
-      ports: {
-        speak: (
-          text: string,
-          id: string,
-          current?: () => boolean,
-        ) => Promise<unknown>;
-        stop: () => Promise<unknown>;
-      };
+      say: (
+        text: string,
+        id: string,
+        current?: () => boolean,
+      ) => Promise<unknown>;
     };
     voice.notifyQuestion('q1');
+    for (let i = 0; i < 12; i++) await Promise.resolve();
     let owned = true;
-    const queued = conversation.ports.speak(
-      'One moment.',
+    const queued = conversation.say(
+      'A superseded response segment.',
       '11111111-2222-4333-8444-555555555555',
       () => owned,
     );
-    const question = Reflect.get(voice, 'questionCue') as {
-      observe: (snapshot: ReturnType<typeof initialSpeechSnapshot>) => void;
-    };
-    question.observe({ ...initialSpeechSnapshot(), revision: '2' });
+    const cancelled = expect(queued).rejects.toThrow('expired');
     owned = false;
-    await queued;
-    await conversation.ports.stop();
-    await conversation.ports.speak(
+    state.set({ ...state(), revision: '2', state: 'idle' });
+    TestBed.tick();
+    await cancelled;
+    const final = conversation.say(
       'Your first event is at ten.',
       '22222222-2222-4333-8444-555555555555',
     );
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    state.set({ ...state(), revision: '4', state: 'idle' });
+    TestBed.tick();
+    await final;
     expect(speak.mock.calls.map((call) => call[0])).toEqual([
       'Could you check this out?',
       'Your first event is at ten.',
     ]);
     TestBed.resetTestingModule();
   });
+
   it.each(['mute', 'stop', 'dispose'])(
-    'does not start narration after %s while waiting for a question cue',
+    'does not dispatch queued narration after %s while a question is playing',
     async (operation) => {
       const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
       const speech = TestBed.inject(SpeechAdapterService);
-      const speak = vi.fn(async () => ({
-        ...initialSpeechSnapshot(),
-        revision: '1',
-        state: 'speaking' as const,
-      }));
+      const state = speech.state as WritableSignal<
+        ReturnType<typeof initialSpeechSnapshot>
+      >;
+      const speak = vi.fn(async (_text: string, operation_id: string) => {
+        const snapshot = {
+          ...state(),
+          operation_id,
+          revision: '1',
+          state: 'speaking' as const,
+        };
+        state.set(snapshot);
+        return snapshot;
+      });
       Object.assign(speech, { speak });
+      await voice.refreshSession();
+      TestBed.tick();
       voice.notifyQuestion('q1');
       const conversation = Reflect.get(voice, 'conversation') as {
-        ports: { speak: (text: string, id: string) => Promise<unknown> };
+        say: (text: string, id: string) => Promise<unknown>;
       };
-      const pending = conversation.ports.speak(
+      const pending = conversation.say(
         'Final narration',
         '11111111-2222-4333-8444-555555555555',
       );
+      const cancelled = expect(pending).rejects.toThrow('cancelled');
       if (operation === 'mute') voice.setMuted(true);
       else if (operation === 'stop') voice.stop();
       else TestBed.resetTestingModule();
-      await pending;
-      expect(speak).toHaveBeenCalledTimes(1);
-      expect(speak.mock.calls[0]).toEqual([
+      await cancelled;
+      expect(speak).toHaveBeenCalledExactlyOnceWith(
         'Could you check this out?',
         expect.any(String),
-      ]);
+      );
       TestBed.resetTestingModule();
     },
   );

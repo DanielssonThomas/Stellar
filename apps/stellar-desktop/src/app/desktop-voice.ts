@@ -54,7 +54,7 @@ export class DesktopVoice {
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
-    speak: (text, id) => this.speech.speak(text, id),
+    speak: (text, id) => this.conversation.say(text, id),
     stop: () => this.speech.stop(),
   });
   private narration?: { id: string; revision: bigint; epoch: string };
@@ -108,7 +108,6 @@ export class DesktopVoice {
     cancelReflex: () => this.reflex.cancel(),
     speak: async (text, id, current = () => true) => {
       const generation = this.playbackGeneration;
-      await this.questionCue.wait();
       if (
         generation !== this.playbackGeneration ||
         !current() ||
@@ -267,7 +266,9 @@ export class DesktopVoice {
           if (local.handled) return local.outcome !== 'cancelled';
         }
         this.reflex.reply.set('');
-        return await this.assistant.submit(text, inputId);
+        return await this.conversation.withResponseOwnership(inputId, () =>
+          this.assistant.submit(text, inputId),
+        );
       } finally {
         this.updateContext();
       }
@@ -280,8 +281,13 @@ export class DesktopVoice {
     const narration = this.narration;
     if (narration && BigInt(speech.revision) > narration.revision) {
       if (speech.epoch !== narration.epoch) this.finishNarration('cancelled');
-      else if (speech.state === 'idle') this.finishNarration('completed');
-      else if (speech.state === 'unavailable') this.finishNarration('failed');
+      else if (speech.operation_id === narration.id && speech.state === 'idle')
+        this.finishNarration('completed');
+      else if (
+        speech.operation_id === narration.id &&
+        speech.state === 'unavailable'
+      )
+        this.finishNarration('failed');
       else if (
         speech.operation_id === narration.id &&
         speech.state === 'speaking'
@@ -308,6 +314,12 @@ export class DesktopVoice {
     this.playbackGeneration++;
     this.questionCue.cancel();
     this.conversation.stopVoice();
+  }
+  narrationOwner() {
+    return this.conversation.narrationOwner();
+  }
+  stopNarration() {
+    return this.conversation.stopNarration();
   }
   async retry(): Promise<void> {
     this.conversation.retry();

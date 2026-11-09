@@ -112,6 +112,8 @@ fn main() {
         IvyActivityProvider::decl(&config),
         IvyActivityOperation::decl(&config),
         IvyActivity::decl(&config),
+        IvyResponseSegmentKind::decl(&config),
+        IvyResponseSegment::decl(&config),
         IvySnapshot::decl(&config),
         IvyInspectorRequest::decl(&config),
         IvySessionSummary::decl(&config),

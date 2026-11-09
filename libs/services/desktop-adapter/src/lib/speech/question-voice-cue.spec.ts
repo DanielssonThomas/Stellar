@@ -30,7 +30,11 @@ describe('question voice cue', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(finished).toBe(false);
-    cue.observe({ ...state, revision: '2' });
+    cue.observe({
+      ...state,
+      operation_id: speak.mock.calls.at(-1)?.[1],
+      revision: '2',
+    });
     await cue.wait();
   });
   function fixture(enabled = true) {
@@ -63,7 +67,11 @@ describe('question voice cue', () => {
     });
     await Promise.resolve();
     expect(finished).toBe(false);
-    cue.observe({ ...state, revision: '2' });
+    cue.observe({
+      ...state,
+      operation_id: speak.mock.calls.at(-1)?.[1],
+      revision: '2',
+    });
     await cue.wait();
     await Promise.resolve();
     expect(finished).toBe(true);
