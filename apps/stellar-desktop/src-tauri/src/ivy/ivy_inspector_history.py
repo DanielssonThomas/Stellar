@@ -109,6 +109,7 @@ def read_history(profile: Path, active, requested, offset=0, before=None, redact
                 return result
             messages = db.execute("SELECT id,role,substr(content,1,16000) AS content,timestamp FROM messages WHERE session_id=? "
                                   "AND role IN ('user','assistant') AND content IS NOT NULL "
+                                  "AND (role='user' OR trim(content,char(9,10,11,12,13,32)) <> '') "
                                   'AND id<? ORDER BY id DESC LIMIT ?',
                                   (selected, before or 4294967295, PAGE + 1)).fetchall()
             result['next_before'] = messages[PAGE - 1]['id'] if len(messages) > PAGE else None
