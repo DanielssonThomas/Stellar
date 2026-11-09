@@ -16,9 +16,13 @@ mod speech_names;
 #[path = "src/telemetry/command_name.rs"]
 mod telemetry_name;
 
+#[path = "src/microphone_permission/command_name.rs"]
+mod microphone_permission;
+
 fn main() {
     const COMMANDS: &[&str] = &[
         "shell_status",
+        microphone_permission::MICROPHONE_REVIEW_COMMAND,
         "ivy_inspect",
         awareness::AWARENESS_COMMANDS[0],
         awareness::AWARENESS_COMMANDS[1],

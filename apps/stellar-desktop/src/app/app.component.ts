@@ -15,6 +15,7 @@ import { DesktopVoice } from './desktop-voice';
 import {
   DesktopAdapterService,
   DesktopAwarenessService,
+  MicrophonePermissionService,
   IvyAdapterService,
   WorkspaceToolsService,
   MusicVisualizerService,
@@ -67,6 +68,7 @@ import { DesktopFaults } from './desktop-faults';
   },
 })
 export class AppComponent {
+  readonly microphonePermission = inject(MicrophonePermissionService);
   readonly inspector = inject(IvyInspectorService);
   inspectorVisible(visible: boolean) {
     if (visible) this.inspector.open();
