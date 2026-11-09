@@ -193,6 +193,9 @@ test('directs the sample from overview through detail and comparison at playback
   await expect(dialog.locator('.is-focused')).toHaveCount(0);
   await speech(page, 'idle');
   await begin(2);
+  await expect(dialog.locator('.projection-caption')).toContainText(
+    'My pick for your local AI work',
+  );
   await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
   await speech(page, 'idle');
   await begin(3);
@@ -216,6 +219,9 @@ test('directs the sample from overview through detail and comparison at playback
   });
   await speech(page, 'idle');
   await begin(6);
+  await expect(dialog.locator('.projection-caption')).toContainText(
+    'Elsewhere in AI',
+  );
   await expect(card(page, 'relay')).toHaveClass(
     /is-focused is-expanded|is-expanded is-focused/,
   );

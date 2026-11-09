@@ -72,19 +72,19 @@ export const morningAiBriefing: SpatialScore = {
   prepare: articles.map((panel) => ({ kind: 'show', panel })),
   segments: [
     {
-      text: 'Good morning. Five sample stories are on the stage. Let’s start with a smaller model that checks its own reasoning.',
+      text: 'Good morning. Here are five sample headlines.',
       actions: [{ kind: 'overview' }],
     },
     {
-      text: 'Project Juniper asks whether a small model can catch mistakes before giving you an answer.',
+      text: 'My pick for your local AI work: Juniper tests a self-checking small model.',
       actions: [{ kind: 'focus', id: 'juniper' }],
     },
     {
-      text: 'Here’s the interesting part. A separate checker can flag uncertain steps. The tradeoff is how much those extra checks cost.',
+      text: 'A separate checker flags uncertain steps.',
       actions: [{ kind: 'expand', id: 'juniper' }],
     },
     {
-      text: 'Meanwhile, Mosaic Lab tests reasoning across long documents. The benchmark asks models to reconcile sources that disagree.',
+      text: 'Mosaic tests whether models can reconcile conflicting sources.',
       actions: [
         { kind: 'collapse', id: 'juniper' },
         { kind: 'focus', id: 'mosaic' },
@@ -92,14 +92,14 @@ export const morningAiBriefing: SpatialScore = {
       ],
     },
     {
-      text: 'Side by side, Juniper changes how a model answers. Mosaic changes how we test the answer. Both make the evidence easier to inspect.',
+      text: 'Juniper checks the answer. Mosaic tests the evidence.',
       actions: [
         { kind: 'collapse', id: 'mosaic' },
         { kind: 'compare', ids: ['juniper', 'mosaic'] },
       ],
     },
     {
-      text: 'Relay Systems is exploring local inference. Keeping sensitive inputs close to the application changes where teams need to measure latency.',
+      text: 'Elsewhere in AI, Relay explores running inference where the data lives.',
       actions: [
         { kind: 'focus', id: 'relay' },
         { kind: 'expand', id: 'relay' },
@@ -107,7 +107,7 @@ export const morningAiBriefing: SpatialScore = {
       after: [{ kind: 'collapse', id: 'relay' }],
     },
     {
-      text: 'Meridian Studio takes on attribution. A provenance card can travel with a generated image and show how it was edited.',
+      text: 'Meridian tests edit histories that travel with generated images.',
       actions: [
         { kind: 'focus', id: 'meridian' },
         { kind: 'expand', id: 'meridian' },
@@ -115,7 +115,7 @@ export const morningAiBriefing: SpatialScore = {
       after: [{ kind: 'collapse', id: 'meridian' }],
     },
     {
-      text: 'Finally, Harbor’s sample audit looks at the human handoff. It asks whether someone can inspect, decline, and recover from a proposed action.',
+      text: 'Harbor proposes an audit for human approvals.',
       actions: [
         { kind: 'focus', id: 'harbor' },
         { kind: 'expand', id: 'harbor' },
@@ -123,7 +123,7 @@ export const morningAiBriefing: SpatialScore = {
       after: [{ kind: 'collapse', id: 'harbor' }],
     },
     {
-      text: 'That’s the briefing. I’ve left the five stories on the stage so you can explore them at your own pace.',
+      text: 'That’s your morning scan.',
       actions: [{ kind: 'overview' }],
     },
   ],
