@@ -146,8 +146,9 @@ export function decodeSpatialScore(
   value: unknown,
   catalogue: StageCatalogue,
 ): SpatialScore | null {
+  // A segment action adds seven levels before a panel detail payload.
   if (
-    !boundedJson(value, 32768, 8000) ||
+    !boundedJson(value, 32768, 8000, 15) ||
     !plainRecord(value) ||
     !keys(value, 'begin prepare segments')
   )
