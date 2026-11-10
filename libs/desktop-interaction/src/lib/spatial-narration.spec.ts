@@ -99,6 +99,28 @@ describe('spatial narration', () => {
     expect(f.view).toHaveBeenLastCalledWith('idle', '');
   });
 
+  it.each([
+    { state: 'idle', stops: 1 },
+    { state: 'speaking', stops: 0 },
+  ] as const)(
+    'cancels pending speech only when the other operation is idle ($state)',
+    async ({ state, stops }) => {
+      const f = fixture();
+      f.signal('idle', 'previous');
+      f.speak.mockImplementationOnce(() => new Promise(() => undefined));
+      f.controller.append([segment]);
+      await tick();
+      expect(f.speak).toHaveBeenCalledOnce();
+      f.signal(state, 'previous');
+
+      f.controller.cancel();
+
+      expect(f.stop).toHaveBeenCalledTimes(stops);
+      expect(f.apply).not.toHaveBeenCalled();
+      expect(f.view).toHaveBeenLastCalledWith('idle', '');
+    },
+  );
+
   it('advances without input when audio fails and gives longer text more time', async () => {
     vi.useFakeTimers();
     const f = fixture();

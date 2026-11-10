@@ -152,7 +152,8 @@ export class SpatialNarration {
     if (
       active &&
       snapshot.epoch === active.epoch &&
-      (!snapshot.operation_id || snapshot.operation_id === active.id)
+      (snapshot.operation_id === active.id ||
+        (snapshot.state === 'idle' && !active.acknowledged))
     ) {
       this.stopping = this.port
         .stop()
