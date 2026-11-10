@@ -17,6 +17,13 @@
   >
     <ng-content select="[stage-emblem]" />
   </div>
+  <div
+    class="spatial-slot"
+    [hidden]="composing()"
+    [attr.inert]="composing() ? '' : null"
+  >
+    <ng-content select="[stage-spatial]" />
+  </div>
   @if (layout().composer) {
     <div
       class="composer-slot"
@@ -38,8 +45,10 @@
       [style.display]="surface.hidden ? 'none' : null"
       (pointerdown)="select(surface.instanceId)"
       (focusin)="select(surface.instanceId)"
-      [attr.inert]="composing() ? '' : null"
-      [attr.aria-hidden]="composing() ? 'true' : null"
+      [attr.inert]="composing() || spatialFocus() !== null ? '' : null"
+      [attr.aria-hidden]="
+        composing() || spatialFocus() !== null ? 'true' : null
+      "
       [attr.data-instance-id]="surface.instanceId"
       [attr.aria-label]="surface.title"
       role="region"

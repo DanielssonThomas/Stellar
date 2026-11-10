@@ -20,7 +20,10 @@ const exact = (
   Object.keys(value).every(
     (key) => required.includes(key) || optional.includes(key),
   );
-const text = (value: unknown, limit = 4096): value is string =>
+export const presentationText = (
+  value: unknown,
+  limit = 4096,
+): value is string =>
   typeof value === 'string' &&
   !!value.trim() &&
   value.length <= limit &&
@@ -32,6 +35,7 @@ const text = (value: unknown, limit = 4096): value is string =>
       (n >= 0xd800 && n <= 0xdfff)
     );
   });
+const text = presentationText;
 const array = (value: unknown, maximum: number): value is unknown[] =>
   Array.isArray(value) &&
   value.length <= maximum &&

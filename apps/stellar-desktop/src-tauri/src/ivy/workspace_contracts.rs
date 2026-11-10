@@ -76,6 +76,9 @@ pub enum WorkspaceToolOperation {
     },
     Clear,
     Inspect,
+    Present {
+        score_json: String,
+    },
     CaptureWindow,
     ListDisplays,
     CaptureDisplay {

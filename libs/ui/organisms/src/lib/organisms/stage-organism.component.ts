@@ -29,6 +29,7 @@ import { type StageDivider, directStage } from './stage-director';
 import { createStageRegistry } from './stage-registry';
 import { createStageMotion } from './stage-motion';
 import { stageRenderState, settleStage } from './stage-observation';
+import { spatialEmblem } from './spatial-layout';
 
 @Component({
   selector: 'stellar-stage-organism',
@@ -41,6 +42,7 @@ import { stageRenderState, settleStage } from './stage-observation';
     '[class.motion-reduced]': 'reducedMotion()',
     '[class.pane-tools-visible]': 'showPaneControls()',
     '[class.keyboard-focus]': 'keyboardFocus()',
+    '[class.spatial-active]': 'spatialFocus() !== null',
     '(keydown.tab)': 'keyboardFocus.set(true)',
     '(pointerdown)': 'keyboardFocus.set(false)',
     '(keydown.escape)': 'escape($event)',
@@ -50,6 +52,7 @@ export class StageOrganism {
   readonly keyboardFocus = signal(false);
   readonly loading = input(false);
   readonly emblemTarget = input<EmblemTarget>();
+  readonly spatialFocus = input<number | null>(null);
   readonly reducedMotion = input(false);
   readonly showPaneControls = input(false);
   readonly composing = input(false);
@@ -59,6 +62,7 @@ export class StageOrganism {
   readonly retainedPresentations = output<boolean>();
   readonly interaction = output<InteractionEvent>();
   readonly motionDuration = computed(() => {
+    if (this.spatialFocus() !== null) return '500ms';
     const target = this.emblemTarget();
     return `${target === 'docked' ? motionDurations.dock : target === 'center' ? motionDurations.return : motionDurations.focus}ms`;
   });
@@ -93,15 +97,23 @@ export class StageOrganism {
   readonly layoutState = signal(this.registry.layout());
   private readonly viewport = signal({ width: 0, height: 0 });
   private readonly instances = signal(this.registry.snapshot());
-  readonly layout = computed(() =>
-    directStage(
-      this.viewport(),
+  readonly layout = computed(() => {
+    const viewport = this.viewport();
+    const stage = directStage(
+      viewport,
       this.instances(),
       this.emblemTarget(),
       this.composing(),
       this.layoutState(),
-    ),
-  );
+    );
+    const focus = this.spatialFocus();
+    return focus === null
+      ? stage
+      : {
+          ...stage,
+          emblem: spatialEmblem(viewport.width, viewport.height, focus),
+        };
+  });
   readonly surfaces = computed(() =>
     this.instances().map((instance) => {
       const rect = this.layout().surfaces.find(
@@ -211,7 +223,13 @@ export class StageOrganism {
     });
     afterRenderEffect(() => {
       const requested = this.focusRequest();
-      if (!requested || this.loading() || this.composing()) return;
+      if (
+        !requested ||
+        this.loading() ||
+        this.composing() ||
+        this.spatialFocus() !== null
+      )
+        return;
       const panel = this.panels().find(
         (entry) =>
           !entry.nativeElement.classList.contains('pane-leave') &&
@@ -326,6 +344,7 @@ export class StageOrganism {
             this.host.nativeElement,
             instance.instanceId,
             instance.minimized ||
+              this.spatialFocus() !== null ||
               !this.layout().surfaces.some(
                 (pane) => pane.instanceId === instance.instanceId,
               ),

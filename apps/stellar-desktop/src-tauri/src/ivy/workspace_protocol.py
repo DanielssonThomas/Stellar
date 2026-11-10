@@ -149,6 +149,7 @@ def validate_operation(operation):
         'arrange': {'instance_ids'}, 'clear': set(), 'inspect': set(),
         'capture_window': set(),
         'capture_foreground': set(), 'capture_display': {'display_id'}, 'list_displays': set(),
+        'present': {'score_json'},
     }
     if kind == 'update' and 'expected_revision' in operation:
         fields['update'] = fields['update'] | {'expected_revision'}
@@ -177,6 +178,8 @@ def validate_operation(operation):
         raise WorkspaceRefused()
     if 'payload_json' in operation:
         _payload(operation['payload_json'], PAYLOAD_LIMITS[operation['surface']], operation['surface'])
+    if kind == 'present':
+        _payload(operation['score_json'], 32768)
     return dict(operation)
 
 

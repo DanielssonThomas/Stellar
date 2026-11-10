@@ -1,5 +1,22 @@
 @if (loading()) {
   <stellar-skeleton-atom shape="text" />
+} @else if (thumbnail(); as preview) {
+  @if (pending()) {
+    <stellar-skeleton-atom class="image-status" shape="text" />
+  }
+  @if (displaySrc(); as src) {
+    <img
+      class="media-image"
+      [src]="src"
+      [alt]="preview.alt"
+      decoding="async"
+      referrerpolicy="no-referrer"
+      draggable="false"
+      (load)="settle($event, false)"
+      (error)="settle($event, true)"
+      [hidden]="!loaded() || failed()"
+    />
+  }
 } @else if (payload(); as content) {
   <article class="presentation">
     <h2>{{ content.title }}</h2>

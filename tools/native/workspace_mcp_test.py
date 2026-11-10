@@ -288,7 +288,7 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     names = {tool.name for tool in tools}
                     self.assertIn('conversing inside Stellar Desktop', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
-                    self.assertEqual(names, {'apply_workspace', 'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
+                    self.assertEqual(names, {'present_spatial', 'apply_workspace', 'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
                                              'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window', 'capture_display', 'capture_foreground', 'list_displays',
                                              'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace'})
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
@@ -306,6 +306,18 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertFalse(result.is_error)
                     self.assertEqual(json.loads(result.content[0].text), {'outcome': {'kind': 'applied'}, 'workspace': {'kind': 'inspection', 'panes': []}, 'snapshot': 'captured'})
                     self.assertEqual(result.content[1].type, 'image')
+
+                    score = json.dumps({'prepare': [{'kind': 'overview'}]})
+                    task = asyncio.create_task(session.call_tool('present_spatial', {'turn_token': token, 'score_json': score}))
+                    request = await self.next_request()
+                    self.assertEqual(request['operation'], {'kind': 'present', 'score_json': score})
+                    self.assertNotIn(token, str(request))
+                    header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                    self.gate.reply({**header, 'outcome': {'kind': 'applied'}})
+                    result = await asyncio.wait_for(task, 5)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(json.loads(result.content[0].text), {'kind': 'applied'})
+                    self.assertFalse(self.frames)
 
     async def test_bulk_tool_returns_one_final_image_without_intermediate_inspection_or_replay(self):
         token = self.gate.arm('1', 'turn-one')

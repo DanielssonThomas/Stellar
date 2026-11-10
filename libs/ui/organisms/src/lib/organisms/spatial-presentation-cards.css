@@ -1,0 +1,198 @@
+.spatial-card {
+  position: absolute;
+  transform-origin: top left;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.36s var(--projection-ease);
+  --edge: var(--gold-line);
+  --corner: var(--detail-line);
+}
+.spatial-card.foreground {
+  z-index: 2;
+  --edge: var(--detail-line);
+  --corner: var(--gold);
+}
+.spatial-card.periphery {
+  opacity: 0.79;
+}
+.spatial-card.periphery:hover,
+.spatial-card.periphery:focus-within {
+  opacity: 1;
+}
+.card-face {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.48s var(--projection-ease);
+}
+.card-plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: top left;
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--stellar-color-canvas) 92%, transparent);
+  transition: border-color 0.3s ease;
+  pointer-events: none;
+}
+.foreground .card-plane {
+  background: color-mix(in srgb, var(--stellar-color-canvas) 96%, var(--gold));
+}
+.card-plane::before,
+.card-plane::after {
+  content: '';
+  position: absolute;
+  width: 0.65rem;
+  height: 0.65rem;
+  pointer-events: none;
+  border: solid var(--corner);
+}
+.card-plane::before {
+  inset: -1px auto auto -1px;
+  border-width: 1px 0 0 1px;
+}
+.card-plane::after {
+  inset: auto -1px -1px auto;
+  border-width: 0 1px 1px 0;
+}
+.middle:nth-child(even) .card-face {
+  transform: perspective(1300px) rotateY(-0.75deg);
+}
+.middle:nth-child(odd) .card-face,
+.periphery .card-face {
+  transform: perspective(1300px) rotateY(0.75deg);
+}
+.card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.65rem 0.85rem;
+}
+.foreground .card-body {
+  padding: 0.85rem 1rem;
+}
+.card-top {
+  display: flex;
+  gap: 0.47rem;
+  align-items: center;
+
+  margin-bottom: 0.35rem;
+}
+.card-sequence {
+  color: var(--gold);
+}
+.card-tick {
+  width: 0.72rem;
+  height: 1px;
+  background: var(--detail-line);
+}
+.card-category {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: 1px 3px 1px;
+  margin-inline: -3px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-line) transparent;
+  overflow-wrap: anywhere;
+}
+.card-headline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+.card-copy {
+  flex: 1;
+  min-width: 0;
+}
+.card-headline > .card-thumbnail {
+  display: grid;
+  flex: 0 0 auto;
+  width: clamp(2.75rem, 25%, 6.75rem);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--gold) 5%, var(--stellar-color-canvas));
+  overflow: hidden;
+  pointer-events: none;
+}
+.foreground .card-headline > .card-thumbnail {
+  width: clamp(3rem, 25%, 9rem);
+}
+.card-headline > .card-thumbnail[data-render-state='error'] {
+  display: none;
+}
+h3 {
+  margin: 0;
+  font-size: clamp(0.89rem, 1.15vw, 1.03rem);
+  line-height: 1.24;
+  font-weight: 550;
+}
+.foreground h3 {
+  font-size: clamp(1.05rem, 1.68vw, 1.52rem);
+  line-height: 1.16;
+  max-width: 35ch;
+}
+.is-focused h3 {
+  font-size: clamp(1.15rem, 1.82vw, 1.63rem);
+}
+.card-title {
+  text-align: left;
+}
+.card-title:hover {
+  color: var(--gold);
+}
+.card-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.card-summary {
+  margin: 0.4rem 0 0.15rem;
+  color: var(--body-ink);
+  font-size: 0.8rem;
+  line-height: 1.42;
+  max-width: 62ch;
+}
+.foreground .card-summary {
+  font-size: 0.88rem;
+}
+.periphery .card-summary {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.panel-source {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  margin-top: 0.55rem;
+  color: var(--gold);
+  font-size: 0.74rem;
+}
+.panel-source:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.card-detail {
+  position: relative;
+  z-index: 1;
+  --stellar-presentation-title: 1rem;
+  --stellar-presentation-body: 0.88rem;
+  border-top: 1px solid var(--gold-line);
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+}
+:host(.motion-reduced) .card-face {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-face {
+    transform: none !important;
+  }
+}

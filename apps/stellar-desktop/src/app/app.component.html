@@ -1,6 +1,8 @@
 <main class="h-dvh bg-stellar-canvas text-stellar-foreground">
   <h1 class="sr-only">{{ title }}</h1>
   <stellar-desktop-experience-template
+    [spatialFocus]="spatial.scene() ? spatial.state().featured.length : null"
+    (spatialBriefing)="spatial.startSample()"
     [state]="experience.state()"
     [manifest]="experience.manifest()"
     [loading]="experience.loading()"
@@ -106,5 +108,20 @@
     (action)="experience.dispatch($event)"
     (stopMicrophone)="experience.session.stopMicrophone()"
     (restoreSummary)="experience.session.showSummary()"
-  />
+  >
+    <stellar-spatial-presentation-organism
+      desktop-spatial
+      [scene]="spatial.scene()"
+      [state]="spatial.state()"
+      [mode]="spatial.narration().mode"
+      [caption]="spatial.narration().caption"
+      [transcript]="spatial.transcript()"
+      [reducedMotion]="experience.state().reducedMotion"
+      (action)="spatial.manual($event)"
+      (stop)="spatial.interrupt()"
+      (next)="spatial.next()"
+      (toggleReadAlong)="spatial.toggleReadAlong()"
+      (follow)="spatial.follow()"
+    />
+  </stellar-desktop-experience-template>
 </main>

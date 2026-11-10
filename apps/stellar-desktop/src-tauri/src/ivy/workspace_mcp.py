@@ -64,6 +64,11 @@ def make_server(gate, bearer, port):
         'errors or missing capture specifically, without generic unverified-request disclaimers. '
         'Use snapshot_workspace for an immediate fresh view of this application when needed. '
         'For multiple panes or changes, use one apply_workspace call with all operations, not one call per pane. '
+        'For a narrated spatial briefing or guided comparison, use present_spatial with committed user-facing narration. '
+        'For today’s AI news, use available research tools to verify current stories, then present a sourced briefing with present_spatial. '
+        'Write a short, factual headline for each story and speak one short sentence per story by default. Keep sources and supporting detail in the panels. '
+        'Lead with your pick when a known user interest gives you a concrete reason. Say it is your judgment and give that reason briefly. '
+        'Present the rest as general updates. When you lack a grounded basis for personalization, give a general update or label your editorial pick as such. '
         'It loads the view concurrently and returns one final image. For closing everything use a single clear '
         'operation or clear_panes. Ready/layout receipts confirm display even if screenshot capture fails; '
         'never claim to have inspected pixels without an image. Do not retry an unavailable screenshot of an '
@@ -119,6 +124,36 @@ def make_server(gate, bearer, port):
     async def changed(operation, turn_token):
         outcome = await gate.call(operation, turn_token)
         return await snapshot(turn_token, outcome, operation['kind'] == 'batch')
+
+    @server.tool()
+    async def present_spatial(turn_token: str, score_json: str):
+        """Direct an opt-in spatial presentation in Stellar Desktop using the current turn token.
+
+        Use for guided briefings, comparisons and similar presentations. Send a JSON object string
+        (max 32 KiB). Start with begin {title,label,description?,sample?}; omit begin when appending
+        to the current presentation. Optional prepare is an array of immediate actions. Optional
+        segments is an ordered array of {text,actions,after?}. The renderer speaks text using local
+        voice, applies actions at segment playback start, and applies after at playback completion.
+        For a current news request, use your available research tools to verify timely, distinct
+        stories. Aim for five when there are enough verified stories. Give each panel a source URL,
+        concise summary and supporting detail. When you have a verified relevant photo or official
+        company mark, add it as a thumbnail with descriptive alt text. Keep the headline useful
+        without the image and omit unavailable imagery. Introduce the briefing, focus each story when you
+        discuss it, reveal detail at the relevant segment, and finish in overview. Submit more panels
+        and segments as verified information arrives. Report retrieval gaps honestly.
+        Avoid repeating the tool's narration in your final chat message. An applied receipt means
+        the score was accepted.
+
+        Actions: {kind:"show",panel:{id,title,category,summary,group?,emphasis?,source?,thumbnail?,detail?}};
+        {kind:"focus"|"defocus"|"expand"|"collapse"|"dismiss",id}; {kind:"compare",ids:[first,second]};
+        {kind:"overview"}; {kind:"clear"}. Up to eight visible panels. Reuse IDs for updates.
+        Emphasis is lead or supporting. Source is a public HTTPS attribution URL. Thumbnail is
+        {src,alt}, with a public HTTPS image URL and alt text of up to 240 characters. Detail is
+        {surface,payload}, using the rich-text, chart, image or diagram schemas in open_pane.
+        Use sample:true and a clear label for fictional information. The user can take over focus
+        or stop narration at any point.
+        """
+        return await gate.call({'kind': 'present', 'score_json': score_json}, turn_token)
 
     @server.tool(structured_output=False)
     async def apply_workspace(turn_token: str, operations: list[dict]):
