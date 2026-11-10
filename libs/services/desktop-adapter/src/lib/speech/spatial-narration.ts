@@ -1,5 +1,4 @@
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
-import type { SpatialAction, SpatialSegment } from './spatial-presentation';
 
 export type SpatialNarrationMode =
   | 'idle'
@@ -8,8 +7,14 @@ export type SpatialNarrationMode =
   | 'reading'
   | 'paused';
 
-type Reading = {
-  readonly segment: SpatialSegment;
+interface NarrationSegment<Action> {
+  readonly text: string;
+  readonly actions: readonly Action[];
+  readonly after?: readonly Action[];
+}
+
+type Reading<Action> = {
+  readonly segment: NarrationSegment<Action>;
   remaining: number;
   deadline: number;
 };
@@ -19,8 +24,8 @@ export function readingTime(text: string): number {
   return Math.max(3200, words * 290, Array.from(text).length * 42) + 450;
 }
 
-type Playback = {
-  readonly segment: SpatialSegment;
+type Playback<Action> = {
+  readonly segment: NarrationSegment<Action>;
   readonly id: string;
   readonly epoch: string;
   readonly revision: bigint;
@@ -28,31 +33,31 @@ type Playback = {
   started: boolean;
 };
 
-interface NarrationPort {
+interface NarrationPort<Action> {
   readonly initialize: () => Promise<void>;
   readonly read: () => SpeechSnapshot;
   readonly speak: (text: string, id: string) => Promise<SpeechSnapshot>;
   readonly stop: () => Promise<unknown>;
   readonly id: () => string;
-  readonly apply: (actions: readonly SpatialAction[]) => void;
+  readonly apply: (actions: readonly Action[]) => void;
   readonly record: (text: string) => void;
   readonly view: (mode: SpatialNarrationMode, caption: string) => void;
 }
 
-export class SpatialNarration {
-  private readonly pending: SpatialSegment[] = [];
+export class SpatialNarration<Action> {
+  private readonly pending: NarrationSegment<Action>[] = [];
   private readonly waiters = new Set<() => void>();
-  private active?: Playback;
+  private active?: Playback<Action>;
   private initializing = false;
   private stopping?: Promise<unknown>;
   private generation = 0;
   private readAlong = false;
   private paused = false;
-  private reading?: Reading;
+  private reading?: Reading<Action>;
   private readTimer?: ReturnType<typeof setTimeout>;
   private caption = '';
 
-  constructor(private readonly port: NarrationPort) {}
+  constructor(private readonly port: NarrationPort<Action>) {}
 
   canAppend(count: number) {
     return (
@@ -60,7 +65,7 @@ export class SpatialNarration {
     );
   }
 
-  append(segments: readonly SpatialSegment[]) {
+  append(segments: readonly NarrationSegment<Action>[]) {
     this.pending.push(...segments);
     this.pump();
   }
@@ -166,7 +171,7 @@ export class SpatialNarration {
     this.publish('idle');
   }
 
-  private start(active: Playback) {
+  private start(active: Playback<Action>) {
     if (active.started) return;
     active.started = true;
     this.caption = active.segment.text;
@@ -175,7 +180,7 @@ export class SpatialNarration {
     if (this.active === active) this.publish('speaking');
   }
 
-  private fallback(active?: Playback) {
+  private fallback(active?: Playback<Action>) {
     if (active?.started) {
       this.reading = {
         segment: active.segment,
@@ -231,7 +236,7 @@ export class SpatialNarration {
           return;
         const segment = this.pending.shift();
         if (!segment) return;
-        const active: Playback = {
+        const active: Playback<Action> = {
           segment,
           id: this.port.id(),
           epoch: before.epoch,
@@ -271,7 +276,7 @@ export class SpatialNarration {
       this.publish('idle');
       return;
     }
-    const reading: Reading = {
+    const reading: Reading<Action> = {
       segment,
       remaining: readingTime(segment.text),
       deadline: 0,
@@ -294,7 +299,7 @@ export class SpatialNarration {
     );
   }
 
-  private completeReading(reading: Reading, step = false) {
+  private completeReading(reading: Reading<Action>, step = false) {
     if (this.reading !== reading) return;
     this.clearReadTimer();
     this.reading = undefined;

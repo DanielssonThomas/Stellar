@@ -13,14 +13,14 @@ import type {
 import {
   directSpatialAction,
   initialSpatialState,
-  SpatialNarration,
-  type SpatialNarrationMode,
   type SpatialAction,
   type SpatialScene,
 } from '@stellar/desktop-interaction';
 import {
   IvyAdapterService,
   SpeechAdapterService,
+  SpatialNarration,
+  type SpatialNarrationMode,
 } from '@stellar/service-desktop-adapter';
 import { decodeSpatialScore, STAGE_CATALOGUE } from '@stellar/ui-organisms';
 import { morningAiBriefing } from './morning-ai-briefing';
@@ -44,7 +44,7 @@ export class DesktopSpatial {
   readonly scene = this.currentScene.asReadonly();
   readonly state = this.currentState.asReadonly();
   readonly narration = this.playback.asReadonly();
-  private readonly timeline = new SpatialNarration({
+  private readonly timeline = new SpatialNarration<SpatialAction>({
     initialize: () =>
       this.muted ? Promise.reject() : this.speech.initialize(),
     read: () => this.speech.state(),

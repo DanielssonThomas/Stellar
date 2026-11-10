@@ -1,16 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
-import type { SpatialSegment } from './spatial-presentation';
 import { readingTime, SpatialNarration } from './spatial-narration';
 
 afterEach(() => vi.useRealTimers());
 
-const segment: SpatialSegment = {
+const segment = {
   text: 'Look at the research.',
   actions: [{ kind: 'focus', id: 'research' }],
   after: [{ kind: 'overview' }],
 };
-const next: SpatialSegment = {
+const next = {
   text: 'Consider the evidence.',
   actions: [{ kind: 'expand', id: 'research' }],
 };
@@ -43,7 +42,7 @@ function fixture() {
       return snapshot;
     },
   );
-  const controller = new SpatialNarration({
+  const controller = new SpatialNarration<{ kind: string; id?: string }>({
     initialize: async () => undefined,
     read: () => snapshot,
     id: () => String(++index),
