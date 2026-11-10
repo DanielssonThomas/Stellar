@@ -13,6 +13,7 @@ export interface SpatialPanel {
   readonly group?: string;
   readonly emphasis?: 'lead' | 'supporting';
   readonly source?: string;
+  readonly thumbnail?: { readonly src: string; readonly alt: string };
   readonly detail?: { readonly surface: string; readonly payload: unknown };
 }
 

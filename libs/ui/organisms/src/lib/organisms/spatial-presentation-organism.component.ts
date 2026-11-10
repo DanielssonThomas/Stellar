@@ -19,6 +19,7 @@ import type {
 } from '@stellar/desktop-interaction';
 import { initialSpatialState } from '@stellar/desktop-interaction';
 import { SkeletonAtom } from '@stellar/ui-atoms';
+import { PresentationMediaMolecule } from '@stellar/ui-molecules';
 import clsx from 'clsx';
 import { STAGE_CATALOGUE } from './stage-catalogue';
 import { spatialBand, spatialEmblem, spatialLayout } from './spatial-layout';
@@ -26,7 +27,7 @@ import { createSpatialMotion } from './spatial-motion';
 
 @Component({
   selector: 'stellar-spatial-presentation-organism',
-  imports: [NgComponentOutlet, SkeletonAtom],
+  imports: [NgComponentOutlet, SkeletonAtom, PresentationMediaMolecule],
   templateUrl: './spatial-presentation-organism.component.html',
   styleUrls: [
     './spatial-presentation-organism.component.css',

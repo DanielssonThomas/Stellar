@@ -136,16 +136,19 @@ def make_server(gate, bearer, port):
         voice, applies actions at segment playback start, and applies after at playback completion.
         For a current news request, use your available research tools to verify timely, distinct
         stories. Aim for five when there are enough verified stories. Give each panel a source URL,
-        concise summary and supporting detail. Introduce the briefing, focus each story when you
+        concise summary and supporting detail. When you have a verified relevant photo or official
+        company mark, add it as a thumbnail with descriptive alt text. Keep the headline useful
+        without the image and omit unavailable imagery. Introduce the briefing, focus each story when you
         discuss it, reveal detail at the relevant segment, and finish in overview. Submit more panels
         and segments as verified information arrives. Report retrieval gaps honestly.
         Avoid repeating the tool's narration in your final chat message. An applied receipt means
         the score was accepted.
 
-        Actions: {kind:"show",panel:{id,title,category,summary,group?,emphasis?,source?,detail?}};
+        Actions: {kind:"show",panel:{id,title,category,summary,group?,emphasis?,source?,thumbnail?,detail?}};
         {kind:"focus"|"defocus"|"expand"|"collapse"|"dismiss",id}; {kind:"compare",ids:[first,second]};
         {kind:"overview"}; {kind:"clear"}. Up to eight visible panels. Reuse IDs for updates.
-        Emphasis is lead or supporting. Source is a public HTTPS attribution URL. Detail is
+        Emphasis is lead or supporting. Source is a public HTTPS attribution URL. Thumbnail is
+        {src,alt}, with a public HTTPS image URL and alt text of up to 240 characters. Detail is
         {surface,payload}, using the rich-text, chart, image or diagram schemas in open_pane.
         Use sample:true and a clear label for fictional information. The user can take over focus
         or stop narration at any point.

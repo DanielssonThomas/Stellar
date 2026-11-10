@@ -187,35 +187,45 @@
                     <span class="card-category">{{ panel.category }}</span>
                   </div>
                   <div class="card-scroll">
-                    <h3>
-                      <button
-                        type="button"
-                        class="card-title"
-                        aria-keyshortcuts="Delete"
-                        [attr.aria-pressed]="panel.focused"
-                        [attr.aria-expanded]="
-                          panel.renderer ? panel.expanded : null
-                        "
-                        [attr.title]="
-                          panel.focused && panel.renderer
-                            ? panel.expanded
-                              ? 'Collapse details'
-                              : 'Read more'
-                            : 'Focus panel'
-                        "
-                        (click)="
-                          activatePanel(
-                            panel.id,
-                            !!panel.renderer,
-                            panel.expanded
-                          )
-                        "
-                        (keydown.delete)="dismiss(panel.id, $event)"
-                      >
-                        {{ panel.title }}
-                      </button>
-                    </h3>
-                    <p class="card-summary">{{ panel.summary }}</p>
+                    <div class="card-headline">
+                      <div class="card-copy">
+                        <h3>
+                          <button
+                            type="button"
+                            class="card-title"
+                            aria-keyshortcuts="Delete"
+                            [attr.aria-pressed]="panel.focused"
+                            [attr.aria-expanded]="
+                              panel.renderer ? panel.expanded : null
+                            "
+                            [attr.title]="
+                              panel.focused && panel.renderer
+                                ? panel.expanded
+                                  ? 'Collapse details'
+                                  : 'Read more'
+                                : 'Focus panel'
+                            "
+                            (click)="
+                              activatePanel(
+                                panel.id,
+                                !!panel.renderer,
+                                panel.expanded
+                              )
+                            "
+                            (keydown.delete)="dismiss(panel.id, $event)"
+                          >
+                            {{ panel.title }}
+                          </button>
+                        </h3>
+                        <p class="card-summary">{{ panel.summary }}</p>
+                      </div>
+                      @if (panel.thumbnail; as thumbnail) {
+                        <stellar-presentation-media-molecule
+                          class="card-thumbnail"
+                          [thumbnail]="thumbnail"
+                        />
+                      }
+                    </div>
                     @if (panel.expanded && panel.renderer; as renderer) {
                       <div class="card-detail" animate.enter="detail-enter">
                         <ng-container

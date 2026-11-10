@@ -100,6 +100,32 @@
   scrollbar-color: var(--gold-line) transparent;
   overflow-wrap: anywhere;
 }
+.card-headline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+.card-copy {
+  flex: 1;
+  min-width: 0;
+}
+.card-headline > .card-thumbnail {
+  display: grid;
+  flex: 0 0 auto;
+  width: clamp(2.75rem, 25%, 6.75rem);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--gold) 5%, var(--stellar-color-canvas));
+  overflow: hidden;
+  pointer-events: none;
+}
+.foreground .card-headline > .card-thumbnail {
+  width: clamp(3rem, 25%, 9rem);
+}
+.card-headline > .card-thumbnail[data-render-state='error'] {
+  display: none;
+}
 h3 {
   margin: 0;
   font-size: clamp(0.89rem, 1.15vw, 1.03rem);

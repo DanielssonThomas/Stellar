@@ -7,6 +7,7 @@ import type {
 } from '@stellar/desktop-interaction';
 import type { StageCatalogue } from './stage-catalogue';
 import { boundedJson, plainRecord } from './stage-json';
+import { isBundledBriefingArtwork } from '@stellar/ui-molecules';
 import { presentationText as text, publicHttps } from './presentation-decoders';
 
 const surfaces = ['rich-text', 'chart', 'image', 'diagram'];
@@ -32,7 +33,10 @@ function scene(value: unknown): SpatialScene | null {
 function panel(value: unknown, catalogue: StageCatalogue): SpatialPanel | null {
   if (
     !plainRecord(value) ||
-    !keys(value, 'id title category summary group emphasis source detail')
+    !keys(
+      value,
+      'id title category summary group emphasis source thumbnail detail',
+    )
   )
     return null;
   const {
@@ -43,6 +47,7 @@ function panel(value: unknown, catalogue: StageCatalogue): SpatialPanel | null {
     group,
     emphasis,
     source,
+    thumbnail,
     detail,
   } = value;
   if (
@@ -56,6 +61,19 @@ function panel(value: unknown, catalogue: StageCatalogue): SpatialPanel | null {
     return null;
   const sourceUrl = source === undefined ? undefined : publicHttps(source);
   if (sourceUrl === null) return null;
+  let image: SpatialPanel['thumbnail'];
+  if (thumbnail !== undefined) {
+    if (
+      !plainRecord(thumbnail) ||
+      !keys(thumbnail, 'src alt') ||
+      !text(thumbnail['alt'], 240)
+    )
+      return null;
+    const src = thumbnail['src'];
+    const url = isBundledBriefingArtwork(src) ? src : publicHttps(src);
+    if (!url) return null;
+    image = { src: url, alt: thumbnail['alt'] };
+  }
   const common: SpatialPanel = {
     id: panelId,
     title,
@@ -64,6 +82,7 @@ function panel(value: unknown, catalogue: StageCatalogue): SpatialPanel | null {
     group,
     emphasis,
     source: sourceUrl,
+    thumbnail: image,
   };
   if (detail === undefined) return common;
   if (

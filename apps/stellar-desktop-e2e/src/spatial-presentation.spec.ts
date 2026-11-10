@@ -138,6 +138,16 @@ async function mockNative(page: Page) {
               };
               return advance('idle', null);
             }
+            if (command === 'workspace_image') {
+              if (args.request['url'] !== 'https://example.com/cover.png')
+                throw 'unavailable';
+              return {
+                data_uri:
+                  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1gAAAABJRU5ErkJggg==',
+                width: 1,
+                height: 1,
+              };
+            }
             if (command === 'workspace_tool_reply') {
               port.replies.push(args.request as unknown as WorkspaceToolReply);
               return undefined;
@@ -172,6 +182,11 @@ test('directs the sample from overview through detail and comparison at playback
   await expect(page.locator('stellar-emblem-motion-molecule')).toHaveCount(1);
   await expect(emblem).toHaveCSS('width', '238px');
   await expect(dialog.getByText('Fictional sample')).toBeVisible();
+  await expect(
+    dialog.getByRole('img', { name: /Illustration of/ }),
+  ).toHaveCount(5);
+  await expect(card(page, 'juniper').getByRole('img')).toBeVisible();
+  await expect(card(page, 'harbor').getByRole('img')).toBeVisible();
   await expect.poll(() => pagePort(page)).toBe(1);
   await expect(dialog.getByRole('status')).toHaveText('Preparing narration');
   await expect(
@@ -404,6 +419,7 @@ test('accepts an admitted score and a later workspace tool update', async ({
     category: 'Research',
     summary: 'First verified result.',
     source: 'https://example.com/research',
+    thumbnail: { src: 'https://example.com/cover.png', alt: 'Research cover' },
   };
   await submit({
     begin: { title: 'A developing story', label: 'Research' },
@@ -423,12 +439,22 @@ test('accepts an admitted score and a later workspace tool update', async ({
     page.getByRole('heading', { name: 'A developing story' }),
   ).toBeFocused();
   await expect(card(page, 'signal')).toBeVisible();
+  await expect(
+    card(page, 'signal').getByRole('img', { name: 'Research cover' }),
+  ).toBeVisible();
   await expect.poll(() => pagePort(page)).toBe(1);
   await submit({
     prepare: [
       {
         kind: 'show',
-        panel: { ...panel, summary: 'The second result has arrived.' },
+        panel: {
+          ...panel,
+          summary: 'The second result has arrived.',
+          thumbnail: {
+            src: 'https://example.com/missing.png',
+            alt: 'Missing cover',
+          },
+        },
       },
     ],
   });
@@ -436,6 +462,7 @@ test('accepts an admitted score and a later workspace tool update', async ({
   await expect(
     card(page, 'signal').getByText('The second result has arrived.'),
   ).toBeVisible();
+  await expect(card(page, 'signal').locator('.card-thumbnail')).toBeHidden();
   await expect(card(page, 'signal')).not.toHaveClass(/is-focused/);
   await expect(
     card(page, 'signal').getByRole('link', { name: 'Source' }),

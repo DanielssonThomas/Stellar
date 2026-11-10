@@ -6,6 +6,7 @@ const article = (
   title: string,
   summary: string,
   detail: string,
+  artwork: string,
   emphasis: SpatialPanel['emphasis'] = 'supporting',
 ): SpatialPanel => ({
   id,
@@ -13,6 +14,7 @@ const article = (
   title,
   summary,
   emphasis,
+  thumbnail: { src: `/briefing/${id}.svg`, alt: artwork },
   detail: {
     surface: 'rich-text',
     payload: {
@@ -29,6 +31,7 @@ const articles = [
     'A smaller model learns to check its work',
     'Project Juniper explores whether lightweight verification can improve reasoning on local devices.',
     'In this fictional scenario, an independent checker flags uncertain steps before the model answers. The interesting tradeoff is how often those extra checks pay for themselves in accuracy.',
+    'Illustration of a processor with a verification check mark',
     'lead',
   ),
   article(
@@ -37,6 +40,7 @@ const articles = [
     'A benchmark puts long context to work',
     'Mosaic Lab tests whether models can reconcile conflicting evidence across a long document.',
     'Several passages disagree on purpose. To score well, a model must cite the source of the disagreement and explain which evidence changed its answer.',
+    'Illustration of connected documents with conflicting evidence',
   ),
   article(
     'relay',
@@ -44,6 +48,7 @@ const articles = [
     'Inference moves closer to the source',
     'Relay Systems sketches a local-first deployment model for teams working with sensitive data.',
     'The design keeps raw inputs near the application. Evaluate the latency of the full workflow, including verification and handoff.',
+    'Illustration of inference running on a local device',
   ),
   article(
     'meridian',
@@ -51,6 +56,7 @@ const articles = [
     'Creative tools test clearer attribution',
     'Meridian Studio pilots provenance cards that travel with generated media.',
     'A provenance record can identify how an asset was produced and edited. A viewer can use that context when evaluating the asset.',
+    'Illustration of a photograph with an attached provenance tag',
   ),
   article(
     'harbor',
@@ -58,6 +64,7 @@ const articles = [
     'An audit kit follows the human handoff',
     'Harbor Initiative publishes a fictional evaluation guide for assistant approvals.',
     'The guide asks whether users can inspect a proposed action, decline it, and recover cleanly after an interruption.',
+    'Illustration of an approval checklist and a shield',
   ),
 ];
 
