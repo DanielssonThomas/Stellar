@@ -1,8 +1,5 @@
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
-import type {
-  SpatialAction,
-  SpatialSegment,
-} from '@stellar/desktop-interaction';
+import type { SpatialAction, SpatialSegment } from './spatial-presentation';
 
 export type SpatialNarrationMode =
   | 'idle'

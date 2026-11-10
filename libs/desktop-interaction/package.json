@@ -6,8 +6,9 @@
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "dependencies": {
-    "tslib": "^2.3.0",
     "@nx/vite": "22.6.1",
+    "@stellar/desktop-contracts": "workspace:*",
+    "tslib": "^2.3.0",
     "vitest": "4.1.0"
   }
 }

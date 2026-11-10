@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
-import type { SpatialSegment } from '@stellar/desktop-interaction';
+import type { SpatialSegment } from './spatial-presentation';
 import { readingTime, SpatialNarration } from './spatial-narration';
 
 afterEach(() => vi.useRealTimers());

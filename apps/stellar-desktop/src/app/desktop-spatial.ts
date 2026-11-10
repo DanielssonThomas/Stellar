@@ -13,6 +13,8 @@ import type {
 import {
   directSpatialAction,
   initialSpatialState,
+  SpatialNarration,
+  type SpatialNarrationMode,
   type SpatialAction,
   type SpatialScene,
 } from '@stellar/desktop-interaction';
@@ -22,10 +24,6 @@ import {
 } from '@stellar/service-desktop-adapter';
 import { decodeSpatialScore, STAGE_CATALOGUE } from '@stellar/ui-organisms';
 import { morningAiBriefing } from './morning-ai-briefing';
-import {
-  SpatialNarration,
-  type SpatialNarrationMode,
-} from './spatial-narration';
 
 @Injectable()
 export class DesktopSpatial {
