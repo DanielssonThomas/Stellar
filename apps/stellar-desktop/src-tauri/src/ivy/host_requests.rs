@@ -294,6 +294,17 @@ pub(in crate::ivy) fn validate_submit(request: &IvySubmitRequest) -> Result<(), 
         || !valid_id
         || request.text.trim().is_empty()
         || request.text.len() > 8192
+        || request.local_actions.as_ref().is_some_and(|events| {
+            events.len() > 6
+                || events.iter().any(|event| {
+                    event.action.is_empty()
+                        || event.action.len() > 128
+                        || event.target.is_empty()
+                        || event.target.len() > 240
+                        || event.reply.is_empty()
+                        || event.reply.len() > 512
+                })
+        })
     {
         return Err(IvyErrorCode::MalformedRequest);
     }

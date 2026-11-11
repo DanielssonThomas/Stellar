@@ -105,6 +105,8 @@ fn main() {
         IvySelectRequest::decl(&config),
         IvyRequest::decl(&config),
         IvySubmitRequest::decl(&config),
+        IvyLocalActionEvent::decl(&config),
+        IvyLocalActionOutcome::decl(&config),
         IvyComponent::decl(&config),
         IvyPresentation::decl(&config),
         IvyActivityKind::decl(&config),

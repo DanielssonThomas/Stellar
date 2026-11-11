@@ -13,6 +13,7 @@ import type {
   IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
+  IvyLocalActionOutcome,
   IvySnapshot,
   IvyQuestion,
   IvyQuestionReplyRequest,
@@ -108,11 +109,36 @@ export function decodeIvySelectRequest(value: unknown): IvySelectRequest {
 }
 
 export function decodeIvySubmitRequest(value: unknown): IvySubmitRequest {
-  const data = record(value, ['version', 'input_id', 'text']);
+  const data = record(
+    value,
+    ['version', 'input_id', 'text'],
+    ['local_actions'],
+  );
+  const events = data['local_actions'];
+  if (events !== undefined && (!Array.isArray(events) || events.length > 6))
+    throw new DesktopContractError('malformed');
   return {
     version: version(data['version']),
     input_id: identifier(data['input_id']),
     text: text(data['text'], 8192),
+    ...(events === undefined
+      ? {}
+      : { local_actions: events.map(decodeLocalAction) }),
+  };
+}
+
+const localActionOutcomes: Record<IvyLocalActionOutcome, true> = {
+  confirmed: true,
+  uncertain: true,
+};
+
+function decodeLocalAction(value: unknown) {
+  const data = record(value, ['action', 'target', 'outcome', 'reply']);
+  return {
+    action: text(data['action'], 128),
+    target: text(data['target'], 240),
+    outcome: variant(data['outcome'], localActionOutcomes),
+    reply: text(data['reply'], 512),
   };
 }
 

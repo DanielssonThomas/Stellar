@@ -21,6 +21,7 @@ import {
   type IvyModel,
   type IvyCommands,
   type IvySnapshot,
+  type IvyLocalActionEvent,
 } from '@stellar/desktop-contracts';
 import { IvyAdapter, IvyAdapterError } from '../ivy/ivy-adapter';
 import {
@@ -77,11 +78,12 @@ export class IvyAdapterService {
     void pending.then(clear, clear);
     return pending;
   }
-  submit(text: string, inputId: string) {
+  submit(text: string, inputId: string, localActions?: IvyLocalActionEvent[]) {
     return this.invoke(ivySubmitCommand, {
       version: 1,
       text,
       input_id: inputId,
+      ...(localActions?.length ? { local_actions: localActions } : {}),
     });
   }
   cancel() {

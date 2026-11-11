@@ -27,6 +27,7 @@ async def main():
     profile = load('stellar_ivy_profile_tools', 'ivy_profile_tools.py')
     load('stellar_ivy_controls', 'ivy_controls.py')
     load('stellar_ivy_edit_policy', 'ivy_edit_policy.py')
+    load('stellar_ivy_conversation', 'ivy_conversation.py')
     protocol = load('stellar_workspace_protocol', 'workspace_protocol.py')
     mcp = load('stellar_workspace_mcp', 'workspace_mcp.py')
     service = load('stellar_workspace_service', 'workspace_service.py')
