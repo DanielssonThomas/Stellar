@@ -118,6 +118,7 @@ fn sealed_prose_accepts_ordinary_markdown_leads_and_rejects_structured_leads() {
 
     for text in [
         "[The notes](https://example.test/notes) are ready.",
+        "[The notes](\n  https://example.test/notes\n  \"Report title\") are ready.",
         "<https://example.test/notes> has the notes.",
         "<mailto:hello@example.test> is the contact address.",
         "\x60npm test\x60 has finished.",

@@ -1,6 +1,6 @@
 import { isSealedIvyProseLine } from '@stellar/desktop-contracts';
 
-const destinationPattern = String.raw`<?(?:\b[a-z][a-z\d+.-]*:\/\/|\bwww\.|\bmailto:|(?<![a-z\d.-])(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
+const destinationPattern = String.raw`<?(?:(?<![a-z\d+.-])[a-z][a-z\d+.-]*:\/\/|\bhttps?:\/\/|\bwww\.|\bmailto:|(?<![a-z\d.-])(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
 const htmlTag = String.raw`<\/?(?:a|b|blockquote|br|code|del|div|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul)(?:[ \t](?:[^<>'"]|"[^"]*"|'[^']*')*)?\/?>`;
 const destination = new RegExp(destinationPattern, 'giu');
 const inlineToken = new RegExp(

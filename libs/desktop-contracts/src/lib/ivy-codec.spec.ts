@@ -53,6 +53,7 @@ describe('Ivy wire validation', () => {
     ).toEqual([commentary, final]);
     for (const text of [
       '[The notes](https://example.test/notes) are ready.',
+      '[The notes](\n  https://example.test/notes\n  "Report title") are ready.',
       '<https://example.test/notes> has the notes.',
       '<mailto:hello@example.test> is the contact address.',
       '\x60npm test\x60 has finished.',

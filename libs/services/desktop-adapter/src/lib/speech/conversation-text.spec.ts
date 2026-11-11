@@ -90,6 +90,9 @@ describe('Desktop conversation text', () => {
       'See [the guide](\n  https://example.test/private?token=yes\n  "A ) title").';
     expect(conversationDisplayText(text)).toBe('See the guide.');
     expect(conversationSpeechText(text)).toBe('See the guide.');
+    expect(conversationSpeechText(text.slice('See '.length))).toBe(
+      'the guide.',
+    );
   });
 
   it('keeps the final speech fallback closed to structured text', () => {

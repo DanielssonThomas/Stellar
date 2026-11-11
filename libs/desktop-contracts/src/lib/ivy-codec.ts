@@ -337,7 +337,8 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
 export function isSealedIvyProseLine(line: string): boolean {
   const content = line.replace(/^\p{White_Space}+/u, '');
   if (content.startsWith('[')) {
-    const link = /^\[([^[\]{}"]+)\]\([^)]*\)/u.exec(content);
+    // An unambiguous Markdown opener can continue onto the next line.
+    const link = /^\[([^[\]{}"]+)\]\(/u.exec(content);
     return !!link && /\P{White_Space}/u.test(link[1]);
   }
   if (content.startsWith('<'))

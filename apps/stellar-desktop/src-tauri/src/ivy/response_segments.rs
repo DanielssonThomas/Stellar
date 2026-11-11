@@ -7,10 +7,8 @@ pub(super) const MAX_COMMENTARY_BYTES: usize = 4096;
 fn sealed_prose_line(line: &str) -> bool {
     let line = line.trim_start();
     if let Some(link) = line.strip_prefix('[') {
-        return link.split_once("](").is_some_and(|(label, destination)| {
-            !label.trim().is_empty()
-                && !label.contains(['[', ']', '{', '}', '"'])
-                && destination.contains(')')
+        return link.split_once("](").is_some_and(|(label, _)| {
+            !label.trim().is_empty() && !label.contains(['[', ']', '{', '}', '"'])
         });
     }
     if let Some(link) = line.strip_prefix('<') {
