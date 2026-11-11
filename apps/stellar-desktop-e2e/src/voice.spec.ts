@@ -33,6 +33,7 @@ for (const scenario of [
         calls,
         inputId: '',
         speechId: '',
+        speechText: '',
         sampleCount: 0,
         stopped: false,
         acquisitions: 0,
@@ -174,7 +175,10 @@ for (const scenario of [
                   ...ivy(results.inputId),
                   turn: 'completed',
                   items: [
-                    { kind: 'text', text: 'Voice fixture reply' },
+                    {
+                      kind: 'text',
+                      text: '**Voice fixture reply.** See [the notes](https://example.test/docs?key=sample#details).',
+                    },
                     {
                       kind: 'component',
                       component: 'assistant_message',
@@ -188,6 +192,7 @@ for (const scenario of [
               }
               if (command === 'speech_speak') {
                 results.speakActive = results.activeTracks;
+                results.speechText = String(request['text']);
                 const accepted = speech(
                   'synthesizing',
                   String(request['utterance_id']),
@@ -261,6 +266,7 @@ for (const scenario of [
                 calls: string[];
                 inputId: string;
                 speechId: string;
+                speechText: string;
                 sampleCount: number;
                 stopped: boolean;
                 acquisitions: number;
@@ -316,6 +322,7 @@ for (const scenario of [
     await expect.poll(async () => (await fixture()).ducking.at(-1)).toBe(false);
     expect((await fixture()).synthesisFrames).toBeGreaterThan(0);
     const result = await fixture();
+    expect(result.speechText).toBe('Voice fixture reply. See the notes.');
     expect(result.inputId).toBe(result.speechId);
     expect(result.transcribeActive).toBe(1);
     expect(result.speakActive).toBe(1);
@@ -333,6 +340,11 @@ for (const scenario of [
       )
       .toBeGreaterThan(900);
     await page.keyboard.press('m');
+    await expect(
+      page
+        .getByRole('dialog', { name: 'Experience controls' })
+        .getByText('Voice fixture reply. See the notes.', { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole('switch', { name: 'Show recognition results' }),
     ).toHaveAttribute('aria-checked', String(scenario.overlay));

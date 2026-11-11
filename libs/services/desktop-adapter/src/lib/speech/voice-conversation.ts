@@ -30,6 +30,7 @@ import {
 } from './voice-invocation';
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
+import { conversationSpeechText } from './conversation-text';
 import { SpeechActivity } from './speech-activity';
 import { SpeechPlaybackQueue } from './speech-playback-queue';
 import { responseSpeech } from './response-speech';
@@ -1995,7 +1996,9 @@ export class VoiceConversation {
     this.publish();
   }
 
-  private async speakLocal(text: string, id: string, generation: number) {
+  private async speakLocal(reply: string, id: string, generation: number) {
+    const text = conversationSpeechText(reply);
+    if (!text) return;
     this.phase = 'speaking';
     this.settledTurn = id;
     this.playbackAcknowledged = false;

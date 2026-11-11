@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import {
+  conversationDisplayText,
   IvyAdapterService,
   IvyReflexService,
   spokenResponse,
@@ -122,15 +123,17 @@ export class DesktopAssistant {
       !this.cancelRequested(),
   );
   readonly reply = computed(() =>
-    this.state()
-      .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
-      .join('\n\n'),
+    conversationDisplayText(
+      this.state()
+        .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
+        .join('\n\n'),
+    ),
   );
   readonly caption = computed(() => {
     const snapshot = this.state();
     const latest = snapshot.response_segments?.at(-1);
     if (latest && (latest.kind === 'final' || snapshot.turn !== 'completed'))
-      return { text: latest.text, kind: latest.kind };
+      return { text: conversationDisplayText(latest.text), kind: latest.kind };
     return {
       text: snapshot.turn === 'completed' ? spokenResponse(snapshot.items) : '',
       kind: 'final' as const,

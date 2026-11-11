@@ -46,7 +46,7 @@ export class SpatialPresentationOrganism {
   readonly reducedMotion = input(false);
   readonly loading = input(false);
   readonly mode = input<
-    'idle' | 'preparing' | 'speaking' | 'reading' | 'paused'
+    'idle' | 'preparing' | 'speaking' | 'silent' | 'reading' | 'paused'
   >('idle');
   readonly caption = input('');
   readonly transcript = input<readonly string[]>([]);
