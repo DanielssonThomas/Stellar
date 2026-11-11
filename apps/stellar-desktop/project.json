@@ -185,6 +185,7 @@
       "{workspaceRoot}/rust-toolchain.toml",
       "{projectRoot}/src-tauri/**/*",
       "{workspaceRoot}/tools/native/**/*",
+      "{workspaceRoot}/tools/engineering-intelligence/migrations/*.sql",
       "{workspaceRoot}/libs/desktop-contracts/**/*",
       "{workspaceRoot}/docs/architecture/rust-tauri.md",
       {

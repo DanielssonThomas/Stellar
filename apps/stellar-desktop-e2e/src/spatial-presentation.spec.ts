@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type {
   IvySnapshot,
   SpeechSnapshot,
@@ -27,6 +29,12 @@ const speech = (page: Page, state: 'speaking' | 'idle') =>
     (state) =>
       (window as unknown as { spatial: ScorePort }).spatial.publish(state),
     state,
+  );
+const submitSpatial = (page: Page, score: unknown) =>
+  page.evaluate(
+    (score) =>
+      (window as unknown as { spatial: ScorePort }).spatial.present(score),
+    score,
   );
 
 async function openSample(page: Page) {
@@ -397,6 +405,76 @@ test('allows manual focus, interruption and dismissal with reduced motion on a n
   ).toBeFocused();
 });
 
+test('shows historical engineering evidence and unavailable measurements on the existing Stage', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockNative(page);
+  await page.goto('/');
+  await expect(page.locator('stellar-root')).toHaveAttribute(
+    'data-desktop-ready',
+    'true',
+  );
+  const fixture: unknown = JSON.parse(
+    readFileSync(
+      resolve(
+        __dirname,
+        '../../../tools/native/fixtures/engineering-intelligence-score.json',
+      ),
+      'utf8',
+    ),
+  );
+  await submitSpatial(page, fixture);
+  const stage = page.getByRole('region', { name: 'Engineering Intelligence' });
+  await expect(stage.getByRole('article')).toHaveCount(4);
+  for (const name of [
+    'Development Budget',
+    'Session Intelligence',
+    'Engineering Patterns',
+    'Skill Intelligence',
+  ]) {
+    await expect(stage.getByRole('button', { name })).toBeVisible();
+  }
+  await stage.screenshot({
+    path: info.outputPath('engineering-intelligence-overview.png'),
+    animations: 'disabled',
+  });
+  const budget = card(page, 'engineering-budget');
+  const title = budget.getByRole('button', { name: 'Development Budget' });
+  await title.click();
+  await expect(title).toHaveAttribute('aria-pressed', 'true');
+  await title.click();
+  await expect(title).toHaveAttribute('aria-expanded', 'true');
+  await expect(budget.locator('stellar-presentation-chart-atom')).toHaveCount(
+    1,
+  );
+  await expect(
+    budget.getByRole('row').filter({ hasText: '#342' }),
+  ).toContainText('1,800 (partial)');
+  await expect(
+    budget.getByRole('row').filter({ hasText: '#343' }).first(),
+  ).toContainText('890');
+  await expect(
+    budget.getByRole('row').filter({ hasText: '#344' }),
+  ).toContainText('Unavailable');
+  await expect(
+    budget.getByText('Subscription allowance is unavailable.'),
+  ).toBeVisible();
+  await stage.screenshot({
+    path: info.outputPath('engineering-intelligence-budget.png'),
+    animations: 'disabled',
+  });
+  await budget
+    .getByRole('row')
+    .filter({ hasText: '#344' })
+    .scrollIntoViewIfNeeded();
+  await stage.screenshot({
+    path: info.outputPath('engineering-intelligence-budget-detail.png'),
+    animations: 'disabled',
+  });
+  expect(await pagePort(page)).toBe(0);
+});
+
 test('accepts an admitted score and a later workspace tool update', async ({
   page,
 }) => {
@@ -406,12 +484,7 @@ test('accepts an admitted score and a later workspace tool update', async ({
     'data-desktop-ready',
     'true',
   );
-  const submit = (score: unknown) =>
-    page.evaluate(
-      (score) =>
-        (window as unknown as { spatial: ScorePort }).spatial.present(score),
-      score,
-    );
+  const submit = (score: unknown) => submitSpatial(page, score);
   const statuses = () =>
     page.evaluate(() =>
       (window as unknown as { spatial: ScorePort }).spatial.replies.map(
