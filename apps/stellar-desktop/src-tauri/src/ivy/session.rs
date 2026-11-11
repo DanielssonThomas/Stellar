@@ -63,8 +63,7 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
-        let text = super::workspace_context::prompt(request.text, self.record.workspace.is_some());
-        let mut params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
+        let mut params = json!({"session_id":sid,"input_id":request.input_id,"text":request.text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();
         let next = Record {
@@ -94,7 +93,12 @@ impl Session {
                 "pending_questions":view.snapshot.questions.as_ref().map_or(0, Vec::len),
             })
         });
-        super::workspace_context::annotate_params(&mut params, observation.as_deref(), ivy_state);
+        super::workspace_context::annotate_params(
+            &mut params,
+            observation.as_deref(),
+            ivy_state,
+            request.local_actions.as_deref(),
+        );
         let receipt = self
             .broker
             .as_mut()

@@ -22,6 +22,7 @@ bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_activity'] = load('ivy_activity')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+conversation = sys.modules['stellar_ivy_conversation'] = load('ivy_conversation')
 profile_tools = load('ivy_profile_tools')
 sys.modules['stellar_ivy_profile_tools'] = profile_tools
 approvals_module = load('ivy_approvals')
@@ -224,8 +225,15 @@ class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
 
         class Connection:
             completed = set()
+            def __init__(self):
+                self.client = conversation.ConversationClient(self, ValueError)
+
             async def call(self, method, params):
-                self.assert_token = workspace.token in params['text']
+                return await self.client.rpc(method, **params)
+
+            async def rpc(self, method, **params):
+                self.assert_token = workspace.token in params['api_text']
+                self.assert_clean_text = params['text']
                 self.result = await gate.call({'kind': 'clear'}, workspace.token)
                 return {'ref': {'session_id': 's'}, 'admission_id': 'a'}
 
@@ -237,6 +245,7 @@ class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(bridge.requests_with_workspace(conn, workspace), 3)
         self.assertEqual(conn.result, {'kind': 'applied'})
         self.assertTrue(conn.assert_token)
+        self.assertEqual(conn.assert_clean_text, 'hello')
         self.assertNotIn(workspace.token, str(frames))
         self.assertEqual([frame.get('event') for frame in frames], ['workspace_tool', None])
         self.assertEqual(frames[-1]['id'], 7)

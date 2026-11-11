@@ -18,6 +18,7 @@ fn lifecycle_controls_share_the_admission_gate_and_preserve_busy_turns() {
     ));
     assert!(matches!(
         host.request(Action::Submit(IvySubmitRequest {
+            local_actions: None,
             version: 1,
             input_id: "00000000-0000-4000-8000-000000000001".into(),
             text: "busy".into(),

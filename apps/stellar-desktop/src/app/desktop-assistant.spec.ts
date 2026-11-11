@@ -189,8 +189,12 @@ describe('desktop Ivy composition', () => {
     expect(adapter.submit).not.toHaveBeenCalled();
     const text = 'x'.repeat(8192);
     expect(await assistant.submit(text)).toBe(true);
-    expect(adapter.submit).toHaveBeenCalledWith(text, expect.any(String));
-    expect(acknowledge).toHaveBeenCalledWith([]);
+    expect(adapter.submit).toHaveBeenCalledWith(
+      text,
+      expect.any(String),
+      reflex.events(),
+    );
+    expect(acknowledge).toHaveBeenCalledWith(reflex.events());
   });
   it('waits for authoritative recovery rather than queue acceptance', async () => {
     vi.useFakeTimers();

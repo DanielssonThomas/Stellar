@@ -106,6 +106,7 @@ fn journal_excludes_second_owner_and_retains_unknown_attempt() {
 #[test]
 fn malformed_user_turns_cannot_be_admitted() {
     let mut request = IvySubmitRequest {
+        local_actions: None,
         version: 1,
         input_id: "00000000-0000-0000-0000-000000000001".into(),
         text: "Hello".into(),
@@ -221,6 +222,7 @@ fn completion_before_admission_reply_is_bound_after_the_receipt() {
     session.broker = Some(inert_broker(false));
     session
         .submit(IvySubmitRequest {
+            local_actions: None,
             version: 1,
             input_id: "00000000-0000-0000-0000-000000000002".into(),
             text: "explicit fixture request".into(),
@@ -365,6 +367,7 @@ fn legacy_route_is_verified_before_followup_without_rotating() {
     session.broker = Some(inert_broker(false));
     session
         .submit(IvySubmitRequest {
+            local_actions: None,
             version: 1,
             input_id: "00000000-0000-0000-0000-000000000002".into(),
             text: "follow up".into(),
@@ -391,6 +394,7 @@ fn legacy_mismatched_or_missing_route_refuses_without_changing_journal() {
         session.broker = Some(inert_route(false, "completed", "answer", model));
         assert_eq!(
             session.submit(IvySubmitRequest {
+                local_actions: None,
                 version: 1,
                 input_id: "00000000-0000-0000-0000-000000000002".into(),
                 text: "follow up".into(),
@@ -425,6 +429,7 @@ fn verified_sol_mismatch_revokes_public_verification_after_reconnect() {
         session.broker = Some(inert_route(false, "completed", "answer", model));
         let error = session
             .submit(IvySubmitRequest {
+                local_actions: None,
                 version: 1,
                 input_id: "00000000-0000-0000-0000-000000000002".into(),
                 text: "follow up".into(),
