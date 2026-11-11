@@ -84,7 +84,8 @@ export class SpatialNarration<Action> {
   whenQuiet(): Promise<void> {
     if (
       !this.stopping &&
-      (this.readAlong || (!this.active && !this.pending.length))
+      (this.readAlong ||
+        (!this.active && !this.reading && !this.pending.length))
     )
       return Promise.resolve();
     return new Promise((resolve) => this.waiters.add(resolve));

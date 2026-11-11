@@ -41,7 +41,7 @@ function shortenDestinations(text: string): string {
 function prose(text: string): string {
   return shortenDestinations(text)
     .replace(/<[^@\s<>]+@[^@\s<>]+\.[a-z]{2,63}>/giu, 'email address')
-    .replace(/\b(?:https?:\/{0,2}|www\.)$/iu, '')
+    .replace(/\b(?:https?:\/{0,2}|www\.)[ \t]*(?=$|\n)/giu, '')
     .replace(/(\*{1,3}|~~)(?=\S)(.+?)(?<=\S)\1/gu, '$2')
     .replace(
       /(?<![\p{L}\p{N}])(_{1,3})(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}])/gu,
@@ -74,7 +74,7 @@ function linkEnd(text: string, start: number): number {
     } else if (
       depth === 1 &&
       /[<"']/u.test(char) &&
-      (i === start || /[ \t]/u.test(text[i - 1]))
+      (i === start || /[ \t\n]/u.test(text[i - 1]))
     ) {
       delimiter = char === '<' ? '>' : char;
     } else if (char === '(') {
@@ -126,7 +126,12 @@ function inline(
 }
 
 function project(source: string, includeCode: boolean): string {
-  const lines: { text: string; code?: true }[] = [];
+  const blocks: { text: string; code?: true }[] = [];
+  let paragraph: string[] = [];
+  const flushParagraph = () => {
+    if (paragraph.length) blocks.push({ text: paragraph.join('\n') });
+    paragraph = [];
+  };
   const references = new Set<string>();
   let fence: string | undefined;
   for (const line of source.replace(/\r\n?/gu, '\n').split('\n')) {
@@ -135,30 +140,37 @@ function project(source: string, includeCode: boolean): string {
       if (marker?.[1].startsWith(fence) && marker[2].trim() === '') {
         fence = undefined;
       } else if (includeCode) {
-        lines.push({ text: line, code: true });
+        blocks.push({ text: line, code: true });
       }
       continue;
     }
     if (marker) {
+      flushParagraph();
       fence = marker[1];
       continue;
     }
     const reference = referenceDefinition.exec(line);
     if (reference) {
+      flushParagraph();
       references.add(referenceId(reference[1]));
       continue;
     }
     if (/^ {0,3}(?:\*{3,}|-{3,}|_{3,})$/u.test(line)) continue;
+    if (!line.trim()) {
+      flushParagraph();
+      blocks.push({ text: line });
+      continue;
+    }
     const text = line.replace(/^ {0,3}(?:>[ \t]+)+/u, '');
-    lines.push({
-      text:
-        heading.exec(text)?.[1] ??
+    paragraph.push(
+      heading.exec(text)?.[1] ??
         text
           .replace(/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]+/u, '')
           .replace(/^\[[ xX]\][ \t]+/u, ''),
-    });
+    );
   }
-  return lines
+  flushParagraph();
+  return blocks
     .map(({ text, code }) =>
       code ? text : inline(text, includeCode, references),
     )

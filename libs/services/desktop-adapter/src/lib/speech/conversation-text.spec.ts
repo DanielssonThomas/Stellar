@@ -85,6 +85,13 @@ describe('Desktop conversation text', () => {
     expect(conversationSpeechText(text)).toBe(expected);
   });
 
+  it('removes the destination and title of a multiline Markdown link', () => {
+    const text =
+      'See [the guide](\n  https://example.test/private?token=yes\n  "A ) title").';
+    expect(conversationDisplayText(text)).toBe('See the guide.');
+    expect(conversationSpeechText(text)).toBe('See the guide.');
+  });
+
   it('preserves literal expressions, fenced code, and explicitly quoted destinations on screen', () => {
     const source = [
       'Calculate 2 ** 3, leave file_name alone, and enter `a*b`.',
