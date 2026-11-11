@@ -85,6 +85,13 @@ function operation(value: unknown): WorkspaceToolOperation {
   if (typeof value !== 'object' || value === null)
     throw new DesktopContractError('malformed');
   const kind = (value as Record<string, unknown>)['kind'];
+  if (kind === 'present') {
+    const data = record(value, ['kind', 'score_json']);
+    const score = boundedString(data['score_json'], 32768);
+    if (new TextEncoder().encode(score).byteLength > 32768)
+      throw new DesktopContractError('malformed');
+    return { kind, score_json: score };
+  }
   if (kind === 'batch') {
     const data = record(value, ['kind', 'operations']);
     const entries = data['operations'];

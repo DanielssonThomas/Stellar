@@ -25,6 +25,7 @@ import {
 } from '@stellar/service-desktop-adapter';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
+import { DesktopSpatial } from './desktop-spatial';
 
 @Injectable()
 export class DesktopVoice {
@@ -35,6 +36,7 @@ export class DesktopVoice {
   private readonly reflex = inject(IvyReflexService);
   private readonly assistant = inject(DesktopAssistant);
   private readonly experience = inject(DesktopExperience);
+  private readonly spatial = inject(DesktopSpatial, { optional: true });
   private readonly zone = inject(NgZone);
   private readonly preferences = new VoicePreferences();
   readonly wakeSensitivity = signal<WakeSensitivity>(
@@ -108,6 +110,7 @@ export class DesktopVoice {
     cancelReflex: () => this.reflex.cancel(),
     speak: async (text, id, current = () => true) => {
       const generation = this.playbackGeneration;
+      if (this.spatial) await this.spatial.whenQuiet();
       if (
         generation !== this.playbackGeneration ||
         !current() ||
@@ -149,7 +152,10 @@ export class DesktopVoice {
       this.playbackGeneration++;
       this.questionCue.dispose();
       this.finishNarration('cancelled');
-      return this.speech.stop();
+      const snapshot = this.speech.state();
+      return this.spatial?.ownsSpeech(snapshot)
+        ? Promise.resolve(snapshot)
+        : this.speech.stop();
     },
     onForegroundEnd: () => this.foregroundCleared?.('clear'),
     selectSession: (model) => this.ivy.selectSession(model),
@@ -230,6 +236,7 @@ export class DesktopVoice {
   }
 
   setMuted(muted: boolean) {
+    this.spatial?.setMuted(muted);
     if (muted) this.playbackGeneration++;
     this.conversation.setMuted(muted);
     if (muted) {
@@ -311,6 +318,7 @@ export class DesktopVoice {
     this.narration = undefined;
   }
   stop() {
+    this.spatial?.interrupt();
     this.playbackGeneration++;
     this.questionCue.cancel();
     this.conversation.stopVoice();

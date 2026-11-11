@@ -30,13 +30,13 @@ class HistoryTests(unittest.TestCase):
         self.db = self.profile / 'state.db'
         with closing(sqlite3.connect(self.db)) as db, db:
             db.executescript('CREATE TABLE sessions(id TEXT,title TEXT,model TEXT,started_at REAL,last_activity_at REAL,message_count INTEGER,source TEXT,hidden INTEGER);'
-                             'CREATE TABLE messages(id INTEGER,session_id TEXT,role TEXT,content TEXT,timestamp REAL);'
+                             'CREATE TABLE messages(id INTEGER,session_id TEXT,role TEXT,content TEXT,timestamp REAL,tool_calls TEXT);'
                              'CREATE TABLE state_meta(key TEXT,value TEXT);')
             db.executemany('INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?)',
                           [(f'local-{n}', f'Conversation {n}', 'terra', n+1, n+1, 2, 'local', 0) for n in range(45)]
                           + [('worker', 'Private worker', 'terra', 999, 999, 1, 'subagent', 0),
                              ('hidden', 'Hidden', 'terra', 999, 999, 1, 'local', 1)])
-            db.executemany('INSERT INTO messages VALUES(?,?,?,?,?)',
+            db.executemany('INSERT INTO messages(id,session_id,role,content,timestamp) VALUES(?,?,?,?,?)',
                           [(n+1, 'local-0', 'user' if n % 2 == 0 else 'assistant', f'Message {n}', n+1) for n in range(45)]
                           + [(46, 'local-0', 'system', 'Private instructions', 46),
                              (47, 'local-0', 'tool', 'Private tool output', 47)])
@@ -57,6 +57,27 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(len(earlier['messages']), 5)
         self.assertIsNone(earlier['next_before'])
         self.assertEqual(hashlib.sha256(self.db.read_bytes()).hexdigest(), before)
+
+    def test_transcript_skips_tool_only_assistant_rows_before_paging(self):
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.executemany('INSERT INTO messages VALUES(?,?,?,?,?,?)', [
+                (101, 'local-1', 'user', 'Check the service', 101, None),
+                (102, 'local-1', 'assistant', '', 102, '[{"id":"check"}]'),
+                (103, 'local-1', 'assistant', 'I will check again.', 103, '[{"id":"retry"}]'),
+                (104, 'local-1', 'assistant', ' \t\r\n', 104, '[{"id":"verify"}]'),
+                (105, 'local-1', 'assistant', 'The service is responding.', 105, None),
+                (106, 'local-1', 'assistant', '', 106, '[{"id":"log"}]'),
+            ])
+
+        with patch.object(history, 'PAGE', 2):
+            recent = history.read_history(self.profile, None, 'local-1')
+            self.assertEqual([m['id'] for m in recent['messages']], [103, 105])
+            self.assertEqual([m['text'] for m in recent['messages']],
+                             ['I will check again.', 'The service is responding.'])
+            self.assertEqual(recent['next_before'], 103)
+            earlier = history.read_history(self.profile, None, 'local-1', before=recent['next_before'])
+            self.assertEqual([m['id'] for m in earlier['messages']], [101])
+            self.assertIsNone(earlier['next_before'])
 
     def test_catalog_rejects_hidden_worker_and_unknown_transcript_selectors(self):
         for selected in ['worker', 'hidden', "local-0' OR 1=1", '../state.db']:

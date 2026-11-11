@@ -26,6 +26,7 @@
     [loading]="loading()"
     [reducedMotion]="state().reducedMotion"
     [suppressed]="
+      spatialVisible() ||
       stage.layout().surfaces.length > 0 ||
       state().phase === 'docking' ||
       state().phase === 'returning' ||
@@ -39,8 +40,13 @@
     class="stage"
     [loading]="loading()"
     [emblemTarget]="state().target"
+    [spatialFocus]="spatialVisible() ? spatialFocus() : null"
     [reducedMotion]="state().reducedMotion"
-    [composing]="composing() || faultVisible() || questions().length > 0"
+    [composing]="
+      composing() ||
+      (faultVisible() && !spatialVisible()) ||
+      questions().length > 0
+    "
     [showPaneControls]="paneControlsVisible()"
     [dismissOnClose]="false"
     [focusFallback]="focusFallback"
@@ -55,7 +61,7 @@
       [manifest]="manifest()"
       assetBasePath="emblem"
       [phase]="emblemPhase()"
-      [fault]="faultActive()"
+      [fault]="faultActive() && !spatialVisible()"
       [solActive]="solActive()"
       [waiting]="
         assistantActive() && assistantWaiting() && !assistantNarrating()
@@ -70,7 +76,10 @@
       (assetUnavailable)="assetUnavailable.emit()"
     >
     </stellar-emblem-motion-molecule>
-    @if (faultVisible()) {
+    <ng-container ngProjectAs="[stage-spatial]">
+      <ng-content select="[desktop-spatial]" />
+    </ng-container>
+    @if (faultVisible() && !spatialVisible()) {
       <stellar-fault-log-molecule
         stage-composer
         [entries]="faultEntries()"
@@ -250,6 +259,12 @@
                 (click)="openMusicControls()"
               >
                 <span>Music visualizer</span><kbd>P</kbd>
+              </button>
+              <button
+                type="button"
+                (click)="menu.close(); spatialBriefing.emit()"
+              >
+                <span>Morning AI briefing</span><span>Sample</span>
               </button>
             </div>
             @if (faultEntries().length) {
