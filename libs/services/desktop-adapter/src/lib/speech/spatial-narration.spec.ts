@@ -65,6 +65,43 @@ function fixture() {
 }
 
 describe('spatial narration', () => {
+  it('reads a code-only segment silently and narrates the following prose', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const code = { ...segment, text: '```sh\necho hello\n```' };
+    const formatted = {
+      ...next,
+      text: 'Read [the **guide**](https://example.test/private).',
+    };
+    f.controller.append([code, formatted]);
+    expect(f.view).toHaveBeenLastCalledWith('silent', code.text);
+    expect(f.apply.mock.calls).toEqual([[code.actions]]);
+    expect(f.speak).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(readingTime(code.text));
+    await tick();
+    expect(f.apply).toHaveBeenLastCalledWith(code.after);
+    expect(f.speak).toHaveBeenCalledExactlyOnceWith('Read the guide.', '1');
+    f.signal('speaking', '1');
+    expect(f.apply).toHaveBeenLastCalledWith(formatted.actions);
+    expect(f.record.mock.calls).toEqual([[code.text], [formatted.text]]);
+  });
+
+  it('waits for the last silent segment to apply its final cue', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const code = { ...segment, text: '```sh\necho hello\n```' };
+    f.controller.append([code]);
+    const quiet = vi.fn();
+    const waiting = f.controller.whenQuiet().then(quiet);
+    await tick();
+    expect(quiet).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(readingTime(code.text));
+    await waiting;
+    expect(f.apply).toHaveBeenLastCalledWith(code.after);
+    expect(quiet).toHaveBeenCalledOnce();
+  });
+
   it('cues at matching playback boundaries and accepts a segment while speech is active', async () => {
     const f = fixture();
     f.controller.append([segment]);

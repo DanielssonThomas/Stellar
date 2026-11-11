@@ -75,7 +75,10 @@ describe('desktop Ivy composition', () => {
       turn: 'completed',
       items: [{ kind: 'text', text }],
     });
-    expect(assistant.caption()).toEqual({ text, kind: 'final' });
+    expect(assistant.caption()).toEqual({
+      text: 'Standup is at nine.',
+      kind: 'final',
+    });
   });
 
   it('prefers a native final caption even when its text was already narrated as commentary', () => {
