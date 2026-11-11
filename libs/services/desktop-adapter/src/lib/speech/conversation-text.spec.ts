@@ -92,6 +92,32 @@ describe('Desktop conversation text', () => {
     expect(conversationSpeechText(text)).toBe('See the guide.');
   });
 
+  it('keeps the final speech fallback closed to structured text', () => {
+    for (const structured of [
+      '[true]',
+      '[123]',
+      '<tool_result>private</tool_result>',
+      'Here is the result:\n{"unfinished":',
+      'Closing </tool_call> marker',
+    ]) {
+      expect(conversationSpeechText(structured)).toBe('');
+      expect(conversationDisplayText(structured)).toBe(structured);
+    }
+    expect(
+      conversationSpeechText('[The notes](https://example.test/private).'),
+    ).toBe('The notes.');
+    expect(
+      conversationSpeechText('<https://example.test/private> has details.'),
+    ).toBe('example.test has details.');
+  });
+
+  it('preserves long dotted prose and shortens an adjacent valid domain', () => {
+    const literal = 'a.'.repeat(32_000) + 'a';
+    const input = literal + ' and example.test/private?key=sample.';
+    expect(conversationDisplayText(input)).toBe(literal + ' and example.test.');
+    expect(conversationSpeechText(input)).toBe(literal + ' and example.test.');
+  });
+
   it('preserves literal expressions, fenced code, and explicitly quoted destinations on screen', () => {
     const source = [
       'Calculate 2 ** 3, leave file_name alone, and enter `a*b`.',

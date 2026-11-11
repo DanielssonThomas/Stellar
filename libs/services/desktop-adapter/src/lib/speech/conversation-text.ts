@@ -1,4 +1,6 @@
-const destinationPattern = String.raw`<?(?:\b[a-z][a-z\d+.-]*:\/\/|\bwww\.|\bmailto:|\b(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
+import { isSealedIvyProseLine } from '@stellar/desktop-contracts';
+
+const destinationPattern = String.raw`<?(?:\b[a-z][a-z\d+.-]*:\/\/|\bwww\.|\bmailto:|(?<![a-z\d.-])(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
 const htmlTag = String.raw`<\/?(?:a|b|blockquote|br|code|del|div|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul)(?:[ \t](?:[^<>'"]|"[^"]*"|'[^']*')*)?\/?>`;
 const destination = new RegExp(destinationPattern, 'giu');
 const inlineToken = new RegExp(
@@ -162,12 +164,13 @@ function project(source: string, includeCode: boolean): string {
       continue;
     }
     const text = line.replace(/^ {0,3}(?:>[ \t]+)+/u, '');
-    paragraph.push(
+    const content =
       heading.exec(text)?.[1] ??
-        text
-          .replace(/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]+/u, '')
-          .replace(/^\[[ xX]\][ \t]+/u, ''),
-    );
+      text
+        .replace(/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]+/u, '')
+        .replace(/^\[[ xX]\][ \t]+/u, '');
+    if (!includeCode && !isSealedIvyProseLine(content)) return '';
+    paragraph.push(content);
   }
   flushParagraph();
   return blocks
@@ -186,8 +189,8 @@ export function conversationDisplayText(text: string): string {
 /** Accepts committed prose before any synthesis-sized splitting. */
 export function conversationSpeechText(text: string): string {
   if (
-    /(?:^|\n)\s*(?:\{|\[\s*[[{"\]])|stellar_presentation|<\/?(?:think|analysis|tool_call)\b/iu.test(
-      text,
+    /stellar_presentation|<\/?(?:think|analysis|tool_call)|\p{Cc}/iu.test(
+      text.replace(/[\n\t\r]/gu, ''),
     )
   )
     return '';

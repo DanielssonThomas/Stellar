@@ -334,7 +334,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   return snapshot;
 }
 
-function sealedProseLine(line: string): boolean {
+export function isSealedIvyProseLine(line: string): boolean {
   const content = line.replace(/^\p{White_Space}+/u, '');
   if (content.startsWith('[')) {
     const link = /^\[([^[\]{}"]+)\]\([^)]*\)/u.exec(content);
@@ -365,7 +365,7 @@ function responseSegments(value: unknown): IvyResponseSegment[] {
       throw new DesktopContractError('malformed');
     const content = text(row['text'], kind === 'commentary' ? 4096 : undefined);
     if (
-      !content.split('\n').every(sealedProseLine) ||
+      !content.split('\n').every(isSealedIvyProseLine) ||
       /stellar_presentation|<\/?(?:think|analysis|tool_call)/i.test(content) ||
       /\p{Cc}/u.test(content.replace(/[\n\t\r]/gu, '')) ||
       (kind === 'commentary' && row['reused'])
