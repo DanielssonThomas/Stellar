@@ -10,6 +10,7 @@ import {
   transferClaim,
 } from './issue-worktree.mjs';
 import { validateIssue } from './validate-issue.mjs';
+import { admitBudgetRevisions } from './issue-budget.mjs';
 import {
   parseGitHubRestResponse,
   readIssueDependenciesSync,
@@ -138,6 +139,7 @@ export async function reconcileClaimStatus({
   fetchIssue = loadIssue,
   updateLabels = updateIssueLabels,
   maxAttempts = 3,
+  admittedBudget,
 }) {
   const owner = ownerLabel(worker);
   const confirmReview = async () => {
@@ -191,6 +193,7 @@ export async function reconcileClaimStatus({
             ),
           }
         : current;
+    admitBudgetRevisions(policyIssue.body, admittedBudget);
     const policy = validateIssue(policyIssue);
     if (!policy.valid)
       throw new Error(
@@ -202,6 +205,7 @@ export async function reconcileClaimStatus({
     }
     await confirmReview();
     const guarded = await fetchIssue(issueNumber);
+    admitBudgetRevisions(guarded.body, admittedBudget);
     if (
       JSON.stringify(issueLabels(current).sort()) !==
       JSON.stringify(issueLabels(guarded).sort())
@@ -467,6 +471,7 @@ export async function main(argv = process.argv.slice(2)) {
       issueNumber: number,
       worker: args.worker,
       resumed: Boolean(result.resumed),
+      admittedBudget: result.budgetRevisions,
     });
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result;
@@ -501,6 +506,7 @@ export async function main(argv = process.argv.slice(2)) {
       issueNumber: number,
       worker: args.worker,
       resumed: Boolean(result.resumed),
+      admittedBudget: result.budgetRevisions,
       reviewPr,
       fetchReview: fetchReviewPr,
     });

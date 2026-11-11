@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { readIssueDependencies } from './issue-dependency-reader.mjs';
+import { issueBudgetErrors } from './issue-budget.mjs';
 
 export const categories = {
   priority: [
@@ -61,7 +62,10 @@ function section(body, name) {
 
 export function validateIssue(
   issue,
-  { authorizedWorkers = configuredAuthorizedWorkers } = {},
+  {
+    authorizedWorkers = configuredAuthorizedWorkers,
+    requireReview = false,
+  } = {},
 ) {
   const labels = labelsOf(issue);
   const errors = [];
@@ -112,7 +116,7 @@ export function validateIssue(
       errors.push(`Use exactly one ${category} label.`);
   }
   // Issue numbers through #102 predate this policy. Draft CLI validation has no number.
-  if (!issue.number || issue.number > 102) {
+  if (requireReview || !issue.number || issue.number > 102) {
     if (found.review.length !== 1)
       errors.push('Use exactly one review label for new actionable issues.');
   } else if (found.review.length > 1) {
@@ -127,6 +131,7 @@ export function validateIssue(
   ) {
     errors.push('Target must be develop or release/YYYY.MM.');
   }
+  errors.push(...issueBudgetErrors(issue, found));
 
   for (const heading of [
     'Objective',
