@@ -93,6 +93,29 @@ describe('spatial composition', () => {
     });
   });
 
+  it.each([
+    [1000, 660],
+    [1440, 900],
+    [1920, 1080],
+  ])(
+    'centers a single focused card on the emblem at %ix%i',
+    (width, height) => {
+      const emblem = spatialEmblem(width, height, 1);
+      const { top } = spatialBand(width, height);
+      const emblemCenter = emblem.y + emblem.height / 2;
+
+      for (const state of [focused, expanded]) {
+        for (const compact of [false, true]) {
+          const [card] = spatialLayout(state, width, compact, height);
+          expect(card.id).toBe('three');
+          expect(
+            Math.abs(top + card.y + card.height / 2 - emblemCenter),
+          ).toBeLessThanOrEqual(1);
+        }
+      }
+    },
+  );
+
   it('keeps manual focus through Ivy cues and fences updates for a user-dismissed panel', () => {
     let state: SpatialState = directSpatialAction(
       compare,
