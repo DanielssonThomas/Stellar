@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { stripVTControlCharacters } from 'node:util';
 
 const knownRust = new Map([
   ['E0277', 'Trait bound not satisfied'],
@@ -31,7 +32,7 @@ export function diagnosticDescription(code, technology) {
 export function diagnoseOutput(text, { technology, category, exitCode } = {}) {
   if (!Number.isInteger(exitCode) || exitCode === 0 || typeof text !== 'string')
     return {};
-  const bounded = text.slice(0, 32_768).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  const bounded = stripVTControlCharacters(text.slice(0, 32_768));
   if (technology === 'rust') {
     const error = /^[ \t]*error\[(E\d{4})\]:[ \t]*([^\r\n]{1,256})/m.exec(
       bounded,

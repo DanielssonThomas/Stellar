@@ -1,0 +1,8 @@
+{
+  "name": "@stellar/engineering-intelligence-tools",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "js-tiktoken": "1.0.21"
+  }
+}

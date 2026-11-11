@@ -180,7 +180,7 @@ export function* readHermesBatches({
   home,
   claims,
   now = Date.now(),
-  onUnavailable = () => {},
+  onUnavailable,
 }) {
   const cutoff = (now - observationWindowMs) / 1000;
   for (const profile of profiles) {
@@ -199,7 +199,7 @@ export function* readHermesBatches({
         throw new Error('Unsupported Hermes state schema');
       yield* readProfile(database, profile, claims, cutoff, now);
     } catch {
-      onUnavailable();
+      onUnavailable?.();
     } finally {
       database?.close();
     }

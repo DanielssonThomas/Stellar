@@ -237,6 +237,10 @@ test('Rust fingerprints retain unquoted type classes and isolate diagnostic bloc
     diagnose(boolean + '\n --> src/main.rs:1:5').diagnosticHash,
     diagnose(boolean).diagnosticHash,
   );
+  assert.deepEqual(
+    diagnose('\x1b[31m' + boolean + '\x1b[0m'),
+    diagnose(boolean),
+  );
 });
 
 test('repeated diagnostics preserve scope, intentional failures and observed resolution', async (t) => {

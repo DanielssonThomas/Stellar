@@ -131,9 +131,6 @@ importers:
       husky:
         specifier: 9.1.7
         version: 9.1.7
-      js-tiktoken:
-        specifier: 1.0.21
-        version: 1.0.21
       jsdom:
         specifier: ~22.1.0
         version: 22.1.0
@@ -9037,12 +9034,6 @@ packages:
         integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==,
       }
 
-  js-tiktoken@1.0.21:
-    resolution:
-      {
-        integrity: sha512-biOj/6M5qdgx5TKjDnFT1ymSpM5tbd3ylwDtrQvFQSu0Z7bBYko2dF+W/aUkXUPuk6IVpRxk/3Q2sHOzGlS36g==,
-      }
-
   js-tokens@4.0.0:
     resolution:
       {
@@ -12866,9 +12857,6 @@ packages:
         optional: true
       happy-dom:
         optional: true
-      js-tiktoken:
-        specifier: 1.0.21
-        version: 1.0.21
       jsdom:
         optional: true
 
@@ -19508,10 +19496,6 @@ snapshots:
   jiti@2.7.0: {}
 
   jose@6.2.12: {}
-
-  js-tiktoken@1.0.21:
-    dependencies:
-      base64-js: 1.5.1
 
   js-tokens@4.0.0: {}
 

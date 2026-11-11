@@ -45,7 +45,6 @@
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-playwright": "^1.6.2",
     "husky": "9.1.7",
-    "js-tiktoken": "1.0.21",
     "jsdom": "~22.1.0",
     "jsonc-eslint-parser": "^2.1.0",
     "msw": "^2.15.0",

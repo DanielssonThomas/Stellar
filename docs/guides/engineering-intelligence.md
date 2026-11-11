@@ -54,6 +54,12 @@ Record an intervention with `history-cli.mjs intervention <json-file>`. Supply `
 
 ## Inspect skill overhead
 
+Install the isolated tokenizer once before inventorying skills. The passive collector uses Node's built-in modules.
+
+```powershell
+npm ci --prefix tools/engineering-intelligence --ignore-scripts --no-audit --no-fund
+```
+
 `node tools/engineering-intelligence/history-cli.mjs inventory` records checked-in skill versions using their content hashes. It estimates the standalone `SKILL.md` size with `o200k_base` in pinned `js-tiktoken`. Static size excludes discovery metadata, chat framing, references, and provider-specific loading. Model-specific loaded context remains unavailable without trusted observations.
 
 Use `skill-state <json-file>` with `skill`, `version`, `recordedAt`, `state` and optional `transferEvidence`. State can be candidate, experimental, validated, maintained, retired, or merged. Use `skill-activation <json-file>` only with verified evidence. Supply a stable `id`, `sessionId` returned by Ivy, `skill`, `version`, `at`, and `provenance`. If you have the original collector identity instead, include its `source`. Include measured `loadedTokens`, `referenceTokens`, and `discoveryTokens` where supported. Observed activations and associated failures describe the captured cohort. Transfer and net savings require comparable tasks and preferably controlled comparisons.
