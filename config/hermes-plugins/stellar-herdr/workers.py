@@ -67,11 +67,11 @@ def validate_claim(settings, issue, role, session):
     return cwd, branch, target
 
 
-def git_text(settings, cwd, expression):
+def git_text(settings, cwd, *args):
     from subprocess import run, TimeoutExpired
     from .core import HIDDEN
     try:
-        result = run([settings['git'], 'rev-parse', expression], cwd=cwd, capture_output=True,
+        result = run([settings['git'], 'rev-parse', *args], cwd=cwd, capture_output=True,
                      encoding='utf-8', errors='replace', timeout=4, creationflags=HIDDEN)
     except (OSError, TimeoutExpired):
         raise Unavailable('Git could not verify the issue worktree.') from None
@@ -84,7 +84,7 @@ def submit(root, settings, core, issue, role, session, task):
     if type(task) is not str or not 1 <= len(task.strip()) <= 16000 or '\0' in task:
         raise Unavailable('Supply a bounded task with allowed paths and verification.')
     cwd, branch, target = validate_claim(settings, issue, role, session)
-    if git_text(settings, cwd, '--abbrev-ref=HEAD') != branch:
+    if git_text(settings, cwd, '--abbrev-ref', 'HEAD') != branch:
         raise Unavailable('The checked-out branch differs from the active claim.')
     head = git_text(settings, cwd, 'HEAD')
     try:

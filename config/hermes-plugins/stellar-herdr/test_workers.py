@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -49,11 +51,22 @@ class WorkersTest(unittest.TestCase):
         return workers.submit(self.root, self.settings, core, 23, 'peon-cloud', 'job-23', 'Check affected lint.')
 
     def test_dispatch_keeps_task_out_of_arguments_and_refuses_repeat(self):
+        git = shutil.which('git')
+        self.assertIsNotNone(git, 'Git is required to verify real branch admission.')
+        self.settings['git'] = git
+        subprocess.run(
+            [git, 'init', '--initial-branch=issue/23-fix'], cwd=self.cwd, check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [git, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test',
+             '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-m', 'Fixture'],
+            cwd=self.cwd, check=True, capture_output=True,
+        )
         core = Mock()
         core.terminals.return_value = []
         core.launch.return_value = 't42'
-        with (patch.object(workers, 'command', side_effect=[self.claim, self.issue] * 2),
-              patch.object(workers, 'git_text', side_effect=['issue/23-fix', 'abc'] * 2)):
+        with patch.object(workers, 'command', side_effect=[self.claim, self.issue] * 2):
             self.assertEqual(self.submit(core)['terminal'], 't42')
             with self.assertRaisesRegex(Unavailable, 'already has a launch receipt'):
                 self.submit(core)
@@ -63,6 +76,8 @@ class WorkersTest(unittest.TestCase):
         self.assertEqual(argv[:4], ['fixture', '-p', 'peon-cloud', 'chat'])
         task_file = argv[argv.index('--query-file') + 1]
         self.assertIn('Check affected lint.', task_file.read_text(encoding='utf-8'))
+        head = subprocess.check_output([git, 'rev-parse', 'HEAD'], cwd=self.cwd, text=True).strip()
+        self.assertIn(f'Baseline: {head}', task_file.read_text(encoding='utf-8'))
         self.assertNotIn('Check affected lint.', argv)
         core.focus.assert_not_called()
 
