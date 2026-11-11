@@ -139,8 +139,12 @@ export function spatialLayout(
             0.369,
             expanded.has(id) ? 0.36 : 0.23,
           ]
-        : [0.145, 0.233, 0.475, expanded.has(id) ? 0.4 : 0.275];
-      place(id, project(slot), 'foreground');
+        : [0.145, 0, 0.475, expanded.has(id) ? 0.4 : 0.275];
+      const rect = project(slot);
+      const y = comparison
+        ? rect.y
+        : reserved.y + (reserved.height - rect.height) / 2;
+      place(id, { ...rect, y }, 'foreground');
     }
     for (const id of ordered.slice(featured.length)) {
       const group = groupById.get(id);

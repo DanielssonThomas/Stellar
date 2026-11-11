@@ -176,6 +176,20 @@ test('directs the sample from overview through detail and comparison at playback
   await openSample(page);
   const dialog = briefing(page);
   const emblem = page.locator('.emblem-slot[data-original-emblem]');
+  const expectFocusedCardCentered = async (id: string) => {
+    await expect
+      .poll(async () => {
+        const [panel, mark] = await Promise.all([
+          card(page, id).boundingBox(),
+          emblem.boundingBox(),
+        ]);
+        if (!panel || !mark) return Infinity;
+        return Math.abs(
+          panel.y + panel.height / 2 - (mark.y + mark.height / 2),
+        );
+      })
+      .toBeLessThanOrEqual(1);
+  };
   await expect(
     dialog.locator('xpath=ancestor::stellar-stage-organism'),
   ).toHaveCount(1);
@@ -212,11 +226,13 @@ test('directs the sample from overview through detail and comparison at playback
     'My pick for your local AI work',
   );
   await expect(card(page, 'juniper')).toHaveClass(/is-focused/);
+  await expectFocusedCardCentered('juniper');
   await speech(page, 'idle');
   await begin(3);
   await expect(
     card(page, 'juniper').getByText(/independent checker/),
   ).toBeVisible();
+  await expectFocusedCardCentered('juniper');
   await dialog.screenshot({
     path: info.outputPath('focus.png'),
     animations: 'disabled',
