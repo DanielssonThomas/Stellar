@@ -65,8 +65,8 @@ impl WarmWorker {
         }
         let command = process::recognition_command(self.mode);
         #[cfg(test)]
-        let command = self.command.map_or(command, |factory| factory());
-        let (child, transport) = process::start_persistent(command, 2)?;
+        let command = self.command.map_or(command, |factory| Ok(factory()));
+        let (child, transport) = process::start_persistent(command?, 2)?;
         *owned = Some(child);
         Ok(Session { epoch, transport })
     }

@@ -84,9 +84,15 @@ export interface VoicePorts {
   readonly transcribe: (
     pcm: Int16Array,
     id: string,
+    analyzeExpression?: true,
   ) => Promise<SpeechTranscript>;
-  readonly collect?: (pcm: Int16Array, id: string) => Promise<SpeechTranscript>;
+  readonly collect?: (
+    pcm: Int16Array,
+    id: string,
+    analyzeExpression?: true,
+  ) => Promise<SpeechTranscript>;
   readonly submit: (text: string, id: string) => Promise<boolean>;
+  readonly submitCaptured?: (text: string, id: string) => Promise<boolean>;
   readonly reflex?: (
     text: string,
     id: string,
@@ -277,13 +283,14 @@ export class VoiceConversation {
       this.draftRecognition = new DraftRecognition(
         ports.collect,
         ports.stop,
-        (text, id, final, commandAllowed, wakeAllowed) =>
+        (text, id, final, commandAllowed, wakeAllowed, captured) =>
           this.acceptCollectedTranscript(
             text,
             id,
             final,
             commandAllowed,
             wakeAllowed,
+            captured,
           ),
         () =>
           this.fail('Local draft recognition stopped. Your text is retained.'),
@@ -562,7 +569,9 @@ export class VoiceConversation {
               this.ports.id(),
               true,
               commandAllowed,
-              'draft',
+              commandAllowed && this.isOrdinaryCapture()
+                ? 'foreground'
+                : 'draft',
               wakeAllowed,
             );
           } else if (
@@ -989,6 +998,7 @@ export class VoiceConversation {
     final: boolean,
     commandAllowed: boolean,
     wakeAllowed: boolean,
+    captured?: true,
   ) {
     if (this.disposed) return;
     if (this.fastCommands && final && commandAllowed) {
@@ -1018,7 +1028,7 @@ export class VoiceConversation {
     const generation = this.generation;
     const control = commandAllowed ? voiceCommand(text) : null;
     if (control === 'new session' || control === 'reload mcp') {
-      await this.recognize(text, id, generation, commandAllowed);
+      await this.recognize(text, id, generation, { commandAllowed });
       return;
     }
     // A capped continuation cannot introduce a new utterance-prefix wake word.
@@ -1048,7 +1058,11 @@ export class VoiceConversation {
       await this.ports.waitForCapturePause?.();
       if (!this.current(generation)) return;
     }
-    await this.recognize(text, id, generation, commandAllowed, invocation);
+    await this.recognize(text, id, generation, {
+      commandAllowed,
+      acceptedInvocation: invocation,
+      captured,
+    });
     if (this.current(generation) && this.phase === null)
       this.latency.finish(this.failure ? 'interrupted' : 'completed');
   }
@@ -1100,7 +1114,7 @@ export class VoiceConversation {
       }
       return;
     }
-    await this.recognize(text, id, this.generation, commandAllowed);
+    await this.recognize(text, id, this.generation, { commandAllowed });
     if (command !== 'prompt' && this.composition.status === 'composing')
       this.refineDraft();
   }
@@ -1217,8 +1231,15 @@ export class VoiceConversation {
     text: string,
     id: string,
     generation: number,
-    commandAllowed = true,
-    acceptedInvocation?: NonNullable<ReturnType<VoiceInvocation['accept']>>,
+    {
+      commandAllowed = true,
+      acceptedInvocation,
+      captured,
+    }: {
+      commandAllowed?: boolean;
+      acceptedInvocation?: NonNullable<ReturnType<VoiceInvocation['accept']>>;
+      captured?: true;
+    } = {},
   ) {
     if (!this.current(generation)) return;
     if (this.sessionPending) return;
@@ -1268,7 +1289,8 @@ export class VoiceConversation {
         this.cancelPrompt();
         return;
       }
-      if (prompt.trim()) await this.recognize(prompt, id, generation, false);
+      if (prompt.trim())
+        await this.recognize(prompt, id, generation, { commandAllowed: false });
       this.publish();
       return;
     }
@@ -1376,7 +1398,14 @@ export class VoiceConversation {
       )
         throw new Error();
       if (!this.current(generation)) return;
-      await this.dispatchDraft(text, text.trim(), model, id, generation);
+      await this.dispatchDraft(
+        text,
+        text.trim(),
+        model,
+        id,
+        generation,
+        captured,
+      );
     } catch {
       if (this.current(generation))
         this.compositionError(
@@ -1644,13 +1673,14 @@ export class VoiceConversation {
     model: VoiceModel,
     id: string,
     generation: number,
+    captured?: true,
   ) {
     if (model === 'sol') this.solSessionStarted = true;
     this.dispatchUncertain = true;
     this.dispatchPending = true;
     let accepted = false;
     try {
-      accepted = await this.submit(text, id, generation);
+      accepted = await this.submit(text, id, generation, captured);
     } catch {
       // A failed transport may still have delivered the turn.
     } finally {
@@ -1681,11 +1711,13 @@ export class VoiceConversation {
     text: string,
     id: string,
     generation: number,
+    captured?: true,
   ): Promise<boolean> {
     this.beginResponse(id, 'voice');
     if (!this.current(generation)) return false;
     this.latency.point('hermes_submit');
-    const accepted = await this.ports.submit(text, id);
+    const submit = (captured && this.ports.submitCaptured) || this.ports.submit;
+    const accepted = await submit(text, id);
     const confirmed = this.responseConfirmed(id);
     if (
       this.current(generation) &&
@@ -1727,7 +1759,18 @@ export class VoiceConversation {
     );
   }
 
+  private isOrdinaryCapture(): boolean {
+    return (
+      this.context?.assistant.connection === 'ready' &&
+      !this.awaitingWake &&
+      this.invocation.active() &&
+      !this.promptOpen &&
+      this.composition.status === 'idle'
+    );
+  }
+
   private async transcribe(pcm: Int16Array) {
+    const captured = this.isOrdinaryCapture() ? true : undefined;
     this.speechResourcesUsed = true;
     this.resetSpeechActivity();
     this.fastCommands?.reset();
@@ -1750,7 +1793,9 @@ export class VoiceConversation {
         await pendingPassive;
         if (!this.current(generation)) return;
       }
-      const transcript = await this.ports.transcribe(pcm, id);
+      const transcript = captured
+        ? await this.ports.transcribe(pcm, id, captured)
+        : await this.ports.transcribe(pcm, id);
       if (!this.current(generation)) return;
       this.latency.point('stt_completed');
       const text = transcript.text;
@@ -1762,7 +1807,7 @@ export class VoiceConversation {
         this.publish();
         return;
       }
-      await this.recognize(text, id, generation);
+      await this.recognize(text, id, generation, { captured });
       if (this.current(generation) && this.phase === null)
         this.latency.finish(
           this.failure || this.composition.error ? 'interrupted' : 'completed',

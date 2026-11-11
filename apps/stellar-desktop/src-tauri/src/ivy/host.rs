@@ -62,6 +62,7 @@ pub enum Action {
 }
 struct Work {
     context: Option<super::workspace_context::ContextLease>,
+    expression: Option<crate::speech::VoiceExpressionPending>,
     epoch: u64,
     workspace_epoch: u64,
     action: Action,
@@ -179,7 +180,7 @@ impl IvyHost {
                             }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
                             Action::Submit(request) => {
-                                session.submit_with_context(request, work.context)
+                                session.submit_with_context(request, work.context, work.expression)
                             }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),

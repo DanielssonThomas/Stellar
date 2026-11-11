@@ -200,6 +200,7 @@ export class DesktopAssistant {
     text: string,
     inputId: string = crypto.randomUUID(),
     source: 'typed' | 'voice' = 'typed',
+    captured = false,
   ): Promise<boolean> {
     const value = text.trim();
     if (
@@ -216,11 +217,13 @@ export class DesktopAssistant {
       return false;
     }
     const events = [...this.reflex.events()];
+    const voiceUtterance = source === 'voice' && captured;
     const request = () => ({
       version: 1,
       text: value,
       input_id: inputId,
       ...(events.length ? { local_actions: events } : {}),
+      ...(voiceUtterance ? { voice_utterance: true } : {}),
     });
     while (
       events.length &&
@@ -256,7 +259,9 @@ export class DesktopAssistant {
       this.closeTargets.delete(expired);
     }
     try {
-      if (events.length) await this.adapter.submit(value, inputId, events);
+      if (voiceUtterance)
+        await this.adapter.submit(value, inputId, events, true);
+      else if (events.length) await this.adapter.submit(value, inputId, events);
       else await this.adapter.submit(value, inputId);
       const current = this.state();
       if (current.turn_id === inputId) this.recordProgress(current);

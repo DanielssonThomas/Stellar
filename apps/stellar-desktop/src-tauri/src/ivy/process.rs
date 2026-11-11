@@ -74,6 +74,10 @@ impl Broker {
                 "stellar_ivy_conversation",
                 include_str!("ivy_conversation.py"),
             ),
+            (
+                "stellar_ivy_voice_expression",
+                include_str!("ivy_voice_expression.py"),
+            ),
             ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),
             (
                 "stellar_ivy_profile_tools",

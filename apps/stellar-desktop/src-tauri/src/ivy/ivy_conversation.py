@@ -116,13 +116,28 @@ class ConversationClient:
         return await self.client.rpc(method, **{**params, 'text': fallback})
 
 
-async def submit_conversation(conn, params, *, workspace_token=None):
+async def submit_conversation(conn, params, *, workspace_token=None, profile=None, expression_current=None):
     observation = params.pop('observation', None)
+    expression = params.pop('voice_expression', None)
     model_text = conversation_prompt(params['text'], workspace_token=workspace_token,
                                      observation=observation)
     fallback = legacy_prompt(params['text'], workspace_token, observation)
+    staged = None
+    if expression is not None and profile is not None and getattr(conn.client, 'supports_api_text', False):
+        from stellar_ivy_voice_expression import installed, ready, stage
+        if (installed(profile) and await ready(conn.client) and
+                (expression_current is None or expression_current())):
+            staged = stage(profile, params['session_id'], expression)
+        if staged is not None:
+            model_text = staged[0] + model_text
     token = _submission.set((params['session_id'], params['input_id'], model_text, fallback))
+    completed = False
     try:
-        return await conn.call('prompt.submit', params)
+        result = await conn.call('prompt.submit', params)
+        completed = conn.client.supports_api_text if staged is not None else True
+        return result
     finally:
         _submission.reset(token)
+        if staged is not None and not completed:
+            from stellar_ivy_voice_expression import discard
+            discard(staged[1])

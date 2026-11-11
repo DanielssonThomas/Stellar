@@ -11,6 +11,7 @@ fn operation(voice: &WarmVoice) -> Operation {
         cancelled: AtomicBool::new(false),
         scratch: None,
         recognition_epoch: 0,
+        expression_epoch: None,
     }
 }
 

@@ -58,6 +58,7 @@ impl IvyHost {
                     .map_err(|_| IvyErrorCode::Protocol)?,
                 action: Action::Inspect(request, tx),
                 context: None,
+                expression: None,
             })
             .map_err(|_| IvyErrorCode::Busy)?;
         Ok(rx)

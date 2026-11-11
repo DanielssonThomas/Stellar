@@ -99,11 +99,19 @@ export class DesktopVoice {
       ? (pcm, stream, sequence, threshold, mode) =>
           this.speech.keywords(pcm, stream, sequence, threshold, mode)
       : undefined,
-    transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
-    collect: (pcm, id) => this.speech.collect(pcm, id),
+    transcribe: (pcm, id, analyzeExpression) =>
+      analyzeExpression
+        ? this.speech.transcribe(pcm, id, true)
+        : this.speech.transcribe(pcm, id),
+    collect: (pcm, id, analyzeExpression) =>
+      analyzeExpression
+        ? this.speech.collect(pcm, id, true)
+        : this.speech.collect(pcm, id),
     refinePrompt: async (raw, signal) =>
       (await this.cleanup.refine(raw, signal)).text,
     submit: (text, id) => this.assistant.submit(text, id, 'voice'),
+    submitCaptured: (text, id) =>
+      this.assistant.submit(text, id, 'voice', true),
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),

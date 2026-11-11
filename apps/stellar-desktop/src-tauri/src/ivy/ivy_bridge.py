@@ -21,7 +21,7 @@ METHODS = {
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
-                      'observation': dict},
+                      'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
     'clarify.respond': {'session_id': str, 'execution_generation': int, 'prompt_id': str, 'answer': str},
@@ -106,7 +106,7 @@ def validate(request):
     if type(method) is not str or method not in METHODS or type(params) is not dict:
         raise ValueError()
     schema = METHODS[method]
-    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation'}}
+    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
     required = set(schema) - optional.get(method, set())
     if not required <= set(params) or set(params) - set(schema):
         raise ValueError()
@@ -462,7 +462,14 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         raise Closed()
                     token = workspace.gate.arm(epoch, params['input_id'])
                     workspace.remember_token(token)
-                result = await asyncio.wait_for(submit_conversation(conn, params, workspace_token=token), DEADLINE)
+
+                def expression_current():
+                    active = workspace.gate.active if token is not None else None
+                    return token is None or (active is not None and active[2] == token)
+
+                result = await asyncio.wait_for(
+                    submit_conversation(conn, params, workspace_token=token, profile=PROFILE,
+                                        expression_current=expression_current), DEADLINE)
                 if token is not None and result.get('admission_id') in conn.completed:
                     workspace.gate.disarm()
             else:
@@ -536,6 +543,7 @@ async def serve():
     conn = None
     workspace = None
     tasks = []
+    prime_config = None
     try:
         IvyConnection, discover, connect = load_library()
         from stellar_workspace_credentials import WorkspaceCredentials
@@ -544,6 +552,7 @@ async def serve():
         from stellar_workspace_service import WorkspaceService
         from stellar_ivy_approvals import Approvals, load_access
         from stellar_ivy_conversation import ConversationClient
+        from stellar_ivy_voice_expression import installed, native_codex_transport
         from hermes_cli.gateway_client import GatewayRPCError
         try:
             from tools.voice_mode_transcript import is_voice_stop_phrase
@@ -565,6 +574,8 @@ async def serve():
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)
+            if installed(PROFILE):
+                prime_config = asyncio.create_task(asyncio.to_thread(native_codex_transport))
             approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
             tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals))]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -576,6 +587,10 @@ async def serve():
     except Exception:
         return 1
     finally:
+        if prime_config is not None:
+            prime_config.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await prime_config
         for task in tasks:
             task.cancel()
         for task in tasks:
