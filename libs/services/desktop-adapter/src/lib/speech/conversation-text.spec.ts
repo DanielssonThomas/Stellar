@@ -147,4 +147,13 @@ describe('Desktop conversation text', () => {
       'Calculate 2 ** 3, leave file_name alone, and enter a*b.',
     );
   });
+
+  it('preserves arithmetic beside inline code and removes paired emphasis around code', () => {
+    const text =
+      'Compute `2`*3, 2*`3`, `2`*`3`, `2`** 3, and 2* 3. Use **`npm test`** or _`pnpm test`_.';
+    const expected =
+      'Compute 2*3, 2*3, 2*3, 2** 3, and 2* 3. Use npm test or pnpm test.';
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
+  });
 });

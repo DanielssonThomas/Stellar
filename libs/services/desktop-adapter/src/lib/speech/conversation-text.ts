@@ -46,24 +46,28 @@ function prose(text: string): string {
   return shortenDestinations(text)
     .replace(/<[^@\s<>]+@[^@\s<>]+\.[a-z]{2,63}>/giu, 'email address')
     .replace(/\b(?:https?:\/{0,2}|www\.)[ \t]*(?=$|\n)/giu, '')
-    .replace(/(\*{1,3}|~~)(?=\S)(.+?)(?<=\S)\1/gu, '$2')
+    .replace(
+      /(?<![\p{L}\p{N}*~])(\*{1,3}|~~)(?=[^\s*~])(.+?)(?<=[^\s*~])\1(?![\p{L}\p{N}*~])/gu,
+      '$2',
+    )
     .replace(
       /(?<![\p{L}\p{N}])(_{1,3})(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}])/gu,
       '$2',
-    )
-    .replace(/(?<!\S)(?:\*+|_{2,}|~~)(?=[\p{L}\p{N}])/gu, '')
-    .replace(/(?<=[\p{L}\p{N}])(?:\*+|_{2,}|~~)(?=$|[\s\p{P}])/gu, '');
+    );
 }
+
+type InlineBoundary = 'code' | 'markup' | undefined;
 
 function adjoiningProse(
   text: string,
-  afterToken: boolean,
-  beforeToken: boolean,
+  previous: InlineBoundary,
+  next: InlineBoundary,
 ): string {
-  if (afterToken)
+  if (previous === 'markup')
     text = text.replace(/^(?:\*{1,3}|_{1,3}|~~)(?=$|[\s\p{P}])/u, '');
-  if (beforeToken) text = text.replace(/(?:\*{1,3}|_{1,3}|~~)$/u, '');
-  return prose(text);
+  if (next === 'markup') text = text.replace(/(?:\*{1,3}|_{1,3}|~~)$/u, '');
+  const operator = previous === 'code' ? (/^\*+/u.exec(text)?.[0] ?? '') : '';
+  return operator + prose(text.slice(operator.length));
 }
 
 function linkEnd(text: string, start: number): number {
@@ -117,11 +121,30 @@ function inline(
     separate = false;
   };
   let end = 0;
+  let previous: InlineBoundary;
   for (let token = tokens.exec(text); token; token = tokens.exec(text)) {
-    append(adjoiningProse(text.slice(end, token.index), end > 0, true));
-    end = tokens.lastIndex;
     const { code, literal, label, destination, reference, tag, url } =
       token.groups ?? {};
+    let preceding = text.slice(end, token.index);
+    if (code !== undefined) {
+      const marker = /(?:\*{1,3}|_{1,3}|~~)$/u.exec(preceding)?.[0];
+      if (marker) {
+        const before = text[token.index - marker.length - 1] ?? '';
+        const after = text[tokens.lastIndex + marker.length] ?? '';
+        if (
+          (!before || /[\s\p{Ps}\p{Pi}]/u.test(before)) &&
+          (!after || /[\s.,;:!?)}\]]/u.test(after)) &&
+          text.startsWith(marker, tokens.lastIndex)
+        ) {
+          preceding = preceding.slice(0, -marker.length);
+          tokens.lastIndex += marker.length;
+        }
+      }
+    }
+    const next = code === undefined ? 'markup' : 'code';
+    append(adjoiningProse(preceding, previous, next));
+    end = tokens.lastIndex;
+    previous = next;
     if (tag !== undefined) {
       separate ||= htmlBlock.test(tag);
     } else if (code !== undefined) {
@@ -142,7 +165,7 @@ function inline(
       append(prose(token[0]));
     }
   }
-  append(adjoiningProse(text.slice(end), end > 0, false));
+  append(adjoiningProse(text.slice(end), previous, undefined));
   return result;
 }
 
