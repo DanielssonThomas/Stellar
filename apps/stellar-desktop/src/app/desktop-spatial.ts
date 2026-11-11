@@ -17,7 +17,6 @@ import {
   type SpatialScene,
 } from '@stellar/desktop-interaction';
 import {
-  conversationSpeechText,
   IvyAdapterService,
   SpeechAdapterService,
   SpatialNarration,
@@ -49,12 +48,7 @@ export class DesktopSpatial {
     initialize: () =>
       this.muted ? Promise.reject() : this.speech.initialize(),
     read: () => this.speech.state(),
-    speak: (text, id) => {
-      const prose = conversationSpeechText(text);
-      return prose
-        ? this.speech.speak(prose, id)
-        : Promise.reject(new Error('No speech-ready narration'));
-    },
+    speak: (text, id) => this.speech.speak(text, id),
     stop: () => this.speech.stop(),
     id: () => crypto.randomUUID(),
     apply: (actions) => this.apply(actions, 'ivy'),

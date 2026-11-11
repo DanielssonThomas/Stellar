@@ -1,9 +1,11 @@
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
+import { conversationSpeechText } from './conversation-text';
 
 export type SpatialNarrationMode =
   | 'idle'
   | 'preparing'
   | 'speaking'
+  | 'silent'
   | 'reading'
   | 'paused';
 
@@ -197,12 +199,13 @@ export class SpatialNarration<Action> {
 
   private pump() {
     if (this.active || this.initializing || this.stopping) return;
-    if (this.readAlong && (this.reading || this.pending.length)) {
+    if (this.reading || (this.readAlong && this.pending.length)) {
       if (!this.reading && !this.paused) this.beginReading();
       else this.scheduleReading();
       return;
     }
-    if (!this.pending.length) {
+    const segment = this.pending[0];
+    if (!segment) {
       this.publish('idle');
       return;
     }
@@ -213,6 +216,11 @@ export class SpatialNarration<Action> {
       )
     ) {
       this.publish('preparing');
+      return;
+    }
+    const speech = conversationSpeechText(segment.text);
+    if (!speech) {
+      this.beginReading();
       return;
     }
     this.initializing = true;
@@ -246,7 +254,7 @@ export class SpatialNarration<Action> {
         };
         this.active = active;
         void this.port
-          .speak(segment.text, active.id)
+          .speak(speech, active.id)
           .then((reply) => {
             if (this.active !== active) return;
             active.acknowledged = true;
@@ -290,7 +298,9 @@ export class SpatialNarration<Action> {
 
   private scheduleReading() {
     const reading = this.reading;
-    this.publish(this.paused ? 'paused' : 'reading');
+    this.publish(
+      this.readAlong ? (this.paused ? 'paused' : 'reading') : 'silent',
+    );
     if (!reading || this.paused || this.readTimer !== undefined) return;
     reading.deadline = performance.now() + reading.remaining;
     this.readTimer = setTimeout(

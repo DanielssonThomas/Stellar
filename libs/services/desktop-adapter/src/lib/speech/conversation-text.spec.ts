@@ -7,7 +7,7 @@ import {
 describe('Desktop conversation text', () => {
   it('keeps words and punctuation from formatted prose', () => {
     const markdown =
-      '## Briefing\n\n- **First**, check *Ivy*.\n- ~~Old~~ Ready?';
+      '## Briefing ###\n\n- **First**, check *Ivy*.\n- ~~Old~~ Ready?';
     expect(conversationDisplayText(markdown)).toBe(
       'Briefing\n\nFirst, check Ivy.\nOld Ready?',
     );
@@ -65,6 +65,24 @@ describe('Desktop conversation text', () => {
         String.raw`**[Documentation](https://docs.test/a)** and **https://example.test/path\_name[part]?key=private#anchor**.`,
       ),
     ).toBe('Documentation and example.test.');
+  });
+
+  it('keeps surrounding quotes while removing apostrophes inside URL destinations', () => {
+    const text = "Visit 'https://example.test/o'reilly?private=yes#end'.";
+    const expected = "Visit 'example.test'.";
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
+  });
+
+  it('keeps literal placeholders and strips HTML links and Markdown titles', () => {
+    const text =
+      'Use <file> and <folder>. ' +
+      '<a href="https://example.test/private?token=secret">Guide</a>, ' +
+      '[relative](/notes "a ) title"), ' +
+      "[angled](<https://example.test/close)> 'another ) title').";
+    const expected = 'Use <file> and <folder>. Guide, relative, angled.';
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
   });
 
   it('preserves literal expressions, fenced code, and explicitly quoted destinations on screen', () => {

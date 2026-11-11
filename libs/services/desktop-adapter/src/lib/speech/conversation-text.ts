@@ -1,16 +1,19 @@
-const destinationPattern = String.raw`<?(?:\b[a-z][a-z\d+.-]*:\/\/|\bwww\.|\bmailto:|\b(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"'\x60]+>?`;
+const destinationPattern = String.raw`<?(?:\b[a-z][a-z\d+.-]*:\/\/|\bwww\.|\bmailto:|\b(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
+const htmlTag = String.raw`<\/?(?:a|b|blockquote|br|code|del|div|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul)(?:[ \t](?:[^<>'"]|"[^"]*"|'[^']*')*)?\/?>`;
 const destination = new RegExp(destinationPattern, 'giu');
 const inlineToken = new RegExp(
   [
     String.raw`(?<!\x60)(?<delimiter>\x60+)(?!\x60)(?<code>[^\n]*?)\k<delimiter>(?!\x60)`,
     String.raw`\\(?<literal>[\\\x60*_[\]{}()#+.!<>~|\-])`,
     String.raw`!?\[(?<label>[^[\]\n]+)\](?:(?<destination>\()|\[(?<reference>[^[\]\n]*)\])?`,
+    '(?<html>' + htmlTag + ')',
     '(?<url>' + destinationPattern + ')',
   ].join('|'),
   'giu',
 );
 const fencedCode = /^ {0,3}(\x60{3,}|~{3,})(.*)$/u;
 const referenceDefinition = /^ {0,3}\[([^[\]\n]+)\]:[ \t]+/u;
+const heading = /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/u;
 
 function linkName(value: string): string {
   try {
@@ -29,7 +32,8 @@ function linkName(value: string): string {
 function shortenDestinations(text: string): string {
   return text.replace(destination, (match) => {
     const address = match.replace(/^<|>$/gu, '');
-    const trimmed = address.replace(/[.,;!?)}\]]+$/u, '');
+    if (match.startsWith('<') && match.endsWith('>')) return linkName(address);
+    const trimmed = address.replace(/[.,;!?)}\]']+$/u, '');
     return linkName(trimmed) + address.slice(trimmed.length);
   });
 }
@@ -37,7 +41,6 @@ function shortenDestinations(text: string): string {
 function prose(text: string): string {
   return shortenDestinations(text)
     .replace(/<[^@\s<>]+@[^@\s<>]+\.[a-z]{2,63}>/giu, 'email address')
-    .replace(/<\/?[a-z][a-z\d-]*(?:\s[^<>]*)?>/giu, '')
     .replace(/\b(?:https?:\/{0,2}|www\.)$/iu, '')
     .replace(/(\*{1,3}|~~)(?=\S)(.+?)(?<=\S)\1/gu, '$2')
     .replace(
@@ -61,10 +64,24 @@ function adjoiningProse(
 
 function linkEnd(text: string, start: number): number {
   let depth = 1;
+  let delimiter: string | undefined;
   for (let i = start; i < text.length; i++) {
-    if (text[i] === '\\') i++;
-    else if (text[i] === '(') depth++;
-    else if (text[i] === ')' && --depth === 0) return i + 1;
+    const char = text[i];
+    if (char === '\\') {
+      i++;
+    } else if (delimiter) {
+      if (char === delimiter) delimiter = undefined;
+    } else if (
+      depth === 1 &&
+      /[<"']/u.test(char) &&
+      (i === start || /[ \t]/u.test(text[i - 1]))
+    ) {
+      delimiter = char === '<' ? '>' : char;
+    } else if (char === '(') {
+      depth++;
+    } else if (char === ')' && --depth === 0) {
+      return i + 1;
+    }
   }
   return text.length;
 }
@@ -84,8 +101,9 @@ function inline(
   for (let token = tokens.exec(text); token; token = tokens.exec(text)) {
     result += adjoiningProse(text.slice(end, token.index), end > 0, true);
     end = tokens.lastIndex;
-    const { code, literal, label, destination, reference, url } =
+    const { code, literal, label, destination, reference, html, url } =
       token.groups ?? {};
+    if (html !== undefined) continue;
     if (code !== undefined) {
       result += includeCode ? code : shortenDestinations(code);
     } else if (literal !== undefined) {
@@ -131,11 +149,13 @@ function project(source: string, includeCode: boolean): string {
       continue;
     }
     if (/^ {0,3}(?:\*{3,}|-{3,}|_{3,})$/u.test(line)) continue;
+    const text = line.replace(/^ {0,3}(?:>[ \t]+)+/u, '');
     lines.push({
-      text: line
-        .replace(/^ {0,3}(?:>[ \t]+)+/u, '')
-        .replace(/^ {0,3}(?:#{1,6}|[-*+]|\d{1,9}[.)])[ \t]+/u, '')
-        .replace(/^\[[ xX]\][ \t]+/u, ''),
+      text:
+        heading.exec(text)?.[1] ??
+        text
+          .replace(/^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]+/u, '')
+          .replace(/^\[[ xX]\][ \t]+/u, ''),
     });
   }
   return lines
