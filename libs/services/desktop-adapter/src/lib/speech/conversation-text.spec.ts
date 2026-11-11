@@ -85,6 +85,17 @@ describe('Desktop conversation text', () => {
     expect(conversationSpeechText(text)).toBe(expected);
   });
 
+  it('keeps word boundaries when stripping HTML line breaks and block tags', () => {
+    const text =
+      'Fi<strong>rst</strong><br>second<div>third</div><ul><li>fourth</li><li>fifth</li></ul>.';
+    const expected = 'First second third fourth fifth.';
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
+    expect(conversationDisplayText('<p>First</p><p>second</p>')).toBe(
+      'First second',
+    );
+  });
+
   it('removes the destination and title of a multiline Markdown link', () => {
     const text =
       'See [the guide](\n  https://example.test/private?token=yes\n  "A ) title").';

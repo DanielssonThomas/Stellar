@@ -1,14 +1,16 @@
 import { isSealedIvyProseLine } from '@stellar/desktop-contracts';
 
 const destinationPattern = String.raw`<?(?:(?<![a-z\d+.-])[a-z][a-z\d+.-]*:\/\/|\bhttps?:\/\/|\bwww\.|\bmailto:|(?<![a-z\d.-])(?:[a-z\d-]+\.)+[a-z]{2,63}(?=[/?#]))[^\s<>"\x60]+>?`;
-const htmlTag = String.raw`<\/?(?:a|b|blockquote|br|code|del|div|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul)(?:[ \t](?:[^<>'"]|"[^"]*"|'[^']*')*)?\/?>`;
+const htmlTag = String.raw`<\/?(?<tag>a|b|blockquote|br|code|del|div|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|th|thead|tr|u|ul)(?:[ \t](?:[^<>'"]|"[^"]*"|'[^']*')*)?\/?>`;
+const htmlBlock =
+  /^(?:blockquote|br|div|h[1-6]|hr|li|ol|p|pre|table|tbody|td|th|thead|tr|ul)$/iu;
 const destination = new RegExp(destinationPattern, 'giu');
 const inlineToken = new RegExp(
   [
     String.raw`(?<!\x60)(?<delimiter>\x60+)(?!\x60)(?<code>[^\n]*?)\k<delimiter>(?!\x60)`,
     String.raw`\\(?<literal>[\\\x60*_[\]{}()#+.!<>~|\-])`,
     String.raw`!?\[(?<label>[^[\]\n]+)\](?:(?<destination>\()|\[(?<reference>[^[\]\n]*)\])?`,
-    '(?<html>' + htmlTag + ')',
+    htmlTag,
     '(?<url>' + destinationPattern + ')',
   ].join('|'),
   'giu',
@@ -99,32 +101,49 @@ function inline(
 ): string {
   const tokens = new RegExp(inlineToken);
   let result = '';
+  let last = '';
+  let separate = false;
+  const append = (value: string) => {
+    if (!value) return;
+    if (
+      separate &&
+      last &&
+      !/\s/u.test(last) &&
+      !/^[\s.,;:!?)}\]]/u.test(value)
+    )
+      result += ' ';
+    result += value;
+    last = value.at(-1) ?? '';
+    separate = false;
+  };
   let end = 0;
   for (let token = tokens.exec(text); token; token = tokens.exec(text)) {
-    result += adjoiningProse(text.slice(end, token.index), end > 0, true);
+    append(adjoiningProse(text.slice(end, token.index), end > 0, true));
     end = tokens.lastIndex;
-    const { code, literal, label, destination, reference, html, url } =
+    const { code, literal, label, destination, reference, tag, url } =
       token.groups ?? {};
-    if (html !== undefined) continue;
-    if (code !== undefined) {
-      result += includeCode ? code : shortenDestinations(code);
+    if (tag !== undefined) {
+      separate ||= htmlBlock.test(tag);
+    } else if (code !== undefined) {
+      append(includeCode ? code : shortenDestinations(code));
     } else if (literal !== undefined) {
-      result += literal;
+      append(literal);
     } else if (url !== undefined) {
-      result += shortenDestinations(url);
+      append(shortenDestinations(url));
     } else if (
       label &&
       (destination || references.has(referenceId(reference || label)))
     ) {
-      result += inline(label, includeCode, references);
+      append(inline(label, includeCode, references));
       if (!destination) continue;
       end = linkEnd(text, end);
       tokens.lastIndex = end;
     } else {
-      result += prose(token[0]);
+      append(prose(token[0]));
     }
   }
-  return result + adjoiningProse(text.slice(end), end > 0, false);
+  append(adjoiningProse(text.slice(end), end > 0, false));
+  return result;
 }
 
 function project(source: string, includeCode: boolean): string {
