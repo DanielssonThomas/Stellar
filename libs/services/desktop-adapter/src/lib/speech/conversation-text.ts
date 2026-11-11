@@ -45,29 +45,42 @@ function shortenDestinations(text: string): string {
 function prose(text: string): string {
   return shortenDestinations(text)
     .replace(/<[^@\s<>]+@[^@\s<>]+\.[a-z]{2,63}>/giu, 'email address')
-    .replace(/\b(?:https?:\/{0,2}|www\.)[ \t]*(?=$|\n)/giu, '')
-    .replace(
-      /(?<![\p{L}\p{N}*~])(\*{1,3}|~~)(?=[^\s*~])(.+?)(?<=[^\s*~])\1(?![\p{L}\p{N}*~])/gu,
-      '$2',
-    )
-    .replace(
-      /(?<![\p{L}\p{N}])(_{1,3})(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}])/gu,
-      '$2',
-    );
+    .replace(/\b(?:https?:\/{0,2}|www\.)[ \t]*(?=$|\n)/giu, '');
 }
 
-type InlineBoundary = 'code' | 'markup' | undefined;
-
-function adjoiningProse(
-  text: string,
-  previous: InlineBoundary,
-  next: InlineBoundary,
-): string {
-  if (previous === 'markup')
-    text = text.replace(/^(?:\*{1,3}|_{1,3}|~~)(?=$|[\s\p{P}])/u, '');
-  if (next === 'markup') text = text.replace(/(?:\*{1,3}|_{1,3}|~~)$/u, '');
-  const operator = previous === 'code' ? (/^\*+/u.exec(text)?.[0] ?? '') : '';
-  return operator + prose(text.slice(operator.length));
+function stripEmphasis(text: string, urlMarkers: ReadonlySet<number>): string {
+  const markers = /\*+|_+|~+/gu;
+  const opens = new Map<string, number[]>();
+  const remove = new Set(urlMarkers);
+  for (const match of text.matchAll(markers)) {
+    const marker = match[0];
+    if (!/^(?:\*{1,3}|_{1,3}|~~)$/u.test(marker)) continue;
+    const before = text[match.index - 1];
+    const after = text[match.index + marker.length];
+    const pending = opens.get(marker) ?? [];
+    const opening = pending.at(-1);
+    if (
+      opening !== undefined &&
+      before &&
+      !/\s/u.test(before) &&
+      (!after || !/[\p{L}\p{N}\0]/u.test(after))
+    ) {
+      pending.pop();
+      remove.add(opening);
+      remove.add(match.index);
+    } else if (
+      !urlMarkers.has(match.index) &&
+      (!before || !/[\p{L}\p{N}\0]/u.test(before)) &&
+      after &&
+      !/\s/u.test(after)
+    ) {
+      pending.push(match.index);
+      opens.set(marker, pending);
+    }
+  }
+  return text.replace(markers, (marker, index: number) =>
+    remove.has(index) ? '' : marker,
+  );
 }
 
 function linkEnd(text: string, start: number): number {
@@ -104,10 +117,17 @@ function inline(
   references: ReadonlySet<string>,
 ): string {
   const tokens = new RegExp(inlineToken);
+  const protectedParts: string[] = [];
+  const urlMarkers = new Set<number>();
+  // Inline atoms stay opaque while emphasis is paired across their boundaries.
+  const protect = (value: string) => {
+    protectedParts.push(value);
+    return '\0';
+  };
   let result = '';
   let last = '';
   let separate = false;
-  const append = (value: string) => {
+  const append = (value: string, literal = false) => {
     if (!value) return;
     if (
       separate &&
@@ -116,48 +136,38 @@ function inline(
       !/^[\s.,;:!?)}\]]/u.test(value)
     )
       result += ' ';
-    result += value;
+    result += literal ? protect(value) : value.replace(/\0/gu, protect);
     last = value.at(-1) ?? '';
     separate = false;
   };
   let end = 0;
-  let previous: InlineBoundary;
   for (let token = tokens.exec(text); token; token = tokens.exec(text)) {
+    append(prose(text.slice(end, token.index)));
+    end = tokens.lastIndex;
     const { code, literal, label, destination, reference, tag, url } =
       token.groups ?? {};
-    let preceding = text.slice(end, token.index);
-    if (code !== undefined) {
-      const marker = /(?:\*{1,3}|_{1,3}|~~)$/u.exec(preceding)?.[0];
-      if (marker) {
-        const before = text[token.index - marker.length - 1] ?? '';
-        const after = text[tokens.lastIndex + marker.length] ?? '';
-        if (
-          (!before || /[\s\p{Ps}\p{Pi}]/u.test(before)) &&
-          (!after || /[\s.,;:!?)}\]]/u.test(after)) &&
-          text.startsWith(marker, tokens.lastIndex)
-        ) {
-          preceding = preceding.slice(0, -marker.length);
-          tokens.lastIndex += marker.length;
-        }
-      }
-    }
-    const next = code === undefined ? 'markup' : 'code';
-    append(adjoiningProse(preceding, previous, next));
-    end = tokens.lastIndex;
-    previous = next;
     if (tag !== undefined) {
       separate ||= htmlBlock.test(tag);
     } else if (code !== undefined) {
-      append(includeCode ? code : shortenDestinations(code));
+      append(includeCode ? code : shortenDestinations(code), true);
     } else if (literal !== undefined) {
-      append(literal);
+      append(literal, true);
     } else if (url !== undefined) {
-      append(shortenDestinations(url));
+      const trailing = /(?<![*_~])(\*{1,3}|_{1,3}|~~)([.,;!?)}\]']*)$/u.exec(
+        url,
+      );
+      if (trailing) {
+        append(prose(url.slice(0, trailing.index)) || 'link', true);
+        urlMarkers.add(result.length);
+        append(trailing[1] + trailing[2]);
+      } else {
+        append(shortenDestinations(url), true);
+      }
     } else if (
       label &&
       (destination || references.has(referenceId(reference || label)))
     ) {
-      append(inline(label, includeCode, references));
+      append(inline(label, includeCode, references), true);
       if (!destination) continue;
       end = linkEnd(text, end);
       tokens.lastIndex = end;
@@ -165,8 +175,12 @@ function inline(
       append(prose(token[0]));
     }
   }
-  append(adjoiningProse(text.slice(end), previous, undefined));
-  return result;
+  append(prose(text.slice(end)));
+  let atom = 0;
+  return stripEmphasis(result, urlMarkers).replace(
+    /\0/gu,
+    () => protectedParts[atom++],
+  );
 }
 
 function project(source: string, includeCode: boolean): string {

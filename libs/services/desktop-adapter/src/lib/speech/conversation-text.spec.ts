@@ -150,9 +150,17 @@ describe('Desktop conversation text', () => {
 
   it('preserves arithmetic beside inline code and removes paired emphasis around code', () => {
     const text =
-      'Compute `2`*3, 2*`3`, `2`*`3`, `2`** 3, and 2* 3. Use **`npm test`** or _`pnpm test`_.';
+      'Compute `2`*3, 2*`3`, `2`*`3`, `2`** 3, and 2*3*4. Use **`npm test`** or _`pnpm test`_.';
     const expected =
-      'Compute 2*3, 2*3, 2*3, 2** 3, and 2* 3. Use npm test or pnpm test.';
+      'Compute 2*3, 2*3, 2*3, 2** 3, and 2*3*4. Use npm test or pnpm test.';
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
+  });
+
+  it('pairs emphasis across prose, code, links and bare addresses', () => {
+    const text =
+      '**Run `npm test` now.** _See [the notes](https://example.test/private)._ **Or go to https://example.test/path?q=private**.';
+    const expected = 'Run npm test now. See the notes. Or go to example.test.';
     expect(conversationDisplayText(text)).toBe(expected);
     expect(conversationSpeechText(text)).toBe(expected);
   });
