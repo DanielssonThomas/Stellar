@@ -1,5 +1,6 @@
 mod acknowledgment;
 pub mod contracts;
+mod expression;
 mod frames;
 mod host;
 mod keywords;
@@ -11,6 +12,7 @@ mod validation;
 mod warm;
 mod warm_worker;
 use contracts::*;
+pub(crate) use expression::Pending as VoiceExpressionPending;
 pub use host::SpeechHost;
 
 #[tauri::command]

@@ -101,12 +101,18 @@ pub fn ivy_connect(
 #[tauri::command]
 pub fn ivy_submit(
     host: tauri::State<'_, IvyHost>,
+    speech: tauri::State<'_, crate::speech::SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
     let request: IvySubmitRequest =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
-    host.request(Action::Submit(request))
+    let expression = if request.voice_utterance == Some(true) {
+        speech.take_expression(&request.input_id)
+    } else {
+        None
+    };
+    host.request_with_expression(Action::Submit(request), expression)
 }
 
 #[tauri::command]

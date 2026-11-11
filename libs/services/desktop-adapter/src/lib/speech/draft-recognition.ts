@@ -1,5 +1,7 @@
 import type { SpeechTranscript } from '@stellar/desktop-contracts';
 
+type Purpose = 'draft' | 'wake' | 'foreground';
+
 type Work = {
   pcm: Int16Array;
   id: string;
@@ -8,7 +10,7 @@ type Work = {
   revision: number;
   commandAllowed: boolean;
   wakeAllowed: boolean;
-  purpose: 'draft' | 'wake';
+  purpose: Purpose;
 };
 
 /** Owns bounded speech snapshots until they are settled or erased. */
@@ -24,6 +26,7 @@ export class DraftRecognition {
     private readonly collect: (
       pcm: Int16Array,
       id: string,
+      analyzeExpression?: true,
     ) => Promise<SpeechTranscript>,
     private readonly stop: () => Promise<unknown>,
     private readonly completed: (
@@ -32,6 +35,7 @@ export class DraftRecognition {
       final: boolean,
       commandAllowed: boolean,
       wakeAllowed: boolean,
+      captured?: true,
     ) => void | Promise<void>,
     private readonly failed: () => void,
     private readonly interruptPreviews = true,
@@ -61,7 +65,7 @@ export class DraftRecognition {
     id: string,
     final: boolean,
     commandAllowed = true,
-    purpose: 'draft' | 'wake' = 'draft',
+    purpose: Purpose = 'draft',
     wakeAllowed = commandAllowed,
   ): void {
     const work = {
@@ -133,10 +137,14 @@ export class DraftRecognition {
     if (!work) return;
     if (this.preview === work) this.preview = undefined;
     this.running = work;
+    const captured =
+      work.final && work.purpose === 'foreground' ? true : undefined;
     const dispatch = () => {
       if (work.generation !== this.generation) return;
       if (work.final) this.timing?.('started');
-      return this.collect(work.pcm, work.id);
+      return captured
+        ? this.collect(work.pcm, work.id, captured)
+        : this.collect(work.pcm, work.id);
     };
     const pending = this.waitForCollect?.();
     const request = pending ? pending.then(dispatch) : dispatch();
@@ -152,14 +160,17 @@ export class DraftRecognition {
             work.purpose === 'wake' ||
             (this.finals.length === 0 &&
               work.revision === this.previewRevision))
-        )
-          await this.completed(
+        ) {
+          const args = [
             result.text,
             work.id,
             work.final,
             work.commandAllowed,
             work.wakeAllowed,
-          );
+          ] as const;
+          if (captured) await this.completed(...args, captured);
+          else await this.completed(...args);
+        }
       })
       .catch(() => {
         if (work.final && work.generation === this.generation) this.failed();

@@ -140,6 +140,9 @@ pub struct IvySubmitRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub local_actions: Option<Vec<IvyLocalActionEvent>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub voice_utterance: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

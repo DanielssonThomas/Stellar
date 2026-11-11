@@ -65,8 +65,12 @@ export class SpeechAdapterService {
     });
   }
 
-  transcribe(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
-    return this.transcribeWith(pcm, utteranceId, false);
+  transcribe(
+    pcm: Int16Array,
+    utteranceId: string,
+    analyzeExpression = false,
+  ): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, false, analyzeExpression);
   }
 
   setDucking(active: boolean, listening = false) {
@@ -88,8 +92,12 @@ export class SpeechAdapterService {
     return this.run(() => this.prepare());
   }
 
-  collect(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
-    return this.transcribeWith(pcm, utteranceId, true);
+  collect(
+    pcm: Int16Array,
+    utteranceId: string,
+    analyzeExpression = false,
+  ): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, true, analyzeExpression);
   }
 
   async keywords(
@@ -117,6 +125,7 @@ export class SpeechAdapterService {
     pcm: Int16Array,
     utteranceId: string,
     collecting: boolean,
+    analyzeExpression: boolean,
   ): Promise<SpeechTranscript> {
     if (!pcm.length || pcm.length > 320000)
       return Promise.reject(new SpeechAdapterError('contract'));
@@ -130,6 +139,7 @@ export class SpeechAdapterService {
         utterance_id: utteranceId,
         sample_rate_hz: 16000,
         pcm: Array.from(pcm),
+        ...(analyzeExpression ? { analyze_expression: true } : {}),
       };
       return collecting
         ? this.adapter.collect(request)

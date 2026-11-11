@@ -78,12 +78,18 @@ export class IvyAdapterService {
     void pending.then(clear, clear);
     return pending;
   }
-  submit(text: string, inputId: string, localActions?: IvyLocalActionEvent[]) {
+  submit(
+    text: string,
+    inputId: string,
+    localActions?: IvyLocalActionEvent[],
+    voiceUtterance = false,
+  ) {
     return this.invoke(ivySubmitCommand, {
       version: 1,
       text,
       input_id: inputId,
       ...(localActions?.length ? { local_actions: localActions } : {}),
+      ...(voiceUtterance ? { voice_utterance: true } : {}),
     });
   }
   cancel() {

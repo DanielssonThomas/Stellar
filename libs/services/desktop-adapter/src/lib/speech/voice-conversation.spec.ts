@@ -22,6 +22,39 @@ describe('local Reflex admission', () => {
   const settle = async () => {
     for (let i = 0; i < 8; i++) await flush();
   };
+  it('marks only an ordinary request from finalized microphone transcription', async () => {
+    const submitCaptured = vi.fn(async () => true);
+    const anecdote = 'Stella just climbed my leg to get onto my desk!';
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: anecdote,
+    }));
+    const f = fixture({
+      submitCaptured,
+      collect,
+      keywords: async (_pcm, _stream, sequence, _threshold, mode) => ({
+        sequence,
+        detection:
+          mode === 'passive' ? { command: 'ivy', end_sample: 0 } : null,
+      }),
+    });
+    f.feed(true, 1);
+    await settle();
+    expect(collect).not.toHaveBeenCalled();
+    f.utterance();
+    await settle();
+    expect(collect).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Int16Array),
+      id,
+      true,
+    );
+    expect(submitCaptured).toHaveBeenCalledExactlyOnceWith(anecdote, id);
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+
   it('runs after wake admission without selecting a cloud session or submitting Hermes', async () => {
     const reflex = vi.fn(async () => ({
       handled: true,

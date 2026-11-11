@@ -58,7 +58,7 @@ export type IvyErrorCode = "malformed_request" | "unavailable" | "timeout" | "bu
 export type IvyModel = "terra" | "sol";
 export type IvySelectRequest = { version: number, model: IvyModel, };
 export type IvyRequest = { version: number, };
-export type IvySubmitRequest = { version: number, input_id: string, text: string, local_actions?: Array<IvyLocalActionEvent>, };
+export type IvySubmitRequest = { version: number, input_id: string, text: string, local_actions?: Array<IvyLocalActionEvent>, voice_utterance?: boolean, };
 export type IvyLocalActionEvent = { action: string, target: string, outcome: IvyLocalActionOutcome, reply: string, };
 export type IvyLocalActionOutcome = "confirmed" | "uncertain";
 export type IvyComponent = "assistant_message";
@@ -120,7 +120,7 @@ export type SpeechDuckingRequest = { version: number,
  */
 active: boolean, };
 export type SpeechStopRequest = { version: number, epoch: string, };
-export type SpeechTranscribeRequest = { version: number, epoch: string, utterance_id: string, sample_rate_hz: number, pcm: Array<number>, };
+export type SpeechTranscribeRequest = { version: number, epoch: string, utterance_id: string, sample_rate_hz: number, pcm: Array<number>, analyze_expression?: boolean, };
 export type SpeechTranscript = { version: number, utterance_id: string, text: string, };
 export type SpeechSpeakRequest = { version: number, epoch: string, utterance_id: string, text: string, };
 export type SpeechSnapshot = { version: number, epoch: string, revision: string, operation_id: string | null, state: SpeechState, error: SpeechError | null, timings?: Array<SpeechTiming>, };

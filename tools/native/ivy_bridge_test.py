@@ -15,7 +15,8 @@ bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
-                       ('stellar_ivy_conversation', 'ivy_conversation.py')]:
+                       ('stellar_ivy_conversation', 'ivy_conversation.py'),
+                       ('stellar_ivy_voice_expression', 'ivy_voice_expression.py')]:
     module_spec = importlib.util.spec_from_file_location(name, SOURCE.with_name(filename))
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
@@ -59,6 +60,68 @@ class Connection:
 
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+
+    async def test_expression_handoff_keeps_labels_out_of_gateway_admission_and_legacy_fallback(self):
+        conversation = sys.modules['stellar_ivy_conversation']
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory)
+            (profile / 'runtime').mkdir()
+            plugin = profile / 'plugins' / 'stellar-voice-expression'
+            plugin.mkdir(parents=True)
+            (plugin / 'plugin.yaml').touch()
+            handoff = profile / 'runtime' / 'stellar-voice-expression'
+            expression = {'primary': 'surprised', 'confidence': 'moderate'}
+            sent = []
+
+            class Owner:
+                def __init__(self, legacy=False, plugin_enabled=True):
+                    self.client = conversation.ConversationClient(self, ValueError)
+                    self.legacy = legacy
+                    self.plugin_enabled = plugin_enabled
+
+                async def call(self, method, params):
+                    return await self.client.rpc(method, **params)
+
+                async def rpc(self, method, **params):
+                    if method == 'plugins.list':
+                        return {'plugins': [{'key': 'stellar-voice-expression', 'version': '1.0.0',
+                                             'enabled': self.plugin_enabled, 'error': ''}]}
+                    sent.append(params)
+                    if self.legacy and 'api_text' in params:
+                        raise ValueError('invalid_params')
+                    return {'admission_id': 'a'}
+
+            request = {'session_id': 's', 'input_id': 'i', 'text': 'Hi Ivy',
+                       'voice_expression': expression}
+            expression_module = sys.modules['stellar_ivy_voice_expression']
+            with patch.object(expression_module, 'native_codex_transport', return_value=True):
+                await conversation.submit_conversation(Owner(), request.copy(), profile=profile)
+            self.assertEqual(sent[-1]['text'], 'Hi Ivy')
+            self.assertNotIn('surprised', json.dumps(sent))
+            files = list(handoff.iterdir())
+            self.assertEqual(len(files), 1)
+            self.assertTrue(sent[-1]['api_text'].startswith(
+                f'[[stellar-desktop-voice-expression:{files[0].stem}]]\n'))
+            staged = json.loads(files[0].read_text())
+            self.assertEqual(staged['session_id'], 's')
+            self.assertEqual(staged['expression'], expression)
+            files[0].unlink()
+
+            with patch.object(expression_module, 'native_codex_transport', return_value=True):
+                await conversation.submit_conversation(Owner(legacy=True), request.copy(), profile=profile)
+                await conversation.submit_conversation(Owner(plugin_enabled=False), request.copy(), profile=profile)
+                await conversation.submit_conversation(
+                    Owner(), request.copy(), profile=profile, expression_current=lambda: False)
+            self.assertNotIn('voice-expression', json.dumps(sent[-3]))
+            self.assertNotIn('voice-expression', json.dumps(sent[-2]))
+            self.assertNotIn('voice-expression', json.dumps(sent[-1]))
+            self.assertEqual(list(handoff.iterdir()), [])
+
+            request['voice_expression'] = {'primary': 'invented', 'confidence': 'high'}
+            with patch.object(expression_module, 'native_codex_transport', return_value=True):
+                await conversation.submit_conversation(Owner(), request.copy(), profile=profile)
+            self.assertNotIn('voice-expression', sent[-1]['api_text'])
+            self.assertEqual(list(handoff.iterdir()), [])
 
     async def test_interim_projection_does_not_settle_admission_or_forward_reasoning(self):
         conn = Connection()

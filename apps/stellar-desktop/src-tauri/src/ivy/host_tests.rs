@@ -48,6 +48,7 @@ fn cancellation_revokes_workspace_generation_without_disconnect_or_turn_replay()
     let turn = "00000000-0000-4000-8000-000000000001";
     let before = host
         .request(Action::Submit(IvySubmitRequest {
+            voice_utterance: None,
             local_actions: None,
             version: 1,
             input_id: turn.into(),
@@ -312,6 +313,7 @@ fn uncertain_turns_cannot_be_resubmitted_under_a_new_id() {
         view.snapshot.turn = IvyTurnState::Uncertain;
     }
     let request = IvySubmitRequest {
+        voice_utterance: None,
         local_actions: None,
         version: 1,
         input_id: "00000000-0000-0000-0000-000000000001".into(),
@@ -328,6 +330,7 @@ fn disconnected_queued_submit_restores_the_unadmitted_journal_state() {
     let (host, receiver) = fixture();
     host.shared.view.lock().unwrap().snapshot.connection = IvyConnectionState::Ready;
     let request = IvySubmitRequest {
+        voice_utterance: None,
         local_actions: None,
         version: 1,
         input_id: "00000000-0000-0000-0000-000000000001".into(),
@@ -357,6 +360,7 @@ fn disconnected_queued_submit_restores_the_unadmitted_journal_state() {
     assert!(!session.record.unsettled);
     host.shared.view.lock().unwrap().snapshot.connection = IvyConnectionState::Ready;
     host.request(Action::Submit(IvySubmitRequest {
+        voice_utterance: None,
         local_actions: None,
         version: 1,
         input_id: "00000000-0000-0000-0000-000000000002".into(),
@@ -386,6 +390,7 @@ fn ready_subscriber_submission_keeps_its_busy_and_deduplication_state() {
                 .upgrade()
                 .unwrap();
             host.request(Action::Submit(IvySubmitRequest {
+                voice_utterance: None,
                 local_actions: None,
                 version: 1,
                 input_id: "00000000-0000-0000-0000-000000000001".into(),
@@ -417,6 +422,7 @@ fn ready_subscriber_submission_keeps_its_busy_and_deduplication_state() {
     );
     assert!(matches!(
         host.request(Action::Submit(IvySubmitRequest {
+            voice_utterance: None,
             local_actions: None,
             version: 1,
             input_id: "00000000-0000-0000-0000-000000000002".into(),
