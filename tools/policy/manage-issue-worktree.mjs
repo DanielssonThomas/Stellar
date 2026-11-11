@@ -216,6 +216,7 @@ export async function reconcileClaimStatus({
       .concat('status:in-progress');
     await updateLabels(issueNumber, nextLabels);
     const latest = await fetchIssue(issueNumber);
+    admitBudgetRevisions(latest.body, admittedBudget);
     const latestLabels = issueLabels(latest);
     const latestStatuses = latestLabels.filter((label) =>
       label.startsWith('status:'),
