@@ -40,6 +40,22 @@ Ivy's desktop foreground retains the ACP edit policy of `ask`. Issue #269 adds a
 
 The 3 November 2026 qualification verified actual edits to three separate disposable numeric functions by Ivy/Terra, Foreman cloud/Sol and Peon cloud/Luna. Tests and unchanged test-file bytes were checked independently, and each Node test passed. After the initial unattended launch denial, the user explicitly approved two fixture launches; an interactive Ivy session launched each named profile sequentially with an Allow once decision and unchanged approval settings. The stored sessions confirmed each expected model and `openai-codex` provider. Peon's own test passed. Foreman's own PowerShell test command was denied in single-query mode; Foreman stopped without retrying, and independent host verification subsequently passed. This proves the small personal-host coding/delegation path, not arbitrary task competence, isolated execution, merge authority or native desktop editing. Flagged future commands can still require interactive consent.
 
+## Personal Ivy worker view in Herdr
+
+The optional [Stellar Herdr plugin](../../config/hermes-plugins/stellar-herdr/) connects Ivy to the local Windows Herdr app and Core. Core owns the worker terminals. Ivy receives a fresh worker inventory each turn and can read the recent output of a specific issue on request. A live terminal means its process is still running. Exit zero alone does not establish that the issue is complete.
+
+Install the plugin's Python files and `plugin.yaml` into `plugins/stellar-herdr` under the personal Ivy profile. In that same profile, create `integration/stellar-herdr/settings.json` with absolute paths for `repo` (the trusted Stellar checkout), `core` (`herdr-core.exe`), `app` (`herdr-app.exe`), `hermes`, `node`, `git` and `gh`. Enable only in Ivy and open a new Ivy session if Hermes defers tool registration.
+
+```powershell
+hermes -p ivy plugins enable stellar-herdr --no-allow-tool-override
+hermes -p ivy plugins doctor --ci stellar-herdr
+hermes -p ivy stellar-herdr
+```
+
+After validation and the issue worktree claim, Ivy uses `stellar_herdr` to start the selected personal worker. The plugin checks the active claim, GitHub ownership and checked-out branch, writes the task outside the repository, and invokes the same named profile in Core. A repeated request using the same claim is refused. If a launch result is uncertain, inspect the issue's terminal and worktree before reassigning it.
+
+Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manual or automatic. Manual is the default. Automatic opens and focuses the view when a worker starts. Hiding the window leaves workers running in Core. Disabling the plugin stops Ivy's integration. Existing workers can still be inspected through the Herdr CLI.
+
 ## Identity templates and Hermes profiles
 
 ### Optional subscription-backed cloud profiles (30 October 2026)
