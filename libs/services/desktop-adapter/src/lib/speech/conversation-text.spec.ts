@@ -164,4 +164,12 @@ describe('Desktop conversation text', () => {
     expect(conversationDisplayText(text)).toBe(expected);
     expect(conversationSpeechText(text)).toBe(expected);
   });
+
+  it('consumes runs that open or close multiple nested spans', () => {
+    const text =
+      '**bold *nested***, *italic **strong***, and ***both** italic*.';
+    const expected = 'bold nested, italic strong, and both italic.';
+    expect(conversationDisplayText(text)).toBe(expected);
+    expect(conversationSpeechText(text)).toBe(expected);
+  });
 });

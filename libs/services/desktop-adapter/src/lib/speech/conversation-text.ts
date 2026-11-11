@@ -50,36 +50,45 @@ function prose(text: string): string {
 
 function stripEmphasis(text: string, urlMarkers: ReadonlySet<number>): string {
   const markers = /\*+|_+|~+/gu;
-  const opens = new Map<string, number[]>();
-  const remove = new Set(urlMarkers);
+  const opens = new Map<string, { index: number; remaining: number }[]>();
+  const consumed = new Map<number, number>();
   for (const match of text.matchAll(markers)) {
     const marker = match[0];
     if (!/^(?:\*{1,3}|_{1,3}|~~)$/u.test(marker)) continue;
-    const before = text[match.index - 1];
-    const after = text[match.index + marker.length];
-    const pending = opens.get(marker) ?? [];
-    const opening = pending.at(-1);
+    const index = match.index;
+    const symbol = marker[0];
+    const before = text[index - 1];
+    const after = text[index + marker.length];
+    const pending = opens.get(symbol) ?? [];
+    let remaining = marker.length;
+    if (before && !/\s/u.test(before) && !/[\p{L}\p{N}\0]/u.test(after ?? '')) {
+      let opening = pending.at(-1);
+      while (remaining && opening) {
+        const length = Math.min(remaining, opening.remaining);
+        opening.remaining -= length;
+        remaining -= length;
+        consumed.set(
+          opening.index,
+          (consumed.get(opening.index) ?? 0) + length,
+        );
+        if (!opening.remaining) pending.pop();
+        opening = pending.at(-1);
+      }
+      consumed.set(index, marker.length - remaining);
+    }
     if (
-      opening !== undefined &&
-      before &&
-      !/\s/u.test(before) &&
-      (!after || !/[\p{L}\p{N}\0]/u.test(after))
-    ) {
-      pending.pop();
-      remove.add(opening);
-      remove.add(match.index);
-    } else if (
-      !urlMarkers.has(match.index) &&
-      (!before || !/[\p{L}\p{N}\0]/u.test(before)) &&
+      remaining &&
+      !urlMarkers.has(index) &&
+      !/[\p{L}\p{N}\0]/u.test(before ?? '') &&
       after &&
       !/\s/u.test(after)
     ) {
-      pending.push(match.index);
-      opens.set(marker, pending);
+      pending.push({ index, remaining });
+      opens.set(symbol, pending);
     }
   }
   return text.replace(markers, (marker, index: number) =>
-    remove.has(index) ? '' : marker,
+    urlMarkers.has(index) ? '' : marker.slice(consumed.get(index) ?? 0),
   );
 }
 
