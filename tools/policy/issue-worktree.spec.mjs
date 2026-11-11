@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
+import { lastPreBudgetIssue } from './issue-budget.mjs';
 import {
   claimWorktree,
   inspectClaim,
@@ -56,6 +57,43 @@ function assignment(overrides = {}) {
 describe('issue worktree assignment', () => {
   it('accepts an owned issue with the exact existing target and resolved dependencies', () => {
     assert.deepEqual(assignment(), { valid: true, errors: [] });
+  });
+
+  it('requires a budget for a new development claim and keeps epic grouping unclaimable', () => {
+    const baseline = fixtureIssue();
+    const issue = {
+      ...baseline,
+      number: lastPreBudgetIssue + 1,
+      labels: [...baseline.labels, 'review:standard'],
+    };
+    assert.match(
+      assignment({ issue }).errors.join(' '),
+      /require a Development budget/,
+    );
+    const budgeted = {
+      ...issue,
+      body:
+        issue.body +
+        `
+
+## Development budget
+
+\`\`\`json
+{"schemaVersion":1,"revisions":[{"revision":1,"recordedAt":"2026-11-11T12:00:00Z","estimatedTokens":1000,"allocatedTokens":2000,"profile":"Codex low","confidence":"low"}]}
+\`\`\`
+`,
+    };
+    assert.equal(assignment({ issue: budgeted }).valid, true);
+    const epic = {
+      ...issue,
+      labels: issue.labels.map((label) =>
+        label === 'type:bug' ? 'type:epic' : label,
+      ),
+    };
+    assert.match(
+      assignment({ issue: epic }).errors.join(' '),
+      /actionable sub-issue/,
+    );
   });
 
   it('rejects invalid metadata and a worker that does not own the issue', () => {
