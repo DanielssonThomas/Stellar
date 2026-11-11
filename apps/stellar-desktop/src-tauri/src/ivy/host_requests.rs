@@ -41,6 +41,7 @@ impl IvyHost {
             .sender
             .try_send(Work {
                 context: None,
+                expression: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Lifecycle(control, ticket.clone(), tx),
@@ -111,6 +112,7 @@ impl IvyHost {
             .sender
             .try_send(Work {
                 context: None,
+                expression: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Rotate(model, force, ticket.clone(), tx),
@@ -134,6 +136,14 @@ impl IvyHost {
         })
     }
     pub fn request(&self, action: Action) -> Result<IvySnapshot, IvyErrorCode> {
+        self.request_with_expression(action, None)
+    }
+
+    pub fn request_with_expression(
+        &self,
+        action: Action,
+        expression: Option<crate::speech::VoiceExpressionPending>,
+    ) -> Result<IvySnapshot, IvyErrorCode> {
         let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         let mut view = self
             .shared
@@ -232,6 +242,7 @@ impl IvyHost {
         self.sender
             .try_send(Work {
                 context,
+                expression,
                 epoch,
                 workspace_epoch,
                 action,
@@ -294,6 +305,17 @@ pub(in crate::ivy) fn validate_submit(request: &IvySubmitRequest) -> Result<(), 
         || !valid_id
         || request.text.trim().is_empty()
         || request.text.len() > 8192
+        || request.local_actions.as_ref().is_some_and(|events| {
+            events.len() > 6
+                || events.iter().any(|event| {
+                    event.action.is_empty()
+                        || event.action.len() > 128
+                        || event.target.is_empty()
+                        || event.target.len() > 240
+                        || event.reply.is_empty()
+                        || event.reply.len() > 512
+                })
+        })
     {
         return Err(IvyErrorCode::MalformedRequest);
     }

@@ -48,13 +48,14 @@ impl Session {
 
     #[cfg(test)]
     pub fn submit(&mut self, request: IvySubmitRequest) -> Result<(), IvyErrorCode> {
-        self.submit_with_context(request, None)
+        self.submit_with_context(request, None, None)
     }
 
     pub fn submit_with_context(
         &mut self,
         request: IvySubmitRequest,
         context: Option<super::workspace_context::ContextLease>,
+        expression: Option<crate::speech::VoiceExpressionPending>,
     ) -> Result<(), IvyErrorCode> {
         if self.record.input_id.as_deref() == Some(&request.input_id) {
             return Ok(());
@@ -63,8 +64,7 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
-        let text = super::workspace_context::prompt(request.text, self.record.workspace.is_some());
-        let mut params = json!({"session_id":sid,"input_id":request.input_id,"text":text,"workspace_epoch":self.workspace_epoch.to_string()});
+        let mut params = json!({"session_id":sid,"input_id":request.input_id,"text":request.text,"workspace_epoch":self.workspace_epoch.to_string()});
         super::process::request_line(u64::MAX, "prompt.submit", &params)?;
         let previous = self.record.clone();
         let next = Record {
@@ -81,11 +81,6 @@ impl Session {
         self.journal.save(&next)?;
         self.record = next;
         self.replay = None;
-        if !self.shared.current(self.epoch) {
-            self.record = previous;
-            self.journal.save(&self.record)?;
-            return Err(IvyErrorCode::Unavailable);
-        }
         let observation = context.and_then(|resolve| resolve());
         let ivy_state = self.shared.view.lock().ok().map(|view| {
             json!({
@@ -94,7 +89,42 @@ impl Session {
                 "pending_questions":view.snapshot.questions.as_ref().map_or(0, Vec::len),
             })
         });
-        super::workspace_context::annotate_params(&mut params, observation.as_deref(), ivy_state);
+        super::workspace_context::annotate_params(
+            &mut params,
+            observation.as_deref(),
+            ivy_state,
+            request.local_actions.as_deref(),
+        );
+        let checking_expression = expression.is_some();
+        if let Some(expression) =
+            expression.and_then(crate::speech::VoiceExpressionPending::resolve)
+        {
+            params["voice_expression"] = json!(expression);
+            if super::process::request_line(u64::MAX, "prompt.submit", &params).is_err()
+                && let Some(params) = params.as_object_mut()
+            {
+                params.remove("voice_expression");
+            }
+        }
+        if !self.shared.current(self.epoch) {
+            self.record = previous;
+            self.journal.save(&self.record)?;
+            return Err(IvyErrorCode::Unavailable);
+        }
+        if checking_expression
+            && self
+                .shared
+                .view
+                .lock()
+                .is_ok_and(|view| view.snapshot.workspace_epoch != self.workspace_epoch.to_string())
+        {
+            self.record = previous;
+            self.journal.save(&self.record)?;
+            self.shared.update(self.epoch, |snapshot| {
+                snapshot.turn = IvyTurnState::Cancelled;
+            });
+            return Ok(());
+        }
         let receipt = self
             .broker
             .as_mut()

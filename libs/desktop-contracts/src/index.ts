@@ -103,6 +103,8 @@ export type {
   IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
+  IvyLocalActionEvent,
+  IvyLocalActionOutcome,
   IvyComponent,
   IvyPresentation,
   IvySnapshot,

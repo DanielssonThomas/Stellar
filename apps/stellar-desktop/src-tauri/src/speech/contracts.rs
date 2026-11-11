@@ -49,6 +49,9 @@ pub struct SpeechTranscribeRequest {
     pub utterance_id: String,
     pub sample_rate_hz: u32,
     pub pcm: Vec<i16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub analyze_expression: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

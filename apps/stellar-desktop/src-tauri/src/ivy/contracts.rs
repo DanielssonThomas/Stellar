@@ -137,6 +137,28 @@ pub struct IvySubmitRequest {
     pub version: u16,
     pub input_id: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub local_actions: Option<Vec<IvyLocalActionEvent>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub voice_utterance: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyLocalActionEvent {
+    pub action: String,
+    pub target: String,
+    pub outcome: IvyLocalActionOutcome,
+    pub reply: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyLocalActionOutcome {
+    Confirmed,
+    Uncertain,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]

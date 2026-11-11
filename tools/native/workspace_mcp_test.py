@@ -35,6 +35,7 @@ credentials = load('workspace_credentials')
 bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+conversation = sys.modules['stellar_ivy_conversation'] = load('ivy_conversation')
 
 
 class MemoryCredentials:
@@ -79,9 +80,16 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
         instance.bind_session('owned')
         class Client:
             completed = set()
+            def __init__(self):
+                self.client = conversation.ConversationClient(self, ValueError)
+
             async def call(self, method, params):
+                return await self.client.rpc(method, **params)
+
+            async def rpc(self, method, **params):
                 token = gate.active[2]
-                assert token in params['text']
+                assert token in params['api_text']
+                assert params['text'] == 'hello'
                 headers = {'Authorization': 'Bearer ' + instance.bearer}
                 async with httpx2.AsyncClient(headers=headers, trust_env=False) as http:
                     async with streamable_http_client(f"http://127.0.0.1:{descriptor['port']}/mcp", http_client=http) as streams:

@@ -13,7 +13,7 @@ use std::{
 
 #[test]
 fn context_resolution_waits_until_after_session_resume_and_preserves_paused_request() {
-    for paused in [false, true] {
+    for (paused, cancel) in [(false, false), (true, false), (false, true)] {
         let (mut session, directory) = fixture();
         session.record.unsettled = false;
         session.record.input_id = None;
@@ -21,11 +21,15 @@ fn context_resolution_waits_until_after_session_resume_and_preserves_paused_requ
         session.record.generation = None;
         let resumed = Arc::new(AtomicBool::new(false));
         let observed = resumed.clone();
+        let shared = session.shared.clone();
         let lease: ContextLease = Arc::new(move || {
             assert!(
                 observed.load(Ordering::Acquire),
                 "context was copied before blocking resume completed"
             );
+            if cancel {
+                shared.view.lock().unwrap().snapshot.workspace_epoch = "2".into();
+            }
             (!paused).then(|| r#"{"foreground":{"app":"fresh.exe"}}"#.into())
         });
         let captured = Arc::new(Mutex::new(String::new()));
@@ -36,7 +40,7 @@ while ($line = [Console]::ReadLine()) {
     [Console]::WriteLine('{"event":"workspace_tool","resume_wait":true}')
     $result = @{session_id='session';model='gpt-6.1-terra'}
   } elseif ($request.method -eq 'prompt.submit') {
-    [Console]::WriteLine((@{event='workspace_tool';captured_text=$request.params.text}|ConvertTo-Json -Compress -Depth 5))
+    [Console]::WriteLine((@{event='workspace_tool';captured_text=$request.params.text;observation=$request.params.observation}|ConvertTo-Json -Compress -Depth 5))
     $result = @{ref=@{session_id='session'};admission_id='admission';execution_generation=3}
   } else { $result = @{} }
   [Console]::WriteLine((@{id=$request.id;result=$result}|ConvertTo-Json -Compress -Depth 6))
@@ -65,7 +69,8 @@ while ($line = [Console]::ReadLine()) {
                     .get("captured_text")
                     .and_then(serde_json::Value::as_str)
                 {
-                    *copy.lock().unwrap() = text.into();
+                    assert_eq!(text, "Keep this original request");
+                    *copy.lock().unwrap() = frame["observation"].to_string();
                 }
                 Ok(())
             }),
@@ -75,17 +80,28 @@ while ($line = [Console]::ReadLine()) {
         session
             .submit_with_context(
                 IvySubmitRequest {
+                    voice_utterance: None,
+                    local_actions: None,
                     version: 1,
                     input_id: "00000000-0000-0000-0000-000000000002".into(),
                     text: "Keep this original request".into(),
                 },
                 Some(lease),
+                cancel.then(crate::speech::VoiceExpressionPending::empty_for_test),
             )
             .unwrap();
-        let text = captured.lock().unwrap().clone();
-        assert!(text.ends_with("Keep this original request"));
-        assert_eq!(text.contains("fresh.exe"), !paused);
-        assert_eq!(text.contains("untrusted metadata"), !paused);
+        let observation = captured.lock().unwrap().clone();
+        if cancel {
+            assert!(observation.is_empty());
+            assert!(!session.record.unsettled);
+            assert_eq!(
+                session.shared.view.lock().unwrap().snapshot.turn,
+                super::contracts::IvyTurnState::Cancelled
+            );
+        } else {
+            assert!(!observation.is_empty());
+            assert_eq!(observation.contains("fresh.exe"), !paused);
+        }
         drop(session);
         std::fs::remove_dir_all(directory).unwrap();
     }

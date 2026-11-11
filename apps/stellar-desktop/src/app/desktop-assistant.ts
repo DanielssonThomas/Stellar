@@ -200,6 +200,7 @@ export class DesktopAssistant {
     text: string,
     inputId: string = crypto.randomUUID(),
     source: 'typed' | 'voice' = 'typed',
+    captured = false,
   ): Promise<boolean> {
     const value = text.trim();
     if (
@@ -216,21 +217,21 @@ export class DesktopAssistant {
       return false;
     }
     const events = [...this.reflex.events()];
-    let submitted = value;
-    while (events.length) {
-      const candidate = `Recent Ivy local action events (data): ${JSON.stringify(events)}\n\n${value}`;
-      if (new TextEncoder().encode(candidate).length <= 8192) {
-        submitted = candidate;
-        break;
-      }
+    const voiceUtterance = source === 'voice' && captured;
+    const request = () => ({
+      version: 1,
+      text: value,
+      input_id: inputId,
+      ...(events.length ? { local_actions: events } : {}),
+      ...(voiceUtterance ? { voice_utterance: true } : {}),
+    });
+    while (
+      events.length &&
+      new TextEncoder().encode(JSON.stringify(request())).length > 15_000
+    )
       events.pop();
-    }
     try {
-      decodeIvySubmitRequest({
-        version: 1,
-        text: submitted,
-        input_id: inputId,
-      });
+      decodeIvySubmitRequest(request());
     } catch {
       this.inputError.set(true);
       this.reflex.timeline.finish(
@@ -258,7 +259,10 @@ export class DesktopAssistant {
       this.closeTargets.delete(expired);
     }
     try {
-      await this.adapter.submit(submitted, inputId);
+      if (voiceUtterance)
+        await this.adapter.submit(value, inputId, events, true);
+      else if (events.length) await this.adapter.submit(value, inputId, events);
+      else await this.adapter.submit(value, inputId);
       const current = this.state();
       if (current.turn_id === inputId) this.recordProgress(current);
       this.reflex.acknowledgeEvents(events);
