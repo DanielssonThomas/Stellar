@@ -38,7 +38,11 @@ describe('local Reflex admission', () => {
     f.utterance();
     await settle();
     expect(reflex).toHaveBeenCalledOnce();
-    expect(f.ports.speak).toHaveBeenCalledWith('Much better.', id);
+    expect(f.ports.speak).toHaveBeenCalledWith(
+      'Much better.',
+      id,
+      expect.any(Function),
+    );
     expect(selectSession).not.toHaveBeenCalled();
     expect(f.ports.submit).not.toHaveBeenCalled();
     f.controller.dispose();
@@ -136,6 +140,270 @@ describe('local Reflex admission', () => {
     await settle();
     expect(f.ports.speak).not.toHaveBeenCalled();
     expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+});
+
+describe('committed response narration', () => {
+  const segment = (
+    digit: string,
+    text: string,
+    kind: 'commentary' | 'final' = 'commentary',
+    reused = false,
+  ) => ({
+    id: digit.repeat(64),
+    kind,
+    text,
+    sequence: kind === 'commentary' ? digit : null,
+    reused,
+  });
+  const settle = async () => {
+    for (let i = 0; i < 8; ++i) await flush();
+  };
+
+  it('speaks committed commentary while admitted, keeps tools running, and settles a reused final once', async () => {
+    const f = fixture();
+    let revision = 0;
+    f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+      ...initialSpeechSnapshot(),
+      operation_id,
+      revision: String(++revision),
+      state: 'speaking',
+    }));
+    f.utterance();
+    await settle();
+    const morning = segment('1', 'Morning! I am checking your day.');
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn_id: id,
+        turn: 'admitted',
+        response_segments: [morning],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledOnce();
+    expect(f.context().assistant.turn).toBe('admitted');
+    const calendar = segment('2', 'Your first meeting is at ten.');
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        response_segments: [morning, calendar],
+        activity: [{ id: '1234567890abcdef', kind: 'web', state: 'running' }],
+      },
+    });
+    expect(f.ports.speak).toHaveBeenCalledOnce();
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        revision: String(++revision),
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn: 'completed',
+        items: [{ kind: 'text', text: calendar.text }],
+        response_segments: [
+          morning,
+          calendar,
+          segment('3', calendar.text, 'final', true),
+        ],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        revision: String(++revision),
+      },
+    });
+    await settle();
+    expect(f.view().busy).toBe(false);
+    f.controller.update(f.context());
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.controller.dispose();
+  });
+
+  it.each(['mute', 'stop', 'reset', 'disconnect'] as const)(
+    'fences queued segments and late completion after %s',
+    async (operation) => {
+      const f = fixture();
+      f.utterance();
+      await settle();
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'admitted',
+          response_segments: [
+            segment('1', 'First update.'),
+            segment('2', 'Must not play after cancellation.'),
+          ],
+        },
+      });
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      if (operation === 'mute') f.controller.setMuted(true);
+      else if (operation === 'stop') f.controller.stopVoice();
+      else if (operation === 'reset') f.controller.accept({ type: 'reset' });
+      else
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn: 'uncertain',
+            connection: 'unavailable',
+          },
+        });
+      await settle();
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          operation_id: id,
+          revision: '8',
+          epoch: '1',
+        },
+      });
+      f.completed();
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      f.controller.dispose();
+    },
+  );
+
+  it.each([false, true])(
+    'bounds retention across 120 ordered updates with mute=%s',
+    async (muted) => {
+      const f = fixture();
+      let revision = 0;
+      f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+        ...initialSpeechSnapshot(),
+        operation_id,
+        revision: String(++revision),
+      }));
+      f.utterance();
+      await settle();
+      f.controller.setMuted(muted);
+      for (let sequence = 1; sequence <= 120; ++sequence) {
+        const update = {
+          ...segment('1', `Update ${sequence}.`),
+          sequence: String(sequence),
+          id: sequence.toString(16).padStart(64, '0'),
+        };
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn_id: id,
+            turn: 'admitted',
+            response_segments: [update],
+          },
+        });
+        await settle();
+      }
+      const retained = Reflect.get(f.controller, 'responseTexts') as string[];
+      expect(retained).toHaveLength(muted ? 0 : 16);
+      expect(Reflect.get(f.controller, 'responseSequence')).toBe(120n);
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 120);
+      // Replayed older snapshots cannot restart narration after ledger eviction.
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          response_segments: [
+            { ...segment('2', 'Old update.'), sequence: '1' },
+          ],
+        },
+      });
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 120);
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn: 'completed',
+          response_segments: [segment('3', 'Update 1.', 'final', true)],
+        },
+      });
+      await settle();
+      // Evicted prose cannot prove reuse, so the canonical final remains audible.
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 121);
+      expect(Reflect.get(f.controller, 'responseTexts')).toHaveLength(
+        muted ? 0 : 16,
+      );
+      f.controller.dispose();
+    },
+  );
+
+  it('does not treat capacity-rejected commentary as proof a reused final was spoken', async () => {
+    const f = fixture();
+    let revision = 0;
+    f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+      ...initialSpeechSnapshot(),
+      operation_id,
+      revision: String(++revision),
+      state: 'speaking',
+    }));
+    f.utterance();
+    await settle();
+    for (let sequence = 1; sequence <= 20; ++sequence) {
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'admitted',
+          response_segments: [
+            {
+              ...segment('1', `Update ${sequence}. ${'word '.repeat(700)}`),
+              sequence: String(sequence),
+              id: sequence.toString(16).padStart(64, '0'),
+            },
+          ],
+        },
+      });
+      await settle();
+    }
+    const rejected = `Update 20. ${'word '.repeat(700)}`.trim();
+    expect(Reflect.get(f.controller, 'responseTexts')).not.toContain(rejected);
+    for (let i = 0; i < 12; ++i) {
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          operation_id: id,
+          revision: String(++revision),
+        },
+      });
+      await settle();
+    }
+    const before = f.ports.speak.mock.calls.length;
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn: 'completed',
+        response_segments: [segment('2', rejected, 'final', true)],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(before + 1);
+    expect(f.ports.speak.mock.calls.at(-1)?.[0]).toBe(rejected);
+    f.controller.dispose();
+  });
+
+  it('never narrates a restored terminal snapshot without local submission ownership', async () => {
+    const f = fixture();
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn_id: id,
+        turn: 'completed',
+        items: [{ kind: 'text', text: 'History' }],
+        response_segments: [segment('1', 'History', 'final')],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).not.toHaveBeenCalled();
     f.controller.dispose();
   });
 });
@@ -601,7 +869,7 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     speak: vi.fn(
       async (_text: string, operation_id: string): Promise<SpeechSnapshot> => ({
         ...initialSpeechSnapshot(),
-        revision: '1',
+        revision: String(BigInt(context.speech.revision) + 1n),
         state: 'synthesizing' as const,
         operation_id,
       }),
@@ -624,6 +892,19 @@ function fixture(extra: Partial<VoicePorts> = {}) {
   controller.update(context);
   let sequence = 0;
   const update = (change: Partial<VoiceContext>) => {
+    // Native idle/speaking events retain their operation ID; old fixtures omitted it.
+    if (
+      change.speech?.operation_id === null &&
+      change.speech.revision !== '0' &&
+      ports.speak.mock.calls.length
+    )
+      change = {
+        ...change,
+        speech: {
+          ...change.speech,
+          operation_id: ports.speak.mock.calls.at(-1)?.[1] ?? null,
+        },
+      };
     context = { ...context, ...change };
     controller.update(context);
   };
@@ -2001,7 +2282,11 @@ describe('voice conversation ownership', () => {
     ).toBe(true);
     f.completed();
     await flush();
-    expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith('A local reply', id);
+    expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
+      'A local reply',
+      id,
+      expect.any(Function),
+    );
     f.completed();
     f.utterance();
     expect(f.ports.transcribe).toHaveBeenCalledOnce();
@@ -2151,45 +2436,31 @@ describe('voice conversation ownership', () => {
     },
   );
 
-  it('acknowledges only an admitted Terra voice turn and finishes the short cue before the final answer', async () => {
+  it('never adds timer filler while an admitted task is waiting for committed text', async () => {
     vi.useFakeTimers();
     const f = fixture();
     try {
       f.utterance();
       await flush();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(f.ports.speak).not.toHaveBeenCalled();
       f.update({
         assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
       });
-      await vi.advanceTimersByTimeAsync(3000);
-      expect(f.ports.speak.mock.calls[0][0]).toBe('One moment.');
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(f.ports.speak).not.toHaveBeenCalled();
       f.completed();
       await flush();
-      expect(f.ports.speak).toHaveBeenCalledOnce();
-      f.update({
-        speech: {
-          ...initialSpeechSnapshot(),
-          revision: '2',
-          operation_id: f.ports.speak.mock.calls[0][1],
-        },
-      });
-      await flush();
-      expect(f.ports.stop).not.toHaveBeenCalled();
-      expect(f.ports.speak.mock.calls.map(([text]) => text)).toEqual([
-        'One moment.',
+      expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
         'A local reply',
-      ]);
-      f.completed();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(f.ports.speak).toHaveBeenCalledTimes(2);
+        id,
+        expect.any(Function),
+      );
     } finally {
       f.controller.dispose();
       vi.useRealTimers();
     }
   });
 
-  it('cancels a scheduled acknowledgment on mute and reset without replaying the request', async () => {
+  it('keeps a muted or reset waiting turn quiet without replaying its request', async () => {
     vi.useFakeTimers();
     const f = fixture();
     try {

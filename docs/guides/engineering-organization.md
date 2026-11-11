@@ -24,21 +24,53 @@ The opt-in installs `personal-config.yaml` and `personal-soul.md` from each role
 Ivy follows this procedure for direct or delegated repository work:
 
 1. Read `AGENTS.md`, this guide and the applicable repository skills. Search for an existing issue before creating a distinct outcome. Assign it to exactly one of the three identities; validate its target, metadata, review tier and native dependencies through the existing issue helpers. Create the corresponding `worker:<profile>` GitHub label if it is missing. Protected governance changes remain Codex/maintainer work.
-2. Generate a stable assignment session ID and use `manage-issue-worktree.mjs claim <issue> --worker <profile> --session-id <stable-id>`. Do not start work on a claim error, active conflicting session, unrelated issue or unresolved dependency. Use the returned worktree and branch. Ivy's own implementation follows the same path with `--worker ivy`.
-3. For a delegate, write a UTF-8 task file containing the exact issue, owner, claim session ID, worktree, branch, baseline revision, allowed source/test paths, objective, acceptance criteria, relevant guidance and verification commands. Explicitly forbid protected governance edits, credential access, merging and approval bypass. Tell the child to read repository guidance itself; it has no Ivy conversation or memory. Do not put secrets in task files.
-4. Invoke one named profile in the claimed worktree, using `--query-file` rather than shell-interpolating the task. For example:
+2. Before claiming work for a delegate, check that its configured model matches the role and that Hermes can reach the Codex account endpoint without inference:
+
+   ```powershell
+   node scripts/check-stellar-delegate.mjs peon-cloud --hermes 'D:/Hermes/bin/hermes.exe'
+   ```
+
+   Use `foreman-cloud` for Foreman. Continue when the check exits zero and returns `ready: true`. A saved login can pass `hermes auth status openai-codex` even after the provider revokes it. If live access fails, report the profile and stop before claiming or launching the assignment.
+
+3. Generate a stable assignment session ID and use `manage-issue-worktree.mjs claim <issue> --worker <profile> --session-id <stable-id>`. Do not start work on a claim error, active conflicting session, unrelated issue or unresolved dependency. Use the returned worktree and branch. Ivy's own implementation follows the same path with `--worker ivy`.
+4. For a delegate, write a UTF-8 task file containing the exact issue, owner, claim session ID, worktree, branch, baseline revision, allowed source/test paths, objective, acceptance criteria, relevant guidance and verification commands. Explicitly forbid protected governance edits, credential access, merging and approval bypass. Tell the child to read repository guidance itself; it has no Ivy conversation or memory. Do not put secrets in task files.
+5. Invoke one named profile in the claimed worktree, using `--query-file` rather than shell-interpolating the task. For example:
 
    ```powershell
    & 'D:/Hermes/bin/hermes.exe' -p peon-cloud chat --in '<claimed-worktree>' --query-file '<task-file>' --oneshot --max-turns 24 --format stream-json
    ```
 
-   Substitute `foreman-cloud` for difficult work. The configured run budget asks Hermes to wrap up and is not a hard process-isolation guarantee. The installed gateway CLI rejects `--run-budget`; use the configuration value. Keep one writer per worktree; wait for the child to finish before inspecting its diff or starting another writer. Preserve its session ID and output outside the source tree. A failed or timed-out launch is not permission to launch a duplicate: inspect the original process, session and worktree first. Approval denial stops that action; do not change profiles, tools or consent settings to retry it.
+   Substitute `foreman-cloud` for difficult work. The configured run budget asks Hermes to wrap up and is not a hard process-isolation guarantee. The installed gateway CLI rejects `--run-budget`; use the configuration value. Keep one writer per worktree and wait for the child to finish before inspecting its diff or starting another writer. Preserve the process ID, exit code, final result and Hermes session ID outside the source tree. A running process or a session ID only confirms the launch. Use the result to report provider or task failure, and inspect the original process, session and worktree before any retry. Approval denial stops that action.
 
-5. Independently inspect the actual changed bytes and run the required checks. Append verified progress with `update-issue`, and use `handle-blocker` on a blocked assignment. Foreman may review Peon's exact head. Foreman-authored work requires a different authorized reviewer; Ivy must not label a worker's own assessment independent review. Follow `prepare-pr` before opening a PR to the issue's target. None of these three identities may merge, change protected governance, promote main or deploy production.
+6. Independently inspect the actual changed bytes and run the required checks. Append verified progress with `update-issue`, and use `handle-blocker` on a blocked assignment. Foreman may review Peon's exact head. Foreman-authored work requires a different authorized reviewer; Ivy must not label a worker's own assessment independent review. Follow `prepare-pr` before opening a PR to the issue's target. None of these three identities may merge, change protected governance, promote main or deploy production.
+
+When a worker reports Codex HTTP 401 `token_revoked` and uses the shared login, ask the account owner to authorize one new Hermes root sign-in:
+
+```powershell
+& 'D:/Hermes/bin/hermes.exe' -p default auth add openai-codex --type oauth --browser --priority 0
+```
+
+Run the readiness check again for both delegates and verify that Ivy can reach Codex with `hermes -p ivy usage --provider openai-codex --json`. Keep only one sign-in for the same account. Profile-local entries take precedence over the shared login, and a new sign-in can revoke an older grant for the same account. The account owner can retire an obsolete entry through Hermes's auth commands. Preserve the profile's model configuration if logging it out to return it to the shared login. [Hermes credential pools](https://hermes-agent.nousresearch.com/docs/user-guide/features/credential-pools)
 
 Ivy's desktop foreground retains the ACP edit policy of `ask`. Issue #269 adds an explicit personal-host opt-in in `integration/desktop-access.json`: the user can supply standing consent for all file proposals and enable a native Allow once/Deny dialog for other required approvals. See [Desktop approvals](desktop-development.md#personal-host-file-access-and-approvals) for configuration, revocation and lifecycle details. Desktop submissions then use interactive gateway routing, so flagged delegate launches can reach the human instead of failing as unattended single queries. Missing or malformed configuration retains automatic denial. This does not change delegate profiles: their own flagged single-query operations still deny, and an approval denial must not be retried through another profile or tool. The existing issue, worktree and independent verification procedure applies to Desktop assignments too.
 
 The 3 November 2026 qualification verified actual edits to three separate disposable numeric functions by Ivy/Terra, Foreman cloud/Sol and Peon cloud/Luna. Tests and unchanged test-file bytes were checked independently, and each Node test passed. After the initial unattended launch denial, the user explicitly approved two fixture launches; an interactive Ivy session launched each named profile sequentially with an Allow once decision and unchanged approval settings. The stored sessions confirmed each expected model and `openai-codex` provider. Peon's own test passed. Foreman's own PowerShell test command was denied in single-query mode; Foreman stopped without retrying, and independent host verification subsequently passed. This proves the small personal-host coding/delegation path, not arbitrary task competence, isolated execution, merge authority or native desktop editing. Flagged future commands can still require interactive consent.
+
+## Personal Ivy worker view in Herdr
+
+The optional [Stellar Herdr plugin](../../config/hermes-plugins/stellar-herdr/) connects Ivy to the local Windows Herdr app and Core. Core owns the worker terminals. Ivy receives a fresh worker inventory each turn and can read the recent output of a specific issue on request. A live terminal means its process is still running. Exit zero alone does not establish that the issue is complete.
+
+Install the plugin's Python files and `plugin.yaml` into `plugins/stellar-herdr` under the personal Ivy profile. In that same profile, create `integration/stellar-herdr/settings.json` with absolute paths for `repo` (the trusted Stellar checkout), `core` (`herdr-core.exe`), `app` (`herdr-app.exe`), `hermes`, `node`, `git` and `gh`. Enable only in Ivy and open a new Ivy session if Hermes defers tool registration.
+
+```powershell
+hermes -p ivy plugins enable stellar-herdr --no-allow-tool-override
+hermes -p ivy plugins doctor --ci stellar-herdr
+hermes -p ivy stellar-herdr
+```
+
+After validation and the issue worktree claim, Ivy uses `stellar_herdr` to start the selected personal worker. The plugin checks the active claim, GitHub ownership and checked-out branch, writes the task outside the repository, and invokes the same named profile in Core. A repeated request using the same claim is refused. If a launch result is uncertain, inspect the issue's terminal and worktree before reassigning it.
+
+Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manual or automatic. Manual is the default. Automatic opens and focuses the view when a worker starts. Hiding the window leaves workers running in Core. Disabling the plugin stops Ivy's integration. Existing workers can still be inspected through the Herdr CLI.
 
 ## Identity templates and Hermes profiles
 

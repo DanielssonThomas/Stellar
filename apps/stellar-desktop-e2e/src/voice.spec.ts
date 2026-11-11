@@ -341,7 +341,9 @@ for (const scenario of [
       .toBeGreaterThan(900);
     await page.keyboard.press('m');
     await expect(
-      page.getByText('Voice fixture reply. See the notes.', { exact: true }),
+      page
+        .getByRole('dialog', { name: 'Experience controls' })
+        .getByText('Voice fixture reply. See the notes.', { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole('switch', { name: 'Show recognition results' }),

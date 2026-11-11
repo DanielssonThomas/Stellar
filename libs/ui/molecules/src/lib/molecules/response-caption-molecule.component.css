@@ -1,0 +1,58 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--stellar-color-foreground);
+}
+.response-caption {
+  border: 1px solid
+    color-mix(in srgb, var(--stellar-color-primary) 38%, transparent);
+  border-radius: var(--stellar-radius-control);
+  background: color-mix(
+    in srgb,
+    var(--stellar-color-canvas) 94%,
+    var(--stellar-color-primary)
+  );
+  box-shadow: var(--stellar-shadow-card);
+}
+.caption-label {
+  color: var(--stellar-color-primary);
+}
+.caption-kind {
+  color: var(--stellar-color-muted);
+  font-size: 0.55rem;
+  letter-spacing: 0.1em;
+}
+.caption-text {
+  max-height: min(12rem, 30vh);
+  scrollbar-color: var(--stellar-color-primary) var(--stellar-color-canvas);
+  scrollbar-width: thin;
+}
+.caption-text:focus-visible {
+  outline: 2px solid var(--stellar-color-primary);
+  outline-offset: 3px;
+}
+.caption-arrive {
+  animation: caption-arrive 180ms ease-out both;
+}
+@keyframes caption-arrive {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+:host(.motion-reduced) .caption-arrive {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .caption-arrive {
+    animation: none;
+  }
+}
+@media (max-height: 480px) {
+  .caption-text {
+    max-height: 18vh;
+  }
+}

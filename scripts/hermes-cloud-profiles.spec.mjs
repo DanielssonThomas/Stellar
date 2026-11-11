@@ -12,10 +12,123 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { checkStellarDelegate } from './check-stellar-delegate.mjs';
 import {
   provisionCloudProfile,
   validateCloudConfig,
 } from './hermes-cloud-profiles.mjs';
+
+const liveCodexResponse = {
+  status: 0,
+  stdout: JSON.stringify({
+    provider: 'openai-codex',
+    unavailable_reason: null,
+    details: ['account data stays private'],
+  }),
+};
+
+for (const [profile, model] of [
+  ['peon-cloud', 'gpt-6-luna'],
+  ['foreman-cloud', 'gpt-6.1-sol'],
+]) {
+  test(`${profile} readiness verifies the configured model and live account access`, () => {
+    const executable = 'D:/Hermes/bin/hermes.exe';
+    const responses = [
+      { status: 0, stdout: 'openai-codex\r\n' },
+      { status: 0, stdout: `${model}\r\n` },
+      liveCodexResponse,
+    ];
+    const calls = [];
+    const result = checkStellarDelegate(profile, {
+      executable,
+      run(command, args, options) {
+        assert.equal(command, executable);
+        assert.equal(options.timeout, 15_000);
+        assert.equal(options.windowsHide, true);
+        calls.push(args);
+        return responses.shift();
+      },
+    });
+    assert.deepEqual(calls, [
+      ['-p', profile, 'config', 'get', 'model.provider'],
+      ['-p', profile, 'config', 'get', 'model.default'],
+      ['-p', profile, 'usage', '--provider', 'openai-codex', '--json'],
+    ]);
+    assert.deepEqual(result, {
+      profile,
+      provider: 'openai-codex',
+      model,
+      ready: true,
+    });
+  });
+}
+
+test('delegate readiness fails when local configuration is wrong or missing', () => {
+  for (const response of [
+    { status: 0, stdout: 'custom\n' },
+    { status: 1, stderr: 'Profile not found.' },
+  ]) {
+    const calls = [];
+    assert.throws(
+      () =>
+        checkStellarDelegate('peon-cloud', {
+          run(_command, args) {
+            calls.push(args);
+            return response;
+          },
+        }),
+      /expected the personal cloud profile with openai-codex\/gpt-6-luna/,
+    );
+    assert.ok(calls.every((args) => args[2] === 'config'));
+  }
+});
+
+test('delegate readiness fails when live access fails despite matching local configuration', () => {
+  for (const response of [
+    { status: 1, stderr: 'HTTP 401 token_revoked. Account details.' },
+    { status: 0, stdout: 'logged in' },
+    {
+      status: 0,
+      stdout: '{"provider":"openai-codex","unavailable_reason":"unreachable"}',
+    },
+  ]) {
+    const responses = [
+      { status: 0, stdout: 'openai-codex' },
+      { status: 0, stdout: 'gpt-6-luna' },
+      response,
+    ];
+    assert.throws(
+      () =>
+        checkStellarDelegate('peon-cloud', { run: () => responses.shift() }),
+      {
+        message:
+          'peon-cloud: Hermes could not verify live Codex access. Check connectivity and the shared Hermes Codex sign-in before claiming or starting this assignment.',
+      },
+    );
+  }
+});
+
+test('delegate readiness distinguishes CLI execution failures and rejects unknown profiles', () => {
+  assert.throws(
+    () =>
+      checkStellarDelegate('ivy', {
+        run: () => assert.fail('Unexpected Hermes invocation'),
+      }),
+    /Choose peon-cloud or foreman-cloud/,
+  );
+  for (const [code, expected] of [
+    ['ETIMEDOUT', /readiness check timed out/],
+    ['ENOENT', /could not run the Hermes CLI readiness check/],
+  ]) {
+    assert.throws(
+      () =>
+        checkStellarDelegate('foreman-cloud', {
+          run: () => ({ error: { code, message: 'raw process details' } }),
+        }),
+      expected,
+    );
+  }
+});
 
 for (const role of ['architect', 'foreman', 'peon']) {
   test(`${role} cloud route keeps a single subscription provider and disabled direct tools`, async () => {
@@ -37,7 +150,7 @@ for (const role of ['architect', 'foreman', 'peon']) {
     );
     assert.throws(
       () =>
-        validateCloudConfig(role, config.replace(/    - terminal\r?\n/, '')),
+        validateCloudConfig(role, config.replace(/^ {4}- terminal\r?\n/m, '')),
       /terminal/,
     );
   });
@@ -62,8 +175,8 @@ for (const role of ['foreman', 'peon']) {
       config.replace('single_query_mode: deny', 'single_query_mode: allow'),
       config.replace('unattended_mode: deny', 'unattended_mode: allow'),
       config.replace('max_turns: 24', 'max_turns: 500'),
-      config.replace(/    - delegation\r?\n/, ''),
-      config.replace(/    - connections\r?\n/, ''),
+      config.replace(/^ {4}- delegation\r?\n/m, ''),
+      config.replace(/^ {4}- connections\r?\n/m, ''),
     ])
       assert.throws(() =>
         validateCloudConfig(role, altered, { personalCoding: true }),

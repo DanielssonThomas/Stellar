@@ -25,6 +25,33 @@
     var(--stellar-color-canvas);
 }
 
+.conversation-captions {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: min(40rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  scrollbar-color: var(--stellar-color-primary) var(--stellar-color-canvas);
+  scrollbar-width: thin;
+  pointer-events: none;
+}
+.conversation-captions > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  pointer-events: auto;
+}
+.conversation-captions > stellar-response-caption-molecule {
+  width: 100%;
+}
+
 .stage {
   position: relative;
   min-height: 0;

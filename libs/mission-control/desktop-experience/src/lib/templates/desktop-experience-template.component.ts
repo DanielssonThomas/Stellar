@@ -27,6 +27,7 @@ import {
   PromptComposerMolecule,
   FaultLogMolecule,
   VoiceTranscriptMolecule,
+  ResponseCaptionMolecule,
   type FaultLogEntry,
   type ComposerFinalizedText,
   type PromptComposerStatus,
@@ -62,6 +63,7 @@ export interface MicrophoneOption {
     PromptComposerMolecule,
     FaultLogMolecule,
     VoiceTranscriptMolecule,
+    ResponseCaptionMolecule,
     RequestStatusMolecule,
     IvyQuestionMolecule,
     IvySessionInspectorMolecule,
@@ -118,6 +120,8 @@ export class DesktopExperienceTemplate {
   readonly passiveListening = input(false);
   readonly assistantStatus = input('Ivy disconnected');
   readonly assistantReply = input('');
+  readonly responseCaptionText = input('');
+  readonly responseCaptionKind = input<'commentary' | 'final'>('commentary');
   readonly assistantBusy = input(false);
   readonly assistantUncertain = input(false);
   readonly assistantWaiting = input(false);

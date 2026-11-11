@@ -24,9 +24,14 @@ mod question_contracts;
 mod questions;
 #[cfg(test)]
 mod recovery_tests;
+mod response_segments;
+#[cfg(test)]
+mod response_segments_tests;
 mod rotation;
 pub(crate) mod runtime;
 mod session;
+mod session_events;
+mod session_receipts;
 #[cfg(test)]
 mod session_tests;
 mod state;

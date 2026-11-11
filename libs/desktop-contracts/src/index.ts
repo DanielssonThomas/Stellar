@@ -1,4 +1,5 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
+export type { IvyResponseSegment, IvyResponseSegmentKind } from './generated';
 export type {
   WorkspaceChartType,
   WorkspaceChartDataset,
