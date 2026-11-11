@@ -99,6 +99,7 @@ export interface VoicePorts {
     ) => void,
   ) => Promise<ReflexOutcome>;
   readonly cancelReflex?: () => void;
+  readonly waitForSpeechSlot?: () => Promise<void> | undefined;
   readonly speak: (
     text: string,
     id: string,
@@ -230,6 +231,7 @@ export class VoiceConversation {
           error: null,
         },
       speak: ports.speak,
+      waitForSlot: ports.waitForSpeechSlot,
       stop: ports.stop,
       acknowledged: (snapshot) => {
         if (

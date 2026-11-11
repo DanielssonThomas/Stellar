@@ -111,3 +111,24 @@ fn commentary_filters_data_bounds_history_and_fails_closed_on_epoch_changes() {
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn closing_tool_marker_preserves_the_completed_answer_without_a_segment() {
+    let (mut session, directory) = fixture();
+    let text = "Use the closing </tool_call> tag.";
+    session.event(event("admission", 1, text)).unwrap();
+    let mut done = event("admission", 2, text);
+    done["data"]["params"]["type"] = json!("message.complete");
+    done["data"]["params"]["payload"] =
+        json!({"text":text,"outcome":"completed","response_reused":false});
+    session.event(done).unwrap();
+    let snapshot = session.shared.view.lock().unwrap().snapshot.clone();
+    assert_eq!(snapshot.turn, IvyTurnState::Completed);
+    assert!(snapshot.response_segments.is_empty());
+    assert!(matches!(
+        snapshot.items.as_slice(),
+        [super::presentation::IvyPresentation::Text { text: reply }] if reply == text
+    ));
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}

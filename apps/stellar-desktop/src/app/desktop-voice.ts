@@ -51,7 +51,6 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
-  private playbackGeneration = 0;
   private disposed = false;
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
@@ -108,16 +107,10 @@ export class DesktopVoice {
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: async (text, id, current = () => true) => {
-      const generation = this.playbackGeneration;
-      if (this.spatial) await this.spatial.whenQuiet();
-      if (
-        generation !== this.playbackGeneration ||
-        !current() ||
-        this.disposed ||
-        this.current().muted
-      )
-        return this.speech.state();
+    waitForSpeechSlot: () => this.spatial?.whenQuiet(),
+    speak: (text, id, current = () => true) => {
+      if (!current() || this.disposed || this.current().muted)
+        return Promise.resolve(this.speech.state());
       const before = this.speech.state();
       this.narration = {
         id,
@@ -149,7 +142,6 @@ export class DesktopVoice {
         });
     },
     stop: () => {
-      this.playbackGeneration++;
       this.questionCue.dispose();
       this.finishNarration('cancelled');
       const snapshot = this.speech.state();
@@ -209,7 +201,6 @@ export class DesktopVoice {
     effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
-      this.playbackGeneration++;
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
@@ -237,7 +228,6 @@ export class DesktopVoice {
 
   setMuted(muted: boolean) {
     this.spatial?.setMuted(muted);
-    if (muted) this.playbackGeneration++;
     this.conversation.setMuted(muted);
     if (muted) {
       this.questionCue.cancel();
@@ -319,7 +309,6 @@ export class DesktopVoice {
   }
   stop() {
     this.spatial?.interrupt();
-    this.playbackGeneration++;
     this.questionCue.cancel();
     this.conversation.stopVoice();
   }

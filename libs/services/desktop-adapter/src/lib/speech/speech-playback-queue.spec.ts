@@ -6,7 +6,7 @@ import { SpeechPlaybackQueue } from './speech-playback-queue';
 const settle = async () => {
   for (let i = 0; i < 12; ++i) await Promise.resolve();
 };
-function fixture() {
+function fixture(waitForSlot?: () => Promise<void>) {
   let state = initialSpeechSnapshot();
   const speak = vi.fn(
     async (
@@ -24,7 +24,11 @@ function fixture() {
       return state;
     },
   );
-  const queue = new SpeechPlaybackQueue({ state: () => state, speak });
+  const queue = new SpeechPlaybackQueue({
+    state: () => state,
+    speak,
+    waitForSlot,
+  });
   const observe = (change: Partial<SpeechSnapshot>) => {
     state = {
       ...state,
@@ -36,6 +40,44 @@ function fixture() {
   return { queue, speak, observe, state: () => state };
 }
 describe('owned sequential speech playback', () => {
+  it('waits for a long spatial briefing before starting the native deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      let release!: () => void;
+      const wait = vi.fn(
+        () => new Promise<void>((resolve) => (release = resolve)),
+      );
+      const f = fixture(wait);
+      const result = f.queue.play('Final answer', 'answer');
+      await vi.advanceTimersByTimeAsync(180000);
+      expect(wait).toHaveBeenCalledOnce();
+      expect(f.speak).not.toHaveBeenCalled();
+      release();
+      await settle();
+      expect(f.speak).toHaveBeenCalledOnce();
+      f.observe({ operation_id: 'answer', state: 'idle' });
+      await expect(result).resolves.toMatchObject({ state: 'idle' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not dispatch a response cleared while waiting for a spatial briefing', async () => {
+    let release!: () => void;
+    const f = fixture(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const cancelled = expect(
+      f.queue.play('Stale response', 'stale'),
+    ).rejects.toThrow('cancelled');
+    f.queue.clear();
+    release();
+    await cancelled;
+    await settle();
+    expect(f.speak).not.toHaveBeenCalled();
+    expect(f.queue.busy()).toBe(false);
+  });
+
   it('bounds a missing native completion and never advances the queued owner', async () => {
     vi.useFakeTimers();
     try {

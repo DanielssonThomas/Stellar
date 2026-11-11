@@ -21,10 +21,12 @@ type Active = {
 export class SpeechPlaybackQueue {
   private pending: Entry[] = [];
   private active?: Active;
+  private waiting?: { epoch: string };
   private generation = 0;
   constructor(
     private readonly ports: {
       state: () => SpeechSnapshot;
+      waitForSlot?: () => Promise<void> | undefined;
       speak: (
         text: string,
         id: string,
@@ -72,7 +74,8 @@ export class SpeechPlaybackQueue {
   observe(snapshot: SpeechSnapshot) {
     const active = this.active;
     if (!active) {
-      this.pump();
+      if (this.waiting && snapshot.epoch !== this.waiting.epoch) this.clear();
+      else this.pump();
       return;
     }
     if (snapshot.epoch !== active.epoch) {
@@ -116,6 +119,7 @@ export class SpeechPlaybackQueue {
     this.pending = [];
     clearTimeout(this.active?.deadline);
     this.active = undefined;
+    this.waiting = undefined;
     for (const entry of entries) entry.reject(new Error('Speech cancelled'));
   }
 
@@ -129,8 +133,31 @@ export class SpeechPlaybackQueue {
   }
 
   private pump() {
-    if (this.active) return;
+    if (this.active || this.waiting || !this.pending.length) return;
     const before = this.ports.state();
+    const wait =
+      before.state === 'idle' ? this.ports.waitForSlot?.() : undefined;
+    if (!wait) {
+      this.dispatch(before);
+      return;
+    }
+    const waiting = { epoch: before.epoch };
+    this.waiting = waiting;
+    void wait.then(
+      () => {
+        if (this.waiting !== waiting) return;
+        this.waiting = undefined;
+        const current = this.ports.state();
+        if (current.epoch !== waiting.epoch) this.clear();
+        else this.dispatch(current);
+      },
+      () => {
+        if (this.waiting === waiting) this.clear();
+      },
+    );
+  }
+
+  private dispatch(before: SpeechSnapshot) {
     if (before.state === 'unavailable') {
       for (const entry of this.pending.splice(0))
         entry.reject(new Error('Speech unavailable'));

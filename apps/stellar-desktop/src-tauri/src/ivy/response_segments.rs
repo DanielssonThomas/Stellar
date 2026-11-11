@@ -18,6 +18,7 @@ pub(super) fn plain_response(text: &str) -> bool {
             "<tool_call",
             "</think",
             "</analysis",
+            "</tool_call",
         ]
         .iter()
         .any(|marker| lower.contains(marker))
