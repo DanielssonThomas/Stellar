@@ -24,6 +24,10 @@ Only change the assigned atom and its focused test.
 None
 ## Verification expectations
 Run focused component tests and affected lint.
+## Development budget
+\`\`\`json
+{"schemaVersion":1,"revisions":[{"revision":1,"recordedAt":"${now}","estimatedTokens":12000,"allocatedTokens":20000,"profile":"Peon and independent review","confidence":"low"}]}
+\`\`\`
 `;
 
 function fixture() {

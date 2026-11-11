@@ -33,7 +33,29 @@ None, or list blocking issue IDs (for example `#123`). Link native issue depende
 
 List the relevant lint, unit, build, or E2E checks.
 
+## Development budget
+
+```json
+{
+  "schemaVersion": 1,
+  "revisions": [
+    {
+      "revision": 1,
+      "recordedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "estimatedTokens": 0,
+      "allocatedTokens": 0,
+      "profile": "Model, reasoning, agent and review assumptions",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
 ## Metadata labels
+
+Replace the budget placeholders before moving to ready. Add optional `evidence`
+references to the revision. Append a numbered revision when the estimate or
+allocation changes. Epic grouping issues can omit this section.
 
 Before moving this issue from triage to ready, assign exactly one of each (see `docs/guides/issue-workflow.md` for definitions and validation):
 
