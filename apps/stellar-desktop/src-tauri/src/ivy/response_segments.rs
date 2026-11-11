@@ -4,13 +4,36 @@ use sha2::{Digest, Sha256};
 pub(super) const MAX_COMMENTARY: usize = 16;
 pub(super) const MAX_COMMENTARY_BYTES: usize = 4096;
 
+fn sealed_prose_line(line: &str) -> bool {
+    let line = line.trim_start();
+    if let Some(link) = line.strip_prefix('[') {
+        return link.split_once("](").is_some_and(|(label, _)| {
+            !label.trim().is_empty() && !label.contains(['[', ']', '{', '}', '"'])
+        });
+    }
+    if let Some(link) = line.strip_prefix('<') {
+        return link.split_once('>').is_some_and(|(url, _)| {
+            ["https://", "http://", "mailto:"].iter().any(|prefix| {
+                url.strip_prefix(prefix)
+                    .is_some_and(|tail| !tail.is_empty())
+            }) && !url.chars().any(char::is_whitespace)
+                && !url.contains(['<', '"', '`'])
+        });
+    }
+    if let Some(inline) = line.strip_prefix('`') {
+        return inline.split_once('`').is_some_and(|(code, _)| {
+            let code = code.trim_start();
+            !code.is_empty() && !code.starts_with(['{', '[', '<'])
+        });
+    }
+    !line.starts_with('{')
+}
+
 pub(super) fn plain_response(text: &str) -> bool {
     let text = text.trim();
     let lower = text.to_ascii_lowercase();
     !text.is_empty()
-        && !text
-            .lines()
-            .any(|line| line.trim_start().starts_with(['{', '[', '`', '<']))
+        && text.lines().all(sealed_prose_line)
         && ![
             "stellar_presentation",
             "<think",

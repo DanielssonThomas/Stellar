@@ -51,6 +51,19 @@ describe('Ivy wire validation', () => {
         response_segments: [commentary, final],
       }).response_segments,
     ).toEqual([commentary, final]);
+    for (const text of [
+      '[The notes](https://example.test/notes) are ready.',
+      '[The notes](\n  https://example.test/notes\n  "Report title") are ready.',
+      '<https://example.test/notes> has the notes.',
+      '<mailto:hello@example.test> is the contact address.',
+      '\x60npm test\x60 has finished.',
+    ]) {
+      const row = { ...commentary, text };
+      expect(
+        decodeIvySnapshot({ ...snapshot(), response_segments: [row] })
+          .response_segments,
+      ).toEqual([row]);
+    }
     for (const rows of [
       [commentary, commentary],
       [{ ...commentary, id: 'foreign' }],
@@ -60,6 +73,12 @@ describe('Ivy wire validation', () => {
       [{ ...commentary, text: '😀'.repeat(1025) }],
       [{ ...commentary, text: 'Description\n{"partial":' }],
       [{ ...commentary, text: '<think>private</think>' }],
+      [{ ...commentary, text: '["private"]' }],
+      [{ ...commentary, text: '<script>private</script>' }],
+      [{ ...commentary, text: '\x60\x60\x60js\nprivate\n\x60\x60\x60' }],
+      [{ ...commentary, text: '\x60{"private":true}\x60' }],
+      [{ ...commentary, text: '<https://example.test/notes' }],
+      [{ ...commentary, text: 'Closing </tool_call> marker' }],
       [final, commentary],
       Array.from({ length: 17 }, (_, index) => ({
         ...commentary,
