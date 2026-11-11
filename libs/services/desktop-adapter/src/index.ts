@@ -1,5 +1,9 @@
 export * from './lib/services/desktop-adapter.service';
 export {
+  conversationDisplayText,
+  conversationSpeechText,
+} from './lib/speech/conversation-text';
+export {
   IvyInspectorService,
   IVY_INSPECTOR_READ,
 } from './lib/services/ivy-inspector.service';

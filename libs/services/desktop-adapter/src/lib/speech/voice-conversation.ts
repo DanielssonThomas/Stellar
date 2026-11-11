@@ -30,6 +30,7 @@ import {
 } from './voice-invocation';
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
+import { conversationSpeechText } from './conversation-text';
 import { SpeechActivity } from './speech-activity';
 import { CloudVoiceCue } from './cloud-voice-cue';
 import { PassiveRecognition } from './passive-recognition';
@@ -1835,7 +1836,9 @@ export class VoiceConversation {
       });
   }
 
-  private async speakLocal(text: string, id: string, generation: number) {
+  private async speakLocal(reply: string, id: string, generation: number) {
+    const text = conversationSpeechText(reply);
+    if (!text) return;
     this.phase = 'speaking';
     this.settledTurn = id;
     this.playbackAcknowledged = false;

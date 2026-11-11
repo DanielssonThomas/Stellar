@@ -7,6 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import {
+  conversationDisplayText,
   IvyAdapterService,
   IvyReflexService,
 } from '@stellar/service-desktop-adapter';
@@ -121,9 +122,11 @@ export class DesktopAssistant {
       !this.cancelRequested(),
   );
   readonly reply = computed(() =>
-    this.state()
-      .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
-      .join('\n\n'),
+    conversationDisplayText(
+      this.state()
+        .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
+        .join('\n\n'),
+    ),
   );
   readonly status = computed(() => {
     const snapshot = this.state();

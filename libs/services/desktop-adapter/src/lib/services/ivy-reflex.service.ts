@@ -24,6 +24,7 @@ import {
   ReflexController,
   type ReflexEnvironment,
 } from '../reflex/reflex-controller';
+import { conversationDisplayText } from '../speech/conversation-text';
 
 type Invoke = (
   command: string,
@@ -350,7 +351,7 @@ export class IvyReflexService {
           )[outcome.outcome] ?? 'Request finished',
         );
       else this.timeline.route(id, 'Terra');
-      if (outcome.reply) this.reply.set(outcome.reply);
+      if (outcome.reply) this.reply.set(conversationDisplayText(outcome.reply));
       return outcome;
     } finally {
       this.busy.set(false);
