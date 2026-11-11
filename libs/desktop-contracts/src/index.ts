@@ -146,6 +146,7 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
   decodeIvyQuestionReply,
+  isSealedIvyProseLine,
 } from './lib/ivy-codec';
 export {
   decodeWorkspaceToolRequest,

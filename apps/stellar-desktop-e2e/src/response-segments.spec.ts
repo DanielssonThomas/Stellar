@@ -201,12 +201,13 @@ test('committed updates are visible outside M and speak before completion withou
   expect(
     await openPane(page, 51, 'retained-notes', 'My notes', 'Keep this content'),
   ).toBe('applied');
-  await publish(page, 'Morning! I am checking your calendar and the news.');
+  const interim =
+    'Morning! I am checking **your calendar** and [the news](https://example.test/news?key=sample#details).';
+  await publish(page, interim);
   const caption = page.locator('stellar-response-caption-molecule');
-  await expect(caption).toContainText('Morning!');
-  await expect
-    .poll(() => spoken(page))
-    .toEqual(['Morning! I am checking your calendar and the news.']);
+  const first = 'Morning! I am checking your calendar and the news.';
+  await expect(caption.getByText(first, { exact: true })).toBeVisible();
+  await expect.poll(() => spoken(page)).toEqual([first]);
   expect(
     await page.evaluate(
       () =>
@@ -215,12 +216,15 @@ test('committed updates are visible outside M and speak before completion withou
         ).__segments.current().turn,
     ),
   ).toBe('admitted');
-  await publish(page, 'Your first meeting is at ten.');
-  await expect(caption).toContainText('Your first meeting is at ten.');
+  const followUp =
+    '[Your **first meeting**](https://example.test/meeting?key=sample#details) is at ten. More at <https://example.test/calendar?key=sample#details>.';
+  const second = 'Your first meeting is at ten. More at example.test.';
+  await publish(page, followUp);
+  await expect(caption.getByText(second, { exact: true })).toBeVisible();
   expect(await spoken(page)).toHaveLength(1);
   await finishSpeech(page);
-  await expect.poll(() => spoken(page)).toHaveLength(2);
-  await publish(page, 'Your first meeting is at ten.', true, true);
+  await expect.poll(() => spoken(page)).toEqual([first, second]);
+  await publish(page, followUp, true, true);
   await finishSpeech(page);
   await expect(caption.locator('section')).toHaveAttribute(
     'aria-label',

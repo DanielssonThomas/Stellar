@@ -113,6 +113,31 @@ fn commentary_filters_data_bounds_history_and_fails_closed_on_epoch_changes() {
 }
 
 #[test]
+fn sealed_prose_accepts_ordinary_markdown_leads_and_rejects_structured_leads() {
+    use super::response_segments::plain_response;
+
+    for text in [
+        "[The notes](https://example.test/notes) are ready.",
+        "[The notes](\n  https://example.test/notes\n  \"Report title\") are ready.",
+        "<https://example.test/notes> has the notes.",
+        "<mailto:hello@example.test> is the contact address.",
+        "\x60npm test\x60 has finished.",
+    ] {
+        assert!(plain_response(text), "{text}");
+    }
+    for text in [
+        "[\"private\"]",
+        "<script>private</script>",
+        "\x60\x60\x60js\nprivate\n\x60\x60\x60",
+        "\x60{\"private\":true}\x60",
+        "<https://example.test/notes",
+        "Closing </tool_call> marker",
+    ] {
+        assert!(!plain_response(text), "{text}");
+    }
+}
+
+#[test]
 fn closing_tool_marker_preserves_the_completed_answer_without_a_segment() {
     let (mut session, directory) = fixture();
     let text = "Use the closing </tool_call> tag.";

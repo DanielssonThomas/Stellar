@@ -334,6 +334,24 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   return snapshot;
 }
 
+export function isSealedIvyProseLine(line: string): boolean {
+  const content = line.replace(/^\p{White_Space}+/u, '');
+  if (content.startsWith('[')) {
+    // An unambiguous Markdown opener can continue onto the next line.
+    const link = /^\[([^[\]{}"]+)\]\(/u.exec(content);
+    return !!link && /\P{White_Space}/u.test(link[1]);
+  }
+  if (content.startsWith('<'))
+    return /^<(?:https?:\/\/|mailto:)[^<>"\x60\p{White_Space}]+>/u.test(
+      content,
+    );
+  if (content.startsWith('\x60')) {
+    const code = /^\x60([^\x60]+)\x60/u.exec(content);
+    return !!code && /^\p{White_Space}*[^<{[\p{White_Space}]/u.test(code[1]);
+  }
+  return !content.startsWith('{');
+}
+
 function responseSegments(value: unknown): IvyResponseSegment[] {
   if (!Array.isArray(value) || value.length > 17)
     throw new DesktopContractError('malformed');
@@ -348,9 +366,9 @@ function responseSegments(value: unknown): IvyResponseSegment[] {
       throw new DesktopContractError('malformed');
     const content = text(row['text'], kind === 'commentary' ? 4096 : undefined);
     if (
-      /(?:^|\n)\s*(?:\{|\[|`|<)|stellar_presentation|<\/?(?:think|analysis|tool_call)\b/i.test(
-        content,
-      ) ||
+      !content.split('\n').every(isSealedIvyProseLine) ||
+      /stellar_presentation|<\/?(?:think|analysis|tool_call)/i.test(content) ||
+      /\p{Cc}/u.test(content.replace(/[\n\t\r]/gu, '')) ||
       (kind === 'commentary' && row['reused'])
     )
       throw new DesktopContractError('malformed');
