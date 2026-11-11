@@ -248,6 +248,7 @@ impl IvyHost {
             view.snapshot.turn = IvyTurnState::Submitting;
             view.snapshot.turn_id = Some(id);
             view.snapshot.items.clear();
+            view.snapshot.response_segments.clear();
             view.snapshot.activity.clear();
         }
         if disconnect || cancel {

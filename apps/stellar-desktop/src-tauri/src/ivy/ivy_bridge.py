@@ -199,7 +199,7 @@ async def pump_events(conn, workspace, approvals):
         if kind in {'tool.start', 'tool.complete'}:
             activity.offer(params)
             continue
-        if kind not in {'message.complete', 'session.replay_gap',
+        if kind not in {'message.interim', 'message.complete', 'session.replay_gap',
                         'approval.request', 'clarify.request', 'clarify.settled'}:
             continue
         # Terminal/control events retain ordering ahead of the next activity batch.
@@ -211,7 +211,14 @@ async def pump_events(conn, workspace, approvals):
             raise Closed()
         clean = project(params)
         clean['type'] = kind
-        if kind in {'clarify.request', 'clarify.settled'}:
+        if kind == 'message.interim':
+            text, streamed = payload.get('text'), payload.get('already_streamed')
+            if not string(text, 4096) or type(streamed) is not bool:
+                continue
+            if workspace is not None:
+                text = workspace.redact(text)
+            clean['payload'] = {'text': text, 'already_streamed': streamed}
+        elif kind in {'clarify.request', 'clarify.settled'}:
             prompt = payload.get('prompt_id')
             if not string(prompt):
                 raise Closed()
@@ -239,6 +246,8 @@ async def pump_events(conn, workspace, approvals):
                     execution_generation=generation, prompt_id=prompt, choice='deny'), DEADLINE)
         else:
             clean['payload'] = text_fields(payload) if kind.startswith('message.') else project(payload)
+            if kind == 'message.complete' and type(payload.get('response_reused')) is bool:
+                clean['payload']['response_reused'] = payload['response_reused']
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         if kind == 'message.complete':
@@ -490,6 +499,8 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if workspace is not None:
                             final = workspace.redact(final)
                         projected['result'] = {'final_response': text_fields({'text': final})['text']}
+                        if type(saved.get('response_reused')) is bool:
+                            projected['result']['response_reused'] = saved['response_reused']
                 result = projected
             if method in {'session.create', 'session.resume'}:
                 conn.selected_session = result.get('session_id')

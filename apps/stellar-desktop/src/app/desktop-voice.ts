@@ -51,12 +51,11 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
-  private playbackGeneration = 0;
   private disposed = false;
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
-    speak: (text, id) => this.speech.speak(text, id),
+    speak: (text, id) => this.conversation.say(text, id),
     stop: () => this.speech.stop(),
   });
   private narration?: { id: string; revision: bigint; epoch: string };
@@ -108,17 +107,10 @@ export class DesktopVoice {
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: async (text, id, current = () => true) => {
-      const generation = this.playbackGeneration;
-      await this.questionCue.wait();
-      await this.spatial?.whenQuiet();
-      if (
-        generation !== this.playbackGeneration ||
-        !current() ||
-        this.disposed ||
-        this.current().muted
-      )
-        return this.speech.state();
+    waitForSpeechSlot: () => this.spatial?.whenQuiet(),
+    speak: (text, id, current = () => true) => {
+      if (!current() || this.disposed || this.current().muted)
+        return Promise.resolve(this.speech.state());
       const before = this.speech.state();
       this.narration = {
         id,
@@ -150,7 +142,6 @@ export class DesktopVoice {
         });
     },
     stop: () => {
-      this.playbackGeneration++;
       this.questionCue.dispose();
       this.finishNarration('cancelled');
       const snapshot = this.speech.state();
@@ -210,7 +201,6 @@ export class DesktopVoice {
     effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
-      this.playbackGeneration++;
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
@@ -238,7 +228,6 @@ export class DesktopVoice {
 
   setMuted(muted: boolean) {
     this.spatial?.setMuted(muted);
-    if (muted) this.playbackGeneration++;
     this.conversation.setMuted(muted);
     if (muted) {
       this.questionCue.cancel();
@@ -274,7 +263,9 @@ export class DesktopVoice {
           if (local.handled) return local.outcome !== 'cancelled';
         }
         this.reflex.reply.set('');
-        return await this.assistant.submit(text, inputId);
+        return await this.conversation.withResponseOwnership(inputId, () =>
+          this.assistant.submit(text, inputId),
+        );
       } finally {
         this.updateContext();
       }
@@ -287,8 +278,13 @@ export class DesktopVoice {
     const narration = this.narration;
     if (narration && BigInt(speech.revision) > narration.revision) {
       if (speech.epoch !== narration.epoch) this.finishNarration('cancelled');
-      else if (speech.state === 'idle') this.finishNarration('completed');
-      else if (speech.state === 'unavailable') this.finishNarration('failed');
+      else if (speech.operation_id === narration.id && speech.state === 'idle')
+        this.finishNarration('completed');
+      else if (
+        speech.operation_id === narration.id &&
+        speech.state === 'unavailable'
+      )
+        this.finishNarration('failed');
       else if (
         speech.operation_id === narration.id &&
         speech.state === 'speaking'
@@ -313,9 +309,14 @@ export class DesktopVoice {
   }
   stop() {
     this.spatial?.interrupt();
-    this.playbackGeneration++;
     this.questionCue.cancel();
     this.conversation.stopVoice();
+  }
+  narrationOwner() {
+    return this.conversation.narrationOwner();
+  }
+  stopNarration() {
+    return this.conversation.stopNarration();
   }
   async retry(): Promise<void> {
     this.conversation.retry();

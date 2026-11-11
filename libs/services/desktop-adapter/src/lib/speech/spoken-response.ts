@@ -6,7 +6,7 @@ export function spokenResponse(items: IvySnapshot['items']): string {
     .flatMap((item) => (item.kind === 'text' ? [item.text] : []))
     .join('\n\n')
     .trim();
-  return /^(?:\{|\[|```)|stellar_presentation|<\/?(?:think|analysis|tool_call)\b/i.test(
+  return /(?:^|\n)\s*(?:\{|\[|```|<)|stellar_presentation|<\/?(?:think|analysis|tool_call)\b/i.test(
     text,
   )
     ? ''

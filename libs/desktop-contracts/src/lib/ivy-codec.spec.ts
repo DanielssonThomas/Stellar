@@ -15,6 +15,7 @@ const snapshot = () => ({
   workspace_epoch: '0',
   reset_id: null,
   activity: [],
+  response_segments: [],
   connection: 'ready',
   turn: 'completed',
   items: [
@@ -29,6 +30,46 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('validates bounded sealed response segments and preserves the final reuse marker', () => {
+    const commentary = {
+      id: '1'.repeat(64),
+      kind: 'commentary',
+      text: 'Your meeting is at ten.',
+      sequence: '18446744073709551615',
+      reused: false,
+    };
+    const final = {
+      ...commentary,
+      id: '2'.repeat(64),
+      kind: 'final',
+      sequence: null,
+      reused: true,
+    };
+    expect(
+      decodeIvySnapshot({
+        ...snapshot(),
+        response_segments: [commentary, final],
+      }).response_segments,
+    ).toEqual([commentary, final]);
+    for (const rows of [
+      [commentary, commentary],
+      [{ ...commentary, id: 'foreign' }],
+      [{ ...commentary, kind: 'reasoning' }],
+      [{ ...commentary, sequence: null }],
+      [{ ...commentary, reused: true }],
+      [{ ...commentary, text: '😀'.repeat(1025) }],
+      [{ ...commentary, text: 'Description\n{"partial":' }],
+      [{ ...commentary, text: '<think>private</think>' }],
+      [final, commentary],
+      Array.from({ length: 17 }, (_, index) => ({
+        ...commentary,
+        id: index.toString(16).padStart(64, '0'),
+      })),
+    ])
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), response_segments: rows }),
+      ).toThrow();
+  });
   it('accepts bounded provider/action enums and rejects arbitrary metadata', () => {
     const row = {
       id: '0123456789abcdef',

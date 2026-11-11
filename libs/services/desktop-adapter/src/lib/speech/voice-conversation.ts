@@ -31,7 +31,8 @@ import {
 import { VoiceLatency } from './voice-latency';
 import { spokenResponse } from './spoken-response';
 import { SpeechActivity } from './speech-activity';
-import { CloudVoiceCue } from './cloud-voice-cue';
+import { SpeechPlaybackQueue } from './speech-playback-queue';
+import { responseSpeech } from './response-speech';
 import { PassiveRecognition } from './passive-recognition';
 import type {
   RecognitionObservation,
@@ -98,6 +99,7 @@ export interface VoicePorts {
     ) => void,
   ) => Promise<ReflexOutcome>;
   readonly cancelReflex?: () => void;
+  readonly waitForSpeechSlot?: () => Promise<void> | undefined;
   readonly speak: (
     text: string,
     id: string,
@@ -179,8 +181,16 @@ export class VoiceConversation {
   private draftCleanupPromise?: Promise<void>;
   private draftRevision = 0;
   private typedLease?: AbortController;
-  private readonly acknowledgment: CloudVoiceCue;
-  private cueText = '';
+  private readonly playback: SpeechPlaybackQueue;
+  private responseSequence = -1n;
+  private responseFinalSeen = false;
+  private responseTexts: string[] = [];
+  private responsePending = 0;
+  private responseTerminal = false;
+  private responseHadSpeech = false;
+  private responseSuppressed = false;
+  private responseSource: 'voice' | 'typed' = 'voice';
+  private responseContext?: { model: VoiceModel; workspace: string };
   private wakeSensitivity: WakeSensitivity = 'standard';
   private showRecognition = false;
   private readonly passiveRecognition?: PassiveRecognition;
@@ -210,27 +220,28 @@ export class VoiceConversation {
           void this.acceptPassiveTranscript(text, id);
         },
       });
-    this.acknowledgment = new CloudVoiceCue({
-      enabled: () =>
-        !this.muted &&
-        !this.disposed &&
-        this.phase === 'waiting' &&
-        this.context?.available === true &&
-        this.context.assistant.turn === 'admitted' &&
-        this.context.assistant.turn_id === this.voiceTurn &&
-        this.composition.model === 'terra',
+    this.playback = new SpeechPlaybackQueue({
       state: () =>
         this.context?.speech ?? {
           version: 1,
           revision: '0',
           epoch: '0',
           operation_id: null,
-          state: 'unavailable',
+          state: 'idle',
           error: null,
         },
       speak: ports.speak,
+      waitForSlot: ports.waitForSpeechSlot,
       stop: ports.stop,
-      stage: (stage) => this.latency.point(stage),
+      acknowledged: (snapshot) => {
+        if (
+          this.phase === 'speaking' &&
+          snapshot.operation_id === this.settledTurn
+        ) {
+          this.playbackAcknowledged = true;
+          this.playbackRevision = BigInt(snapshot.revision);
+        }
+      },
     });
     this.assembler = createUtteranceAssembler({
       silenceMs: ports.silenceMs ?? (ports.keywords ? 800 : 1400),
@@ -340,11 +351,25 @@ export class VoiceConversation {
       context.assistant.turn,
     );
     this.context = context;
+    if (
+      this.voiceTurn &&
+      this.responseContext &&
+      (context.assistant.model !== this.responseContext.model ||
+        context.assistant.workspace_epoch !== this.responseContext.workspace ||
+        context.assistant.connection !== 'ready')
+    ) {
+      this.invalidate();
+    }
+    if (
+      this.playback.owner()?.id === context.speech.operation_id &&
+      this.voiceTurn
+    )
+      this.latency.speech(context.speech);
     const retiredFallback =
       !!this.pendingFallback &&
       !this.fallbackContextMatches(this.pendingFallback, context);
     if (retiredFallback) this.retireFallback();
-    this.acknowledgment.observe(context.speech);
+    this.playback.observe(context.speech);
     if (context.assistant.model === 'sol' && context.assistant.turn_id)
       this.solSessionStarted = true;
     if (
@@ -732,13 +757,19 @@ export class VoiceConversation {
   setMuted(muted: boolean) {
     if (this.disposed) return;
     this.muted = muted;
-    if (muted)
-      void this.acknowledgment.cancel().then((stopped) => {
-        if (!stopped && !this.disposed)
-          this.fail(
-            'Local speech could not stop. Retry voice before resuming.',
+    if (muted) {
+      this.responseSuppressed = true;
+      const active = this.playback.busy();
+      this.playback.clear();
+      if (active && this.phase !== 'speaking')
+        void this.ports
+          .stop()
+          .catch(() =>
+            this.fail(
+              'Local speech could not stop. Retry voice before resuming.',
+            ),
           );
-      });
+    }
     if (
       muted &&
       (this.phase === 'speaking' ||
@@ -1650,17 +1681,16 @@ export class VoiceConversation {
     id: string,
     generation: number,
   ): Promise<boolean> {
-    this.settledTurn = null;
-    this.voiceTurn = id;
-    this.cueText = text;
-    this.phase = 'waiting';
-    this.publish();
+    this.beginResponse(id, 'voice');
     if (!this.current(generation)) return false;
     this.latency.point('hermes_submit');
     const accepted = await this.ports.submit(text, id);
+    const confirmed = this.responseConfirmed(id);
     if (
       this.current(generation) &&
       !accepted &&
+      !confirmed &&
+      !this.responseTerminal &&
       this.phase === 'waiting' &&
       this.voiceTurn === id
     ) {
@@ -1671,7 +1701,7 @@ export class VoiceConversation {
       this.latency.finish('interrupted');
       this.publish();
     }
-    return accepted;
+    return accepted || confirmed;
   }
 
   private canCollect(context: VoiceContext): boolean {
@@ -1744,21 +1774,98 @@ export class VoiceConversation {
     }
   }
 
+  /** Only an explicit local submit can create a narration lease; history never calls this. */
+  async withResponseOwnership(
+    id: string,
+    action: () => Promise<boolean>,
+  ): Promise<boolean> {
+    if (this.disposed || this.voiceTurn) return false;
+    const generation = this.generation;
+    this.beginResponse(id, 'typed');
+    try {
+      const accepted = (await action()) || this.responseConfirmed(id);
+      if (!accepted && this.current(generation) && this.voiceTurn === id) {
+        this.responseSuppressed = true;
+        this.playback.clear();
+        this.voiceTurn = null;
+        this.phase = null;
+      }
+      return accepted;
+    } catch {
+      if (this.current(generation) && this.voiceTurn === id) {
+        this.responseSuppressed = true;
+        this.playback.clear();
+        this.voiceTurn = null;
+        this.phase = null;
+      }
+      return false;
+    } finally {
+      if (!this.disposed) this.publish();
+    }
+  }
+
+  private beginResponse(id: string, source: 'voice' | 'typed') {
+    this.settledTurn = null;
+    this.voiceTurn = id;
+    this.responseSource = source;
+    this.responseContext = undefined;
+    this.responseSequence = -1n;
+    this.responseFinalSeen = false;
+    this.responseTexts = [];
+    this.responsePending = 0;
+    this.responseTerminal = false;
+    this.responseHadSpeech = false;
+    this.responseSuppressed = this.muted;
+    this.phase = 'waiting';
+    this.publish();
+  }
+
+  private responseConfirmed(id: string) {
+    return (
+      this.context?.assistant.turn_id === id &&
+      ['admitted', 'completed'].includes(this.context.assistant.turn)
+    );
+  }
+
+  say(text: string, id: string, current = () => true): Promise<SpeechSnapshot> {
+    this.speechResourcesUsed = true;
+    return this.playback.play(
+      text,
+      id,
+      () => !this.disposed && !this.muted && current(),
+    );
+  }
+
+  narrationOwner() {
+    return this.playback.owner();
+  }
+
+  /** Playback cancellation is distinct from cancelling the admitted research task. */
+  async stopNarration(): Promise<void> {
+    this.responseSuppressed = true;
+    const active = this.playback.busy();
+    this.playback.clear();
+    if (active) await this.ports.stop();
+    this.finishResponse();
+  }
+
   private consumeReply() {
     const context = this.context;
     if (!context || this.phase !== 'waiting' || !this.voiceTurn) return;
     const snapshot = context.assistant;
     if (snapshot.turn_id !== this.voiceTurn) return;
+    if (snapshot.turn === 'admitted' || snapshot.turn === 'completed')
+      this.responseContext ??= {
+        model: snapshot.model,
+        workspace: snapshot.workspace_epoch,
+      };
     if (snapshot.first_text_observed) this.latency.point('first_model_delta');
     if (snapshot.turn === 'admitted') this.latency.point('hermes_admitted');
-    if (snapshot.turn === 'admitted' && this.composition.model === 'terra')
-      this.acknowledgment.schedule(this.voiceTurn, this.cueText);
-    if (
-      ['uncertain', 'failed', 'cancelled', 'completed'].includes(snapshot.turn)
-    )
-      this.settledTurn = snapshot.turn === 'uncertain' ? null : this.voiceTurn;
     if (['uncertain', 'failed', 'cancelled'].includes(snapshot.turn)) {
-      void this.acknowledgment.cancel();
+      this.responseSuppressed = true;
+      const active = this.playback.busy();
+      this.playback.clear();
+      if (active) void this.ports.stop().catch(() => undefined);
       this.latency.finish('interrupted');
       this.voiceTurn = null;
       this.phase = null;
@@ -1768,71 +1875,124 @@ export class VoiceConversation {
           : 'Ivy did not complete the voice request. See the menu.';
       return;
     }
-    if (snapshot.turn !== 'completed') return;
-    const cueStopped = this.acknowledgment.handoff();
-    this.invocation.activate();
-    this.latency.point('model_completed');
-    const id = this.voiceTurn;
-    this.voiceTurn = null;
-    this.phase = null;
-    const text = spokenResponse(snapshot.items);
-    if (text) this.latency.point('first_validated_text');
+    const terminal = snapshot.turn === 'completed';
+    const segments = snapshot.response_segments ?? [];
+    for (const segment of segments) {
+      if (segment.kind === 'final') {
+        if (!terminal || this.responseFinalSeen) continue;
+        this.responseFinalSeen = true;
+      } else {
+        // Native replay fencing guarantees monotonic sequences within this lease.
+        const sequence = BigInt(segment.sequence!);
+        if (sequence <= this.responseSequence) continue;
+        this.responseSequence = sequence;
+      }
+      const text = spokenResponse([{ kind: 'text', text: segment.text }]);
+      const reused =
+        segment.kind === 'final' &&
+        segment.reused &&
+        (this.responseTexts.includes(text) ||
+          this.responseTexts.join('\n\n') === text);
+      if (reused) continue;
+      const offered = this.offerResponse(
+        text,
+        segment.kind === 'final' ? this.voiceTurn : this.ports.id(),
+      );
+      if (offered && segment.kind === 'commentary') {
+        this.responseTexts.push(text);
+        if (this.responseTexts.length > 16) this.responseTexts.shift();
+      }
+    }
+    // Legacy/final-only peers remain usable; never manufacture an interim boundary.
+    if (
+      terminal &&
+      !segments.some((segment) => segment.kind === 'final') &&
+      !this.responseFinalSeen
+    ) {
+      this.responseFinalSeen = true;
+      this.offerResponse(spokenResponse(snapshot.items), this.voiceTurn);
+    }
+    if (terminal) {
+      this.settledTurn = this.voiceTurn;
+      this.responseTerminal = true;
+      this.latency.point('model_completed');
+      this.finishResponse();
+    }
+  }
+
+  private offerResponse(text: string, id: string): boolean {
+    const context = this.context;
     if (
       !text ||
+      this.responseSuppressed ||
       this.muted ||
-      !context.available ||
-      !['capturing', 'turn-paused'].includes(context.audio.status)
-    ) {
-      this.latency.finish('completed');
-      return;
+      !context?.available ||
+      (this.responseSource === 'voice' &&
+        !['capturing', 'turn-paused'].includes(context.audio.status))
+    )
+      return false;
+    const chunks = responseSpeech(text);
+    if (!chunks.length) {
+      this.controlNotice =
+        'Long reply is available as text; this segment exceeds the local voice limit.';
+      return false;
     }
-    if (new TextEncoder().encode(text).length > 4000) {
-      this.failure =
-        'Reply is available as text; it exceeds the local voice limit.';
-      this.latency.finish('completed');
-      return;
+    if (!this.playback.canAccept(chunks)) {
+      this.controlNotice =
+        'Speech queue is full. This update remains available as text.';
+      return false;
     }
+    for (const [index, chunk] of chunks.entries())
+      this.queueResponse(chunk, index === 0 ? id : this.ports.id());
+    return true;
+  }
+
+  private queueResponse(text: string, id: string) {
     const generation = this.generation;
-    this.phase = 'speaking';
-    this.playbackAcknowledged = false;
-    this.assembler.reset();
-    void cueStopped
-      .then((stopped) => {
-        if (!this.current(generation) || this.muted) return undefined;
-        if (!stopped) throw new Error('acknowledgment stop failed');
-        this.latency.point('tts_request');
-        return this.ports.speak(text, id);
-      })
-      .then((snapshot) => {
-        if (!snapshot || !this.current(generation)) return;
-        if (snapshot.state === 'unavailable') {
-          this.fail(
-            'Local voice unavailable. Retry voice or use the text reply.',
-          );
-          return;
-        }
-        this.latency.speech(snapshot);
-        this.playbackAcknowledged = true;
-        this.playbackRevision = BigInt(snapshot.revision);
-        const observed = this.context?.speech;
-        if (
-          snapshot.state === 'idle' ||
-          (observed?.state === 'idle' &&
-            BigInt(observed.revision) >= this.playbackRevision)
-        ) {
-          this.phase = null;
-          this.invocation.activate();
-          this.awaitingQuiet = true;
-          this.assembler.reset();
-          this.publish();
-        }
-      })
+    const turn = this.voiceTurn;
+    this.latency.point('first_validated_text');
+    ++this.responsePending;
+    this.responseHadSpeech = true;
+    void this.say(
+      text,
+      id,
+      () =>
+        this.current(generation) &&
+        this.voiceTurn === turn &&
+        !this.responseSuppressed,
+    )
       .catch(() => {
-        if (this.current(generation))
-          this.fail(
-            'Local voice unavailable. Retry voice or use the text reply.',
-          );
+        if (
+          this.current(generation) &&
+          this.voiceTurn === turn &&
+          !this.responseSuppressed
+        ) {
+          this.responseSuppressed = true;
+          this.controlNotice =
+            'Local speech unavailable. The reply remains available as text.';
+        }
+      })
+      .finally(() => {
+        if (!this.current(generation) || this.voiceTurn !== turn) return;
+        --this.responsePending;
+        this.finishResponse();
+        this.publish();
       });
+  }
+
+  private finishResponse() {
+    if (
+      !this.responseTerminal ||
+      (this.responsePending && this.playback.busy())
+    )
+      return;
+    this.voiceTurn = null;
+    this.phase = null;
+    this.invocation.activate();
+    this.awaitingQuiet ||= this.responseHadSpeech;
+    this.assembler.reset();
+    this.latency.finish('completed');
+    this.publish();
   }
 
   private async speakLocal(text: string, id: string, generation: number) {
@@ -1842,7 +2002,7 @@ export class VoiceConversation {
     this.latency.point('tts_request');
     this.publish();
     try {
-      const snapshot = await this.ports.speak(text, id);
+      const snapshot = await this.say(text, id);
       if (!this.current(generation)) return;
       this.latency.speech(snapshot);
       this.playbackAcknowledged = true;
@@ -1876,7 +2036,7 @@ export class VoiceConversation {
     this.passiveRecognition?.reset();
     this.passiveTicket = undefined;
     this.pendingFallback = undefined;
-    this.acknowledgment.clear();
+    this.playback.clear();
     this.ports.cancelReflex?.();
     this.pcmSequence = null;
     this.lastVoicedSequence = null;
@@ -2016,7 +2176,8 @@ export class VoiceConversation {
         this.stopping ||
         this.unconfirmedStop ||
         this.phase === 'transcribing' ||
-        this.phase === 'speaking',
+        this.phase === 'speaking' ||
+        this.playback.busy(),
       status:
         this.failure ||
         this.controlNotice ||
@@ -2025,15 +2186,18 @@ export class VoiceConversation {
           : '') ||
         (this.phase === 'transcribing'
           ? 'Recognizing locally'
-          : this.phase === 'waiting'
-            ? 'Waiting for Ivy'
-            : this.phase === 'speaking'
-              ? 'Speaking locally'
-              : context?.audio.status === 'capturing'
-                ? this.invocation.active() || this.composition.status !== 'idle'
-                  ? 'Local voice listening'
-                  : 'Listening for Ivy'
-                : 'Local voice idle'),
+          : this.playback.busy()
+            ? 'Speaking locally'
+            : this.phase === 'waiting'
+              ? 'Waiting for Ivy'
+              : this.phase === 'speaking'
+                ? 'Speaking locally'
+                : context?.audio.status === 'capturing'
+                  ? this.invocation.active() ||
+                    this.composition.status !== 'idle'
+                    ? 'Local voice listening'
+                    : 'Listening for Ivy'
+                  : 'Local voice idle'),
     });
   }
 }

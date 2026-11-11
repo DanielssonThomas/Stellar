@@ -140,6 +140,23 @@ pub struct IvySubmitRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyResponseSegmentKind {
+    Commentary,
+    Final,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyResponseSegment {
+    pub id: String,
+    pub kind: IvyResponseSegmentKind,
+    pub text: String,
+    pub sequence: Option<String>,
+    pub reused: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvySnapshot {
     pub version: u16,
@@ -156,6 +173,8 @@ pub struct IvySnapshot {
     #[serde(default)]
     pub reset_id: Option<String>,
     pub items: Vec<super::presentation::IvyPresentation>,
+    #[serde(default)]
+    pub response_segments: Vec<IvyResponseSegment>,
     pub error: Option<IvyErrorCode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -180,6 +199,7 @@ impl Default for IvySnapshot {
             activity: vec![],
             reset_id: None,
             items: vec![],
+            response_segments: vec![],
             error: None,
             first_text_observed: None,
             questions: None,

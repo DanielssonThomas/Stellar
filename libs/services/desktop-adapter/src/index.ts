@@ -104,6 +104,7 @@ export type {
   WakeSensitivity,
   RecognitionObservation,
 } from './lib/speech/voice-preferences';
+export { spokenResponse } from './lib/speech/spoken-response';
 export {
   SpatialNarration,
   type SpatialNarrationMode,
