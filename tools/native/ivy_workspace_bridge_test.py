@@ -20,6 +20,7 @@ def load(name):
 
 bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_activity'] = load('ivy_activity')
+sys.modules['stellar_ivy_lifecycle'] = load('ivy_lifecycle')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
 conversation = sys.modules['stellar_ivy_conversation'] = load('ivy_conversation')

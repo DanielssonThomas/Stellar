@@ -25,6 +25,8 @@ METHODS = {
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
                       'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
+    'session.background.bindings': {'session_id': str},
+    'session.background.inspect': {'session_id': str, 'binding_id': str, 'event_id': str, 'digest': str},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
     'clarify.respond': {'session_id': str, 'execution_generation': int, 'prompt_id': str, 'answer': str},
     'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
@@ -214,7 +216,10 @@ async def pump_events(conn, workspace, approvals):
             raise Closed()
         clean = project(params)
         clean['type'] = kind
-        if kind == 'message.start':
+        lifecycle = lifecycle_payload(conn, payload, params.get('session_id')) if kind in {'message.start', 'message.complete'} else None
+        if lifecycle is not None:
+            clean['payload'] = lifecycle
+        elif kind == 'message.start':
             clean['payload'] = {'autonomous': autonomous_start(payload)}
         elif kind == 'message.interim':
             text, streamed = payload.get('text'), payload.get('already_streamed')
@@ -255,7 +260,7 @@ async def pump_events(conn, workspace, approvals):
                 clean['payload'] = completion_payload(payload)
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
-        if kind == 'message.complete':
+        if kind == 'message.complete' and lifecycle is None:
             if approvals is not None:
                 await approvals.cancel(params.get('session_id'))
             admission = params.get('admission_id') or payload.get('admission_id')
@@ -298,6 +303,17 @@ def autonomous_start(payload):
             and payload.get('notification_category') != 'diagnostic')
 
 
+def lifecycle_payload(conn, payload, session):
+    if payload.get('display_kind') != 'lifecycle_update' and 'background_v1' not in payload:
+        return None
+    from stellar_ivy_lifecycle import descriptor
+    if (not getattr(conn, 'background_v1', False) or session != getattr(conn, 'selected_session', None)
+            or not string(session) or payload.get('display_kind') != 'lifecycle_update'
+            or payload.get('notification_category') == 'diagnostic'):
+        raise Closed()
+    return {'background_v1': descriptor(payload.get('background_v1'), str(PROFILE), session)}
+
+
 async def replay_events(conn, params, workspace):
     if params['session_id'] != getattr(conn, 'selected_session', None):
         raise Closed()
@@ -318,8 +334,9 @@ async def replay_events(conn, params, workspace):
             raise Closed()
         clean = project(event)
         clean['type'] = kind
-        clean['payload'] = ({'autonomous': autonomous_start(payload)} if kind == 'message.start'
-                            else completion_payload(payload))
+        lifecycle = lifecycle_payload(conn, payload, params['session_id'])
+        clean['payload'] = (lifecycle if lifecycle is not None else
+            {'autonomous': autonomous_start(payload)} if kind == 'message.start' else completion_payload(payload))
         if workspace is not None and type(clean['payload'].get('text')) is str:
             clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         events.append(clean)
@@ -476,12 +493,26 @@ async def request_worker(conn, workspace, queue, approvals=None):
         if isinstance(request, Exception):
             raise Closed() from None
         rid, method, params = request
+        if method == 'runtime.describe':
+            conn.background_v1 = False
         resuming = method == 'session.resume' and approvals is not None
         if resuming:
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'inspector.inspect':
+            if method in {'session.background.bindings', 'session.background.inspect'}:
+                from stellar_ivy_lifecycle import bindings, inspection, hexadecimal, identifier
+                if (not getattr(conn, 'background_v1', False)
+                        or params['session_id'] != getattr(conn, 'selected_session', None)):
+                    raise Closed()
+                if method.endswith('.inspect'):
+                    hexadecimal(params['binding_id'], 32)
+                    hexadecimal(params['digest'], 64)
+                    identifier(params['event_id'], 256)
+                result = await asyncio.wait_for(conn.client.rpc(method, **params), DEADLINE)
+                result = (bindings(result, str(PROFILE), params['session_id']) if method.endswith('.bindings')
+                          else inspection(result, str(PROFILE), params['session_id'], params))
+            elif method == 'inspector.inspect':
                 from stellar_ivy_inspector import Inspector
                 inspector = getattr(conn, 'inspector', None)
                 if inspector is None:
@@ -580,15 +611,25 @@ async def request_worker(conn, workspace, queue, approvals=None):
             if method == 'prompt.submit' and getattr(conn, 'active', None) is not None:
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
+                if type(result) is dict and 'background_v1' in result:
+                    raise Closed()
                 await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect'}:
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect',
+                          'session.background.bindings', 'session.background.inspect'}:
                 pass
             elif method == 'runtime.describe':
                 if (type(result) is not dict or
                         os.path.normcase(result.get('profile_id', '')) != os.path.normcase(str(PROFILE)) or
                         not set(CAPABILITIES) <= set(result.get('capabilities', []))):
                     raise Closed()
-                result = {'profile': 'ivy', 'protocol': 1, 'capabilities': CAPABILITIES}
+                from stellar_ivy_lifecycle import CONTRACT_SHA256
+                advertised = 'stellar.background.v1' in result.get('capabilities', [])
+                if advertised and result.get('background_v1_contract_sha256') != CONTRACT_SHA256:
+                    raise Closed()
+                conn.background_v1 = advertised
+                result = {'profile': 'ivy', 'protocol': 1,
+                          'capabilities': [*CAPABILITIES, *(['stellar.background.v1'] if conn.background_v1 else [])],
+                          **({'background_v1_contract_sha256': CONTRACT_SHA256} if conn.background_v1 else {})}
             elif method == 'ping':
                 if type(result) is not dict or result.get('pong') is not True:
                     raise Closed()

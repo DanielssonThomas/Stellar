@@ -24,6 +24,9 @@ fn identity(params: &Value) -> Result<Admission, IvyErrorCode> {
 }
 
 fn verified(receipt: &Value, session: &str, admission: &Admission) -> Result<(), IvyErrorCode> {
+    if receipt.get("background_v1").is_some() {
+        return Err(IvyErrorCode::Protocol);
+    }
     if receipt.pointer("/ref/session_id").and_then(Value::as_str) != Some(session)
         || receipt.get("admission_id").and_then(Value::as_str) != Some(&admission.id)
         || number(receipt.get("execution_generation"))? != admission.generation

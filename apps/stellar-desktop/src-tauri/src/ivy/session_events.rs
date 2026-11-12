@@ -26,6 +26,10 @@ impl Session {
             return Err(IvyErrorCode::Uncertain);
         }
         self.validate_update_event(params)?;
+        self.lifecycle_fence(params)?;
+        if self.lifecycle_event(params)? {
+            return Ok(());
+        }
         if self.background_event(params)? {
             return Ok(());
         }

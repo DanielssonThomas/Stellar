@@ -18,6 +18,7 @@ spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
+                       ('stellar_ivy_lifecycle', 'ivy_lifecycle.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
                        ('stellar_ivy_conversation', 'ivy_conversation.py'),
                        ('stellar_ivy_voice_expression', 'ivy_voice_expression.py')]:
@@ -880,6 +881,156 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(module.Refused):
             await module.control(conn, 'integrations.reload', {'session_id': 's'})
         self.assertEqual(conn.calls, [])
+
+
+class LifecycleContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_lifecycle_canonical_receipt_cannot_fall_back_through_legacy_projection(self):
+        conn = Connection(); conn.active = {'session_id':'session','admission_id':'a'}
+        async def call(method, params):
+            return {'ref':{'session_id':'session'},'admission_id':'a','execution_generation':7,
+                    'status':'terminal','outcome':'completed','background_v1':self.fixture()['inspection']['descriptor'],
+                    'result':{'final_response':'Must not reach legacy delivery'}}
+        conn.call = call
+        queue = asyncio.Queue(); await queue.put((1,'prompt.receipt',{'session_id':'session','admission_id':'a','include_result':True}))
+        output=Pipe()
+        with patch.object(sys,'stdout',output), self.assertRaises(bridge.Closed):
+            await bridge.request_worker(conn,None,queue)
+        self.assertEqual(output.buffer.getvalue(),b'')
+        self.assertEqual(conn.lease.released,[]); self.assertEqual(conn.completed,set())
+        self.assertIsNotNone(conn.active)
+
+    async def test_lifecycle_completion_never_reconciles_foreground_lease_or_approvals(self):
+        data = self.fixture()
+        conn = Connection(); conn.selected_session = 'session'; conn.background_v1 = True
+        conn.active = {'session_id': 'session', 'admission_id': 'foreground'}
+        cancels = []; disarms = []
+        class Approvals:
+            async def cancel(self, *args): cancels.append(args)
+        class Workspace:
+            class Gate:
+                def disarm(self): disarms.append(True)
+            gate = Gate()
+        for admission in ('background', 'foreground'):
+            await conn.events.put({'params': {'type': 'message.complete', 'session_id': 'session',
+                'admission_id': admission, 'authority_epoch': 2, 'execution_generation': 7,
+                'seq': 1, 'replay_epoch': 'e', 'payload': {'display_kind': 'lifecycle_update',
+                'background_v1': data['inspection']['descriptor']}}})
+        await conn.events.put(RuntimeError('stop'))
+        with patch.object(sys, 'stdout', Pipe()), self.assertRaises(bridge.Closed):
+            await bridge.pump_events(conn, Workspace(), Approvals())
+        self.assertEqual(cancels, []); self.assertEqual(disarms, [])
+        self.assertEqual(conn.completed, set()); self.assertEqual(conn.lease.released, [])
+        self.assertEqual(conn.active, {'session_id': 'session', 'admission_id': 'foreground'})
+
+    async def test_capability_requires_exact_contract_pin_and_never_implies_effect_authority(self):
+        module = sys.modules['stellar_ivy_lifecycle']
+        for digest in (None, '0' * 64, module.CONTRACT_SHA256):
+            conn = Connection()
+            async def call(method, params):
+                return {'profile_id': str(bridge.PROFILE),
+                        'capabilities': [*bridge.CAPABILITIES, module.CAPABILITY],
+                        'background_v1_contract_sha256': digest}
+            conn.call = call
+            queue = asyncio.Queue(); await queue.put((1, 'runtime.describe', {})); await queue.put(None)
+            output = Pipe()
+            with patch.object(sys, 'stdout', output):
+                if digest == module.CONTRACT_SHA256:
+                    await bridge.request_worker(conn, None, queue)
+                else:
+                    with self.assertRaises(bridge.Closed): await bridge.request_worker(conn, None, queue)
+            if not output.buffer.getvalue():
+                self.assertNotEqual(digest, module.CONTRACT_SHA256)
+                self.assertFalse(conn.background_v1)
+                continue
+            row = json.loads(output.buffer.getvalue())
+            if digest == module.CONTRACT_SHA256:
+                self.assertEqual(row['result']['background_v1_contract_sha256'], digest)
+                self.assertIn(module.CAPABILITY, row['result']['capabilities'])
+            else:
+                self.assertNotIn('result', row)
+            self.assertEqual(conn.active, None); self.assertEqual(conn.lease.released, [])
+
+    def fixture(self):
+        import copy
+        value = json.loads((SOURCE.parents[5] / 'tools/native/fixtures/lifecycle-v1.json').read_text(encoding='utf-8'))
+        value['binding']['origin']['profileId'] = str(bridge.PROFILE)
+        value['inspection']['descriptor']['origin']['profileId'] = str(bridge.PROFILE)
+        value['inspection']['receipt']['ref']['profile_id'] = str(bridge.PROFILE)
+        return copy.deepcopy(value)
+
+    async def test_negotiated_live_and_replay_preserve_exact_descriptor_without_text(self):
+        data = self.fixture()
+        conn = Connection(); conn.selected_session = 'session'; conn.background_v1 = True
+        card = data['inspection']['descriptor']
+        event = {'session_id': 'session', 'type': 'message.start', 'seq': 1, 'replay_epoch': 'e',
+                 'admission_id': 'a', 'authority_epoch': 2, 'execution_generation': 7,
+                 'payload': {'display_kind': 'lifecycle_update', 'background_v1': card,
+                             'text': 'PRIVATE RAW PAYLOAD', 'authorityFromText': True}}
+        await conn.events.put({'params': event}); await conn.events.put(RuntimeError('stop'))
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        clean = json.loads(output.buffer.getvalue())['data']['params']
+        self.assertEqual(clean['payload'], {'background_v1': card})
+        self.assertNotIn(b'PRIVATE', output.buffer.getvalue())
+        async def rpc(method, **params):
+            return {'events': [event], 'replay_epoch': 'e', 'last_sequence': 1, 'truncated': False}
+        conn.rpc = rpc
+        replay = await bridge.replay_events(conn, {'session_id': 'session', 'replay_epoch': 'e', 'last_sequence': 0}, None)
+        self.assertEqual(replay['events'][0], clean)
+        self.assertEqual(conn.calls, [])
+
+    async def test_unadvertised_foreign_and_malformed_lifecycle_events_fail_closed(self):
+        import copy
+        card = self.fixture()['inspection']['descriptor']
+        for mode in ('capability', 'session', 'profile', 'version', 'digest', 'extra', 'kind'):
+            conn = Connection(); conn.selected_session = 'session'; conn.background_v1 = mode != 'capability'
+            changed = copy.deepcopy(card)
+            if mode == 'profile': changed['origin']['profileId'] = 'foreign'
+            if mode == 'version': changed['schemaVersion'] = True
+            if mode == 'digest': changed['digest'] = 'forged'
+            if mode == 'extra': changed['authorityFromText'] = True
+            payload = {'display_kind': 'process_complete' if mode == 'kind' else 'lifecycle_update', 'background_v1': changed}
+            with self.assertRaises((ValueError, bridge.Closed)):
+                bridge.lifecycle_payload(conn, payload, 'foreign' if mode == 'session' else 'session')
+
+    async def test_public_read_ports_are_selected_session_only_and_keep_candidate_receipt(self):
+        data = self.fixture()
+        conn = Connection(); conn.selected_session = 'session'; conn.background_v1 = True
+        card = data['inspection']['descriptor']
+        async def rpc(method, **params):
+            return {'bindings': [data['binding']]} if method.endswith('.bindings') else data['inspection']
+        conn.rpc = rpc
+        queue = asyncio.Queue()
+        await queue.put((1, 'session.background.bindings', {'session_id': 'session'}))
+        await queue.put((2, 'session.background.inspect', {'session_id': 'session', 'binding_id': card['bindingId'],
+                        'event_id': card['eventId'], 'digest': card['digest']}))
+        await queue.put(None)
+        output = Pipe()
+        with patch.object(sys, 'stdout', output): await bridge.request_worker(conn, None, queue)
+        rows = [json.loads(line) for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual(rows[0]['result'], {'bindings': [data['binding']]})
+        self.assertEqual(rows[1]['result'], data['inspection'])
+        self.assertEqual(conn.active, None); self.assertEqual(conn.lease.released, [])
+
+    def test_closed_candidate_inspection_bounds_and_unknown_never_authorize_retry(self):
+        import copy
+        module = sys.modules['stellar_ivy_lifecycle']
+        data = self.fixture(); card = data['inspection']['descriptor']
+        request = {'binding_id': card['bindingId'], 'event_id': card['eventId'], 'digest': card['digest']}
+        unknown = {'schemaVersion': 1, 'status': 'unknown', 'retryAuthorized': False}
+        self.assertEqual(module.inspection(unknown, str(bridge.PROFILE), 'session', request), unknown)
+        for mode in ('retry', 'profile', 'blank', 'oversized', 'extra', 'unknown_delivery', 'float'):
+            value = copy.deepcopy(data['inspection'])
+            if mode == 'retry': value['retryAuthorized'] = True
+            if mode == 'profile': value['receipt']['ref']['profile_id'] = 'foreign'
+            if mode == 'blank': value['receipt']['result']['final_response'] = ' '
+            if mode == 'oversized': value['receipt']['result']['final_response'] = 'é' * 131073
+            if mode == 'extra': value['receipt']['result']['raw_history'] = []
+            if mode == 'unknown_delivery': value['status'] = 'unknown'
+            if mode == 'float': value['receipt']['sequence'] = 4.0
+            with self.assertRaises(ValueError, msg=mode):
+                module.inspection(value, str(bridge.PROFILE), 'session', request)
 
 
 if __name__ == '__main__':

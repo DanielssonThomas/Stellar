@@ -23,8 +23,16 @@ pub(crate) mod inspector;
 pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
+mod lifecycle_consumer;
+mod lifecycle_contract;
+#[cfg(test)]
+mod lifecycle_integration_tests;
+mod lifecycle_receipt;
+mod lifecycle_store;
 #[cfg(test)]
 mod lifecycle_tests;
+#[cfg(test)]
+mod lifecycle_wire_tests;
 mod observation;
 pub mod presentation;
 mod presentation_decode;

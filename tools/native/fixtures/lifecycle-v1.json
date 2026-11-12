@@ -1,0 +1,76 @@
+{
+  "producerCheckpoint": "ba49247c92461ccb05aed1a6d3048676ac1d78ee",
+  "contractSha256": "008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724",
+  "sourceSha256": "7d79ef58d7585477a4c220f450efe082bea1fa30e99063ff6958cb75e6d563a2",
+  "now": 1700000000000,
+  "binding": {
+    "bindingId": "11111111111111111111111111111111",
+    "origin": {
+      "profileId": "D:\\Hermes\\profiles\\ivy",
+      "sessionId": "session",
+      "physicalTarget": "physical",
+      "route": "fixture-route",
+      "producerId": "stellar-herdr",
+      "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "consentRevision": 1,
+    "expiresAt": 1700000600000,
+    "maxAdmissions": 100,
+    "spent": 1,
+    "revoked": false,
+    "createdAt": 1700000000000
+  },
+  "event": {
+    "schemaVersion": 1,
+    "eventId": "event-é",
+    "kind": "lifecycle_update",
+    "payload": {
+      "milestone": "waiting_review",
+      "fact": {
+        "note": "é\nsource fact"
+      },
+      "observedAt": 1700000000000
+    }
+  },
+  "inspection": {
+    "schemaVersion": 1,
+    "descriptor": {
+      "schemaVersion": 1,
+      "capability": "stellar.background.v1",
+      "kind": "lifecycle_update",
+      "bindingId": "11111111111111111111111111111111",
+      "eventId": "event-é",
+      "digest": "f942779acb9e68b2353ea00223ab3da42c63d4ee19d0887db7323f6881cc840f",
+      "origin": {
+        "profileId": "D:\\Hermes\\profiles\\ivy",
+        "sessionId": "session",
+        "physicalTarget": "physical",
+        "route": "fixture-route",
+        "producerId": "stellar-herdr",
+        "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "consentRevision": 1,
+      "expiresAt": 1700000600000,
+      "maxAdmissions": 100,
+      "eventExpiresAt": 1700000300000
+    },
+    "status": "terminal",
+    "retryAuthorized": false,
+    "deliveryAuthorized": true,
+    "receipt": {
+      "admission_id": "lifecycle-admission",
+      "ref": {
+        "profile_id": "D:\\Hermes\\profiles\\ivy",
+        "session_id": "session"
+      },
+      "status": "terminal",
+      "outcome": "completed",
+      "sequence": 4,
+      "authority_epoch": 2,
+      "execution_generation": 7,
+      "result": {
+        "final_response": "Verified fixture answer, not live evidence."
+      }
+    }
+  }
+}

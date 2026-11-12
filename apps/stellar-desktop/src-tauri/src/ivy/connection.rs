@@ -62,6 +62,7 @@ pub(super) fn connect(
         {
             return Err(IvyErrorCode::Protocol);
         }
+        session.resume_lifecycle()?;
         session.resume_updates(&resumed)?;
         session.drain()?;
     } else {

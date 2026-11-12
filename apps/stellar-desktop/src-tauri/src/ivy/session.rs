@@ -39,11 +39,12 @@ impl Session {
         if !self.shared.current(self.epoch) {
             return Err(IvyErrorCode::Unavailable);
         }
-        self.broker.as_mut().ok_or(IvyErrorCode::Unavailable)?.call(
-            method,
-            params,
-            &mut self.buffered,
-        )
+        let result = self
+            .broker
+            .as_mut()
+            .ok_or(IvyErrorCode::Unavailable)?
+            .call(method, params, &mut self.buffered)?;
+        super::lifecycle_consumer::checked_response(method, result)
     }
 
     #[cfg(test)]
