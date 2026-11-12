@@ -9,12 +9,16 @@ const recognize = (page: Page, text: string) =>
       window as unknown as {
         ng: {
           getComponent(element: Element): {
-            voice: { current: { update(fn: (state: object) => object): void } };
+            voice: {
+              recognition: {
+                set(value: { text: string; status: string }): void;
+              };
+            };
           };
         };
       }
     ).ng.getComponent(root);
-    app.voice.current.update((state) => ({ ...state, inputText: text }));
+    app.voice.recognition.set({ text, status: 'Active conversation' });
   }, text);
 
 for (const width of [1600, 640]) {
@@ -111,6 +115,10 @@ test('speech text updates in gold and respects system and app reduced motion', a
   });
   await recognize(page, 'Ivy, show two stoic quotes side by side.');
   const overlay = page.locator('stellar-voice-transcript-molecule');
+  await expect(overlay).toHaveCount(0);
+  await page.keyboard.press('m');
+  await page.getByRole('switch', { name: 'Show recognition results' }).click();
+  await page.keyboard.press('Escape');
   const status = overlay.getByRole('status');
   await expect(status).toHaveText('Ivy, show two stoic quotes side by side.');
   await expect(status).toHaveAttribute('aria-live', 'polite');

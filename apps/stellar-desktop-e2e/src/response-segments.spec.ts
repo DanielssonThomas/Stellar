@@ -194,7 +194,7 @@ const spoken = (page: Page) =>
       (window as unknown as { __segments: SegmentFixture }).__segments.spoken,
   );
 
-test('committed updates are visible outside M and speak before completion without consuming existing panes', async ({
+test('committed updates speak before completion and appear on stage when captions are enabled', async ({
   page,
 }, testInfo) => {
   await install(page);
@@ -206,8 +206,12 @@ test('committed updates are visible outside M and speak before completion withou
   await publish(page, interim);
   const caption = page.locator('stellar-response-caption-molecule');
   const first = 'Morning! I am checking your calendar and the news.';
-  await expect(caption.getByText(first, { exact: true })).toBeVisible();
+  await expect(caption).toHaveCount(0);
   await expect.poll(() => spoken(page)).toEqual([first]);
+  await page.keyboard.press('m');
+  await page.getByRole('switch', { name: 'Show Ivy captions' }).click();
+  await page.keyboard.press('Escape');
+  await expect(caption.getByText(first, { exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () =>
@@ -260,6 +264,7 @@ test('mute fences queued commentary and keeps final text visible without timer f
   await page
     .getByRole('switch', { name: 'Spoken replies', exact: true })
     .click();
+  await page.getByRole('switch', { name: 'Show Ivy captions' }).click();
   await page.keyboard.press('Escape');
   await publish(page, 'The completed answer remains visible.', true);
   await expect(page.locator('stellar-response-caption-molecule')).toContainText(

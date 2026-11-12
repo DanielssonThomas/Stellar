@@ -203,7 +203,10 @@ test('directs the sample from overview through detail and comparison at playback
   ).toHaveCount(1);
   await expect(page.locator('stellar-emblem-motion-molecule')).toHaveCount(1);
   await expect(emblem).toHaveCSS('width', '238px');
-  await expect(dialog.getByText('Fictional sample')).toBeVisible();
+  await expect(dialog).toHaveAccessibleDescription('Fictional sample');
+  await expect(
+    dialog.getByRole('heading', { name: 'Morning AI briefing' }),
+  ).toHaveCSS('width', '1px');
   await expect(
     dialog.getByRole('img', { name: /Illustration of/ }),
   ).toHaveCount(5);

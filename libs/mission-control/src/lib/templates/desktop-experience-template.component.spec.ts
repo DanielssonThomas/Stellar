@@ -34,6 +34,11 @@ describe('DesktopExperienceTemplate', () => {
     );
     fixture.componentRef.setInput('assistantBusy', true);
     await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector('stellar-response-caption-molecule'),
+    ).toBeNull();
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    await fixture.whenStable();
     const caption: HTMLElement = fixture.nativeElement.querySelector(
       'stellar-response-caption-molecule',
     );
@@ -61,15 +66,13 @@ describe('DesktopExperienceTemplate', () => {
     ).toHaveLength(0);
   });
 
-  it('stacks the response with persistent microphone recognition and preserves Sol visibility rules', async () => {
+  it('only shows recognition results when diagnostics are enabled', async () => {
     fixture.componentRef.setInput('responseCaptionText', 'I will check that.');
-    fixture.componentRef.setInput('recognitionVisible', true);
+    fixture.componentRef.setInput('showResponseCaptions', true);
     fixture.componentRef.setInput(
       'recognitionText',
       'hey ivy show my calendar',
     );
-    fixture.componentRef.setInput('solActive', true);
-    fixture.componentRef.setInput('promptStatus', 'composing');
     await fixture.whenStable();
     const captions: HTMLElement = fixture.nativeElement.querySelector(
       '.conversation-captions',
@@ -78,11 +81,15 @@ describe('DesktopExperienceTemplate', () => {
       captions.querySelector(':scope > stellar-response-caption-molecule'),
     ).not.toBeNull();
     expect(
+      captions.querySelector('stellar-voice-transcript-molecule'),
+    ).toBeNull();
+    fixture.componentRef.setInput('showRecognition', true);
+    await fixture.whenStable();
+    expect(
       captions.querySelector(':scope > stellar-voice-transcript-molecule')
         ?.textContent,
     ).toContain('hey ivy show my calendar');
-    fixture.componentRef.setInput('recognitionVisible', false);
-    fixture.componentRef.setInput('voiceInputText', 'Draft speech');
+    fixture.componentRef.setInput('showRecognition', false);
     await fixture.whenStable();
     expect(
       captions.querySelector('stellar-voice-transcript-molecule'),
@@ -94,7 +101,8 @@ describe('DesktopExperienceTemplate', () => {
 
   it('loads response captions through the shared skeleton state and hides captions on suspend/shutdown', async () => {
     fixture.componentRef.setInput('responseCaptionText', 'A committed update.');
-    fixture.componentRef.setInput('recognitionVisible', true);
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    fixture.componentRef.setInput('showRecognition', true);
     fixture.componentRef.setInput('loading', true);
     fixture.componentRef.setInput('state', {
       ...initialState,
@@ -118,6 +126,7 @@ describe('DesktopExperienceTemplate', () => {
 
   it('does not invent an empty caption when no response text has arrived', async () => {
     fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('showResponseCaptions', true);
     fixture.componentRef.setInput('responseCaptionText', '   ');
     await fixture.whenStable();
     expect(
@@ -326,37 +335,6 @@ describe('DesktopExperienceTemplate', () => {
     expect(open).toHaveBeenCalledOnce();
     fixture.nativeElement.dispatchEvent(key({ key: 'P', shiftKey: true }));
     expect(open).toHaveBeenCalledTimes(2);
-  });
-
-  it('shows only available Whisper input and hides it throughout prompt mode and suspension', async () => {
-    const panel = () =>
-      fixture.nativeElement.querySelector('stellar-voice-transcript-molecule');
-    expect(panel()).toBeNull();
-    fixture.componentRef.setInput('voiceInputText', 'Ivy, misheard request');
-    await fixture.whenStable();
-    expect(panel()?.textContent).toContain('Ivy, misheard request');
-    fixture.componentRef.setInput('promptStatus', 'error');
-    await fixture.whenStable();
-    expect(panel()?.textContent).toContain('Ivy, misheard request');
-    fixture.componentRef.setInput('solActive', true);
-    for (const status of [
-      'composing',
-      'refining',
-      'finalizing',
-      'submitting',
-      'error',
-    ]) {
-      fixture.componentRef.setInput('promptStatus', status);
-      await fixture.whenStable();
-      expect(panel()).toBeNull();
-    }
-    fixture.componentRef.setInput('promptStatus', 'idle');
-    fixture.componentRef.setInput('state', {
-      ...initialState,
-      phase: 'suspended',
-    });
-    await fixture.whenStable();
-    expect(panel()).toBeNull();
   });
 
   it('retains assembled presence between foreground turns until clear, while suspension still wins', async () => {
