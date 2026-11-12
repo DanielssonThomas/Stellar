@@ -1,5 +1,7 @@
 import type { SpeechSnapshot } from '@stellar/desktop-contracts';
 
+const MAX_PENDING_UTTERANCES = 64;
+
 type Entry = {
   text: string;
   id: string;
@@ -33,6 +35,7 @@ export class SpeechPlaybackQueue {
         current: () => boolean,
       ) => Promise<SpeechSnapshot>;
       acknowledged?: (snapshot: SpeechSnapshot) => void;
+      failed?: () => void;
       stop?: () => Promise<unknown>;
     },
   ) {}
@@ -40,7 +43,7 @@ export class SpeechPlaybackQueue {
   canAccept(texts: readonly string[]): boolean {
     const bytes = (text: string) => new TextEncoder().encode(text).length;
     return (
-      this.pending.length + texts.length <= 16 &&
+      this.pending.length + texts.length <= MAX_PENDING_UTTERANCES &&
       texts.every((text) => bytes(text) <= 4000) &&
       [...this.pending.map((entry) => entry.text), ...texts].reduce(
         (sum, text) => sum + bytes(text),
@@ -61,7 +64,7 @@ export class SpeechPlaybackQueue {
     );
     if (
       bytes > 4000 ||
-      this.pending.length >= 16 ||
+      this.pending.length >= MAX_PENDING_UTTERANCES ||
       queuedBytes + bytes > 32000
     )
       return Promise.reject(new Error('Speech queue capacity exceeded'));
@@ -90,6 +93,7 @@ export class SpeechPlaybackQueue {
     if (active.returned) this.ports.acknowledged?.(snapshot);
     if (snapshot.state === 'unavailable') {
       this.reject(active, new Error('Speech unavailable'));
+      this.recover();
       return;
     }
     if (snapshot.state === 'idle') active.terminal = snapshot;
@@ -125,11 +129,16 @@ export class SpeechPlaybackQueue {
 
   private reject(active: Active, error: Error) {
     if (this.active !== active) return;
+    this.ports.failed?.();
     clearTimeout(active.deadline);
     this.active = undefined;
     active.entry.reject(error);
     // A failed owner cannot establish that the native slot is free.
     for (const entry of this.pending.splice(0)) entry.reject(error);
+  }
+
+  private recover() {
+    void this.ports.stop?.().catch(() => undefined);
   }
 
   private pump() {
@@ -159,8 +168,10 @@ export class SpeechPlaybackQueue {
 
   private dispatch(before: SpeechSnapshot) {
     if (before.state === 'unavailable') {
+      this.ports.failed?.();
       for (const entry of this.pending.splice(0))
         entry.reject(new Error('Speech unavailable'));
+      this.recover();
       return;
     }
     if (before.state !== 'idle') return;
@@ -183,7 +194,7 @@ export class SpeechPlaybackQueue {
     active.deadline = setTimeout(() => {
       if (this.active !== active) return;
       this.reject(active, new Error('Speech completion was not observed'));
-      void this.ports.stop?.().catch(() => undefined);
+      this.recover();
     }, 125000);
     void this.ports
       .speak(
@@ -200,7 +211,11 @@ export class SpeechPlaybackQueue {
           active.returned = true;
           this.observe(snapshot);
         },
-        () => this.reject(active, new Error('Speech dispatch failed')),
+        () => {
+          if (this.active !== active) return;
+          this.reject(active, new Error('Speech dispatch failed'));
+          if (this.ports.state().state === 'unavailable') this.recover();
+        },
       );
   }
 }

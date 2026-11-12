@@ -253,6 +253,24 @@ test('committed updates speak before completion and appear on stage when caption
   });
 });
 
+test('narrates a long final answer in order across native speech operations', async ({
+  page,
+}) => {
+  await install(page);
+  const text =
+    'The team will review the results after the next scheduled meeting. '
+      .repeat(40)
+      .trim();
+  await publish(page, text, true);
+  for (const count of [1, 2, 3]) {
+    await expect.poll(() => spoken(page)).toHaveLength(count);
+    await finishSpeech(page);
+  }
+  const chunks = await spoken(page);
+  expect(chunks.join(' ')).toBe(text);
+  expect(chunks.every((chunk) => Buffer.byteLength(chunk) <= 1200)).toBe(true);
+});
+
 test('mute fences queued commentary and keeps final text visible without timer filler', async ({
   page,
 }) => {

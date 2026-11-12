@@ -201,7 +201,7 @@ describe('owned sequential speech playback', () => {
 
   it('bounds queued text and does not hide overflow by silently dropping it', async () => {
     const f = fixture();
-    const pending = Array.from({ length: 17 }, (_, index) =>
+    const pending = Array.from({ length: 65 }, (_, index) =>
       f.queue.play('x', String(index)),
     );
     const caught = Promise.allSettled(pending);
