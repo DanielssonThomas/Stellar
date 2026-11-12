@@ -72,6 +72,10 @@ Tests use actual `SessionDB`, patched canonical functions, result handling, even
 host method bodies extracted without starting the gateway. Native/policy/gesture callbacks and
 connections are synthetic. Host construction verifies all 15 pinned files/postimages and the
 executing canonical functions; it refuses partial changes, unknown updates or stale loaded code.
+For the managed layout, the selected dependency workspace has no install stamp. Composition must
+explicitly supply its bootstrap root and managed facts path together. The verifier checks the
+bootstrap stamp, the facts-selected environment/lock paths, exact workspace bytes and loaded code
+at that selected workspace. It never invents a stamp or silently selects another installation.
 This is not complete loaded-module or managed bootstrap qualification. Native verifier/gesture
 integration, reviewed host composition, consumer persistence/render/speech enforcement, capability
 advertisement and real named-Ivy ACP acceptance remain gates. Missing wiring means unsupported.

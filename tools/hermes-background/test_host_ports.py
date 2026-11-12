@@ -326,6 +326,39 @@ class HostTests(unittest.TestCase):
         missing = {**MANIFEST, 'files': dict(list(MANIFEST['files'].items())[1:])}
         self.assertCode('rollback_mismatch', lambda: undo_fixture(RUNTIME, OVERLAY, missing))
 
+    def test_managed_provenance_requires_exact_explicit_selected_workspace(self):
+        from stellar_background.provenance import verify_candidate
+        facts = Path(self.tmp.name) / 'managed-facts-fixture.json'
+        venv, lock = OVERLAY.parent / 'venv', OVERLAY / 'uv.lock'
+        venv.mkdir(exist_ok=True)
+        lock.write_text('# disposable lock fixture\n', encoding='utf-8')
+        facts.write_text(json.dumps({'packages': {'venv': {'environment': str(OVERLAY.parent / 'venv'),
+                         'resolved_lock': str(OVERLAY / 'uv.lock')}}}), encoding='utf-8')
+        stamp = OVERLAY / 'install-stamp.json'
+        saved = stamp.read_bytes()
+        try:
+            stamp.unlink()  # only the disposable fixture; managed layout has no stamp here
+            result = verify_candidate(OVERLAY, bootstrap_root=RUNTIME, facts_path=facts)
+            self.assertFalse(result['installedCapability'])
+            venv.rmdir()
+            self.assertCode('runtime_unavailable', lambda: verify_candidate(OVERLAY, bootstrap_root=RUNTIME, facts_path=facts))
+            venv.mkdir()
+            lock.unlink()
+            self.assertCode('runtime_unavailable', lambda: verify_candidate(OVERLAY, bootstrap_root=RUNTIME, facts_path=facts))
+            lock.write_text('# disposable lock fixture\n', encoding='utf-8')
+            wrong_lock = OVERLAY / 'wrong.lock'
+            wrong_lock.write_text('# wrong fixture\n', encoding='utf-8')
+            facts.write_text(json.dumps({'packages': {'venv': {'environment': str(venv),
+                             'resolved_lock': str(wrong_lock)}}}), encoding='utf-8')
+            self.assertCode('runtime_mismatch', lambda: verify_candidate(OVERLAY, bootstrap_root=RUNTIME, facts_path=facts))
+            (OVERLAY.parent / 'other' / 'venv').mkdir(parents=True)
+            facts.write_text(json.dumps({'packages': {'venv': {'environment': str(OVERLAY.parent / 'other' / 'venv'),
+                             'resolved_lock': str(OVERLAY / 'uv.lock')}}}), encoding='utf-8')
+            self.assertCode('runtime_mismatch', lambda: verify_candidate(OVERLAY, bootstrap_root=RUNTIME, facts_path=facts))
+            self.assertCode('runtime_mismatch', lambda: verify_candidate(OVERLAY, bootstrap_root=RUNTIME))
+        finally:
+            stamp.write_bytes(saved)
+
     def test_public_plugin_context_exposes_only_its_profile_and_plugin_port(self):
         from hermes_cli.plugins_context import PluginContext
         from hermes_constants import hermes_home_key
@@ -469,7 +502,8 @@ if __name__ == '__main__':
                 raise RuntimeError('Network/process launch prohibited in host-port qualification')
         sys.addaudithook(offline)
         from stellar_background.overlay import fixture, undo_fixture
-        overlay = Path(directory)
+        overlay = Path(directory) / 'environment' / 'workspace'
+        overlay.mkdir(parents=True)
         OVERLAY = overlay
         manifest = fixture(args.runtime, overlay)
         MANIFEST = manifest

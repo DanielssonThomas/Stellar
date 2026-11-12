@@ -16,11 +16,12 @@ from .ledger import Ledger
 
 
 class Host:
-    def __init__(self, authority, *, runtime_root, verify_native, verify_gesture, policy_gate, clock):
+    def __init__(self, authority, *, runtime_root, verify_native, verify_gesture, policy_gate, clock,
+                 bootstrap_root=None, facts_path=None):
         if not all(callable(port) for port in (verify_native, verify_gesture, policy_gate)):
             raise ContractError('host_wiring_unavailable')
         from .provenance import verify_candidate
-        verify_candidate(runtime_root)
+        verify_candidate(runtime_root, bootstrap_root=bootstrap_root, facts_path=facts_path)
         self.authority, self.clock = authority, clock
         self.verify_native, self.verify_gesture, self.policy_gate = verify_native, verify_gesture, policy_gate
         self._producers, self._tickets, self._exposed = {}, {}, {}

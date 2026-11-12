@@ -33,13 +33,32 @@ def verify_runtime(root: Path, *, pin_path: Path | None = None):
             'reason': 'host_and_consumer_wiring_required'}
 
 
-def verify_candidate(root: Path):
+def verify_candidate(root: Path, *, bootstrap_root: Path | None = None, facts_path: Path | None = None):
     """Require complete pinned postimages before host composition; never applies them."""
     root = root.resolve(strict=True)
     package = Path(__file__).resolve().parents[1]
     pin = json.loads((package / 'runtime-pin.json').read_text(encoding='utf-8'))
     post = json.loads((package / 'postimages.json').read_text(encoding='utf-8'))['files']
-    stamp = json.loads((root / 'install-stamp.json').read_text(encoding='utf-8-sig'))
+    if (bootstrap_root is None) != (facts_path is None):
+        raise ContractError('runtime_mismatch')
+    stamp_root = root
+    if bootstrap_root is not None:
+        # Managed dependency workspaces have no install stamp of their own. Require the
+        # coordinator's explicit read-only provenance chain; never discover/fallback to a profile.
+        stamp_root = bootstrap_root.resolve(strict=True)
+        facts = json.loads(facts_path.read_text(encoding='utf-8'))
+        selected = facts['packages']['venv']
+        environment, lock = Path(selected['environment']), Path(selected['resolved_lock'])
+        if not environment.is_absolute() or not lock.is_absolute():
+            raise ContractError('runtime_mismatch')
+        try:
+            environment, lock = environment.resolve(strict=True), lock.resolve(strict=True)
+        except OSError:
+            raise ContractError('runtime_unavailable') from None
+        if (not environment.is_dir() or not lock.is_file() or environment.parent != root.parent
+                or environment.name != 'venv' or lock != root / 'uv.lock'):
+            raise ContractError('runtime_mismatch')
+    stamp = json.loads((stamp_root / 'install-stamp.json').read_text(encoding='utf-8-sig'))
     if stamp.get('commit') != pin['commit'] or stamp.get('baseVersion') != pin['version']:
         raise ContractError('runtime_mismatch')
     for name, before in pin['files'].items():
