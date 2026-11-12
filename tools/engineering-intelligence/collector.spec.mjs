@@ -199,12 +199,14 @@ function setupCodex(home, [first, second]) {
         },
       },
     }));
+    const responseContent =
+      id === 'root-first' ? sourceSecret.padEnd(512 * 1024, 'x') : sourceSecret;
     writeFileSync(
       rollout,
       [
         JSON.stringify({
           type: 'response_item',
-          payload: { content: sourceSecret },
+          payload: { content: responseContent },
         }),
         ...records.map((record) => JSON.stringify(record)),
         '',

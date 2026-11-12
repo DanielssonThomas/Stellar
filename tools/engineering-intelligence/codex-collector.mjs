@@ -94,7 +94,7 @@ function readUsage(home, thread, start, stop) {
     return [];
   try {
     const file = sourceFile(home, relative);
-    const lines = readBounded(file, rolloutBytes).split('\n');
+    const lines = readBounded(file, rolloutBytes, true).split('\n');
     for (const line of lines.reverse()) {
       if (
         !/^\{"timestamp":"[^"]{20,35}","ordinal":\d+,"type":"token_usage_record","payload":/.test(
