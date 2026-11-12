@@ -79,7 +79,22 @@ The repository plugin can record opted-in lifecycle observations. **It does not 
 Tracking defaults off and is separate from the manual/automatic window preference. Enable it only when the user explicitly requests observation of an exact launch, using `stellar_herdr` or the plugin CLI:
 
 ```json
-{"action":"tracking","issue":23,"role":"peon-cloud","session_id":"exact-launch-claim","enabled":true,"kinds":["worker_exited","worker_blocked","waiting_review","checks_failed","checks_passed","merged","workflow_verified"]}
+{
+  "action": "tracking",
+  "issue": 23,
+  "role": "peon-cloud",
+  "session_id": "exact-launch-claim",
+  "enabled": true,
+  "kinds": [
+    "worker_exited",
+    "worker_blocked",
+    "waiting_review",
+    "checks_failed",
+    "checks_passed",
+    "merged",
+    "workflow_verified"
+  ]
+}
 ```
 
 New launches retain a versioned receipt with a random incarnation also attached to Core's worker labels, exact issue/worker/claim/branch/target and baseline SHA. Older receipts lack this provenance and cannot be opted into observation. They remain available through ordinary status/progress; do not relabel an old terminal or invent a receipt. Enabling tracking verifies current structured sources and establishes a silent baseline. Re-enabling starts a new consent revision with a fresh baseline. `{"action":"tracking","issue":23,"enabled":false}` revokes all observation for that issue, clears its transition records and invalidates an in-flight reconciliation. A concurrent consent change also invalidates a slow enable request.
@@ -93,6 +108,10 @@ Limits: at most 20 retained launches, four launches per tick, one attempt per so
 For an explicitly configured observation-only schedule, `observer_tick.py` is a one-shot entry point for Hermes' [supported no-agent cron mode](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron#no-agent-mode-script-only-jobs). Supply the installed file as the job's script in the owning profile, at a cadence of at least one minute. It never starts a daemon or model call and always emits the silent `wakeAgent:false` sentinel; even errors are recorded only on stderr. No job is created by plugin registration. Disabling the plugin does not remove a separately configured cron job: pause/remove that job and opt out of tracked work explicitly. No installed plugin, live schedule or Desktop restart is implied by repository changes.
 
 The [Hermes plugin API](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins) documents the supported extension surfaces. Completing delivery requires a host-supported producer with atomic original-session authorization, stable event admission/reconciliation, a validated trusted descriptor and dispatch-time opt-out enforcement. Session reset/compression policy must be explicit. Until that interface is qualified, the journal and silent scheduler entry point are independent groundwork; idle/concurrent Desktop presentation, cancellation and speech-once end-to-end acceptance remain unverified.
+
+The [background compatibility architecture](../architecture/hermes-background.md) records the inactive
+`stellar.background.v1` candidate, executable process qualification, transaction tests and remaining
+host/consumer integration gates. It does not authorize installation or enable notification delivery.
 
 ## Identity templates and Hermes profiles
 

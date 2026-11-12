@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "0.23.1",
+  "commit": "3b421578588243f920886e6fe79a6faa87ea026e",
+  "files": {
+    "hermes_cli/plugins_context.py": "d75a6fef102140431f68bc1a402d58977b5024ad21d5b1df284a9dad41250df4",
+    "gateway/run_plugin_injection.py": "e4097818da5177cf779a30c06426ff4789bf986cdedd298c4439278d7272a7f1",
+    "gateway/session_authority.py": "ec45262a22582fe3a94f99f9b7d73f94a251c52e792dbf9992710baa419fe2c3",
+    "gateway/session_automation.py": "623ced268132b0088a7352f573eb4f6ccc22e0aca17002d049193b52c7db94bc",
+    "gateway/session_controls.py": "44624fbc34c86529db0963eb9dd2183b56b2c8034650053c6a6dc8c3556dc352",
+    "gateway/session_completion_notes.py": "f03c2bc31fa30d8317b934c5d1b7475cb46b236ae17b63817e75eb05f29bf277",
+    "gateway/response_filters.py": "9175b0d688617862d3b628fe74d47f6a0bfaf80800e6639bad2735bdc45edf90",
+    "hermes_state_runtime.py": "6bbcc688799d3ea784545b5227d20e07f8b5ce8f26fcf545825bc8a60462ee3f",
+    "hermes_state_terminal.py": "371ab5dc76d9e6cdc42ec184d36630eda254c1c97877e558e577020333229162",
+    "tools/terminal_tool_background.py": "44038b1348e44993d0998c67cac0412125349d3f11eca188f38e69c9562f39f9"
+  }
+}

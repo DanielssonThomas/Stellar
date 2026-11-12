@@ -15,6 +15,7 @@
 - [Worker integration policy](guides/worker-integration-policy.md): deterministic offline eligibility checks for restricted worker pull requests.
 - [Restricted worker security](guides/worker-security.md): fork-only identity, local WSL and Podman boundaries, admission, and removal.
 - [Engineering organization](guides/engineering-organization.md): Architect, Foreman, Peon roles, profile setup, authority, and offline workflow.
+- [Hermes background producer compatibility](architecture/hermes-background.md): inactive canonical-admission candidate, protocol, threat model and review/application gates.
 - [Offline engineering planning](guides/engineering-planning.md): revision-bound planning packets, duplicate and capability evidence, dependency ordering and non-authorizing records.
 - [Engineering Intelligence](guides/engineering-intelligence.md): issue budgets, passive local history, recurring failures, skills, and the Ivy Stage presentation.
 - [Stellar Live telemetry](guides/live-telemetry.md): local read-only source map, launch, and observation limits.
