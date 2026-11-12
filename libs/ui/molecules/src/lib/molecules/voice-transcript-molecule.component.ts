@@ -16,6 +16,7 @@ export class VoiceTranscriptMolecule {
   readonly label = input('Recognized speech');
   readonly ariaLabel = input('Voice input');
   readonly text = input('');
+  readonly status = input('');
   readonly loading = input(false);
   readonly reducedMotion = input(false);
 }

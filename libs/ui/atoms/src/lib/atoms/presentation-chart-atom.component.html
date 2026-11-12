@@ -1,0 +1,49 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="control" />
+} @else if (chart(); as data) {
+  <figure>
+    <div class="chart-canvas">
+      <canvas
+        #canvas
+        role="img"
+        [attr.aria-label]="title() + '. Chart data follows.'"
+      ></canvas>
+    </div>
+    @if (renderState() === 'error') {
+      <p class="chart-error" role="status">
+        Chart drawing is unavailable. The data is shown below.
+      </p>
+    }
+    <details class="chart-data">
+      <summary>View chart data</summary>
+      <div class="chart-table">
+        <table>
+          <caption>
+            {{
+              title()
+            }}
+            data
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ data.x_label || 'Category' }}</th>
+              @for (dataset of data.datasets; track $index) {
+                <th scope="col">{{ dataset.label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (label of data.labels; track $index; let row = $index) {
+              <tr>
+                <th scope="row">{{ label }}</th>
+                @for (dataset of data.datasets; track $index) {
+                  <td>{{ dataset.values[row] }}</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </figure>
+}

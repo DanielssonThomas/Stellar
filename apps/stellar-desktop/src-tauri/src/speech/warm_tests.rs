@@ -11,6 +11,7 @@ fn operation(voice: &WarmVoice) -> Operation {
         cancelled: AtomicBool::new(false),
         scratch: None,
         recognition_epoch: 0,
+        expression_epoch: None,
     }
 }
 
@@ -21,6 +22,7 @@ fn command() -> Result<Command, SpeechError> {
         "-NonInteractive",
         "-Command",
         r#"
+[Console]::WriteLine(('{"audio_process":' + $PID + '}'))
 while ($null -ne ($line = [Console]::ReadLine())) {
     if ($line -eq 'crash') { exit 7 }
     if ($line -eq 'hold') { Start-Sleep -Seconds 10 }
@@ -51,6 +53,7 @@ fn repeated_requests_reuse_child_and_crash_restarts_without_host_restart() {
     let op = operation(&voice);
     run(&voice, &op, "one\n").unwrap();
     let first = voice.child.lock().unwrap().as_ref().unwrap().id();
+    assert_eq!(voice.audio_process.load(Ordering::Acquire), first);
     for _ in 0..3 {
         run(&voice, &op, "next\n").unwrap();
     }
@@ -58,6 +61,10 @@ fn repeated_requests_reuse_child_and_crash_restarts_without_host_restart() {
     assert_eq!(run(&voice, &op, "crash\n"), Err(SpeechError::Unavailable));
     run(&voice, &op, "fresh\n").unwrap();
     assert_ne!(voice.child.lock().unwrap().as_ref().unwrap().id(), first);
+    assert_eq!(
+        voice.audio_process.load(Ordering::Acquire),
+        voice.child.lock().unwrap().as_ref().unwrap().id()
+    );
     process::stop(&voice.child).unwrap();
     assert!(voice.child.lock().unwrap().is_none());
 }

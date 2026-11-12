@@ -38,12 +38,22 @@ fn payload(value: &str, surface: &WorkspaceSurface) -> bool {
     let limit = match surface {
         WorkspaceSurface::ActivitySummary => return false,
         WorkspaceSurface::Diagram => 16384,
+        WorkspaceSurface::Chart => 16384,
         WorkspaceSurface::Browser => 4096,
         WorkspaceSurface::Workflow | WorkspaceSurface::Session => 2048,
         WorkspaceSurface::RichText
         | WorkspaceSurface::Image
         | WorkspaceSurface::AssistantMessage => MAX_PAYLOAD,
     };
+    object_payload(value, limit)
+        && match surface {
+            WorkspaceSurface::Chart => super::chart_validate::payload(value),
+            WorkspaceSurface::RichText => super::chart_validate::inline(value),
+            _ => true,
+        }
+}
+
+fn object_payload(value: &str, limit: usize) -> bool {
     if value.len() > limit {
         return false;
     }
@@ -132,6 +142,7 @@ fn operation(value: &WorkspaceToolOperation) -> bool {
                 && instance_ids.iter().all(|id| identifier(id))
                 && instance_ids.iter().collect::<HashSet<_>>().len() == instance_ids.len()
         }
+        WorkspaceToolOperation::Present { score_json } => object_payload(score_json, 32768),
         WorkspaceToolOperation::Clear
         | WorkspaceToolOperation::ListDisplays
         | WorkspaceToolOperation::CaptureForeground

@@ -22,7 +22,7 @@ function fixture() {
     claim: vi.fn(async () => true),
     speak: vi.fn(async () => ({ ...state, revision: '1' })),
     stop: vi.fn(async () => undefined),
-    waitForQuestion: vi.fn(async () => undefined),
+    waitForQuestion: vi.fn(async (): Promise<void> => undefined),
     id: () => crypto.randomUUID(),
     changed: vi.fn(),
     failed: vi.fn(),
@@ -45,6 +45,7 @@ describe('background update speech', () => {
       expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
         update.text,
         expect.any(String),
+        expect.any(Function),
       ),
     );
     f.cue.observe([update]);
@@ -121,6 +122,29 @@ describe('background update speech', () => {
     }
   });
 
+  it('rechecks foreground work after the final question wait', async () => {
+    const f = fixture();
+    let resume!: () => void;
+    f.ports.waitForQuestion
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(
+        () => new Promise<void>((done) => (resume = done)),
+      );
+    f.cue.observe([update]);
+    await vi.waitFor(() =>
+      expect(f.ports.waitForQuestion).toHaveBeenCalledTimes(2),
+    );
+    f.busy(true);
+    resume();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(f.ports.speak).not.toHaveBeenCalled();
+    f.busy(false);
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.speak).toHaveBeenCalledOnce());
+    f.cue.dispose();
+  });
+
   it('retains long updates as text and speaks a bounded notification', async () => {
     const f = fixture();
     f.cue.observe([{ ...update, text: 'Detailed result. '.repeat(400) }]);
@@ -128,8 +152,46 @@ describe('background update speech', () => {
       expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
         "I have an update for you. It's available in the conversation.",
         expect.any(String),
+        expect.any(Function),
       ),
     );
+    f.cue.dispose();
+  });
+
+  it('invalidates a queued dispatch when its update is removed', async () => {
+    const f = fixture();
+    let current!: () => boolean;
+    let operation = '';
+    let finish!: () => void;
+    f.ports.speak.mockImplementation((...args: unknown[]) => {
+      current = args[2] as () => boolean;
+      operation = args[1] as string;
+      return new Promise(
+        (done) => (finish = () => done(initialSpeechSnapshot())),
+      );
+    });
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.speak).toHaveBeenCalledOnce());
+    expect(current()).toBe(true);
+    f.cue.observe([]);
+    expect(current()).toBe(false);
+    expect(f.ports.stop).toHaveBeenCalledWith(operation);
+    finish();
+    f.cue.dispose();
+  });
+
+  it('discards a late claim after reset without dispatching speech', async () => {
+    const f = fixture();
+    let claim!: (value: boolean) => void;
+    f.ports.claim.mockImplementation(
+      () => new Promise((done) => (claim = done)),
+    );
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.claim).toHaveBeenCalledOnce());
+    f.cue.observe([]);
+    claim(true);
+    await vi.waitFor(() => expect(f.ports.changed).toHaveBeenCalled());
+    expect(f.ports.speak).not.toHaveBeenCalled();
     f.cue.dispose();
   });
 

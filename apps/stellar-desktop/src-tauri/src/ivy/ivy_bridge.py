@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 
 sys.dont_write_bytecode = True
 PROFILE = Path('D:/Hermes/profiles/ivy')
@@ -21,13 +22,15 @@ METHODS = {
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
     'session.events.since': {'session_id': str, 'replay_epoch': str, 'last_sequence': int},
-    'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str},
+    'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
+                      'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
     'clarify.respond': {'session_id': str, 'execution_generation': int, 'prompt_id': str, 'answer': str},
     'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
     'integrations.reload': {'session_id': object},
     'workspace.setup': {'descriptor': object, 'session_id': object}, 'workspace.stop': {},
+    'inspector.inspect': {'active': object, 'requested': object, 'offset': int, 'before': object},
 }
 CAPABILITIES = ['durable-admission-v1', 'event-replay-v1', 'local-cli-create-v1']
 IDENTITY = {'session_id', 'stored_session_id', 'admission_id', 'input_id',
@@ -105,7 +108,7 @@ def validate(request):
     if type(method) is not str or method not in METHODS or type(params) is not dict:
         raise ValueError()
     schema = METHODS[method]
-    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch'}}
+    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
     required = set(schema) - optional.get(method, set())
     if not required <= set(params) or set(params) - set(schema):
         raise ValueError()
@@ -199,7 +202,7 @@ async def pump_events(conn, workspace, approvals):
         if kind in {'tool.start', 'tool.complete'}:
             activity.offer(params)
             continue
-        if kind not in {'message.start', 'message.complete', 'session.replay_gap',
+        if kind not in {'message.start', 'message.interim', 'message.complete', 'session.replay_gap',
                         'approval.request', 'clarify.request', 'clarify.settled'}:
             continue
         # Terminal/control events retain ordering ahead of the next activity batch.
@@ -213,6 +216,13 @@ async def pump_events(conn, workspace, approvals):
         clean['type'] = kind
         if kind == 'message.start':
             clean['payload'] = {'autonomous': autonomous_start(payload)}
+        elif kind == 'message.interim':
+            text, streamed = payload.get('text'), payload.get('already_streamed')
+            if not string(text, 4096) or type(streamed) is not bool:
+                continue
+            if workspace is not None:
+                text = workspace.redact(text)
+            clean['payload'] = {'text': text, 'already_streamed': streamed}
         elif kind in {'clarify.request', 'clarify.settled'}:
             prompt = payload.get('prompt_id')
             if not string(prompt):
@@ -241,6 +251,8 @@ async def pump_events(conn, workspace, approvals):
                     execution_generation=generation, prompt_id=prompt, choice='deny'), DEADLINE)
         else:
             clean['payload'] = text_fields(payload) if kind.startswith('message.') else project(payload)
+            if kind == 'message.complete':
+                clean['payload'] = completion_payload(payload)
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         if kind == 'message.complete':
@@ -270,6 +282,13 @@ async def pump_events(conn, workspace, approvals):
         emit({'event': 'gateway', 'data': envelope})
 
 
+def completion_payload(payload):
+    clean = text_fields(payload)
+    if type(payload.get('response_reused')) is bool:
+        clean['response_reused'] = payload['response_reused']
+    return clean
+
+
 def autonomous_start(payload):
     return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
             and payload.get('notification_category') != 'diagnostic')
@@ -281,8 +300,8 @@ async def replay_events(conn, params, workspace):
     result = await asyncio.wait_for(conn.client.rpc('session.events.since', **params), DEADLINE)
     if (type(result) is not dict or type(result.get('events')) is not list
             or len(result['events']) > 1024 or type(result.get('truncated')) is not bool
-            or not string(result.get('replay_epoch'))
-            or type(result.get('last_sequence')) is not int or result['last_sequence'] < 0):
+            or result.get('replay_epoch') != params['replay_epoch']
+            or type(result.get('last_sequence')) is not int or result['last_sequence'] < params['last_sequence']):
         raise Closed()
     events = []
     for event in result['events']:
@@ -296,7 +315,7 @@ async def replay_events(conn, params, workspace):
         clean = project(event)
         clean['type'] = kind
         clean['payload'] = ({'autonomous': autonomous_start(payload)} if kind == 'message.start'
-                            else text_fields(payload))
+                            else completion_payload(payload))
         if workspace is not None and type(clean['payload'].get('text')) is str:
             clean['payload']['text'] = workspace.redact(clean['payload']['text'])
         events.append(clean)
@@ -390,9 +409,42 @@ async def settle_receipt(conn, workspace, params, receipt, approvals=None):
         await approvals.cancel(params['session_id'])
 
 
+async def profile_toolsets():
+    """One daemon per create; cancellation closes the bridge, never retries loading.
+
+    Python cannot cancel a synchronous import. The native broker owns the bridge
+    process and kills/reaps it on failure; the daemon must not hold interpreter
+    shutdown or the asyncio default executor open. Late results are discarded.
+    """
+    loop = asyncio.get_running_loop()
+    result = loop.create_future()
+
+    def publish(value, error):
+        if not result.done():
+            if error is None:
+                result.set_result(value)
+            else:
+                result.set_exception(Closed())
+
+    def load():
+        try:
+            from stellar_ivy_profile_tools import load_toolsets
+            value, error = load_toolsets(), None
+        except BaseException:
+            value, error = None, True
+        try:
+            loop.call_soon_threadsafe(publish, value, error)
+        except RuntimeError:
+            pass  # The owning bridge already closed its event loop.
+
+    threading.Thread(target=load, name='ivy-profile-tools', daemon=True).start()
+    return await result
+
+
 async def request_worker(conn, workspace, queue, approvals=None):
     from stellar_ivy_controls import control, Refused
     from stellar_ivy_edit_policy import synchronize
+    from stellar_ivy_conversation import submit_conversation
     access = approvals.access if approvals is not None else {}
     while True:
         request = await queue.get()
@@ -406,7 +458,22 @@ async def request_worker(conn, workspace, queue, approvals=None):
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method in {'session.new', 'integrations.reload'}:
+            if method == 'inspector.inspect':
+                from stellar_ivy_inspector import Inspector
+                inspector = getattr(conn, 'inspector', None)
+                if inspector is None:
+                    inspector = conn.inspector = Inspector(PROFILE)
+                active = params['active']
+                if getattr(conn, 'selected_session', None) is not None and active != conn.selected_session:
+                    raise Closed()
+                requested, offset, before = params['requested'], params['offset'], params['before']
+                if ((requested is not None and not string(requested, 512)) or
+                        not 0 <= offset <= 1960 or
+                        (before is not None and (type(before) is not int or not 0 < before <= 4294967295))):
+                    raise Closed()
+                result = await inspector.inspect(conn, active, requested, offset, before,
+                    workspace.redact if workspace is not None else lambda value: value)
+            elif method in {'session.new', 'integrations.reload'}:
                 result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
             elif method == 'session.events.since':
                 result = await replay_events(conn, params, workspace)
@@ -421,43 +488,43 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 await workspace.stop()
                 result = {}
             elif method == 'session.create':
-                # The installed IvyConnection excludes launch routing; keep its session registry
-                # while invoking the gateway's explicitly advertised fixed-model contract.
-                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
-                fields = description.get('session_create', {}).get('parameters', [])
-                if not {'model', 'provider'} <= set(fields):
-                    raise Closed()
-                options = {}
-                if workspace is not None and workspace.task is not None:
-                    from stellar_ivy_profile_tools import load_toolsets
-                    if ('acp' not in description.get('session_create', {}).get('sources', []) or
-                            'toolsets' not in fields or
-                            not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
+                async with asyncio.timeout(DEADLINE):
+                    # The installed IvyConnection excludes launch routing; keep its session registry
+                    # while invoking the gateway's explicitly advertised fixed-model contract.
+                    description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                    fields = description.get('session_create', {}).get('parameters', [])
+                    if not {'model', 'provider'} <= set(fields):
                         raise Closed()
-                    options = {'editor': workspace.editor(), 'toolsets': load_toolsets()}
-                result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
-                    request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
-                sid = result.get('session_id')
-                if not string(sid):
-                    raise Closed()
-                conn.sessions.add(sid)
-                if options:
-                    workspace.bind_session(sid)
-                info = result.get('info', {})
-                launch = info.get('launch_request', {})
-                if (type(launch) is not dict or launch.get('model') != params['model'] or
-                        launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
-                    raise Closed()
-                if options and not workspace.verifies(info):
-                    raise Closed()
-                if options and launch.get('toolsets') != options['toolsets']:
-                    raise Closed()
-                if options:
-                    result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                    options = {}
+                    if workspace is not None and workspace.task is not None:
+                        if ('acp' not in description.get('session_create', {}).get('sources', []) or
+                                'toolsets' not in fields or
+                                not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
+                            raise Closed()
+                        options = {'editor': workspace.editor(), 'toolsets': await profile_toolsets()}
+                    result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
+                        request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
+                    sid = result.get('session_id')
+                    if not string(sid):
+                        raise Closed()
+                    conn.sessions.add(sid)
+                    if options:
+                        workspace.bind_session(sid)
                     info = result.get('info', {})
-                    if info.get('model') != params['model'] or not workspace.verifies(info):
+                    launch = info.get('launch_request', {})
+                    if (type(launch) is not dict or launch.get('model') != params['model'] or
+                            launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
                         raise Closed()
-                result = {'session_id': sid, 'model': info['model']}
+                    if options and not workspace.verifies(info):
+                        raise Closed()
+                    if options and launch.get('toolsets') != options['toolsets']:
+                        raise Closed()
+                    if options:
+                        result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                        info = result.get('info', {})
+                        if info.get('model') != params['model'] or not workspace.verifies(info):
+                            raise Closed()
+                    result = {'session_id': sid, 'model': info['model']}
             elif method == 'session.resume' and workspace is not None and workspace.task is not None:
                 description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
                 if 'acp-session-mcp-v1' not in description.get('capabilities', []):
@@ -466,16 +533,23 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 if not workspace.verifies(result.get('info', {})):
                     raise Closed()
                 result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
-            elif method == 'prompt.submit' and workspace is not None and workspace.task is not None:
-                if workspace.owner_session != params['session_id'] or 'workspace_epoch' not in params:
-                    raise Closed()
-                epoch = params.pop('workspace_epoch')
-                token = workspace.gate.arm(epoch, params['input_id'])
-                workspace.remember_token(token)
-                params['text'] = (f'For workspace tool calls in this turn, pass turn_token exactly as '
-                                  f'{token}. Do not reveal the token. Do not reuse it in later turns.\n' + params['text'])
-                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
-                if result.get('admission_id') in conn.completed:
+            elif method == 'prompt.submit':
+                epoch = params.pop('workspace_epoch', None)
+                token = None
+                if workspace is not None and workspace.task is not None:
+                    if workspace.owner_session != params['session_id'] or epoch is None:
+                        raise Closed()
+                    token = workspace.gate.arm(epoch, params['input_id'])
+                    workspace.remember_token(token)
+
+                def expression_current():
+                    active = workspace.gate.active if token is not None else None
+                    return token is None or (active is not None and active[2] == token)
+
+                result = await asyncio.wait_for(
+                    submit_conversation(conn, params, workspace_token=token, profile=PROFILE,
+                                        expression_current=expression_current), DEADLINE)
+                if token is not None and result.get('admission_id') in conn.completed:
                     workspace.gate.disarm()
             else:
                 params.pop('workspace_epoch', None)
@@ -484,7 +558,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
                 await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'session.events.since'}:
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect'}:
                 pass
             elif method == 'runtime.describe':
                 if (type(result) is not dict or
@@ -513,6 +587,8 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if workspace is not None:
                             final = workspace.redact(final)
                         projected['result'] = {'final_response': text_fields({'text': final})['text']}
+                        if type(saved.get('response_reused')) is bool:
+                            projected['result']['response_reused'] = saved['response_reused']
                 result = projected
             if method in {'session.create', 'session.resume'}:
                 conn.selected_session = result.get('session_id')
@@ -546,6 +622,7 @@ async def serve():
     conn = None
     workspace = None
     tasks = []
+    prime_config = None
     try:
         IvyConnection, discover, connect = load_library()
         from stellar_workspace_credentials import WorkspaceCredentials
@@ -553,6 +630,13 @@ async def serve():
         from stellar_workspace_mcp import make_server
         from stellar_workspace_service import WorkspaceService
         from stellar_ivy_approvals import Approvals, load_access
+        from stellar_ivy_conversation import ConversationClient
+        from stellar_ivy_voice_expression import installed, native_codex_transport
+        from hermes_cli.gateway_client import GatewayRPCError
+        try:
+            from tools.voice_mode_transcript import is_voice_stop_phrase
+        except ImportError:
+            is_voice_stop_phrase = None
         access = load_access(PROFILE)
         try:
             import win32cred
@@ -568,6 +652,9 @@ async def serve():
             conn = IvyConnection(client, approvals=bool(access))
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
+            conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)
+            if installed(PROFILE):
+                prime_config = asyncio.create_task(asyncio.to_thread(native_codex_transport))
             approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
             tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals))]
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -579,6 +666,10 @@ async def serve():
     except Exception:
         return 1
     finally:
+        if prime_config is not None:
+            prime_config.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await prime_config
         for task in tasks:
             task.cancel()
         for task in tasks:
@@ -586,6 +677,8 @@ async def serve():
                 await task
         if conn is not None:
             conn.lease.release()
+            if getattr(conn, 'inspector', None) is not None:
+                await conn.inspector.close()
         if workspace is not None:
             await workspace.stop()
 

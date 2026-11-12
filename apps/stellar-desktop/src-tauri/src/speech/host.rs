@@ -15,6 +15,10 @@ pub struct SpeechHost {
 }
 
 impl SpeechHost {
+    pub fn audio_process(&self) -> Arc<std::sync::atomic::AtomicU32> {
+        self.inner.voice.audio_process.clone()
+    }
+
     pub fn new(scratch: PathBuf, publish: Publisher) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -30,6 +34,7 @@ impl SpeechHost {
                 scratch,
                 transcriber: super::warm_worker::WarmWorker::new("transcribe"),
                 keywords: super::warm_worker::WarmWorker::new("keywords"),
+                expression: super::expression::Analyzer::from_environment(),
                 #[cfg(test)]
                 settlement_gate: Mutex::new(None),
             }),
@@ -49,6 +54,16 @@ impl SpeechHost {
         id: String,
         epoch: &str,
         state: SpeechState,
+    ) -> Result<Arc<Operation>, SpeechError> {
+        self.reserve_with_expression(id, epoch, state, false)
+    }
+
+    fn reserve_with_expression(
+        &self,
+        id: String,
+        epoch: &str,
+        state: SpeechState,
+        analyze_expression: bool,
     ) -> Result<Arc<Operation>, SpeechError> {
         let epoch = validation::epoch(epoch)?;
         let (operation, snapshot) = {
@@ -85,6 +100,11 @@ impl SpeechHost {
                 cancelled: AtomicBool::new(false),
                 scratch,
                 recognition_epoch: self.inner.transcriber.ticket(),
+                expression_epoch: if analyze_expression {
+                    self.inner.expression.ticket()
+                } else {
+                    None
+                },
             });
             view.active = Some(operation.clone());
             view.snapshot.operation_id = Some(id);
@@ -116,13 +136,29 @@ impl SpeechHost {
         state: SpeechState,
     ) -> Result<std::sync::mpsc::Receiver<Result<SpeechTranscript, SpeechError>>, SpeechError> {
         validation::transcribe(&request)?;
+        let samples = request.pcm.len();
         let payload =
             process::payload(json!({"pcm":request.pcm,"sample_rate_hz":request.sample_rate_hz}))?;
-        let operation = self.reserve(request.utterance_id.clone(), &request.epoch, state)?;
+        let operation = self.reserve_with_expression(
+            request.utterance_id.clone(),
+            &request.epoch,
+            state,
+            request.analyze_expression == Some(true),
+        )?;
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         let host = self.clone();
         std::thread::spawn(move || {
+            let pending = operation
+                .expression_epoch
+                .and_then(|epoch| host.inner.expression.start(epoch, samples, &payload));
             let result = host.execute(&operation, "transcribe", payload, Duration::from_secs(60));
+            if let Some(pending) = pending
+                && result.as_ref().is_ok_and(|text| !text.trim().is_empty())
+            {
+                host.inner
+                    .expression
+                    .bind(request.utterance_id.clone(), pending);
+            }
             let result = host
                 .settle(&operation, result)
                 .map(|text| SpeechTranscript {
@@ -133,6 +169,9 @@ impl SpeechHost {
             let _ = send.send(result);
         });
         Ok(receive)
+    }
+    pub(crate) fn take_expression(&self, id: &str) -> Option<super::VoiceExpressionPending> {
+        self.inner.expression.take(id)
     }
     pub fn speak(&self, request: SpeechSpeakRequest) -> Result<SpeechSnapshot, SpeechError> {
         validation::speak(&request)?;
@@ -146,7 +185,7 @@ impl SpeechHost {
             .as_ref()
             .ok_or(SpeechError::Unavailable)?
             .output();
-        let payload = process::payload(json!({"text":request.text,"output":output}));
+        let payload = process::payload(super::acknowledgment::payload(request.text, &output));
         let host = self.clone();
         std::thread::spawn(move || {
             let result = payload.and_then(|bytes| {
@@ -349,6 +388,7 @@ impl SpeechHost {
                 view.snapshot.state = SpeechState::Idle;
                 view.snapshot.error = None;
             }
+            self.inner.expression.stop();
             if view
                 .active
                 .as_ref()

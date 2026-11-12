@@ -122,6 +122,7 @@ impl Session {
             view.turn_id = None;
             view.turn = IvyTurnState::Idle;
             view.items.clear();
+            view.response_segments.clear();
             view.activity.clear();
             view.error = None;
         });

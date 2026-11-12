@@ -3,13 +3,22 @@ mod activity;
 mod activity_tests;
 #[cfg(feature = "native-smoke")]
 mod background_probe;
+#[cfg(test)]
+mod background_replay_tests;
 mod background_updates;
 #[cfg(test)]
 mod background_updates_tests;
+pub mod chart_contracts;
+#[cfg(test)]
+mod chart_tests;
+mod chart_validate;
 mod connection;
+#[cfg(all(test, windows))]
+mod context_submit_tests;
 pub mod contracts;
-mod events;
 mod host;
+pub(crate) mod inspector;
+pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
 #[cfg(test)]
@@ -22,9 +31,14 @@ mod question_contracts;
 mod questions;
 #[cfg(test)]
 mod recovery_tests;
+mod response_segments;
+#[cfg(test)]
+mod response_segments_tests;
 mod rotation;
 pub(crate) mod runtime;
 mod session;
+mod session_events;
+mod session_receipts;
 #[cfg(test)]
 mod session_tests;
 mod state;
@@ -44,6 +58,7 @@ use contracts::{
 };
 use host::Action;
 pub use host::IvyHost;
+pub use workspace_context::{ContextLease, ContextProvider};
 
 #[cfg(test)]
 mod text_timing_tests;
@@ -112,12 +127,18 @@ pub fn ivy_connect(
 #[tauri::command]
 pub fn ivy_submit(
     host: tauri::State<'_, IvyHost>,
+    speech: tauri::State<'_, crate::speech::SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
     let request: IvySubmitRequest =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
-    host.request(Action::Submit(request))
+    let expression = if request.voice_utterance == Some(true) {
+        speech.take_expression(&request.input_id)
+    } else {
+        None
+    };
+    host.request_with_expression(Action::Submit(request), expression)
 }
 
 #[tauri::command]

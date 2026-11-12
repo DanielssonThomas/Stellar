@@ -16,6 +16,7 @@ type WorkspacePort = {
   readonly present: (command: unknown) => StageResult;
   readonly available: () => boolean;
   readonly isCurrent: (request: WorkspaceToolRequest) => boolean;
+  readonly spatial?: (request: WorkspaceToolRequest) => boolean;
 };
 
 const surfaces: readonly string[] = [
@@ -23,6 +24,7 @@ const surfaces: readonly string[] = [
   'image',
   'browser',
   'diagram',
+  'chart',
   'workflow',
   'session',
   'assistant-message',
@@ -37,6 +39,8 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
       return { kind: 'rejected' };
     const operation = request.operation;
     if (operation.kind === 'batch') return { kind: 'rejected' };
+    if (operation.kind === 'present')
+      return { kind: port.spatial?.(request) ? 'applied' : 'rejected' };
     if (
       [
         'capture_window',

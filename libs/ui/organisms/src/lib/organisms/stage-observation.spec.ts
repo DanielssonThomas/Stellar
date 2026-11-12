@@ -71,4 +71,16 @@ describe('observed Stage rendering', () => {
     await cancelled;
     expect(vi.getTimerCount()).toBe(0);
   });
+  it('waits for every inline chart and reports a later failed chart', () => {
+    const f = fixture();
+    f.media.dataset['renderState'] = 'ready';
+    const second = document.createElement('div');
+    second.dataset['renderState'] = 'loading';
+    f.panel.append(second);
+    expect(f.state()).toBe('loading');
+    second.dataset['renderState'] = 'error';
+    expect(f.state()).toBe('error');
+    second.dataset['renderState'] = 'ready';
+    expect(f.state()).toBe('ready');
+  });
 });

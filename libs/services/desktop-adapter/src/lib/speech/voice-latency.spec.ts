@@ -5,6 +5,40 @@ import { initialSpeechSnapshot } from './speech-transport';
 describe('content-free voice latency observations', () => {
   afterEach(() => performance.clearMeasures('stellar.voice.latency'));
 
+  it('keeps acknowledgment timing separate from validated answer and final audio', () => {
+    let now = 0;
+    const latency = new VoiceLatency(() => now);
+    latency.begin();
+    latency.point('hermes_submit');
+    now = 50;
+    latency.point('hermes_admitted');
+    now = 750;
+    latency.point('acknowledgment_requested');
+    now = 1050;
+    latency.point('acknowledgment_playback_observed');
+    now = 3000;
+    latency.point('first_validated_text');
+    latency.point('model_completed');
+    latency.point('tts_request');
+    now = 3300;
+    latency.speech({
+      ...initialSpeechSnapshot(),
+      state: 'speaking',
+      timings: [{ stage: 'first_audio', elapsed_ms: 300 }],
+    });
+    now = 4000;
+    latency.speech({ ...initialSpeechSnapshot(), state: 'idle' });
+    const entry = performance.getEntriesByName(
+      'stellar.voice.latency',
+    )[0] as PerformanceMeasure;
+    expect(entry.detail.stages_ms.acknowledgment_playback_observed).toBe(1050);
+    expect(entry.detail.durations_ms.validated_model_text).toBe(3000);
+    expect(entry.detail.durations_ms.end_to_end_first_audio_observed).toBe(
+      3300,
+    );
+    expect(entry.detail.first_audible_ms).toBeNull();
+  });
+
   it('includes observed speech-end to utterance-finalization settlement without changing VAD', () => {
     let now = 0;
     const latency = new VoiceLatency(() => now);

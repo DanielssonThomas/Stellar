@@ -1,6 +1,7 @@
 import type {
   SpeechError,
   SpeechRequest,
+  SpeechDuckingRequest,
   SpeechStopRequest,
   SpeechSnapshot,
   SpeechSpeakRequest,
@@ -87,6 +88,15 @@ export function decodeSpeechRequest(value: unknown): SpeechRequest {
   return { version: version(data['version']) };
 }
 
+export function decodeSpeechDuckingRequest(
+  value: unknown,
+): SpeechDuckingRequest {
+  const data = record(value, ['version', 'active']);
+  if (typeof data['active'] !== 'boolean')
+    throw new DesktopContractError('malformed');
+  return { version: version(data['version']), active: data['active'] };
+}
+
 export function decodeSpeechStopRequest(value: unknown): SpeechStopRequest {
   const data = record(value, ['version', 'epoch']);
   return { version: version(data['version']), epoch: sequence(data['epoch']) };
@@ -99,15 +109,16 @@ export function decodeSpeechError(value: unknown): SpeechError {
 export function decodeSpeechTranscribeRequest(
   value: unknown,
 ): SpeechTranscribeRequest {
-  const data = record(value, [
-    'version',
-    'epoch',
-    'utterance_id',
-    'sample_rate_hz',
-    'pcm',
-  ]);
+  const data = record(
+    value,
+    ['version', 'epoch', 'utterance_id', 'sample_rate_hz', 'pcm'],
+    ['analyze_expression'],
+  );
   const pcm = data['pcm'];
+  const analyzeExpression = data['analyze_expression'];
   if (
+    (analyzeExpression !== undefined &&
+      typeof analyzeExpression !== 'boolean') ||
     data['sample_rate_hz'] !== 16000 ||
     !Array.isArray(pcm) ||
     pcm.length === 0 ||
@@ -124,6 +135,9 @@ export function decodeSpeechTranscribeRequest(
     utterance_id: identifier(data['utterance_id']),
     sample_rate_hz: 16000,
     pcm: [...pcm],
+    ...(analyzeExpression === undefined
+      ? {}
+      : { analyze_expression: analyzeExpression }),
   };
 }
 

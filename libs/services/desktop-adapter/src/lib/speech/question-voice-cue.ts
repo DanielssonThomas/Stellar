@@ -3,6 +3,7 @@ import type { SpeechSnapshot } from '@stellar/desktop-contracts';
 export class QuestionVoiceCue {
   private readonly seen = new Set<string>();
   private pending?: {
+    id: string;
     epoch: string;
     revision: bigint;
     ready: Promise<void>;
@@ -31,22 +32,21 @@ export class QuestionVoiceCue {
       finish = resolve;
     });
     const ticket = {
+      id: crypto.randomUUID(),
       epoch: before.epoch,
       revision: BigInt(before.revision),
       ready,
       finish,
     };
     this.pending = ticket;
-    void this.ports
-      .speak('Could you check this out?', crypto.randomUUID())
-      .then(
-        (snapshot) => {
-          if (this.pending === ticket) this.observe(snapshot);
-        },
-        () => {
-          if (this.pending === ticket) this.dispose();
-        },
-      );
+    void this.ports.speak('Could you check this out?', ticket.id).then(
+      (snapshot) => {
+        if (this.pending === ticket) this.observe(snapshot);
+      },
+      () => {
+        if (this.pending === ticket) this.dispose();
+      },
+    );
   }
 
   wait(): Promise<void> {
@@ -57,7 +57,8 @@ export class QuestionVoiceCue {
     if (
       this.pending &&
       (snapshot.epoch !== this.pending.epoch ||
-        (BigInt(snapshot.revision) > this.pending.revision &&
+        (snapshot.operation_id === this.pending.id &&
+          BigInt(snapshot.revision) > this.pending.revision &&
           ['idle', 'unavailable'].includes(snapshot.state)))
     )
       this.dispose();

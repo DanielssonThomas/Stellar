@@ -6,6 +6,10 @@ import type {
   PresentationTextPayload,
 } from '@stellar/ui-molecules';
 import { plainRecord } from './stage-json';
+import {
+  decodeWorkspaceChart,
+  decodeWorkspaceChartPayload,
+} from '@stellar/desktop-contracts';
 
 const exact = (
   value: Record<string, unknown>,
@@ -16,7 +20,10 @@ const exact = (
   Object.keys(value).every(
     (key) => required.includes(key) || optional.includes(key),
   );
-const text = (value: unknown, limit = 4096): value is string =>
+export const presentationText = (
+  value: unknown,
+  limit = 4096,
+): value is string =>
   typeof value === 'string' &&
   !!value.trim() &&
   value.length <= limit &&
@@ -28,6 +35,7 @@ const text = (value: unknown, limit = 4096): value is string =>
       (n >= 0xd800 && n <= 0xdfff)
     );
   });
+const text = presentationText;
 const array = (value: unknown, maximum: number): value is unknown[] =>
   Array.isArray(value) &&
   value.length <= maximum &&
@@ -45,6 +53,13 @@ const list = (value: unknown, maximum: number): value is unknown[] =>
 function block(value: unknown): PresentationTextBlock | null {
   if (!plainRecord(value)) return null;
   const kind = value['kind'];
+  if (kind === 'chart' && exact(value, ['kind', 'chart'])) {
+    try {
+      return { kind, chart: decodeWorkspaceChart(value['chart']) };
+    } catch {
+      return null;
+    }
+  }
   if (
     (kind === 'paragraph' || kind === 'heading') &&
     exact(value, ['kind', 'text']) &&
@@ -125,6 +140,14 @@ export function decodePresentationText(
   return blocks.every((item): item is PresentationTextBlock => item !== null)
     ? { title: value['title'], blocks }
     : null;
+}
+
+export function decodePresentationChart(value: unknown) {
+  try {
+    return decodeWorkspaceChartPayload(value);
+  } catch {
+    return null;
+  }
 }
 
 export function publicHttps(value: unknown): string | null {

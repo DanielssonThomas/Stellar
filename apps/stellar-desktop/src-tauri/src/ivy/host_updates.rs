@@ -12,6 +12,8 @@ impl IvyHost {
             version: 1,
             input_id: request.request_id.clone(),
             text: "claim".into(),
+            local_actions: None,
+            voice_utterance: Some(false),
         })?;
         let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         if self
@@ -48,6 +50,8 @@ impl IvyHost {
                     .parse()
                     .map_err(|_| IvyErrorCode::Protocol)?,
                 action: Action::ClaimUpdate(request, tx),
+                context: None,
+                expression: None,
             })
             .map_err(|_| IvyErrorCode::Busy)?;
         Ok(rx)

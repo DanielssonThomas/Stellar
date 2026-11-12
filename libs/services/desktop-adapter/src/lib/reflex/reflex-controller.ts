@@ -2,6 +2,7 @@ import type {
   ReflexPlan,
   ReflexRequest,
   ReflexMode,
+  IvyLocalActionEvent,
 } from '@stellar/desktop-contracts';
 import { LocalActionRegistry, type LocalAction } from './action-registry';
 import { ReflexLatency, type ReflexTimingStage } from './reflex-latency';
@@ -24,12 +25,7 @@ export interface ReflexOutcome {
     | 'hermes'
     | 'unavailable';
 }
-export interface ReflexEvent {
-  readonly action: string;
-  readonly target: string;
-  readonly outcome: 'confirmed' | 'uncertain';
-  readonly reply: string;
-}
+export type ReflexEvent = Readonly<IvyLocalActionEvent>;
 export interface ReflexPorts {
   readonly environment: (
     signal: AbortSignal,

@@ -1,7 +1,4 @@
-use super::{
-    contracts::*,
-    session::{Session, bounded_id},
-};
+use super::{contracts::*, session::Session};
 use serde_json::{Value, json};
 
 impl Session {
@@ -28,6 +25,7 @@ impl Session {
         if params.get("type").and_then(Value::as_str) == Some("session.replay_gap") {
             return Err(IvyErrorCode::Uncertain);
         }
+        self.validate_update_event(params)?;
         if self.background_event(params)? {
             return Ok(());
         }
@@ -38,7 +36,7 @@ impl Session {
         if admission.is_none() || admission != self.record.admission_id.as_deref() {
             return Ok(());
         }
-        let epoch = bounded_id(params.get("replay_epoch"))?;
+        let epoch = super::session::bounded_id(params.get("replay_epoch"))?;
         let sequence = params
             .get("seq")
             .and_then(Value::as_u64)
@@ -51,7 +49,7 @@ impl Session {
                 return Ok(());
             }
         }
-        self.replay = Some((epoch, sequence));
+        self.replay = Some((epoch.clone(), sequence));
         let generation = params
             .get("execution_generation")
             .and_then(Value::as_u64)
@@ -76,9 +74,34 @@ impl Session {
                     .update(self.epoch, |view| view.first_text_observed = Some(true));
                 Ok(())
             }
+            Some("message.interim") => {
+                let Some(text) = params.pointer("/payload/text").and_then(Value::as_str) else {
+                    return Ok(());
+                };
+                if params
+                    .pointer("/payload/already_streamed")
+                    .and_then(Value::as_bool)
+                    .is_none()
+                {
+                    return Ok(());
+                }
+                if let Some(row) = super::response_segments::segment(
+                    self.record.session_id.as_deref().unwrap_or_default(),
+                    admission.unwrap_or_default(),
+                    generation,
+                    Some((&epoch, sequence)),
+                    text,
+                    false,
+                ) {
+                    self.shared.update(self.epoch, |view| {
+                        super::response_segments::append(&mut view.response_segments, row)
+                    });
+                }
+                Ok(())
+            }
             Some("stellar.activity") => self.activity(params),
             Some("clarify.request" | "clarify.settled") => self.question_event(params),
-            Some("message.complete") => self.complete(
+            Some("message.complete") => self.complete_with_reuse(
                 params
                     .pointer("/payload/outcome")
                     .and_then(Value::as_str)
@@ -87,6 +110,10 @@ impl Session {
                     .pointer("/payload/text")
                     .and_then(Value::as_str)
                     .unwrap_or(""),
+                params
+                    .pointer("/payload/response_reused")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             ),
             Some("approval.request") => {
                 self.shared.update(self.epoch, |view| {
@@ -96,35 +123,5 @@ impl Session {
             }
             _ => Ok(()),
         }
-    }
-
-    pub(super) fn complete(&mut self, outcome: &str, text: &str) -> Result<(), IvyErrorCode> {
-        let turn = match outcome {
-            "completed" => IvyTurnState::Completed,
-            "failed" => IvyTurnState::Failed,
-            "cancelled" | "interrupted" => IvyTurnState::Cancelled,
-            _ => return Err(IvyErrorCode::Uncertain),
-        };
-        let failed = turn == IvyTurnState::Failed;
-        let items = if failed {
-            vec![]
-        } else {
-            super::presentation_decode::parse_presentation(text)
-        };
-        self.record.unsettled = false;
-        self.journal.save(&self.record)?;
-        self.shared.update(self.epoch, |view| {
-            view.activity.clear();
-            view.turn = turn;
-            view.questions = None;
-            view.turn_id = self.record.input_id.clone();
-            view.items = items;
-            view.error = if failed {
-                Some(IvyErrorCode::TurnFailed)
-            } else {
-                None
-            };
-        });
-        Ok(())
     }
 }

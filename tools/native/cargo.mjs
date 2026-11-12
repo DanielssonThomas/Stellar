@@ -78,6 +78,7 @@ if (action === 'smoke' || action === 'background-smoke') {
             permissions: [
               'allow-music-set-enabled',
               'allow-reflex-media-snapshot',
+              'allow-speech-set-ducking',
               'allow-reflex-media-execute',
               'allow-reflex-infer',
               'allow-reflex-route',
@@ -86,6 +87,9 @@ if (action === 'smoke' || action === 'background-smoke') {
               'allow-reflex-set-enabled',
               'allow-reflex-cancel',
               'allow-shell-status',
+              'allow-awareness-snapshot',
+              'allow-awareness-set-enabled',
+              'allow-awareness-workspace',
               'allow-workspace-browser',
               'allow-workspace-image',
               'allow-smoke-media-probe',
@@ -107,6 +111,7 @@ if (action === 'smoke' || action === 'background-smoke') {
               'allow-background-smoke-start',
               'allow-ivy-disconnect',
               'allow-ivy-snapshot',
+              'allow-ivy-inspect',
               'allow-smoke-hold-ivy',
               'allow-smoke-capture-window',
             ],
@@ -170,7 +175,11 @@ if (action === 'smoke' || action === 'background-smoke') {
   child.on('close', (code) => {
     clearTimeout(deadline);
     for (const line of output.split(/\r?\n/)) {
-      if (/^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|WORKSPACE_METRICS) /.test(line))
+      if (
+        /^STELLAR_(?:SMOKE_STAGE|SMOKE_CHECKS|AWARENESS_CHECKS|AWARENESS_SOURCE|WORKSPACE_METRICS|DUCKING_PROBE) /.test(
+          line,
+        )
+      )
         console.log(line);
     }
     if (
@@ -208,6 +217,11 @@ if (action === 'smoke' || action === 'background-smoke') {
             u64Precision: true,
             malformedInputRejected: true,
             invalidVersionRejected: true,
+            duckingIpcPreservesMasterVolume: output.includes(
+              'STELLAR_DUCKING_PROBE true',
+            )
+              ? 'passed'
+              : 'skipped-no-render-endpoint',
           };
       mkdirSync(resolve(root, 'artifacts/native'), { recursive: true });
       writeFileSync(
@@ -256,6 +270,7 @@ if (action === 'smoke' || action === 'background-smoke') {
       'ivy_bridge_test.py',
       'ivy_approvals_test.py',
       'ivy_workspace_bridge_test.py',
+      'engineering_intelligence_test.py',
       'workspace_protocol_test.py',
       'workspace_credentials_test.py',
       'speech_worker_test.py',

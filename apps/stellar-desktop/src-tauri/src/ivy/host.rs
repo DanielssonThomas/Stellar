@@ -22,6 +22,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "host_inspector.rs"]
+mod inspector;
 #[path = "host_questions.rs"]
 mod questions;
 #[path = "host_requests.rs"]
@@ -36,6 +38,10 @@ mod updates;
 mod route_tests;
 
 pub enum Action {
+    Inspect(
+        super::inspector_contracts::IvyInspectorRequest,
+        mpsc::SyncSender<Result<super::inspector_contracts::IvyInspectorSnapshot, IvyErrorCode>>,
+    ),
     Connect,
     Submit(IvySubmitRequest),
     Cancel,
@@ -61,11 +67,14 @@ pub enum Action {
     SmokeHold(mpsc::SyncSender<()>),
 }
 struct Work {
+    context: Option<super::workspace_context::ContextLease>,
+    expression: Option<crate::speech::VoiceExpressionPending>,
     epoch: u64,
     workspace_epoch: u64,
     action: Action,
 }
 pub struct IvyHost {
+    context_provider: Arc<Mutex<Option<super::workspace_context::ContextProvider>>>,
     shared: Shared,
     child: OwnedChild,
     sender: SyncSender<Work>,
@@ -131,6 +140,9 @@ impl IvyHost {
         let pending_rotation: Pending = Arc::new(Mutex::new(None));
         let rotations = pending_rotation.clone();
         let state = shared.clone();
+        let context_provider = Arc::new(Mutex::new(
+            None::<super::workspace_context::ContextProvider>,
+        ));
         let owned = child.clone();
         std::thread::spawn(move || {
             let Some((journal, record, first)) =
@@ -174,8 +186,13 @@ impl IvyHost {
                         session.epoch = work.epoch;
                         session.workspace_epoch = work.workspace_epoch;
                         let result = match work.action {
+                            Action::Inspect(request, reply) => {
+                                inspector::run(&mut session, request, reply)
+                            }
                             Action::Connect => connect(&mut session, owned.clone(), tools.clone()),
-                            Action::Submit(request) => session.submit(request),
+                            Action::Submit(request) => {
+                                session.submit_with_context(request, work.context, work.expression)
+                            }
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
                             Action::Question(request) => session.answer_question(request),
@@ -219,11 +236,7 @@ impl IvyHost {
                                 Ok(())
                             }
                         };
-                        if let Err(error) = result {
-                            tools.disarm();
-                            tools.set_input(None);
-                            fail(&mut session, error);
-                        }
+                        settle_result(&mut session, &tools, result);
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -258,6 +271,7 @@ impl IvyHost {
             }
         });
         Self {
+            context_provider,
             shared,
             child,
             sender,
@@ -269,6 +283,12 @@ impl IvyHost {
 
     pub fn set_workspace_publisher(&self, publisher: workspace_hub::Publisher) {
         self.workspace.set_publisher(publisher);
+    }
+
+    pub fn set_context_provider(&self, provider: super::workspace_context::ContextProvider) {
+        if let Ok(mut slot) = self.context_provider.lock() {
+            *slot = Some(provider);
+        }
     }
 
     pub fn set_workspace_capture(&self, capture: workspace_hub::Capture) {
@@ -300,6 +320,14 @@ impl IvyHost {
 impl Drop for IvyHost {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+fn settle_result(session: &mut Session, tools: &WorkspaceHub, result: Result<(), IvyErrorCode>) {
+    if let Err(error) = result {
+        tools.disarm();
+        tools.set_input(None);
+        fail(session, error);
     }
 }
 

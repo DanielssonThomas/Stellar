@@ -55,6 +55,7 @@ const snapshot = () => ({
   workspace_epoch: '0',
   reset_id: null,
   activity: [],
+  response_segments: [],
   connection: 'ready',
   turn: 'completed',
   items: [
@@ -69,6 +70,86 @@ const snapshot = () => ({
   error: null,
 });
 describe('Ivy wire validation', () => {
+  it('validates bounded sealed response segments and preserves the final reuse marker', () => {
+    const commentary = {
+      id: '1'.repeat(64),
+      kind: 'commentary',
+      text: 'Your meeting is at ten.',
+      sequence: '18446744073709551615',
+      reused: false,
+    };
+    const final = {
+      ...commentary,
+      id: '2'.repeat(64),
+      kind: 'final',
+      sequence: null,
+      reused: true,
+    };
+    expect(
+      decodeIvySnapshot({
+        ...snapshot(),
+        response_segments: [commentary, final],
+      }).response_segments,
+    ).toEqual([commentary, final]);
+    for (const text of [
+      '[The notes](https://example.test/notes) are ready.',
+      '[The notes](\n  https://example.test/notes\n  "Report title") are ready.',
+      '<https://example.test/notes> has the notes.',
+      '<mailto:hello@example.test> is the contact address.',
+      '\x60npm test\x60 has finished.',
+    ]) {
+      const row = { ...commentary, text };
+      expect(
+        decodeIvySnapshot({ ...snapshot(), response_segments: [row] })
+          .response_segments,
+      ).toEqual([row]);
+    }
+    for (const rows of [
+      [commentary, commentary],
+      [{ ...commentary, id: 'foreign' }],
+      [{ ...commentary, kind: 'reasoning' }],
+      [{ ...commentary, sequence: null }],
+      [{ ...commentary, reused: true }],
+      [{ ...commentary, text: '😀'.repeat(1025) }],
+      [{ ...commentary, text: 'Description\n{"partial":' }],
+      [{ ...commentary, text: '<think>private</think>' }],
+      [{ ...commentary, text: '["private"]' }],
+      [{ ...commentary, text: '<script>private</script>' }],
+      [{ ...commentary, text: '\x60\x60\x60js\nprivate\n\x60\x60\x60' }],
+      [{ ...commentary, text: '\x60{"private":true}\x60' }],
+      [{ ...commentary, text: '<https://example.test/notes' }],
+      [{ ...commentary, text: 'Closing </tool_call> marker' }],
+      [final, commentary],
+      Array.from({ length: 17 }, (_, index) => ({
+        ...commentary,
+        id: index.toString(16).padStart(64, '0'),
+      })),
+    ])
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), response_segments: rows }),
+      ).toThrow();
+  });
+  it('accepts bounded provider/action enums and rejects arbitrary metadata', () => {
+    const row = {
+      id: '0123456789abcdef',
+      kind: 'mcp',
+      state: 'running',
+      provider: 'calendar',
+      operation: 'list',
+    };
+    expect(
+      decodeIvySnapshot({ ...snapshot(), activity: [row] }).activity,
+    ).toEqual([row]);
+    for (const bad of [
+      { ...row, provider: 'secret' },
+      { ...row, operation: 'rm -rf' },
+      { ...row, operation: null },
+      { ...row, args: 'secret' },
+    ])
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), activity: [bad] }),
+      ).toThrow();
+  });
   it('validates question bounds, exact actions and unique prompt IDs', () => {
     const question = {
       id: 'q1',

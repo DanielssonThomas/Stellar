@@ -35,12 +35,23 @@ pub struct SpeechRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
+pub struct SpeechDuckingRequest {
+    pub version: u16,
+    /// Renew a six-second native lease; false starts restoration.
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
 pub struct SpeechTranscribeRequest {
     pub version: u16,
     pub epoch: String,
     pub utterance_id: String,
     pub sample_rate_hz: u32,
     pub pcm: Vec<i16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub analyze_expression: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -117,6 +128,8 @@ pub struct SpeechStopRequest {
 #[serde(rename_all = "lowercase")]
 pub enum KeywordMode {
     Passive,
+    #[serde(rename = "passive_sensitive")]
+    PassiveSensitive,
     Listening,
     Composing,
 }

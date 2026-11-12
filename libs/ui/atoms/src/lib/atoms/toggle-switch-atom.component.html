@@ -1,0 +1,33 @@
+<label [class]="classes()">
+  <span class="switch-copy"
+    ><span class="switch-label">{{ label() }}</span>
+    @if (description()) {
+      <span class="switch-description">{{ description() }}</span>
+    }
+  </span>
+  <span class="switch-control">
+    <input
+      #control
+      type="checkbox"
+      role="switch"
+      [attr.aria-label]="label()"
+      [attr.aria-description]="description() || null"
+      [attr.aria-checked]="checked()"
+      [checked]="checked()"
+      [disabled]="disabled() || loading()"
+      (change)="change($event)"
+    />
+    @if (loading()) {
+      <span class="switch-loading"
+        ><stellar-skeleton-atom shape="control"
+      /></span>
+    } @else {
+      <span class="switch-state" aria-hidden="true">{{
+        checked() ? 'On' : 'Off'
+      }}</span
+      ><span class="switch-rail" aria-hidden="true"
+        ><span class="switch-thumb"></span
+      ></span>
+    }
+  </span>
+</label>

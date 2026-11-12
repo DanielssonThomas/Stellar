@@ -35,6 +35,23 @@ fn verified(receipt: &Value, session: &str, admission: &Admission) -> Result<(),
 }
 
 impl Session {
+    pub(super) fn validate_update_event(&self, params: &Value) -> Result<(), IvyErrorCode> {
+        let sid = self
+            .record
+            .session_id
+            .as_deref()
+            .ok_or(IvyErrorCode::Protocol)?;
+        let updates = Updates::load(&self.journal.updates_path(), sid)?;
+        let epoch = super::session::bounded_id(params.get("replay_epoch"))?;
+        number(params.get("seq"))?;
+        if let Some((previous, _)) = updates.cursor
+            && previous != epoch
+        {
+            return Err(IvyErrorCode::Uncertain);
+        }
+        Ok(())
+    }
+
     pub(super) fn background_event(&mut self, params: &Value) -> Result<bool, IvyErrorCode> {
         if params.get("admission_id").and_then(Value::as_str) == self.record.admission_id.as_deref()
         {
@@ -210,7 +227,10 @@ impl Session {
                 "session.events.since",
                 json!({"session_id":sid,"replay_epoch":epoch,"last_sequence":sequence}),
             )?;
-            if replay.get("truncated") != Some(&Value::Bool(false)) {
+            if replay.get("truncated") != Some(&Value::Bool(false))
+                || replay.get("replay_epoch").and_then(Value::as_str) != Some(epoch)
+                || number(replay.get("last_sequence"))? < *sequence
+            {
                 return Err(IvyErrorCode::Uncertain);
             }
             let events = replay

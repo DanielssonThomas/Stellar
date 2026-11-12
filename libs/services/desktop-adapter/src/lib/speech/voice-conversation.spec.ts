@@ -22,6 +22,39 @@ describe('local Reflex admission', () => {
   const settle = async () => {
     for (let i = 0; i < 8; i++) await flush();
   };
+  it('marks only an ordinary request from finalized microphone transcription', async () => {
+    const submitCaptured = vi.fn(async () => true);
+    const anecdote = 'Stella just climbed my leg to get onto my desk!';
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: anecdote,
+    }));
+    const f = fixture({
+      submitCaptured,
+      collect,
+      keywords: async (_pcm, _stream, sequence, _threshold, mode) => ({
+        sequence,
+        detection:
+          mode === 'passive' ? { command: 'ivy', end_sample: 0 } : null,
+      }),
+    });
+    f.feed(true, 1);
+    await settle();
+    expect(collect).not.toHaveBeenCalled();
+    f.utterance();
+    await settle();
+    expect(collect).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Int16Array),
+      id,
+      true,
+    );
+    expect(submitCaptured).toHaveBeenCalledExactlyOnceWith(anecdote, id);
+    expect(f.ports.transcribe).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+
   it('runs after wake admission without selecting a cloud session or submitting Hermes', async () => {
     const reflex = vi.fn(async () => ({
       handled: true,
@@ -38,7 +71,11 @@ describe('local Reflex admission', () => {
     f.utterance();
     await settle();
     expect(reflex).toHaveBeenCalledOnce();
-    expect(f.ports.speak).toHaveBeenCalledWith('Much better.', id);
+    expect(f.ports.speak).toHaveBeenCalledWith(
+      'Much better.',
+      id,
+      expect.any(Function),
+    );
     expect(selectSession).not.toHaveBeenCalled();
     expect(f.ports.submit).not.toHaveBeenCalled();
     f.controller.dispose();
@@ -136,6 +173,270 @@ describe('local Reflex admission', () => {
     await settle();
     expect(f.ports.speak).not.toHaveBeenCalled();
     expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+});
+
+describe('committed response narration', () => {
+  const segment = (
+    digit: string,
+    text: string,
+    kind: 'commentary' | 'final' = 'commentary',
+    reused = false,
+  ) => ({
+    id: digit.repeat(64),
+    kind,
+    text,
+    sequence: kind === 'commentary' ? digit : null,
+    reused,
+  });
+  const settle = async () => {
+    for (let i = 0; i < 8; ++i) await flush();
+  };
+
+  it('speaks committed commentary while admitted, keeps tools running, and settles a reused final once', async () => {
+    const f = fixture();
+    let revision = 0;
+    f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+      ...initialSpeechSnapshot(),
+      operation_id,
+      revision: String(++revision),
+      state: 'speaking',
+    }));
+    f.utterance();
+    await settle();
+    const morning = segment('1', 'Morning! I am checking your day.');
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn_id: id,
+        turn: 'admitted',
+        response_segments: [morning],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledOnce();
+    expect(f.context().assistant.turn).toBe('admitted');
+    const calendar = segment('2', 'Your first meeting is at ten.');
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        response_segments: [morning, calendar],
+        activity: [{ id: '1234567890abcdef', kind: 'web', state: 'running' }],
+      },
+    });
+    expect(f.ports.speak).toHaveBeenCalledOnce();
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        revision: String(++revision),
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn: 'completed',
+        items: [{ kind: 'text', text: calendar.text }],
+        response_segments: [
+          morning,
+          calendar,
+          segment('3', calendar.text, 'final', true),
+        ],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        revision: String(++revision),
+      },
+    });
+    await settle();
+    expect(f.view().busy).toBe(false);
+    f.controller.update(f.context());
+    expect(f.ports.speak).toHaveBeenCalledTimes(2);
+    f.controller.dispose();
+  });
+
+  it.each(['mute', 'stop', 'reset', 'disconnect'] as const)(
+    'fences queued segments and late completion after %s',
+    async (operation) => {
+      const f = fixture();
+      f.utterance();
+      await settle();
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'admitted',
+          response_segments: [
+            segment('1', 'First update.'),
+            segment('2', 'Must not play after cancellation.'),
+          ],
+        },
+      });
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      if (operation === 'mute') f.controller.setMuted(true);
+      else if (operation === 'stop') f.controller.stopVoice();
+      else if (operation === 'reset') f.controller.accept({ type: 'reset' });
+      else
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn: 'uncertain',
+            connection: 'unavailable',
+          },
+        });
+      await settle();
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          operation_id: id,
+          revision: '8',
+          epoch: '1',
+        },
+      });
+      f.completed();
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      f.controller.dispose();
+    },
+  );
+
+  it.each([false, true])(
+    'bounds retention across 120 ordered updates with mute=%s',
+    async (muted) => {
+      const f = fixture();
+      let revision = 0;
+      f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+        ...initialSpeechSnapshot(),
+        operation_id,
+        revision: String(++revision),
+      }));
+      f.utterance();
+      await settle();
+      f.controller.setMuted(muted);
+      for (let sequence = 1; sequence <= 120; ++sequence) {
+        const update = {
+          ...segment('1', `Update ${sequence}.`),
+          sequence: String(sequence),
+          id: sequence.toString(16).padStart(64, '0'),
+        };
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn_id: id,
+            turn: 'admitted',
+            response_segments: [update],
+          },
+        });
+        await settle();
+      }
+      const retained = Reflect.get(f.controller, 'responseTexts') as string[];
+      expect(retained).toHaveLength(muted ? 0 : 16);
+      expect(Reflect.get(f.controller, 'responseSequence')).toBe(120n);
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 120);
+      // Replayed older snapshots cannot restart narration after ledger eviction.
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          response_segments: [
+            { ...segment('2', 'Old update.'), sequence: '1' },
+          ],
+        },
+      });
+      await settle();
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 120);
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn: 'completed',
+          response_segments: [segment('3', 'Update 1.', 'final', true)],
+        },
+      });
+      await settle();
+      // Evicted prose cannot prove reuse, so the canonical final remains audible.
+      expect(f.ports.speak).toHaveBeenCalledTimes(muted ? 0 : 121);
+      expect(Reflect.get(f.controller, 'responseTexts')).toHaveLength(
+        muted ? 0 : 16,
+      );
+      f.controller.dispose();
+    },
+  );
+
+  it('does not treat capacity-rejected commentary as proof a reused final was spoken', async () => {
+    const f = fixture();
+    let revision = 0;
+    f.ports.speak.mockImplementation(async (_text, operation_id) => ({
+      ...initialSpeechSnapshot(),
+      operation_id,
+      revision: String(++revision),
+      state: 'speaking',
+    }));
+    f.utterance();
+    await settle();
+    for (let sequence = 1; sequence <= 20; ++sequence) {
+      f.update({
+        assistant: {
+          ...f.context().assistant,
+          turn_id: id,
+          turn: 'admitted',
+          response_segments: [
+            {
+              ...segment('1', `Update ${sequence}. ${'word '.repeat(700)}`),
+              sequence: String(sequence),
+              id: sequence.toString(16).padStart(64, '0'),
+            },
+          ],
+        },
+      });
+      await settle();
+    }
+    const rejected = `Update 20. ${'word '.repeat(700)}`.trim();
+    expect(Reflect.get(f.controller, 'responseTexts')).not.toContain(rejected);
+    for (let i = 0; i < 12; ++i) {
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          operation_id: id,
+          revision: String(++revision),
+        },
+      });
+      await settle();
+    }
+    const before = f.ports.speak.mock.calls.length;
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn: 'completed',
+        response_segments: [segment('2', rejected, 'final', true)],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).toHaveBeenCalledTimes(before + 1);
+    expect(f.ports.speak.mock.calls.at(-1)?.[0]).toBe(rejected);
+    f.controller.dispose();
+  });
+
+  it('never narrates a restored terminal snapshot without local submission ownership', async () => {
+    const f = fixture();
+    f.update({
+      assistant: {
+        ...f.context().assistant,
+        turn_id: id,
+        turn: 'completed',
+        items: [{ kind: 'text', text: 'History' }],
+        response_segments: [segment('1', 'History', 'final')],
+      },
+    });
+    await settle();
+    expect(f.ports.speak).not.toHaveBeenCalled();
     f.controller.dispose();
   });
 });
@@ -601,7 +902,7 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     speak: vi.fn(
       async (_text: string, operation_id: string): Promise<SpeechSnapshot> => ({
         ...initialSpeechSnapshot(),
-        revision: '1',
+        revision: String(BigInt(context.speech.revision) + 1n),
         state: 'synthesizing' as const,
         operation_id,
       }),
@@ -624,6 +925,19 @@ function fixture(extra: Partial<VoicePorts> = {}) {
   controller.update(context);
   let sequence = 0;
   const update = (change: Partial<VoiceContext>) => {
+    // Native idle/speaking events retain their operation ID; old fixtures omitted it.
+    if (
+      change.speech?.operation_id === null &&
+      change.speech.revision !== '0' &&
+      ports.speak.mock.calls.length
+    )
+      change = {
+        ...change,
+        speech: {
+          ...change.speech,
+          operation_id: ports.speak.mock.calls.at(-1)?.[1] ?? null,
+        },
+      };
     context = { ...context, ...change };
     controller.update(context);
   };
@@ -684,6 +998,61 @@ function fixture(extra: Partial<VoicePorts> = {}) {
     view: () => view,
   };
 }
+
+describe('voice volume ducking intent', () => {
+  it('keeps passive speech untouched and ducks an admitted voice turn through playback', async () => {
+    const f = fixture();
+    f.feed(true, 5);
+    expect(f.view().ducking).toBe(false);
+    f.feed(false, 35);
+    await flush();
+    expect(f.view().ducking).toBe(true);
+    f.completed();
+    await flush();
+    expect(f.view().ducking).toBe(true);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        state: 'speaking',
+        revision: '2',
+        operation_id: id,
+      },
+    });
+    expect(f.view().ducking).toBe(true);
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        state: 'idle',
+        revision: '3',
+        operation_id: id,
+      },
+    });
+    expect(f.view().ducking).toBe(false);
+    f.controller.dispose();
+  });
+
+  it('ducks foreground speech, permits brief quiet, and releases on failure, stop and suspension', async () => {
+    for (const end of ['stop', 'failure', 'suspend', 'capture'] as const) {
+      const f = fixture();
+      f.controller.setDraft('foreground draft');
+      f.feed(true, 1);
+      expect(f.view().ducking).toBe(true);
+      f.feed(false, 1);
+      expect(f.view()).toMatchObject({
+        ducking: false,
+        duckingListening: true,
+      });
+      if (end === 'stop') f.controller.stopVoice();
+      if (end === 'failure') f.controller.accept({ type: 'unavailable' });
+      if (end === 'suspend') f.update({ available: false });
+      if (end === 'capture')
+        f.update({ audio: { ...f.context().audio, status: 'idle' } });
+      expect(f.view().ducking).toBe(false);
+      expect(f.view().duckingListening).toBe(false);
+      f.controller.dispose();
+    }
+  });
+});
 
 describe('wake-word session lifecycle', () => {
   it('shows raw Whisper previews and final words without admitting passive speech', async () => {
@@ -1523,6 +1892,44 @@ describe('voice conversation ownership', () => {
     expect(await failed.controller.withCaptureReleased(action)).toBe(false);
     expect(action).not.toHaveBeenCalled();
   });
+
+  it('keeps genuine foreground draft collection authoritative over typed submission', async () => {
+    const pending = deferred<SpeechTranscript>();
+    const collect = vi.fn(() => pending.promise);
+    const action = vi.fn(async () => true);
+    const f = fixture({ collect });
+    f.controller.setDraft('Keep my active draft');
+    f.utterance();
+    expect(collect).toHaveBeenCalledOnce();
+    f.update({
+      speech: {
+        ...initialSpeechSnapshot(),
+        operation_id: id,
+        state: 'collecting',
+      },
+    });
+    expect(await f.controller.withCaptureReleased(action)).toBe(false);
+    expect(action).not.toHaveBeenCalled();
+    expect(f.composition().raw).toBe('Keep my active draft');
+    f.controller.dispose();
+    pending.resolve({ version: 1, utterance_id: id, text: 'stale words' });
+    await flush();
+    expect(f.composition().raw).toBe('Keep my active draft');
+  });
+
+  it.each(['collecting', 'transcribing', 'synthesizing', 'speaking'] as const)(
+    'rejects unowned native %s instead of bypassing the foreground guard',
+    async (state) => {
+      const f = fixture();
+      const action = vi.fn(async () => true);
+      f.update({
+        speech: { ...initialSpeechSnapshot(), operation_id: id, state },
+      });
+      expect(await f.controller.withCaptureReleased(action)).toBe(false);
+      expect(action).not.toHaveBeenCalled();
+      f.controller.dispose();
+    },
+  );
   it('retains native cleanup serialization across reset and refines the new draft', async () => {
     const old = deferred<unknown>();
     const invoke = vi
@@ -1908,11 +2315,206 @@ describe('voice conversation ownership', () => {
     ).toBe(true);
     f.completed();
     await flush();
-    expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith('A local reply', id);
+    expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
+      'A local reply',
+      id,
+      expect.any(Function),
+    );
     f.completed();
     f.utterance();
     expect(f.ports.transcribe).toHaveBeenCalledOnce();
     expect(f.ports.speak).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])(
+    'serializes post-wake draft collection behind passive diagnostics (reset queued: %s)',
+    async (resetQueued) => {
+      const passive = deferred<void>();
+      let active = false;
+      let collisions = 0;
+      let wakeNext = false;
+      const buffers: Int16Array[] = [];
+      const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => {
+        if (active) {
+          collisions++;
+          throw new Error('SpeechHost busy');
+        }
+        active = true;
+        buffers.push(pcm);
+        try {
+          if (buffers.length === 1) {
+            await passive.promise;
+            return { version: 1, utterance_id, text: 'Ambient speech' };
+          }
+          expect(pcm.some((sample) => sample !== 0)).toBe(true);
+          return { version: 1, utterance_id, text: 'A short spoken request' };
+        } finally {
+          active = false;
+        }
+      });
+      const f = fixture({
+        collect,
+        keywords: async (_pcm, _stream, sequence) => {
+          const detection = wakeNext
+            ? { command: 'ivy' as const, end_sample: (sequence + 1) * 640 }
+            : null;
+          wakeNext = false;
+          return { sequence, detection };
+        },
+      });
+      const settle = async () => {
+        for (let i = 0; i < 8; i++) await flush();
+      };
+      f.controller.setRecognitionOptions('high', true);
+      f.feed(true, 8);
+      f.feed(false, 35);
+      await settle();
+      expect(collect).toHaveBeenCalledOnce();
+      wakeNext = true;
+      f.feed(true, 1);
+      await settle();
+      expect(f.view().foregroundActive).toBe(true);
+      f.feed(true, 8);
+      f.feed(false, 40);
+      await settle();
+      expect(collect).toHaveBeenCalledOnce();
+      expect(collisions).toBe(0);
+      expect(f.view().error).toBe(false);
+      if (resetQueued) f.controller.accept({ type: 'reset' });
+      passive.resolve();
+      await settle();
+      expect(collisions).toBe(0);
+      expect(f.view().error).toBe(false);
+      expect(collect).toHaveBeenCalledTimes(resetQueued ? 1 : 2);
+      if (resetQueued) expect(f.ports.submit).not.toHaveBeenCalled();
+      else
+        expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+          'A short spoken request',
+          id,
+        );
+      expect(buffers.every((pcm) => pcm.every((sample) => sample === 0))).toBe(
+        true,
+      );
+      f.controller.dispose();
+    },
+  );
+
+  it('keeps non-wake passive diagnostics local and selects the high-sensitivity wake-only mode', async () => {
+    const observations = vi.fn();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'Ambient speech without an invocation',
+    }));
+    const keywords = vi.fn(
+      async (
+        _pcm: Int16Array,
+        _stream: string,
+        sequence: number,
+        threshold: number,
+        mode: unknown,
+      ) => {
+        void threshold;
+        void mode;
+        return { sequence, detection: null };
+      },
+    );
+    const f = fixture({ collect, keywords, onRecognition: observations });
+    f.controller.setRecognitionOptions('high', true);
+    f.utterance();
+    await flush();
+    expect(collect).toHaveBeenCalledOnce();
+    expect(observations).toHaveBeenCalledWith({
+      text: 'Ambient speech without an invocation',
+      status: 'No wake detected',
+    });
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(
+      keywords.mock.calls.some((call) => call[4] === 'passive_sensitive'),
+    ).toBe(true);
+    f.controller.setRecognitionOptions('standard', false);
+    f.utterance();
+    await flush();
+    expect(collect).toHaveBeenCalledTimes(2);
+    f.controller.dispose();
+  });
+
+  it.each(['Hello', 'Hello there', 'Thanks', 'Cancel that'])(
+    'never adds waiting speech to an admitted %s turn',
+    async (text) => {
+      vi.useFakeTimers();
+      const f = fixture();
+      try {
+        f.ports.transcribe.mockResolvedValueOnce({
+          version: 1,
+          utterance_id: id,
+          text: `Ivy, ${text}`,
+        });
+        f.utterance();
+        await flush();
+        f.update({
+          assistant: {
+            ...f.context().assistant,
+            turn: 'admitted',
+            turn_id: id,
+          },
+        });
+        await vi.advanceTimersByTimeAsync(6000);
+        expect(f.ports.speak).not.toHaveBeenCalled();
+        expect(f.ports.submit).toHaveBeenCalledOnce();
+      } finally {
+        f.controller.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('never adds timer filler while an admitted task is waiting for committed text', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      f.update({
+        assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
+      });
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.completed();
+      await flush();
+      expect(f.ports.speak).toHaveBeenCalledExactlyOnceWith(
+        'A local reply',
+        id,
+        expect.any(Function),
+      );
+    } finally {
+      f.controller.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a muted or reset waiting turn quiet without replaying its request', async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      f.utterance();
+      await flush();
+      f.update({
+        assistant: { ...f.context().assistant, turn: 'admitted', turn_id: id },
+      });
+      f.controller.setMuted(true);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(f.ports.speak).not.toHaveBeenCalled();
+      f.controller.setMuted(false);
+      f.controller.stopVoice();
+      f.completed();
+      await flush();
+      expect(f.ports.submit).toHaveBeenCalledOnce();
+      expect(f.ports.speak).not.toHaveBeenCalled();
+    } finally {
+      f.controller.dispose();
+      vi.useRealTimers();
+    }
   });
 
   it('discards a late transcript after microphone stop and clears its samples', async () => {
@@ -2978,6 +3580,26 @@ describe('spoken prompt composition', () => {
 });
 
 describe('native voice lifecycle commands', () => {
+  it('runs a requested UI new session through lifecycle without submitting a model prompt', async () => {
+    const newSession = vi.fn(async () => true),
+      onNewSession = vi.fn();
+    const f = fixture({ newSession, onNewSession });
+    expect(await f.controller.newSession()).toBe(true);
+    expect(newSession).toHaveBeenCalledOnce();
+    expect(onNewSession).toHaveBeenCalledOnce();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.view().passive).toBe(true);
+    f.controller.dispose();
+  });
+  it('refuses a UI new session while an admitted turn is running', async () => {
+    const newSession = vi.fn(async () => true);
+    const f = fixture({ newSession });
+    f.update({ assistant: { ...f.context().assistant, turn: 'admitted' } });
+    expect(await f.controller.newSession()).toBe(false);
+    expect(newSession).not.toHaveBeenCalled();
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
   it('accepts a standalone collected reload while passive without activating foreground presence', async () => {
     const reloadMcp = vi.fn(async () => true);
     const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({

@@ -1,0 +1,283 @@
+@if (scene(); as current) {
+  <section
+    class="spatial-shell"
+    [class.is-compact]="compact()"
+    role="region"
+    aria-labelledby="spatial-title"
+    [attr.aria-description]="current.label"
+    aria-keyshortcuts="Escape Alt+S F"
+    (keydown.escape)="escape($event)"
+    (keydown)="shortcut($event)"
+    animate.enter="scene-enter"
+    animate.leave="scene-leave"
+  >
+    <h2 #title id="spatial-title" class="sr-only" tabindex="-1">
+      {{ current.title }}
+    </h2>
+
+    <div #context class="projection-context">
+      <button
+        #contextTrigger
+        type="button"
+        class="context-trigger"
+        aria-label="Presentation actions"
+        title="Presentation actions"
+        [attr.aria-expanded]="contextOpen()"
+        (click)="toggleContext()"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          width="16"
+          height="16"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <circle cx="4" cy="10" r="1.2" />
+          <circle cx="10" cy="10" r="1.2" />
+          <circle cx="16" cy="10" r="1.2" />
+        </svg>
+      </button>
+      @if (contextOpen()) {
+        <nav class="context-actions" aria-label="Presentation actions">
+          @if (state().manual) {
+            <button
+              type="button"
+              aria-keyshortcuts="F"
+              (click)="closeContext(); follow.emit()"
+            >
+              Follow Ivy <kbd>F</kbd>
+            </button>
+          }
+          @if (state().featured.length) {
+            <button type="button" (click)="contextAction({ kind: 'overview' })">
+              Return to overview
+            </button>
+          }
+          @if (state().featured.length === 1) {
+            <button
+              type="button"
+              (click)="
+                contextAction({ kind: 'dismiss', id: state().featured[0] })
+              "
+            >
+              Dismiss focused panel
+            </button>
+          }
+          <button
+            type="button"
+            [attr.aria-pressed]="compact()"
+            (click)="compact.set(!compact())"
+          >
+            Compact panels
+          </button>
+          @if (readAlong()) {
+            <button type="button" (click)="toggleReadAlong.emit()">
+              {{
+                mode() === 'paused' ? 'Resume read-along' : 'Pause read-along'
+              }}
+            </button>
+            <button type="button" (click)="next.emit()">Next segment</button>
+          }
+          @if (transcript().length) {
+            <button
+              type="button"
+              [attr.aria-expanded]="transcriptOpen()"
+              (click)="transcriptOpen.set(!transcriptOpen())"
+            >
+              {{ transcriptOpen() ? 'Hide transcript' : 'View transcript' }}
+            </button>
+          }
+          @if (mode() !== 'idle') {
+            <button
+              type="button"
+              aria-keyshortcuts="Alt+S"
+              (click)="closeContext(); stop.emit()"
+            >
+              Stop narration <kbd>Alt+S</kbd>
+            </button>
+          }
+          <button type="button" (click)="contextAction({ kind: 'clear' })">
+            Close presentation
+          </button>
+          @if (transcriptOpen()) {
+            <section
+              class="context-transcript"
+              aria-labelledby="spatial-transcript-title"
+              tabindex="0"
+            >
+              <h3 id="spatial-transcript-title" class="microtype">
+                Transcript
+              </h3>
+              <ol>
+                @for (line of transcript(); track $index) {
+                  <li>{{ line }}</li>
+                }
+              </ol>
+            </section>
+          }
+        </nav>
+      }
+    </div>
+
+    <div
+      #viewport
+      class="spatial-viewport"
+      [style.top.px]="band().top"
+      [style.bottom.px]="band().bottom"
+      [attr.aria-busy]="loading()"
+    >
+      @if (loading()) {
+        <stellar-skeleton-atom class="stage-skeleton" />
+      } @else {
+        <div
+          class="spatial-field"
+          [class.is-scrollable]="fieldHeight() > band().height"
+          [style.height.px]="fieldHeight()"
+        >
+          @if (connector(); as path) {
+            <svg class="projection-link" aria-hidden="true">
+              <path [attr.d]="path" />
+            </svg>
+          }
+          @for (panel of panels(); track panel.id) {
+            <article
+              #card
+              [class]="panel.classes"
+              [attr.data-panel-id]="panel.id"
+              [attr.aria-label]="panel.title"
+              [style.--order]="panel.index"
+              [style.left.px]="panel.x"
+              [style.top.px]="panel.y"
+              [style.width.px]="panel.width"
+              [style.height.px]="panel.height"
+              animate.enter="card-enter"
+              animate.leave="card-leave"
+            >
+              <div class="card-face">
+                <div class="card-plane" aria-hidden="true"></div>
+                <div class="card-body">
+                  <div class="card-top microtype">
+                    <span class="card-sequence"
+                      >{{ panel.index + 1 < 10 ? '0' : ''
+                      }}{{ panel.index + 1 }}</span
+                    >
+                    <span aria-hidden="true" class="card-tick"></span>
+                    <span class="card-category">{{ panel.category }}</span>
+                  </div>
+                  <div class="card-scroll">
+                    <div class="card-headline">
+                      <div class="card-copy">
+                        <h3>
+                          <button
+                            type="button"
+                            class="card-title"
+                            aria-keyshortcuts="Delete"
+                            [attr.aria-pressed]="panel.focused"
+                            [attr.aria-expanded]="
+                              panel.renderer ? panel.expanded : null
+                            "
+                            [attr.title]="
+                              panel.focused && panel.renderer
+                                ? panel.expanded
+                                  ? 'Collapse details'
+                                  : 'Read more'
+                                : 'Focus panel'
+                            "
+                            (click)="
+                              activatePanel(
+                                panel.id,
+                                !!panel.renderer,
+                                panel.expanded
+                              )
+                            "
+                            (keydown.delete)="dismiss(panel.id, $event)"
+                          >
+                            {{ panel.title }}
+                          </button>
+                        </h3>
+                        <p class="card-summary">{{ panel.summary }}</p>
+                      </div>
+                      @if (panel.thumbnail; as thumbnail) {
+                        <stellar-presentation-media-molecule
+                          class="card-thumbnail"
+                          [thumbnail]="thumbnail"
+                        />
+                      }
+                    </div>
+                    @if (panel.expanded && panel.renderer; as renderer) {
+                      <div class="card-detail" animate.enter="detail-enter">
+                        <ng-container
+                          *ngComponentOutlet="
+                            renderer.component;
+                            inputs: renderer.inputs
+                          "
+                        />
+                      </div>
+                    }
+                  </div>
+                  @if (panel.source && (panel.focused || panel.expanded)) {
+                    <a
+                      class="panel-source"
+                      [href]="panel.source"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Source <span aria-hidden="true">↗</span>
+                    </a>
+                  }
+                </div>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty-state microtype">
+              {{
+                mode() === 'idle'
+                  ? 'No panels on stage.'
+                  : 'Ivy is preparing the canvas.'
+              }}
+            </p>
+          }
+        </div>
+      }
+    </div>
+
+    <p role="status" class="sr-only">
+      @switch (mode()) {
+        @case ('preparing') {
+          Preparing narration
+        }
+        @case ('speaking') {
+          Ivy speaking
+        }
+        @case ('idle') {
+          Presentation ready
+        }
+      }
+    </p>
+    <div class="projection-subtitles" aria-live="polite" aria-atomic="true">
+      @if ((caption() && mode() !== 'idle') || readAlong()) {
+        <div class="projection-caption" animate.leave="caption-leave">
+          @if (readAlong()) {
+            <div class="microtype">
+              {{
+                mode() === 'paused'
+                  ? 'Audio unavailable / Read-along paused'
+                  : 'Audio unavailable / Read along'
+              }}
+            </div>
+          }
+          @for (line of [caption()]; track line) {
+            @if (line) {
+              <p animate.enter="caption-enter">{{ line }}</p>
+            }
+          }
+          @if (state().manual) {
+            <div class="microtype selection-hint">
+              Manual focus · F to follow Ivy
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </section>
+}

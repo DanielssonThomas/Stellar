@@ -47,3 +47,6 @@ export type {
 export * from './lib/molecules/request-status-molecule.component';
 export type { RequestStatusEntry } from './lib/molecules/request-status-molecule.component';
 export * from './lib/molecules/ivy-question-molecule.component';
+export * from './lib/molecules/ivy-session-inspector-molecule.component';
+export * from './lib/molecules/presentation-chart-molecule.component';
+export * from './lib/molecules/response-caption-molecule.component';

@@ -5,6 +5,7 @@ import {
   PresentationTextMolecule,
   PresentationMediaMolecule,
   PresentationDiagramMolecule,
+  PresentationChartMolecule,
   PresentationTelemetryMolecule,
 } from '@stellar/ui-molecules';
 import {
@@ -16,6 +17,7 @@ import {
   decodePresentationImage,
   decodePresentationBrowser,
   decodePresentationDiagram,
+  decodePresentationChart,
   decodePresentationWorkflow,
   decodePresentationSession,
 } from './presentation-decoders';
@@ -53,6 +55,11 @@ export const STAGE_CATALOGUE = new InjectionToken<StageCatalogue>(
           title: 'Diagram',
           component: PresentationDiagramMolecule,
           decode: decodePresentationDiagram,
+        }),
+        chart: Object.freeze({
+          title: 'Chart',
+          component: PresentationChartMolecule,
+          decode: decodePresentationChart,
         }),
         workflow: Object.freeze({
           title: 'Stellar workflow',

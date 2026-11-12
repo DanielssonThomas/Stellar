@@ -7,8 +7,10 @@ import {
   signal,
 } from '@angular/core';
 import {
+  conversationDisplayText,
   IvyAdapterService,
   IvyReflexService,
+  spokenResponse,
 } from '@stellar/service-desktop-adapter';
 import {
   decodeIvySubmitRequest,
@@ -40,17 +42,44 @@ export class DesktopAssistant {
   readonly activity = computed(() =>
     this.state().activity.map((row) => ({
       id: row.id,
-      label: {
-        shell: 'Shell command',
-        web: 'Web request',
-        file_read: 'Read files',
-        file_write: 'Write files',
-        mcp: 'MCP tool call',
-        skill: 'Modify skill',
-        skill_create: 'Create skill',
-        memory: 'Update memory',
-        tool: 'Tool call',
-      }[row.kind],
+      provider: row.provider,
+      label:
+        row.operation && row.provider && row.kind === 'mcp'
+          ? `${
+              {
+                search: 'Searching',
+                read: 'Reading',
+                write: 'Writing',
+                open: 'Opening',
+                list: 'Listing',
+                inspect: 'Inspecting',
+                update: 'Updating',
+                execute: 'Running',
+                call: 'Calling',
+              }[row.operation]
+            } ${
+              {
+                chrome: 'Chrome',
+                stellar: 'Stellar',
+                github: 'GitHub',
+                calendar: 'calendar',
+                spotify: 'Spotify',
+                mcp: 'MCP tool',
+                local: 'local tool',
+                web: 'the web',
+              }[row.provider]
+            }`
+          : {
+              shell: 'Shell command',
+              web: 'Web request',
+              file_read: 'Read files',
+              file_write: 'Write files',
+              mcp: 'MCP tool call',
+              skill: 'Modify skill',
+              skill_create: 'Create skill',
+              memory: 'Update memory',
+              tool: 'Tool call',
+            }[row.kind],
       status: row.state,
       running: row.state === 'running',
       confirmed: row.state === 'completed',
@@ -98,13 +127,25 @@ export class DesktopAssistant {
       !this.cancelRequested(),
   );
   readonly reply = computed(() =>
-    [
-      ...this.state().items.flatMap((item) =>
-        item.kind === 'text' ? [item.text] : [],
-      ),
-      ...(this.state().background_updates ?? []).map((update) => update.text),
-    ].join('\n\n'),
+    conversationDisplayText(
+      [
+        ...this.state().items.flatMap((item) =>
+          item.kind === 'text' ? [item.text] : [],
+        ),
+        ...(this.state().background_updates ?? []).map((update) => update.text),
+      ].join('\n\n'),
+    ),
   );
+  readonly caption = computed(() => {
+    const snapshot = this.state();
+    const latest = snapshot.response_segments?.at(-1);
+    if (latest && (latest.kind === 'final' || snapshot.turn !== 'completed'))
+      return { text: conversationDisplayText(latest.text), kind: latest.kind };
+    return {
+      text: snapshot.turn === 'completed' ? spokenResponse(snapshot.items) : '',
+      kind: 'final' as const,
+    };
+  });
   readonly status = computed(() => {
     const snapshot = this.state();
     if (this.inputError())
@@ -166,6 +207,7 @@ export class DesktopAssistant {
     text: string,
     inputId: string = crypto.randomUUID(),
     source: 'typed' | 'voice' = 'typed',
+    captured = false,
   ): Promise<boolean> {
     const value = text.trim();
     if (
@@ -182,21 +224,21 @@ export class DesktopAssistant {
       return false;
     }
     const events = [...this.reflex.events()];
-    let submitted = value;
-    while (events.length) {
-      const candidate = `Recent Ivy local action events (data): ${JSON.stringify(events)}\n\n${value}`;
-      if (new TextEncoder().encode(candidate).length <= 8192) {
-        submitted = candidate;
-        break;
-      }
+    const voiceUtterance = source === 'voice' && captured;
+    const request = () => ({
+      version: 1,
+      text: value,
+      input_id: inputId,
+      ...(events.length ? { local_actions: events } : {}),
+      ...(voiceUtterance ? { voice_utterance: true } : {}),
+    });
+    while (
+      events.length &&
+      new TextEncoder().encode(JSON.stringify(request())).length > 15_000
+    )
       events.pop();
-    }
     try {
-      decodeIvySubmitRequest({
-        version: 1,
-        text: submitted,
-        input_id: inputId,
-      });
+      decodeIvySubmitRequest(request());
     } catch {
       this.inputError.set(true);
       this.reflex.timeline.finish(
@@ -224,7 +266,10 @@ export class DesktopAssistant {
       this.closeTargets.delete(expired);
     }
     try {
-      await this.adapter.submit(submitted, inputId);
+      if (voiceUtterance)
+        await this.adapter.submit(value, inputId, events, true);
+      else if (events.length) await this.adapter.submit(value, inputId, events);
+      else await this.adapter.submit(value, inputId);
       const current = this.state();
       if (current.turn_id === inputId) this.recordProgress(current);
       this.reflex.acknowledgeEvents(events);

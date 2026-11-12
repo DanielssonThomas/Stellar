@@ -6,11 +6,16 @@ import type {
 interface Ports {
   available(): boolean;
   busy(): boolean;
+  eligible?(): boolean;
   enabled(): boolean;
   state(): SpeechSnapshot;
   claim(id: string, request: string): Promise<boolean>;
-  speak(text: string, id: string): Promise<SpeechSnapshot>;
-  stop(): Promise<unknown>;
+  speak(
+    text: string,
+    id: string,
+    current: () => boolean,
+  ): Promise<SpeechSnapshot>;
+  stop(id: string): Promise<unknown>;
   waitForQuestion(): Promise<void>;
   id(): string;
   changed(): void;
@@ -25,12 +30,17 @@ export class UpdateVoiceCue {
   private playing?: { epoch: string; revision: bigint; done: () => void };
   private disposed = false;
   private dispatching = false;
+  private operation?: string;
+  private update?: string;
+  private offered = new Set<string>();
   private waiting?: () => void;
 
   constructor(private readonly ports: Ports) {}
 
   observe(updates: readonly IvyBackgroundUpdate[]) {
     if (this.disposed) return;
+    this.offered = new Set(updates.map((item) => item.id));
+    if (this.update && !this.offered.has(this.update)) this.cancel();
     if (!this.ports.available()) {
       this.cancel();
       return;
@@ -65,6 +75,7 @@ export class UpdateVoiceCue {
     );
     if (!next) return;
     this.attempted.add(next.id);
+    this.update = next.id;
     const generation = this.generation;
     const pending = this.run(next, generation);
     this.pending = pending;
@@ -82,7 +93,11 @@ export class UpdateVoiceCue {
 
   private current(generation: number) {
     return (
-      !this.disposed && generation === this.generation && this.ports.available()
+      !this.disposed &&
+      generation === this.generation &&
+      this.ports.available() &&
+      this.update !== undefined &&
+      this.offered.has(this.update)
     );
   }
 
@@ -100,18 +115,33 @@ export class UpdateVoiceCue {
         this.ports.failed();
         return;
       }
-      if (this.ports.busy() || this.ports.state().state !== 'idle')
+      while (this.current(generation) && this.ports.enabled()) {
+        await this.ports.waitForQuestion();
+        if (!this.current(generation) || !this.ports.enabled()) return;
+        if (this.ports.state().state === 'unavailable') {
+          this.ports.failed();
+          return;
+        }
+        if (!this.ports.busy() && this.ports.state().state === 'idle') break;
         await new Promise<void>((ready) => {
           this.waiting = ready;
         });
-      await this.ports.waitForQuestion();
+      }
       if (!this.current(generation) || !this.ports.enabled()) return;
       const text =
         new TextEncoder().encode(update.text).length <= 4000
           ? update.text
           : "I have an update for you. It's available in the conversation.";
       this.dispatching = true;
-      const snapshot = await this.ports.speak(text, this.ports.id());
+      this.operation = this.ports.id();
+      const snapshot = await this.ports.speak(
+        text,
+        this.operation,
+        () =>
+          this.current(generation) &&
+          this.ports.enabled() &&
+          (this.ports.eligible?.() ?? true),
+      );
       if (!this.current(generation)) return;
       if (snapshot.state === 'unavailable') {
         this.ports.failed();
@@ -135,6 +165,7 @@ export class UpdateVoiceCue {
       if (this.current(generation)) this.ports.failed();
     } finally {
       this.dispatching = false;
+      this.operation = undefined;
     }
   }
 
@@ -146,8 +177,8 @@ export class UpdateVoiceCue {
     this.waiting = undefined;
     waiting?.();
     playing?.done();
-    if (this.dispatching) {
-      void this.ports.stop().catch(() => this.ports.failed());
+    if (this.dispatching && this.operation) {
+      void this.ports.stop(this.operation).catch(() => this.ports.failed());
     }
   }
 

@@ -40,6 +40,8 @@ impl IvyHost {
         if self
             .sender
             .try_send(Work {
+                context: None,
+                expression: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Lifecycle(control, ticket.clone(), tx),
@@ -109,6 +111,8 @@ impl IvyHost {
         if self
             .sender
             .try_send(Work {
+                context: None,
+                expression: None,
                 epoch: view.epoch,
                 workspace_epoch,
                 action: Action::Rotate(model, force, ticket.clone(), tx),
@@ -132,6 +136,14 @@ impl IvyHost {
         })
     }
     pub fn request(&self, action: Action) -> Result<IvySnapshot, IvyErrorCode> {
+        self.request_with_expression(action, None)
+    }
+
+    pub fn request_with_expression(
+        &self,
+        action: Action,
+        expression: Option<crate::speech::VoiceExpressionPending>,
+    ) -> Result<IvySnapshot, IvyErrorCode> {
         let _guard = self.gate.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         let mut view = self
             .shared
@@ -218,8 +230,19 @@ impl IvyHost {
             Action::Disconnect => (Some(IvyConnectionState::Disconnected), None),
             _ => (None, None),
         };
+        let context = if matches!(&action, Action::Submit(_)) {
+            self.context_provider.lock().ok().and_then(|provider| {
+                provider
+                    .as_ref()
+                    .and_then(|provide| provide(&previous_workspace_epoch.to_string()))
+            })
+        } else {
+            None
+        };
         self.sender
             .try_send(Work {
+                context,
+                expression,
                 epoch,
                 workspace_epoch,
                 action,
@@ -236,6 +259,7 @@ impl IvyHost {
             view.snapshot.turn = IvyTurnState::Submitting;
             view.snapshot.turn_id = Some(id);
             view.snapshot.items.clear();
+            view.snapshot.response_segments.clear();
             view.snapshot.activity.clear();
         }
         if disconnect || cancel {
@@ -281,6 +305,17 @@ pub(in crate::ivy) fn validate_submit(request: &IvySubmitRequest) -> Result<(), 
         || !valid_id
         || request.text.trim().is_empty()
         || request.text.len() > 8192
+        || request.local_actions.as_ref().is_some_and(|events| {
+            events.len() > 6
+                || events.iter().any(|event| {
+                    event.action.is_empty()
+                        || event.action.len() > 128
+                        || event.target.is_empty()
+                        || event.target.len() > 240
+                        || event.reply.is_empty()
+                        || event.reply.len() > 512
+                })
+        })
     {
         return Err(IvyErrorCode::MalformedRequest);
     }

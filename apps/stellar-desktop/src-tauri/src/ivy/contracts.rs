@@ -80,11 +80,44 @@ pub enum IvyActivityState {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityProvider {
+    Chrome,
+    Stellar,
+    Github,
+    Calendar,
+    Spotify,
+    Mcp,
+    Local,
+    Web,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyActivityOperation {
+    Search,
+    Read,
+    Write,
+    Open,
+    List,
+    Inspect,
+    Update,
+    Execute,
+    Call,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvyActivity {
     pub id: String,
     pub kind: IvyActivityKind,
     pub state: IvyActivityState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub provider: Option<IvyActivityProvider>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub operation: Option<IvyActivityOperation>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -104,6 +137,45 @@ pub struct IvySubmitRequest {
     pub version: u16,
     pub input_id: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub local_actions: Option<Vec<IvyLocalActionEvent>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub voice_utterance: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyLocalActionEvent {
+    pub action: String,
+    pub target: String,
+    pub outcome: IvyLocalActionOutcome,
+    pub reply: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyLocalActionOutcome {
+    Confirmed,
+    Uncertain,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum IvyResponseSegmentKind {
+    Commentary,
+    Final,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyResponseSegment {
+    pub id: String,
+    pub kind: IvyResponseSegmentKind,
+    pub text: String,
+    pub sequence: Option<String>,
+    pub reused: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
@@ -139,6 +211,8 @@ pub struct IvySnapshot {
     #[serde(default)]
     pub reset_id: Option<String>,
     pub items: Vec<super::presentation::IvyPresentation>,
+    #[serde(default)]
+    pub response_segments: Vec<IvyResponseSegment>,
     pub error: Option<IvyErrorCode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -166,6 +240,7 @@ impl Default for IvySnapshot {
             activity: vec![],
             reset_id: None,
             items: vec![],
+            response_segments: vec![],
             error: None,
             first_text_observed: None,
             questions: None,

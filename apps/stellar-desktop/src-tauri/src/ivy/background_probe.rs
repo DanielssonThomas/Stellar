@@ -32,7 +32,7 @@ impl IvyHost {
                 input_id.insert(index, '-');
             }
             self.request(Action::Submit(IvySubmitRequest {
-                version:1, input_id,
+                version:1, input_id, local_actions: None, voice_utterance: Some(false),
                 text: "This is the user's authorized harmless Desktop background notification test. Run exactly one terminal computation in the background with notify_on_complete=true: python -I -c \"sum(i*i for i in range(60000000)); print('STELLAR_BACKGROUND_299')\". Use the existing local interpreter, no downloads. Do not delegate, create or edit files, change settings, access the network, or use other tools. Return a short initial acknowledgement after starting it. When its completion notification wakes you, reply with exactly: STELLAR_BACKGROUND_299 completed. Do not claim completion before the real process finishes.".into(),
             }))?;
         }

@@ -19,6 +19,41 @@ function deferred() {
 }
 
 describe('fast command audio ownership', () => {
+  it('preserves post-wake audio and rejects controls in sensitive passive mode', async () => {
+    const pending = deferred();
+    const detected = vi.fn(),
+      failed = vi.fn();
+    const owner = new FastCommands(
+      () => pending.promise,
+      () => 'sensitive',
+      detected,
+      failed,
+    );
+    owner.push(chunk(0, 1), 0.008, 'passive_sensitive');
+    owner.push(chunk(1, 2), 0.008, 'passive_sensitive');
+    pending.resolve({
+      sequence: 0,
+      detection: { command: 'ivy', end_sample: 320 },
+    });
+    await flush();
+    expect(
+      detected.mock.calls[0][1].map(
+        (item: ReturnType<typeof chunk>) => item.samples.length,
+      ),
+    ).toEqual([320, 640]);
+    const reject = new FastCommands(
+      async () => ({
+        sequence: 0,
+        detection: { command: 'clear', end_sample: 320 },
+      }),
+      () => 'sensitive',
+      detected,
+      failed,
+    );
+    reject.push(chunk(0), 0.008, 'passive_sensitive');
+    await flush();
+    expect(failed).toHaveBeenCalledOnce();
+  });
   it('preserves all post-wake audio including chunks queued while inference was pending', async () => {
     const pending = deferred();
     const port: KeywordPort = vi.fn(() => pending.promise);

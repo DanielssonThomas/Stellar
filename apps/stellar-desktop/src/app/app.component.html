@@ -1,6 +1,8 @@
 <main class="h-dvh bg-stellar-canvas text-stellar-foreground">
   <h1 class="sr-only">{{ title }}</h1>
   <stellar-desktop-experience-template
+    [spatialFocus]="spatial.scene() ? spatial.state().featured.length : null"
+    (spatialBriefing)="spatial.startSample()"
     [state]="experience.state()"
     [manifest]="experience.manifest()"
     [loading]="experience.loading()"
@@ -23,6 +25,21 @@
     [selectedInputLabel]="experience.inputs.selectedLabel()"
     [activityStatus]="experience.activityStatus()"
     [ivyActivity]="assistant.activity()"
+    [sessionSnapshot]="inspector.snapshot()"
+    [sessionRows]="inspector.sessions()"
+    [sessionMessages]="inspector.messages()"
+    [sessionLoading]="inspector.loading()"
+    [sessionError]="inspector.error()"
+    [verifiedModel]="assistant.state().verified_model ?? 'Unverified'"
+    (sessionVisibilityChange)="inspectorVisible($event)"
+    (sessionSelected)="inspector.select($event)"
+    (sessionRefresh)="inspector.refresh()"
+    (sessionMore)="inspector.moreSessions()"
+    (sessionOlderMessages)="inspector.olderMessages()"
+    (sessionNew)="newInspectorSession()"
+    [awarenessEnabled]="awareness.enabled()"
+    [awarenessStatus]="awareness.status()"
+    (toggleAwareness)="awareness.setEnabled($event)"
     [questions]="
       assistant.state().connection === 'ready' &&
       assistant.state().turn === 'admitted' &&
@@ -46,6 +63,10 @@
     (showFaults)="faults.show()"
     [assistantReply]="reflex.reply() || assistant.reply()"
     [backgroundUpdate]="assistant.backgroundUpdate()"
+    [showResponseCaptions]="voice.showResponseCaptions()"
+    (showResponseCaptionsChange)="voice.setShowResponseCaptions($event)"
+    [responseCaptionText]="assistant.caption().text"
+    [responseCaptionKind]="assistant.caption().kind"
     [assistantBusy]="assistant.busy() || assistant.uncertain() || reflex.busy()"
     [assistantUncertain]="assistant.uncertain()"
     [assistantWaiting]="assistant.waiting() || voice.waiting() || reflex.busy()"
@@ -59,7 +80,12 @@
     [promptStatus]="voice.composition().status"
     [conversationActive]="voice.state().foregroundActive ?? false"
     [voiceStatus]="reflex.busy() ? 'Handling locally' : voice.state().status"
-    [voiceInputText]="voice.state().inputText ?? ''"
+    [wakeSensitivity]="voice.wakeSensitivity()"
+    [showRecognition]="voice.showRecognition()"
+    (wakeSensitivityChange)="voice.setWakeSensitivity($event)"
+    (showRecognitionChange)="voice.setShowRecognition($event)"
+    [recognitionText]="voice.recognition()?.text ?? ''"
+    [recognitionStatus]="voice.recognition()?.status ?? ''"
     [voiceNotice]="voice.state().notice ?? ''"
     [voiceMuted]="voice.state().muted"
     [reflexEnabled]="reflex.enabled()"
@@ -85,5 +111,20 @@
     (action)="experience.dispatch($event)"
     (stopMicrophone)="experience.session.stopMicrophone()"
     (restoreSummary)="experience.session.showSummary()"
-  />
+  >
+    <stellar-spatial-presentation-organism
+      desktop-spatial
+      [scene]="spatial.scene()"
+      [state]="spatial.state()"
+      [mode]="spatial.narration().mode"
+      [caption]="spatial.narration().caption"
+      [transcript]="spatial.transcript()"
+      [reducedMotion]="experience.state().reducedMotion"
+      (action)="spatial.manual($event)"
+      (stop)="spatial.interrupt()"
+      (next)="spatial.next()"
+      (toggleReadAlong)="spatial.toggleReadAlong()"
+      (follow)="spatial.follow()"
+    />
+  </stellar-desktop-experience-template>
 </main>

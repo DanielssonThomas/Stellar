@@ -2,6 +2,8 @@
 
 Issue #164 provides a local, read-only feed of Hermes turn activity. It does not launch agents or change their runtime. PR #163 owns the Operations and Character Studio UI; the Live view is a separate integration step after that PR is resolved.
 
+For persistent issue usage, failures, and engineering analysis, see [Engineering Intelligence](engineering-intelligence.md).
+
 ## Run locally
 
 Use Node 22. Set `STELLAR_HERMES_ROOT` to the actual Hermes home if it is not `D:\Hermes`, then run `node tools/live/server.mjs` from this checkout. The server binds to `127.0.0.1:4212`. `GET /api/live` returns the latest allowlisted snapshot. `GET /api/live/events` streams snapshots through Server-Sent Events with a heartbeat every two seconds; clients can fall back to polling `/api/live`. Only the local Angular origins on port 4200 receive CORS permission. No request accepts a file path, command, session selector, or arbitrary query.

@@ -34,6 +34,7 @@ pub(super) fn acquire(
                             IvyTurnState::Idle
                         };
                         view.items.clear();
+                        view.response_segments.clear();
                         view.error = None;
                     });
                     return Some((journal, record, Some(work)));

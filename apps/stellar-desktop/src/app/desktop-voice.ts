@@ -16,6 +16,9 @@ import {
   VoiceConversation,
   QuestionVoiceCue,
   UpdateVoiceCue,
+  VoicePreferences,
+  type WakeSensitivity,
+  type RecognitionObservation,
   type VoiceComposition,
   type PromptPresentation,
   type VoiceModel,
@@ -23,6 +26,7 @@ import {
 } from '@stellar/service-desktop-adapter';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
+import { DesktopSpatial } from './desktop-spatial';
 
 @Injectable()
 export class DesktopVoice {
@@ -33,7 +37,15 @@ export class DesktopVoice {
   private readonly reflex = inject(IvyReflexService);
   private readonly assistant = inject(DesktopAssistant);
   private readonly experience = inject(DesktopExperience);
+  private readonly spatial = inject(DesktopSpatial, { optional: true });
   private readonly zone = inject(NgZone);
+  private readonly preferences = new VoicePreferences();
+  readonly wakeSensitivity = signal<WakeSensitivity>(
+    this.preferences.wakeSensitivity,
+  );
+  readonly showRecognition = signal(this.preferences.showRecognition);
+  readonly showResponseCaptions = signal(this.preferences.showResponseCaptions);
+  readonly recognition = signal<RecognitionObservation | null>(null);
   private readonly current = signal<VoiceView>({
     status: 'Local voice idle',
     muted: false,
@@ -41,14 +53,13 @@ export class DesktopVoice {
     busy: false,
   });
   private readonly sessionError = signal(false);
-  private playbackGeneration = 0;
   private disposed = false;
   private readonly updateRevision = signal(0);
   private readonly updateFailure = signal(false);
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
-    speak: (text, id) => this.speech.speak(text, id),
+    speak: (text, id) => this.conversation.say(text, id),
     stop: () => this.speech.stop(),
   });
   private readonly updateCue = new UpdateVoiceCue({
@@ -58,23 +69,20 @@ export class DesktopVoice {
       !this.sessionError() &&
       this.assistant.state().connection === 'ready' &&
       !['suspended', 'shutdown'].includes(this.experience.state().phase),
-    busy: () =>
-      this.current().busy ||
-      ['submitting', 'admitted', 'uncertain'].includes(
-        this.assistant.state().turn,
-      ) ||
-      this.compositionState().status !== 'idle' ||
-      !!(
-        this.current().foregroundActive && this.audio.state().activity?.active
-      ),
+    busy: () => this.current().busy || this.foregroundBusy(),
+    eligible: () => !this.foregroundBusy(),
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
     claim: (id, request) => this.ivy.claimUpdate(id, request),
-    speak: (text, id) => {
+    speak: (text, id, current) => {
       this.updateFailure.set(false);
-      return this.speech.speak(text, id);
+      return this.conversation.say(text, id, current);
     },
-    stop: () => this.speech.stop(),
+    stop: (id) =>
+      this.conversation.narrationOwner()?.id === id ||
+      this.speech.state().operation_id === id
+        ? this.speech.stop()
+        : Promise.resolve(),
     waitForQuestion: () => this.questionCue.wait(),
     id: () => crypto.randomUUID(),
     changed: () =>
@@ -128,24 +136,26 @@ export class DesktopVoice {
       ? (pcm, stream, sequence, threshold, mode) =>
           this.speech.keywords(pcm, stream, sequence, threshold, mode)
       : undefined,
-    transcribe: (pcm, id) => this.speech.transcribe(pcm, id),
-    collect: (pcm, id) => this.speech.collect(pcm, id),
+    transcribe: (pcm, id, analyzeExpression) =>
+      analyzeExpression
+        ? this.speech.transcribe(pcm, id, true)
+        : this.speech.transcribe(pcm, id),
+    collect: (pcm, id, analyzeExpression) =>
+      analyzeExpression
+        ? this.speech.collect(pcm, id, true)
+        : this.speech.collect(pcm, id),
     refinePrompt: async (raw, signal) =>
       (await this.cleanup.refine(raw, signal)).text,
     submit: (text, id) => this.assistant.submit(text, id, 'voice'),
+    submitCaptured: (text, id) =>
+      this.assistant.submit(text, id, 'voice', true),
     reflex: (text, id, signal, point) =>
       this.reflex.run(text, id, signal, point),
     cancelReflex: () => this.reflex.cancel(),
-    speak: async (text, id) => {
-      const generation = this.playbackGeneration;
-      await this.questionCue.wait();
-      await this.updateCue.wait();
-      if (
-        generation !== this.playbackGeneration ||
-        this.disposed ||
-        this.current().muted
-      )
-        return this.speech.state();
+    waitForSpeechSlot: () => this.spatial?.whenQuiet(),
+    speak: (text, id, current = () => true) => {
+      if (!current() || this.disposed || this.current().muted)
+        return Promise.resolve(this.speech.state());
       const before = this.speech.state();
       this.narration = {
         id,
@@ -177,11 +187,13 @@ export class DesktopVoice {
         });
     },
     stop: () => {
-      this.playbackGeneration++;
       this.questionCue.dispose();
       this.updateCue.cancel();
       this.finishNarration('cancelled');
-      return this.speech.stop();
+      const snapshot = this.speech.state();
+      return this.spatial?.ownsSpeech(snapshot)
+        ? Promise.resolve(snapshot)
+        : this.speech.stop();
     },
     onForegroundEnd: () => this.foregroundCleared?.('clear'),
     selectSession: (model) => this.ivy.selectSession(model),
@@ -204,15 +216,21 @@ export class DesktopVoice {
     onChange: (view) =>
       this.zone.run(() => {
         this.current.set(view);
+        this.speech.setDucking(view.ducking ?? false, view.duckingListening);
         this.experience.setPassiveListening(view.passive ?? false);
       }),
     onComposition: (value) =>
       this.zone.run(() => {
         this.compositionState.set(value);
       }),
+    onRecognition: (value) => this.zone.run(() => this.recognition.set(value)),
   });
 
   constructor() {
+    this.conversation.setRecognitionOptions(
+      this.wakeSensitivity(),
+      this.showRecognition(),
+    );
     const request = ++this.sessionRequest;
     void this.readSession()
       .then((model) => {
@@ -229,19 +247,50 @@ export class DesktopVoice {
     effect(() => this.updateContext());
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
-      this.playbackGeneration++;
       unsubscribe();
       this.sessionRequest++;
       this.conversation.dispose();
+      this.speech.setDucking(false);
       this.questionCue.cancel();
       this.updateCue.dispose();
       this.foregroundCleared = undefined;
     });
   }
 
+  private foregroundBusy() {
+    return (
+      ['submitting', 'admitted', 'uncertain'].includes(
+        this.assistant.state().turn,
+      ) ||
+      this.compositionState().status !== 'idle' ||
+      !!(this.current().foregroundActive && this.audio.state().activity?.active)
+    );
+  }
+
+  setWakeSensitivity(value: WakeSensitivity) {
+    this.preferences.setSensitivity(value);
+    this.wakeSensitivity.set(this.preferences.wakeSensitivity);
+    this.conversation.setRecognitionOptions(
+      this.wakeSensitivity(),
+      this.showRecognition(),
+    );
+  }
+
+  setShowRecognition(value: boolean) {
+    this.preferences.setRecognition(value);
+    this.showRecognition.set(value);
+    if (!value) this.recognition.set(null);
+    this.conversation.setRecognitionOptions(this.wakeSensitivity(), value);
+  }
+
+  setShowResponseCaptions(value: boolean) {
+    this.preferences.setResponseCaptions(value);
+    this.showResponseCaptions.set(value);
+  }
+
   setMuted(muted: boolean) {
-    if (muted) this.playbackGeneration++;
     if (muted) this.updateCue.cancel();
+    this.spatial?.setMuted(muted);
     this.conversation.setMuted(muted);
     if (muted) {
       this.questionCue.cancel();
@@ -261,6 +310,9 @@ export class DesktopVoice {
     }
   }
 
+  newSession(): Promise<boolean> {
+    return this.conversation.newSession();
+  }
   submitText(text: string): Promise<boolean> {
     return this.conversation.withCaptureReleased(async (signal) => {
       const inputId = crypto.randomUUID();
@@ -274,7 +326,9 @@ export class DesktopVoice {
           if (local.handled) return local.outcome !== 'cancelled';
         }
         this.reflex.reply.set('');
-        return await this.assistant.submit(text, inputId);
+        return await this.conversation.withResponseOwnership(inputId, () =>
+          this.assistant.submit(text, inputId),
+        );
       } finally {
         this.updateContext();
       }
@@ -288,8 +342,13 @@ export class DesktopVoice {
     const narration = this.narration;
     if (narration && BigInt(speech.revision) > narration.revision) {
       if (speech.epoch !== narration.epoch) this.finishNarration('cancelled');
-      else if (speech.state === 'idle') this.finishNarration('completed');
-      else if (speech.state === 'unavailable') this.finishNarration('failed');
+      else if (speech.operation_id === narration.id && speech.state === 'idle')
+        this.finishNarration('completed');
+      else if (
+        speech.operation_id === narration.id &&
+        speech.state === 'unavailable'
+      )
+        this.finishNarration('failed');
       else if (
         speech.operation_id === narration.id &&
         speech.state === 'speaking'
@@ -314,10 +373,16 @@ export class DesktopVoice {
     this.narration = undefined;
   }
   stop() {
-    this.playbackGeneration++;
+    this.spatial?.interrupt();
     this.questionCue.cancel();
     this.updateCue.cancel();
     this.conversation.stopVoice();
+  }
+  narrationOwner() {
+    return this.conversation.narrationOwner();
+  }
+  stopNarration() {
+    return this.conversation.stopNarration();
   }
   async retry(): Promise<void> {
     this.conversation.retry();

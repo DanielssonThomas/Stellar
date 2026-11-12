@@ -11,6 +11,7 @@ fn invalid_pcm_and_identity_never_reserve_work() {
         Arc::new(|_| {}),
     );
     let request = SpeechTranscribeRequest {
+        analyze_expression: None,
         version: 1,
         epoch: "0".into(),
         utterance_id: "bad".into(),
@@ -67,6 +68,7 @@ fn synchronous_stop_during_admission_prevents_process_launch() {
     *holder.lock().unwrap() = Some(host.clone());
     let completion = host
         .transcribe(SpeechTranscribeRequest {
+            analyze_expression: None,
             version: 1,
             epoch: "0".into(),
             utterance_id: identity(),
@@ -131,6 +133,7 @@ fn shutdown_seals_admission_before_a_delayed_command_can_reserve() {
     let delayed = host.clone();
     let thread = std::thread::spawn(move || {
         let request = SpeechTranscribeRequest {
+            analyze_expression: None,
             version: 1,
             epoch: "0".into(),
             utterance_id: identity(),

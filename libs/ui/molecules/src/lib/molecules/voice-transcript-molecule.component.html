@@ -7,6 +7,9 @@
   >
     <span aria-hidden="true">✧</span> {{ label() }}
   </h2>
+  @if (status()) {
+    <span class="mt-1 block text-[0.6rem] opacity-70">{{ status() }}</span>
+  }
   @if (loading()) {
     <stellar-skeleton-atom shape="text" />
   } @else {

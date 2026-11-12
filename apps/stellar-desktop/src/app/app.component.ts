@@ -3,7 +3,9 @@ import {
   Component,
   DestroyRef,
   effect,
+  ElementRef,
   inject,
+  Injector,
   signal,
   viewChild,
 } from '@angular/core';
@@ -13,11 +15,13 @@ import { DesktopAssistant } from './desktop-assistant';
 import { DesktopVoice } from './desktop-voice';
 import {
   DesktopAdapterService,
+  DesktopAwarenessService,
   IvyAdapterService,
   WorkspaceToolsService,
   MusicVisualizerService,
   createNativeMediaWorkspace,
   IvyReflexService,
+  IvyInspectorService,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
 import {
@@ -32,14 +36,17 @@ import { desktopPresentationData } from './desktop-presentation-data';
 import { desktopWorkspace } from './desktop-workspace';
 import { desktopReflex } from './desktop-reflex';
 import { DesktopFaults } from './desktop-faults';
+import { DesktopSpatial } from './desktop-spatial';
+import { SpatialPresentationOrganism } from '@stellar/ui-organisms';
 
 @Component({
-  imports: [DesktopExperienceTemplate],
+  imports: [DesktopExperienceTemplate, SpatialPresentationOrganism],
   providers: [
     DesktopExperience,
     DesktopAssistant,
     DesktopVoice,
     DesktopFaults,
+    DesktopSpatial,
     MusicVisualizerService,
     { provide: PRESENTATION_DATA, useFactory: desktopPresentationData },
     {
@@ -64,6 +71,17 @@ import { DesktopFaults } from './desktop-faults';
   },
 })
 export class AppComponent {
+  readonly inspector = inject(IvyInspectorService);
+  inspectorVisible(visible: boolean) {
+    if (visible) this.inspector.open();
+    else this.inspector.close();
+  }
+  async newInspectorSession() {
+    if (await this.voice.newSession()) {
+      this.inspector.select(null);
+    }
+  }
+  private readonly injector = inject(Injector);
   async questionShown(id: string) {
     try {
       const state = await this.ivy.questionReply(id, { kind: 'shown' });
@@ -89,11 +107,16 @@ export class AppComponent {
   readonly experience = inject(DesktopExperience);
   readonly assistant = inject(DesktopAssistant);
   readonly voice = inject(DesktopVoice);
+  readonly spatial = inject(DesktopSpatial);
   readonly faults = inject(DesktopFaults);
   readonly music = inject(MusicVisualizerService);
   readonly reflex = inject(IvyReflexService);
+  readonly awareness = inject(DesktopAwarenessService);
   readonly faultRecovering = signal(false);
   private readonly view = viewChild.required(DesktopExperienceTemplate);
+  private readonly desktopHost = viewChild.required(DesktopExperienceTemplate, {
+    read: ElementRef<HTMLElement>,
+  });
   readonly desktopReady = signal(false);
   readonly eventSeen = signal(false);
   readonly capabilities = signal('');
@@ -102,6 +125,21 @@ export class AppComponent {
   private readonly workspace = inject(WorkspaceToolsService);
 
   constructor() {
+    let spatialWasOpen = false;
+    effect(() => {
+      const open = this.spatial.scene() !== null;
+      if (spatialWasOpen && !open) {
+        afterNextRender(
+          () => this.desktopHost().nativeElement.focus({ preventScroll: true }),
+          { injector: this.injector },
+        );
+      }
+      spatialWasOpen = open;
+    });
+    effect(() => {
+      if (['suspended', 'shutdown'].includes(this.experience.state().phase))
+        this.spatial.close();
+    });
     let hadActiveFault = false;
     let recoveredTimer: ReturnType<typeof setTimeout> | undefined;
     inject(DestroyRef).onDestroy(() => clearTimeout(recoveredTimer));
@@ -162,6 +200,7 @@ export class AppComponent {
     });
     afterNextRender(() => {
       void this.ivy.connect().catch(() => undefined);
+      void this.awareness.start();
     });
     const destroy = inject(DestroyRef);
     afterNextRender(() => {
@@ -169,6 +208,40 @@ export class AppComponent {
         (command) => this.view().dispatch(command),
         () => this.view().stage().nextCommandId(),
       );
+      let signature = '';
+      const observeWorkspace = () => {
+        const value = {
+          version: 1,
+          epoch: this.assistant.state().workspace_epoch,
+          panes: this.view()
+            .stage()
+            .inspectPresentations()
+            .slice(0, 8)
+            .map((pane) => ({
+              title: [...pane.title]
+                .filter((char) => {
+                  const code = char.codePointAt(0) ?? 0;
+                  return code >= 32 && (code < 127 || code > 159);
+                })
+                .slice(0, 80)
+                .join(''),
+              surface: pane.surface,
+              selected: pane.selected,
+              minimized: pane.minimized,
+            })),
+        };
+        const next = JSON.stringify(value);
+        if (next !== signature) {
+          signature = next;
+          this.awareness.workspace(value);
+        }
+      };
+      const awarenessTimer = setInterval(() => {
+        signature = '';
+        observeWorkspace();
+      }, 5000);
+      destroy.onDestroy(() => clearInterval(awarenessTimer));
+      effect(observeWorkspace, { injector: this.injector });
       destroy.onDestroy(
         this.voice.bindPromptPresentation((text, signal) =>
           text.model === 'sol'
@@ -183,6 +256,7 @@ export class AppComponent {
           available: () =>
             !['suspended', 'shutdown'].includes(this.experience.state().phase),
           isCurrent: (request) => this.workspace.isCurrent(request),
+          spatial: (request) => this.spatial.accept(request),
         }),
       );
       destroy.onDestroy(unbind);
@@ -198,6 +272,7 @@ export class AppComponent {
       );
       this.voice.bindForegroundClear((reason) => {
         this.reflex.clear();
+        this.spatial.close();
         this.view().stage().closePresentations();
         if (reason === 'new_session') {
           this.view().draft.set('');

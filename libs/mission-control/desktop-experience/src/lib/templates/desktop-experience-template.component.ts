@@ -10,6 +10,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { DesktopMenu } from './desktop-menu';
+import { DesktopSettingsNavigation } from './desktop-settings-navigation';
+import { ToggleSwitchAtom } from '@stellar/ui-atoms';
 import {
   initialState,
   type InteractionEvent,
@@ -25,18 +27,23 @@ import {
   PromptComposerMolecule,
   FaultLogMolecule,
   VoiceTranscriptMolecule,
+  ResponseCaptionMolecule,
   type FaultLogEntry,
   type ComposerFinalizedText,
   type PromptComposerStatus,
   type EmblemManifest,
   RequestStatusMolecule,
   IvyQuestionMolecule,
+  IvySessionInspectorMolecule,
   type RequestStatusEntry,
 } from '@stellar/ui-molecules';
 import { StageOrganism } from '@stellar/ui-organisms';
 import type {
   IvyQuestion,
   IvyQuestionAction,
+  IvyInspectorSnapshot,
+  IvySessionSummary,
+  IvySessionMessage,
 } from '@stellar/desktop-contracts';
 
 export interface MicrophoneOption {
@@ -48,6 +55,7 @@ export interface MicrophoneOption {
   selector: 'stellar-desktop-experience-template',
   standalone: true,
   imports: [
+    ToggleSwitchAtom,
     StageOrganism,
     EmblemMotionMolecule,
     AudioVisualizerMolecule,
@@ -55,8 +63,10 @@ export interface MicrophoneOption {
     PromptComposerMolecule,
     FaultLogMolecule,
     VoiceTranscriptMolecule,
+    ResponseCaptionMolecule,
     RequestStatusMolecule,
     IvyQuestionMolecule,
+    IvySessionInspectorMolecule,
   ],
   templateUrl: './desktop-experience-template.component.html',
   styleUrl: './desktop-experience-template.component.css',
@@ -66,11 +76,24 @@ export interface MicrophoneOption {
     '(keydown.escape)': 'dismiss($event)',
     '(keydown)': 'menu.keydown($event)',
     tabindex: '-1',
-    'aria-keyshortcuts': 'M P S',
+    'aria-keyshortcuts': 'M P S C',
     '(document:keydown)': 'controlsShortcut($event)',
   },
 })
 export class DesktopExperienceTemplate {
+  readonly sessionsVisible = signal(false);
+  readonly sessionSnapshot = input<IvyInspectorSnapshot | null>(null);
+  readonly sessionRows = input<readonly IvySessionSummary[]>([]);
+  readonly sessionMessages = input<readonly IvySessionMessage[]>([]);
+  readonly sessionLoading = input(false);
+  readonly sessionError = input('');
+  readonly verifiedModel = input('Unverified');
+  readonly sessionVisibilityChange = output<boolean>();
+  readonly sessionSelected = output<string | null>();
+  readonly sessionRefresh = output<void>();
+  readonly sessionMore = output<void>();
+  readonly sessionOlderMessages = output<void>();
+  readonly sessionNew = output<void>();
   readonly questions = input<readonly IvyQuestion[]>([]);
   readonly questionShown = output<string>();
   readonly questionAnswer = output<{ id: string; action: IvyQuestionAction }>();
@@ -85,6 +108,10 @@ export class DesktopExperienceTemplate {
   readonly menu = new DesktopMenu(
     this.host.nativeElement,
     () => this.controlsDialog().nativeElement,
+  );
+  readonly settings = new DesktopSettingsNavigation(
+    () => this.controlsDialog().nativeElement,
+    () => this.state().reducedMotion,
   );
   readonly ivyActivity = input<readonly IvyActivityItem[]>([]);
   readonly ivyTurnId = input<string | null>(null);
@@ -117,6 +144,10 @@ export class DesktopExperienceTemplate {
     if (!this.menu.open()) this.menu.toggle();
     this.dismissedUpdate.set(this.backgroundUpdate()?.id ?? null);
   }
+  readonly showResponseCaptions = input(false);
+  readonly showResponseCaptionsChange = output<boolean>();
+  readonly responseCaptionText = input('');
+  readonly responseCaptionKind = input<'commentary' | 'final'>('commentary');
   readonly assistantBusy = input(false);
   readonly assistantUncertain = input(false);
   readonly assistantWaiting = input(false);
@@ -155,27 +186,37 @@ export class DesktopExperienceTemplate {
       (this.assistantWaiting() || this.assistantNarrating()),
   );
   readonly emblemPhase = computed(() =>
-    this.faultActive()
-      ? ('idle' as const)
-      : this.passiveListening() &&
-          !this.state().manualActive &&
-          !['suspended', 'shutdown'].includes(this.state().phase)
+    this.spatialVisible()
+      ? ('presenting' as const)
+      : this.faultActive()
         ? ('idle' as const)
-        : this.assistantActive() ||
-            (this.conversationActive() &&
-              !['suspended', 'shutdown'].includes(this.state().phase))
-          ? ('listening' as const)
-          : this.state().phase,
+        : this.passiveListening() &&
+            !this.state().manualActive &&
+            !['suspended', 'shutdown'].includes(this.state().phase)
+          ? ('idle' as const)
+          : this.assistantActive() ||
+              (this.conversationActive() &&
+                !['suspended', 'shutdown'].includes(this.state().phase))
+            ? ('listening' as const)
+            : this.state().phase,
   );
   readonly retryIvy = output<void>();
   readonly cancelIvy = output<void>();
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
-  readonly voiceInputText = input('');
+  readonly recognitionText = input('');
+  readonly recognitionStatus = input('');
+  readonly wakeSensitivity = input<'standard' | 'high'>('standard');
+  readonly showRecognition = input(false);
+  readonly wakeSensitivityChange = output<'standard' | 'high'>();
+  readonly showRecognitionChange = output<boolean>();
   readonly voiceNotice = input('');
   readonly voiceMuted = input(false);
   readonly reflexEnabled = input(false);
+  readonly awarenessEnabled = input(true);
+  readonly awarenessStatus = input('Awareness unavailable');
+  readonly toggleAwareness = output<boolean>();
   readonly reflexStatus = input('Unavailable');
   readonly reflexLastRoute = input('');
   readonly toggleReflex = output<boolean>();
@@ -243,12 +284,19 @@ export class DesktopExperienceTemplate {
   readonly action = output<InteractionEvent>();
   readonly stopMicrophone = output<void>();
   readonly restoreSummary = output<void>();
+  readonly spatialBriefing = output<void>();
+  readonly spatialFocus = input<number | null>(null);
+  readonly spatialActive = computed(() => this.spatialFocus() !== null);
+  readonly spatialVisible = computed(
+    () => this.spatialActive() && !this.composing() && !this.questions().length,
+  );
   readonly stage = viewChild.required(StageOrganism);
   readonly focusFallback = this.host.nativeElement;
 
   constructor() {
     effect(() => {
-      if (this.questions().length) {
+      if (this.questions().length || this.spatialActive()) {
+        this.setSessionsVisible(false);
         this.menu.close();
         this.musicControls().close();
       }
@@ -261,11 +309,13 @@ export class DesktopExperienceTemplate {
   openFaultControls() {
     this.musicControls().close();
     if (!this.menu.open()) this.menu.toggle();
+    this.settings.show('ivy');
   }
   presentFinalizedPrompt(text: ComposerFinalizedText, signal: AbortSignal) {
     return this.promptComposer().presentFinalized(text, signal);
   }
   dismiss(event: Event) {
+    if (this.spatialActive()) return;
     if (event.target instanceof Element && event.target.closest('dialog[open]'))
       return;
     if (this.state().phase === 'idle') return;
@@ -274,6 +324,7 @@ export class DesktopExperienceTemplate {
   }
   controlsShortcut(event: KeyboardEvent) {
     if (
+      this.spatialActive() ||
       event.defaultPrevented ||
       this.questions().length > 0 ||
       event.repeat ||
@@ -281,24 +332,36 @@ export class DesktopExperienceTemplate {
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      !['m', 'p', 's'].includes(event.key.toLowerCase())
+      (event.shiftKey && event.key.toLowerCase() === 'c') ||
+      !['m', 'p', 's', 'c'].includes(event.key.toLowerCase())
     )
       return;
     if (
       event.target instanceof Element &&
       event.target.closest(
-        'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+        'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select, [contenteditable]:not([contenteditable="false"])',
       )
     )
       return;
     if (['suspended', 'shutdown'].includes(this.state().phase)) return;
     event.preventDefault();
-    if (event.key.toLowerCase() === 's') this.toggleStatus();
+    if (event.key.toLowerCase() === 'c')
+      this.setSessionsVisible(!this.sessionsVisible());
+    else if (event.key.toLowerCase() === 's') this.toggleStatus();
     else if (event.key.toLowerCase() === 'p') this.openMusicControls();
     else {
       this.musicControls().close();
       this.menu.toggle();
     }
+  }
+  setSessionsVisible(visible: boolean) {
+    if (this.sessionsVisible() === visible) return;
+    if (visible) {
+      this.menu.close();
+      this.musicControls().close();
+    }
+    this.sessionsVisible.set(visible);
+    this.sessionVisibilityChange.emit(visible);
   }
   toggleStatus() {
     this.menu.close();

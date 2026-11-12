@@ -63,8 +63,21 @@ pub fn stop(child: &OwnedChild) {
 impl Broker {
     pub fn launch(child: OwnedChild) -> Result<Self, IvyErrorCode> {
         let modules = [
+            (
+                "stellar_ivy_inspector_history",
+                include_str!("ivy_inspector_history.py"),
+            ),
+            ("stellar_ivy_inspector", include_str!("ivy_inspector.py")),
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
+            (
+                "stellar_ivy_conversation",
+                include_str!("ivy_conversation.py"),
+            ),
+            (
+                "stellar_ivy_voice_expression",
+                include_str!("ivy_voice_expression.py"),
+            ),
             ("stellar_ivy_approvals", include_str!("ivy_approvals.py")),
             (
                 "stellar_ivy_profile_tools",
@@ -81,6 +94,14 @@ impl Broker {
             (
                 "stellar_workspace_protocol",
                 include_str!("workspace_protocol.py"),
+            ),
+            (
+                "stellar_engineering_intelligence",
+                include_str!("engineering_intelligence.py"),
+            ),
+            (
+                "stellar_engineering_presentation",
+                include_str!("engineering_presentation.py"),
             ),
             ("stellar_workspace_mcp", include_str!("workspace_mcp.py")),
             (

@@ -11,6 +11,7 @@ pub enum WorkspaceSurface {
     Image,
     Browser,
     Diagram,
+    Chart,
     Workflow,
     Session,
     AssistantMessage,
@@ -75,6 +76,9 @@ pub enum WorkspaceToolOperation {
     },
     Clear,
     Inspect,
+    Present {
+        score_json: String,
+    },
     CaptureWindow,
     ListDisplays,
     CaptureDisplay {

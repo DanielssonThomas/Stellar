@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_info;
+mod awareness;
 #[cfg(feature = "native-smoke")]
 mod background_smoke;
 mod cleanup;
@@ -19,9 +20,11 @@ mod shell;
 mod smoke;
 mod speech;
 mod telemetry;
+mod volume_ducking;
 
 fn main() {
     use tauri::{Emitter, Manager};
+    debug_assert_eq!(awareness::contracts::AWARENESS_COMMANDS.len(), 3);
     debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 12);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
@@ -62,6 +65,15 @@ fn main() {
                 }),
             );
             let handle = app.handle().clone();
+            let awareness_host = awareness::AwarenessHost::new(
+                &directory,
+                std::sync::Arc::new(move |snapshot| {
+                    let _ = handle.emit_to("main", awareness::contracts::AWARENESS_EVENT, snapshot);
+                }),
+            );
+            ivy_host.set_context_provider(awareness_host.provider());
+            app.manage(awareness_host);
+            let handle = app.handle().clone();
             ivy_host.set_workspace_publisher(std::sync::Arc::new(move |request| {
                 handle
                     .emit_to("main", ivy::contracts::WORKSPACE_EVENT, request)
@@ -81,17 +93,31 @@ fn main() {
             #[cfg(feature = "recognition-smoke")]
             let speech_directory = std::env::temp_dir()
                 .join(format!("stellar-recognition-smoke-{}", std::process::id()));
-            app.manage(speech::SpeechHost::new(
+            let speech_host = speech::SpeechHost::new(
                 speech_directory,
                 std::sync::Arc::new(move |snapshot| {
                     let _ = handle.emit_to("main", speech::contracts::SPEECH_EVENT, snapshot);
                 }),
+            );
+            app.manage(volume_ducking::VolumeDucking::new(
+                speech_host.audio_process(),
             ));
+            app.manage(speech_host);
             #[cfg(feature = "recognition-smoke")]
             recognition_smoke::create_window(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<awareness::AwarenessHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Some(host) = window.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::WindowEvent::Destroyed)
                 && let Some(host) = window.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {
@@ -132,12 +158,16 @@ fn main() {
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         commands::shell_status,
+        awareness::awareness_snapshot,
+        awareness::awareness_set_enabled,
+        awareness::awareness_workspace,
         music::music_set_enabled,
         media::workspace_browser,
         media::workspace_image,
         app_info::app_info,
         ivy::ivy_connect,
         ivy::ivy_snapshot,
+        ivy::inspector::ivy_inspect,
         ivy::ivy_submit,
         ivy::ivy_cancel,
         ivy::ivy_reconcile,
@@ -155,6 +185,7 @@ fn main() {
         speech::speech_speak,
         speech::speech_stop,
         speech::speech_snapshot,
+        speech::speech_set_ducking,
         cleanup::cleanup_refine,
         reflex::reflex_infer,
         reflex::reflex_route,
@@ -170,6 +201,16 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Stellar desktop failed to launch")
         .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<awareness::AwarenessHost>()
+            {
+                host.shutdown();
+            }
+            if matches!(event, tauri::RunEvent::Exit)
+                && let Some(host) = app.try_state::<volume_ducking::VolumeDucking>()
+            {
+                host.shutdown();
+            }
             if matches!(event, tauri::RunEvent::Exit)
                 && let Some(host) = app.try_state::<std::sync::Arc<reflex::MediaHost>>()
             {

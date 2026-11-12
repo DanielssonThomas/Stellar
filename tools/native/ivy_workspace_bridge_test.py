@@ -22,6 +22,7 @@ bridge = load('ivy_bridge')
 sys.modules['stellar_ivy_activity'] = load('ivy_activity')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+conversation = sys.modules['stellar_ivy_conversation'] = load('ivy_conversation')
 profile_tools = load('ivy_profile_tools')
 sys.modules['stellar_ivy_profile_tools'] = profile_tools
 approvals_module = load('ivy_approvals')
@@ -224,8 +225,15 @@ class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
 
         class Connection:
             completed = set()
+            def __init__(self):
+                self.client = conversation.ConversationClient(self, ValueError)
+
             async def call(self, method, params):
-                self.assert_token = workspace.token in params['text']
+                return await self.client.rpc(method, **params)
+
+            async def rpc(self, method, **params):
+                self.assert_token = workspace.token in params['api_text']
+                self.assert_clean_text = params['text']
                 self.result = await gate.call({'kind': 'clear'}, workspace.token)
                 return {'ref': {'session_id': 's'}, 'admission_id': 'a'}
 
@@ -237,10 +245,63 @@ class EarlyWorkspaceTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(bridge.requests_with_workspace(conn, workspace), 3)
         self.assertEqual(conn.result, {'kind': 'applied'})
         self.assertTrue(conn.assert_token)
+        self.assertEqual(conn.assert_clean_text, 'hello')
         self.assertNotIn(workspace.token, str(frames))
         self.assertEqual([frame.get('event') for frame in frames], ['workspace_tool', None])
         self.assertEqual(frames[-1]['id'], 7)
 
+
+
+class ChartProtocolTests(unittest.TestCase):
+    def chart(self, kind='line'):
+        return {'type': kind, 'labels': ['Mon', 'Tue'], 'datasets': [{'label': 'Visits', 'values': [12, 18]}]}
+
+    def operation(self, chart=None):
+        return {'kind': 'open', 'instance_id': 'chart', 'surface': 'chart', 'prominence': 'primary',
+                'payload_json': json.dumps({'title': 'Visits', 'chart': chart or self.chart()})}
+
+    def test_chart_types_and_inline_blocks_use_the_real_operation_gate(self):
+        for kind in ('line', 'bar', 'pie', 'doughnut'):
+            value = self.operation(self.chart(kind))
+            self.assertEqual(protocol.validate_operation(value), value)
+        value = self.operation()
+        value['surface'] = 'rich-text'
+        value['payload_json'] = json.dumps({'title': 'Report', 'blocks': [
+            {'kind': 'paragraph', 'text': 'Summary'}, {'kind': 'chart', 'chart': self.chart()}]})
+        self.assertEqual(protocol.validate_operation(value), value)
+
+    def test_chart_gate_rejects_unknown_options_and_inconsistent_values(self):
+        for field in ('options', 'plugins', 'callbacks', 'onClick'):
+            chart = {**self.chart(), field: {}}
+            with self.assertRaises(protocol.WorkspaceRefused):
+                protocol.validate_operation(self.operation(chart))
+        for values in ([], [1], [1, 2, 3], [True, 2], [1e13, 2], [10**1000, 2], [float('inf'), 2]):
+            chart = self.chart()
+            chart['datasets'][0]['values'] = values
+            with self.assertRaises(protocol.WorkspaceRefused):
+                protocol.validate_operation(self.operation(chart))
+
+    def test_circular_charts_and_axis_labels_are_bounded(self):
+        for values in ([-1, 2], [0, 0]):
+            chart = self.chart('pie')
+            chart['datasets'][0]['values'] = values
+            with self.assertRaises(protocol.WorkspaceRefused):
+                protocol.validate_operation(self.operation(chart))
+        for value in (None, '', 'x' * 121, '\u0085', '\ud800'):
+            chart = {**self.chart(), 'x_label': value}
+            with self.assertRaises(protocol.WorkspaceRefused):
+                protocol.validate_operation(self.operation(chart))
+
+    def test_inline_and_inspected_content_cannot_bypass_chart_validation(self):
+        chart = {**self.chart(), 'options': {}}
+        operation = self.operation(chart)
+        operation['surface'] = 'rich-text'
+        operation['payload_json'] = json.dumps({'title': 'Report', 'blocks': [{'kind': 'chart', 'chart': chart}]})
+        with self.assertRaises(protocol.WorkspaceRefused):
+            protocol.validate_operation(operation)
+        with self.assertRaises(protocol.WorkspaceRefused):
+            protocol.validate_outcome({'kind': 'content', 'instance_id': 'chart', 'surface': 'chart',
+                                       'revision': 1, 'payload_json': self.operation(chart)['payload_json']}, 'inspect_content')
 
 
 if __name__ == '__main__':

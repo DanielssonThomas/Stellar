@@ -7,7 +7,20 @@ fn smoke_result(
     workspace_metrics: Option<Vec<f64>>,
     stage: Option<String>,
     diagnostics: Option<Vec<bool>>,
+    volume_probe: Option<bool>,
+    awareness_checks: Option<Vec<bool>>,
 ) {
+    if let Some(checks) = awareness_checks
+        && checks.len() <= 12
+    {
+        println!(
+            "STELLAR_AWARENESS_CHECKS {}",
+            serde_json::to_string(&checks).unwrap_or_default()
+        );
+    }
+    if let Some(performed) = volume_probe {
+        println!("STELLAR_DUCKING_PROBE {performed}");
+    }
     if let Some(metrics) = workspace_metrics
         && metrics.len() == 5
         && metrics
@@ -84,7 +97,7 @@ fn check_page(window: Webview) {
     let script = r#"
         (async () => {
             const invoke = window.__TAURI__.core.invoke;
-            let stage='startup';let workspaceChecks=[];
+            let stage='startup';let workspaceChecks=[];let volumeProbe=false;
             try {
                 for (let n = 0; n < 100 && !(document.querySelector('stellar-root')?.getAttribute('data-desktop-ready') === 'true' &&
                     document.querySelector('stellar-root')?.getAttribute('data-desktop-event') === 'true'); n++)
@@ -99,6 +112,26 @@ fn check_page(window: Webview) {
                 catch (error) { musicRejected = error === 'unsupported_version'; }
                 const musicOk = musicRejected && music.status === 'idle' && music.tone === null && Object.values(music.levels).every(value => value === 0);
                 const reflexMedia = await invoke('reflex_media_snapshot');
+                let duckingRejected = false;
+                try { await invoke('speech_set_ducking', {request:{version:2,active:true}}); }
+                catch(error) { duckingRejected = error === 'unsupported_version'; }
+                if (!duckingRejected) throw Error('Ducking version validation failed');
+                if (reflexMedia.volume !== null) {
+                  try {
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,1000));
+                    const lowered = await invoke('reflex_media_snapshot');
+                    await invoke('speech_set_ducking', {request:{version:1,active:true}});
+                    await new Promise(resolve=>setTimeout(resolve,100));
+                    const held = await invoke('reflex_media_snapshot');
+                    if (lowered.endpoint_id !== reflexMedia.endpoint_id || lowered.muted !== reflexMedia.muted || lowered.volume !== reflexMedia.volume || held.volume !== reflexMedia.volume)
+                        throw Error('Ducking changed master volume or mute');
+                  } finally { await invoke('speech_set_ducking', {request:{version:1,active:false}}); }
+                  await new Promise(resolve=>setTimeout(resolve,1000));
+                  const restored = await invoke('reflex_media_snapshot');
+                  if (restored.volume !== reflexMedia.volume || restored.muted !== reflexMedia.muted) throw Error('System volume restoration failed');
+                  volumeProbe=true;
+                } else await invoke('speech_set_ducking', {request:{version:1,active:false}});
                 const reflexRoute = await invoke('reflex_route',{request:{version:1,input_id:'smoke-substantive',text:'Please show me my latest github issue',mode:'professional',context:'{}',history:[],actions:[]}});
                 if(reflexRoute.version!==1 || reflexRoute.local!==false) throw Error('Substantive request did not delegate');
                 const reflexStatus = await invoke('reflex_status');
@@ -157,6 +190,8 @@ fn check_page(window: Webview) {
                     console.log('STELLAR_WORKSPACE_LIVE',JSON.stringify({creationMs,boundsMs:operations,loaded,isolated:probe,retained}));
                 }
                 stage='local-checks';
+                const awarenessChecks = await (__AWARENESS_SMOKE__);
+                const awarenessOk = awarenessChecks.every(Boolean);
                 let rejected = false;
                 try { await invoke('shell_status', { request: { version: 2 } }); }
                 catch (error) { rejected = error.code === 'unsupported_version' && error.received === 2; }
@@ -165,6 +200,17 @@ fn check_page(window: Webview) {
                 catch (error) { malformedRejected = error.code === 'malformed_request'; }
                 const cleanup = await invoke('cleanup_refine', { request: { version: 2, raw: 'synthetic' } });
                 const cleanupRejected = cleanup.version === 1 && cleanup.text === null;
+                stage='inspector-request-validation';
+                let inspectorRejected=0;
+                for(const request of [
+                  {version:2,session_id:null,offset:0,before_message:null},
+                  {version:1,session_id:'',offset:0,before_message:null}
+                ]) {
+                  try { await invoke('ivy_inspect',{request}); }
+                  catch(error) { if(error==='malformed_request')inspectorRejected++; }
+                }
+                if(inspectorRejected!==2)throw Error('Inspector malformed contract failed');
+                stage='lifecycle-validation';
                 let lifecycleRejected = 0;
                 for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
                     try { await invoke(name, { request: { version: 2 } }); }
@@ -184,6 +230,12 @@ fn check_page(window: Webview) {
                 await invoke('ivy_disconnect', { request: { version: 1 } });
                 const disconnectResponsive = performance.now() - beforeDisconnect < 750;
                 const cancelledRotation = await pending;
+                stage='inspector-disconnected';
+                let inspectorUnavailable=false;
+                try { await invoke('ivy_inspect',{request:{version:1,session_id:null,offset:0,before_message:null}}); }
+                catch(error) { inspectorUnavailable=error==='unavailable'; }
+                if(!inspectorUnavailable)throw Error('Disconnected inspector read-only contract failed');
+                stage='local-checks';
                 const capturedWindow = await invoke('smoke_capture_window');
                 const rendered = document.querySelector('h1')?.textContent?.includes('Stellar Desktop');
                 const root = document.querySelector('stellar-root');
@@ -215,11 +267,17 @@ fn check_page(window: Webview) {
                     stage='detailed-window-capture';
                     if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
                 }
-                await invoke('smoke_result', { workspaceMetrics, stage, diagnostics:[musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, awarenessChecks, diagnostics:[awarenessOk,musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: awarenessOk && musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
     "#;
+    let script = script.replace(
+        "__AWARENESS_SMOKE__",
+        include_str!("awareness/smoke.js")
+            .trim()
+            .trim_end_matches(';'),
+    );
     let script = script.replace(
         "__DETAILED_CAPTURE__",
         include_str!("smoke_capture.js")
@@ -251,6 +309,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         .invoke_handler(tauri::generate_handler![
             crate::reflex::reflex_media_snapshot,
+            crate::speech::speech_set_ducking,
             crate::reflex::reflex_media_execute,
             crate::reflex::reflex_infer,
             crate::reflex::reflex_route,
@@ -259,6 +318,9 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::reflex::reflex_set_enabled,
             crate::reflex::reflex_cancel,
             crate::commands::shell_status,
+            crate::awareness::awareness_snapshot,
+            crate::awareness::awareness_set_enabled,
+            crate::awareness::awareness_workspace,
             crate::music::music_set_enabled,
             crate::media::workspace_browser,
             crate::media::workspace_image,
@@ -278,6 +340,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::speech::speech_stop,
             crate::speech::speech_snapshot,
             crate::background_smoke::background_smoke_start,
+            crate::ivy::inspector::ivy_inspect,
             smoke_hold_ivy,
             smoke_capture_window,
             smoke_result
@@ -286,6 +349,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             if window.label() == "main"
                 && payload.event() == tauri::webview::PageLoadEvent::Finished
             {
+                let _ = window.window().set_focus();
                 if std::env::var_os("STELLAR_WORKSPACE_SMOKE_LIVE").is_some() {
                     let _ = window
                         .window()

@@ -26,6 +26,7 @@
     [loading]="loading()"
     [reducedMotion]="state().reducedMotion"
     [suppressed]="
+      spatialVisible() ||
       stage.layout().surfaces.length > 0 ||
       state().phase === 'docking' ||
       state().phase === 'returning' ||
@@ -39,8 +40,13 @@
     class="stage"
     [loading]="loading()"
     [emblemTarget]="state().target"
+    [spatialFocus]="spatialVisible() ? spatialFocus() : null"
     [reducedMotion]="state().reducedMotion"
-    [composing]="composing() || faultVisible() || questions().length > 0"
+    [composing]="
+      composing() ||
+      (faultVisible() && !spatialVisible()) ||
+      questions().length > 0
+    "
     [showPaneControls]="paneControlsVisible()"
     [dismissOnClose]="false"
     [focusFallback]="focusFallback"
@@ -55,7 +61,7 @@
       [manifest]="manifest()"
       assetBasePath="emblem"
       [phase]="emblemPhase()"
-      [fault]="faultActive()"
+      [fault]="faultActive() && !spatialVisible()"
       [solActive]="solActive()"
       [waiting]="
         assistantActive() && assistantWaiting() && !assistantNarrating()
@@ -70,7 +76,10 @@
       (assetUnavailable)="assetUnavailable.emit()"
     >
     </stellar-emblem-motion-molecule>
-    @if (faultVisible()) {
+    <ng-container ngProjectAs="[stage-spatial]">
+      <ng-content select="[desktop-spatial]" />
+    </ng-container>
+    @if (faultVisible() && !spatialVisible()) {
       <stellar-fault-log-molecule
         stage-composer
         [entries]="faultEntries()"
@@ -109,17 +118,25 @@
     (sensitivityChange)="musicSensitivityChange.emit($event)"
   />
 
-  @if (
-    voiceInputText() &&
-    (!solActive() || promptStatus() === 'idle') &&
-    !['suspended', 'shutdown'].includes(state().phase)
-  ) {
-    <stellar-voice-transcript-molecule
-      class="absolute bottom-4 left-4 z-2 max-w-[calc(100%-2rem)]"
-      [text]="voiceInputText()"
-      [loading]="loading()"
-      [reducedMotion]="state().reducedMotion"
-    />
+  @if (!['suspended', 'shutdown'].includes(state().phase)) {
+    <div class="conversation-captions">
+      @if (showResponseCaptions() && responseCaptionText().trim()) {
+        <stellar-response-caption-molecule
+          [text]="responseCaptionText()"
+          [kind]="responseCaptionKind()"
+          [loading]="loading()"
+          [reducedMotion]="state().reducedMotion"
+        />
+      }
+      @if (showRecognition()) {
+        <stellar-voice-transcript-molecule
+          [text]="recognitionText() || 'Listening for speech…'"
+          [status]="recognitionStatus() || 'Local recognition · no speech sent'"
+          [loading]="loading()"
+          [reducedMotion]="state().reducedMotion"
+        />
+      }
+    </div>
   }
 
   @if (backgroundPreview(); as update) {
@@ -163,14 +180,10 @@
     (close)="menu.restoreFocus()"
   >
     <div class="controls-content">
-      <div class="flex w-full items-start justify-between gap-6">
+      <header class="settings-header flex items-start justify-between gap-6">
         <div>
-          <p class="text-xs uppercase tracking-widest text-stellar-muted">
-            Stellar desktop · M
-          </p>
-          <h2 id="desktop-controls-title" class="mt-2 text-xl font-medium">
-            Experience controls
-          </h2>
+          <p class="settings-eyebrow">Stellar desktop · M</p>
+          <h2 id="desktop-controls-title">Experience controls</h2>
         </div>
         <button
           type="button"
@@ -180,215 +193,433 @@
         >
           ✕
         </button>
-      </div>
-      <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
-      <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
-      <button
-        type="button"
-        aria-keyshortcuts="S"
-        [attr.aria-pressed]="statusVisible()"
-        (click)="toggleStatus()"
-      >
-        Request status · S
-      </button>
-      <button
-        type="button"
-        role="switch"
-        aria-label="Ivy Reflex"
-        [attr.aria-checked]="reflexEnabled()"
-        aria-describedby="ivy-reflex-status"
-        (click)="toggleReflex.emit(!reflexEnabled())"
-      >
-        Ivy Reflex · {{ reflexEnabled() ? 'On' : 'Off' }}
-      </button>
-      <p id="ivy-reflex-status" class="status" aria-live="polite">
-        {{ reflexStatus() }}
-        @if (reflexLastRoute()) {
-          · {{ reflexLastRoute() }}
-        }
-      </p>
-      <button type="button" (click)="copyReflexDiagnostics.emit()">
-        Copy Reflex diagnostics
-      </button>
-      <span class="status" aria-live="polite">{{
-        reflexDiagnosticNotice()
-      }}</span>
-      <button type="button" aria-keyshortcuts="P" (click)="openMusicControls()">
-        Music visualizer · P
-      </button>
-      @if (faultEntries().length) {
-        <button type="button" (click)="showFaults.emit(); menu.close()">
-          Recent errors
-        </button>
-      }
-      <button
-        type="button"
-        [attr.aria-pressed]="voiceMuted()"
-        (click)="muteVoice.emit(!voiceMuted())"
-      >
-        {{ voiceMuted() ? 'Unmute voice' : 'Mute voice' }}
-      </button>
-      @if (voiceBusy()) {
-        <button type="button" (click)="stopVoice.emit()">Stop voice</button>
-      }
-      @if (voiceError()) {
-        <button type="button" (click)="retryVoice.emit()">Retry voice</button>
-      }
-      <button
-        type="button"
-        [disabled]="assistantBusy() && !assistantUncertain()"
-        (click)="retryIvy.emit(); menu.close()"
-      >
-        Connect Ivy
-      </button>
-      @if (assistantUncertain()) {
-        <button type="button" (click)="reconcileIvy.emit()">
-          Check response
-        </button>
-      } @else if (assistantBusy()) {
-        <button type="button" (click)="cancelIvy.emit()">Cancel request</button>
-      }
-      <form class="assistant-input" (submit)="send($event)">
-        <label for="ivy-input">Message Ivy</label>
-        <textarea
-          id="ivy-input"
-          rows="2"
-          maxlength="8000"
-          [value]="draft()"
-          (input)="editDraft($event)"
-          placeholder="Type a message"
-        ></textarea>
-        <button
-          type="submit"
-          [disabled]="assistantBusy() || !draft().trim() || draftTooLong()"
+      </header>
+      <div class="settings-layout">
+        <nav
+          class="settings-navigation"
+          tabindex="-1"
+          aria-label="Settings sections"
+          (keydown)="settings.keydown($event)"
         >
-          Send
-        </button>
-        @if (draftTooLong()) {
-          <p role="status">Message exceeds the 8 KiB text limit.</p>
-        }
-      </form>
-      @if (assistantReply()) {
-        <p class="assistant-reply" aria-live="polite">{{ assistantReply() }}</p>
-      }
-      <p class="status" aria-live="polite" aria-atomic="true">
-        {{ statusText() }}
-      </p>
-      <div class="actions">
-        <button
-          type="button"
-          (click)="
-            action.emit({
-              type: state().manualActive ? 'manual-end' : 'manual-start',
-            })
-          "
-        >
-          {{ state().manualActive ? 'End activity' : 'Start activity' }}
-        </button>
-
-        @if (
-          state().microphone.status === 'requesting' ||
-          state().microphone.status === 'capturing'
-        ) {
-          <button type="button" (click)="stopMicrophone.emit()">
-            Stop microphone
-          </button>
-        } @else {
-          <button
-            type="button"
-            (click)="action.emit({ type: 'capture-request' })"
-          >
-            Enable microphone
-          </button>
-        }
-
-        <button
-          type="button"
-          [disabled]="inputsLoading()"
-          (click)="chooseInputs.emit()"
-        >
-          {{
-            inputsLoading()
-              ? 'Finding inputs…'
-              : inputsVisible()
-                ? 'Refresh inputs'
-                : 'Choose microphone'
-          }}
-        </button>
-
-        @if (state().phase !== 'idle') {
-          <button type="button" (click)="dismissExperience()">Dismiss</button>
-        }
-
-        @if (requestedContent()) {
-          <button
-            type="button"
-            (click)="menu.close(); stage.restorePresentation()"
-          >
-            Show content
-          </button>
-        }
-      </div>
-      <label class="motion-toggle">
-        <input
-          type="checkbox"
-          id="desktop-pane-controls"
-          [checked]="paneControlsVisible()"
-          (change)="setPaneControls($event)"
-        />
-        <span>Show pane controls</span>
-      </label>
-      <label class="motion-toggle">
-        <input
-          type="checkbox"
-          id="desktop-reduce-motion"
-          [checked]="state().reducedMotion"
-          (change)="setReduced($event)"
-        />
-        <span>Reduce motion</span>
-      </label>
-      @if (inputsVisible()) {
-        <div class="input-choice">
-          <label>
-            Microphone
-            <select [value]="selectedInputId()" (change)="chooseInput($event)">
-              <option value="" [selected]="selectedInputId() === ''">
-                System default microphone
-              </option>
-              @if (inputMissing()) {
-                <option [value]="selectedInputId()" selected disabled>
-                  {{ selectedInputLabel() }}
-                </option>
-              }
-              @for (device of inputs(); track device.deviceId) {
-                <option
-                  [value]="device.deviceId"
-                  [selected]="selectedInputId() === device.deviceId"
-                >
-                  {{ device.label }}
-                </option>
-              }
-            </select>
-          </label>
-          @if (inputError()) {
-            <p role="status">{{ inputError() }}</p>
+          @for (section of settings.sections; track section.id) {
+            <button
+              type="button"
+              [class]="settings.classes(section.id)"
+              [attr.data-settings-nav]="section.id"
+              [attr.aria-controls]="'desktop-settings-' + section.id"
+              [attr.aria-current]="
+                settings.selected() === section.id ? 'location' : null
+              "
+              (click)="settings.show(section.id)"
+            >
+              <span class="settings-nav-icon" aria-hidden="true">{{
+                section.icon
+              }}</span
+              ><span>{{ section.label }}</span>
+            </button>
           }
+          <p class="settings-shortcut-note">
+            M closes settings<br />C opens sessions<br />S shows request status
+          </p>
+        </nav>
+        <div
+          class="settings-scroll"
+          data-settings-scroll
+          (scroll)="settings.scrolled()"
+        >
+          <section
+            id="desktop-settings-overview"
+            data-settings-section="overview"
+            aria-labelledby="settings-overview-title"
+            class="settings-section"
+          >
+            <div class="settings-section-heading">
+              <p class="settings-eyebrow">At a glance</p>
+              <h3 id="settings-overview-title">Overview</h3>
+              <p>Current status and quick access to your desktop.</p>
+            </div>
+            <div class="settings-status-grid">
+              <div class="settings-status-card">
+                <h4>Ivy</h4>
+                <p class="status" aria-live="polite">{{ assistantStatus() }}</p>
+              </div>
+              <div class="settings-status-card">
+                <h4>Voice</h4>
+                <p class="status" aria-live="polite">{{ voiceStatus() }}</p>
+              </div>
+            </div>
+            <p
+              class="status settings-runtime-status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {{ statusText() }}
+            </p>
+            <div class="settings-quick-actions">
+              <button
+                type="button"
+                aria-keyshortcuts="C"
+                aria-label="Ivy sessions · C"
+                (click)="setSessionsVisible(true)"
+              >
+                <span>Ivy sessions</span><kbd>C</kbd>
+              </button>
+              <button
+                type="button"
+                aria-keyshortcuts="S"
+                aria-label="Request status · S"
+                [attr.aria-pressed]="statusVisible()"
+                (click)="toggleStatus()"
+              >
+                <span>Request status</span><kbd>S</kbd>
+              </button>
+              <button
+                type="button"
+                aria-keyshortcuts="P"
+                aria-label="Music visualizer · P"
+                (click)="openMusicControls()"
+              >
+                <span>Music visualizer</span><kbd>P</kbd>
+              </button>
+              <button
+                type="button"
+                (click)="menu.close(); spatialBriefing.emit()"
+              >
+                <span>Morning AI briefing</span><span>Sample</span>
+              </button>
+            </div>
+            @if (faultEntries().length) {
+              <button type="button" (click)="showFaults.emit(); menu.close()">
+                Recent errors
+              </button>
+            }
+            <div class="settings-group">
+              <h4>Workspace</h4>
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Show pane controls"
+                description="Keep workspace pane actions visible."
+                [checked]="paneControlsVisible()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="paneControlsVisible.set($event)"
+              />
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Reduce motion"
+                description="Use quieter transitions throughout Stellar."
+                [checked]="state().reducedMotion"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="
+                  action.emit({ type: 'reduced-motion', enabled: $event })
+                "
+              />
+              <div class="settings-button-row">
+                <button
+                  type="button"
+                  (click)="
+                    action.emit({
+                      type: state().manualActive
+                        ? 'manual-end'
+                        : 'manual-start',
+                    })
+                  "
+                >
+                  {{ state().manualActive ? 'End activity' : 'Start activity' }}
+                </button>
+                @if (state().phase !== 'idle') {
+                  <button type="button" (click)="dismissExperience()">
+                    Dismiss
+                  </button>
+                }
+                @if (requestedContent()) {
+                  <button
+                    type="button"
+                    (click)="menu.close(); stage.restorePresentation()"
+                  >
+                    Show content
+                  </button>
+                }
+              </div>
+            </div>
+          </section>
+          <section
+            id="desktop-settings-microphone"
+            data-settings-section="microphone"
+            aria-labelledby="settings-microphone-title"
+            class="settings-section"
+          >
+            <div class="settings-section-heading">
+              <p class="settings-eyebrow">Listening</p>
+              <h3 id="settings-microphone-title">Microphone</h3>
+              <p>Choose an input and adjust how Ivy hears you.</p>
+            </div>
+            <div class="settings-group">
+              <div class="settings-capture-status">
+                <span
+                  class="settings-status-indicator"
+                  aria-hidden="true"
+                ></span
+                ><span>Microphone · {{ state().microphone.status }}</span>
+              </div>
+              <div class="settings-button-row">
+                @if (
+                  state().microphone.status === 'requesting' ||
+                  state().microphone.status === 'capturing'
+                ) {
+                  <button type="button" (click)="stopMicrophone.emit()">
+                    Stop microphone
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    (click)="action.emit({ type: 'capture-request' })"
+                  >
+                    Enable microphone
+                  </button>
+                }
+                <button
+                  type="button"
+                  [disabled]="inputsLoading()"
+                  (click)="chooseInputs.emit()"
+                >
+                  {{
+                    inputsLoading()
+                      ? 'Finding inputs…'
+                      : inputsVisible()
+                        ? 'Refresh inputs'
+                        : 'Choose microphone'
+                  }}
+                </button>
+              </div>
+              @if (inputsVisible()) {
+                <div class="input-choice">
+                  <label
+                    >Microphone<select
+                      [value]="selectedInputId()"
+                      (change)="chooseInput($event)"
+                    >
+                      <option value="" [selected]="selectedInputId() === ''">
+                        System default microphone
+                      </option>
+                      @if (inputMissing()) {
+                        <option [value]="selectedInputId()" selected disabled>
+                          {{ selectedInputLabel() }}
+                        </option>
+                      }
+                      @for (device of inputs(); track device.deviceId) {
+                        <option
+                          [value]="device.deviceId"
+                          [selected]="selectedInputId() === device.deviceId"
+                        >
+                          {{ device.label }}
+                        </option>
+                      }
+                    </select></label
+                  >
+                  @if (inputError()) {
+                    <p role="status">{{ inputError() }}</p>
+                  }
+                </div>
+              }
+              @if (state().microphone.status === 'capturing') {
+                <div class="input-level">
+                  <span>{{ selectedInputLabel() }}</span
+                  ><meter
+                    min="0"
+                    max="100"
+                    [value]="inputMeter()"
+                    aria-label="Microphone input level"
+                  ></meter
+                  ><span>{{ activityStatus() }}</span>
+                </div>
+              }
+            </div>
+            <div class="settings-group">
+              <h4>Recognition</h4>
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Higher wake sensitivity"
+                description="Accept more words that sound like Ivy. May wake during other speech."
+                [checked]="wakeSensitivity() === 'high'"
+                [disabled]="
+                  voiceBusy() || state().microphone.status === 'requesting'
+                "
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="
+                  wakeSensitivityChange.emit($event ? 'high' : 'standard')
+                "
+              />
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Show recognition results"
+                description="Keep the latest phrase Ivy recognized visible on the desktop."
+                [checked]="showRecognition()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="showRecognitionChange.emit($event)"
+              />
+              @if (voiceBusy()) {
+                <p class="settings-note" role="status">
+                  Sensitivity can be changed after voice processing finishes.
+                </p>
+              }
+            </div>
+          </section>
+          <section
+            id="desktop-settings-ivy"
+            data-settings-section="ivy"
+            aria-labelledby="settings-ivy-title"
+            class="settings-section"
+          >
+            <div class="settings-section-heading">
+              <p class="settings-eyebrow">Conversation</p>
+              <h3 id="settings-ivy-title">Ivy</h3>
+              <p>Speech, local actions and the current conversation.</p>
+            </div>
+            <div class="settings-group">
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Spoken replies"
+                description="Let Ivy speak her replies aloud."
+                [checked]="!voiceMuted()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="muteVoice.emit(!$event)"
+              />
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Show Ivy captions"
+                description="Display Ivy’s updates and replies on the desktop."
+                [checked]="showResponseCaptions()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="showResponseCaptionsChange.emit($event)"
+              />
+              <div class="settings-button-row">
+                @if (voiceBusy()) {
+                  <button type="button" (click)="stopVoice.emit()">
+                    Stop voice
+                  </button>
+                }
+                @if (voiceError()) {
+                  <button type="button" (click)="retryVoice.emit()">
+                    Retry voice
+                  </button>
+                }
+              </div>
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Ivy Reflex"
+                description="Handle supported desktop and playback requests locally."
+                [checked]="reflexEnabled()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="toggleReflex.emit($event)"
+              />
+              <p
+                id="ivy-reflex-status"
+                class="settings-note"
+                aria-live="polite"
+              >
+                {{ reflexStatus() }}
+                @if (reflexLastRoute()) {
+                  · {{ reflexLastRoute() }}
+                }
+              </p>
+              <button
+                type="button"
+                class="settings-secondary-action"
+                (click)="copyReflexDiagnostics.emit()"
+              >
+                Copy Reflex diagnostics
+              </button>
+              <span class="settings-note" aria-live="polite">{{
+                reflexDiagnosticNotice()
+              }}</span>
+            </div>
+            <div class="settings-group">
+              <h4>Current conversation</h4>
+              <div class="settings-button-row">
+                <button
+                  type="button"
+                  [disabled]="assistantBusy() && !assistantUncertain()"
+                  (click)="retryIvy.emit(); menu.close()"
+                >
+                  Connect Ivy
+                </button>
+                @if (assistantUncertain()) {
+                  <button type="button" (click)="reconcileIvy.emit()">
+                    Check response
+                  </button>
+                } @else if (assistantBusy()) {
+                  <button type="button" (click)="cancelIvy.emit()">
+                    Cancel request
+                  </button>
+                }
+              </div>
+              <form class="assistant-input" (submit)="send($event)">
+                <label for="ivy-input">Message Ivy</label
+                ><textarea
+                  id="ivy-input"
+                  rows="3"
+                  maxlength="8000"
+                  [value]="draft()"
+                  (input)="editDraft($event)"
+                  placeholder="Type a message"
+                ></textarea
+                ><button
+                  type="submit"
+                  [disabled]="
+                    assistantBusy() || !draft().trim() || draftTooLong()
+                  "
+                >
+                  Send
+                </button>
+                @if (draftTooLong()) {
+                  <p role="status">Message exceeds the 8 KiB text limit.</p>
+                }
+              </form>
+              @if (assistantReply()) {
+                <p class="assistant-reply" aria-live="polite">
+                  {{ assistantReply() }}
+                </p>
+              }
+            </div>
+          </section>
+          <section
+            id="desktop-settings-awareness"
+            data-settings-section="awareness"
+            aria-labelledby="settings-awareness-title"
+            class="settings-section"
+          >
+            <div class="settings-section-heading">
+              <p class="settings-eyebrow">Context</p>
+              <h3 id="settings-awareness-title">App awareness</h3>
+              <p>Let Ivy keep up with what you are doing.</p>
+            </div>
+            <div class="settings-group">
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Ivy awareness"
+                description="Share current app, playback and Stellar workspace metadata with Ivy."
+                [checked]="awarenessEnabled()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="toggleAwareness.emit($event)"
+              />
+              <p
+                id="ivy-awareness-status"
+                class="settings-note"
+                aria-live="polite"
+              >
+                {{ awarenessStatus() }}
+              </p>
+            </div>
+            <p class="settings-note">
+              Pausing awareness stops new observations. It does not change your
+              Windows privacy settings.
+            </p>
+          </section>
         </div>
-      }
-      @if (state().microphone.status === 'capturing') {
-        <div class="input-level">
-          <span>{{ selectedInputLabel() }}</span>
-          <meter
-            min="0"
-            max="100"
-            [value]="inputMeter()"
-            aria-label="Microphone input level"
-          ></meter>
-          <span>{{ activityStatus() }}</span>
-        </div>
-      }
+      </div>
     </div>
   </dialog>
+
   @for (question of questions().slice(0, 1); track question.id) {
     <stellar-ivy-question-molecule
       [promptId]="question.id"
@@ -415,3 +646,25 @@
     />
   }
 </div>
+<stellar-ivy-session-inspector-molecule
+  [visible]="sessionsVisible()"
+  [snapshot]="sessionSnapshot()"
+  [sessions]="sessionRows()"
+  [messages]="sessionMessages()"
+  [loading]="sessionLoading()"
+  [error]="sessionError()"
+  [status]="assistantStatus()"
+  [voice]="voiceStatus()"
+  [reflex]="reflexStatus()"
+  [model]="cloudLabel()"
+  [verifiedModel]="verifiedModel()"
+  [busy]="
+    assistantBusy() || voiceBusy() || composing() || cloudStatus() !== 'ready'
+  "
+  (closed)="setSessionsVisible(false)"
+  (selected)="sessionSelected.emit($event)"
+  (refresh)="sessionRefresh.emit()"
+  (moreSessions)="sessionMore.emit()"
+  (olderMessages)="sessionOlderMessages.emit()"
+  (newSession)="sessionNew.emit()"
+/>
