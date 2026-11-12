@@ -258,6 +258,27 @@ asyncio.run(run())
         with self.assertRaises(bridge.Closed):
             await bridge.replay_events(conn, {'session_id': 'foreign', 'replay_epoch': 'e', 'last_sequence': 0}, None)
 
+    async def test_lifecycle_extension_is_not_downgraded_or_silently_checkpointed(self):
+        conn = Connection()
+        conn.selected_session = 's'
+        event = {'type': 'message.start', 'session_id': 's', 'admission_id': 'a',
+                 'authority_epoch': 2, 'execution_generation': 3, 'seq': 1,
+                 'replay_epoch': 'e', 'payload': {'display_kind': 'lifecycle_update',
+                 'text': 'Do not turn this into a user request', 'schemaVersion': 1}}
+        await conn.events.put({'params': event})
+        output = Pipe()
+        with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+            await bridge.pump(conn)
+        self.assertEqual(output.buffer.getvalue(), b'')
+        self.assertEqual(conn.completed, set())
+        self.assertEqual(conn.lease.released, [])
+        self.assertEqual(conn.calls, [])
+        async def rpc(method, **params):
+            return {'truncated': False, 'replay_epoch': 'e', 'last_sequence': 1, 'events': [event]}
+        conn.rpc = rpc
+        with self.assertRaises(bridge.Closed):
+            await bridge.replay_events(conn, {'session_id': 's', 'replay_epoch': 'e', 'last_sequence': 0}, None)
+
 
 
     async def test_replay_preserves_completion_reuse_and_rejects_changed_empty_epoch(self):

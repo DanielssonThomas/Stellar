@@ -9,7 +9,7 @@ use std::{
 pub(super) const MAX_TEXT: usize = 262_144;
 const MAX_STORE: u64 = 16_800_000;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Admission {
     pub id: String,
@@ -46,19 +46,16 @@ impl Updates {
                 ..Self::default()
             };
         }
-        if store.pending.len() > 16
-            || store.completed.len() > 8
-            || store
-                .completed
-                .iter()
-                .any(|u| u.id.is_empty() || u.id.len() > 512 || u.text.len() > MAX_TEXT)
-        {
+        if !store.valid() {
             return Err(IvyErrorCode::Storage);
         }
         Ok(store)
     }
 
     pub fn save(&self, path: &Path) -> Result<(), IvyErrorCode> {
+        if !self.valid() {
+            return Err(IvyErrorCode::Storage);
+        }
         let bytes = serde_json::to_vec(self).map_err(|_| IvyErrorCode::Storage)?;
         if bytes.len() as u64 > MAX_STORE {
             return Err(IvyErrorCode::Storage);
@@ -77,11 +74,29 @@ impl Updates {
     }
 
     pub fn admit(&mut self, admission: Admission) -> Result<(), IvyErrorCode> {
-        if admission.generation <= self.floor_generation
-            || admission.sequence <= self.settled_sequence
-            || self.pending.iter().any(|a| a.id == admission.id)
-        {
+        if !bounded_id(&admission.id) {
+            return Err(IvyErrorCode::Protocol);
+        }
+        if let Some(previous) = self.pending.iter().find(|a| a.id == admission.id) {
+            return if previous == &admission {
+                Ok(())
+            } else {
+                Err(IvyErrorCode::Protocol)
+            };
+        }
+        if admission.generation <= self.floor_generation {
             return Ok(());
+        }
+        if admission.sequence <= self.settled_sequence {
+            return Ok(());
+        }
+        if self
+            .pending
+            .iter()
+            .any(|a| a.sequence == admission.sequence)
+            || self.completed.iter().any(|u| u.id == admission.id)
+        {
+            return Err(IvyErrorCode::Protocol);
         }
         if self.pending.len() == 16 {
             return Err(IvyErrorCode::Uncertain);
@@ -90,4 +105,35 @@ impl Updates {
         self.pending.sort_by_key(|a| a.sequence);
         Ok(())
     }
+
+    fn valid(&self) -> bool {
+        self.pending.len() <= 16
+            && self.completed.len() <= 8
+            && self
+                .cursor
+                .as_ref()
+                .is_none_or(|(epoch, _)| bounded_id(epoch))
+            && self.pending.iter().enumerate().all(|(i, item)| {
+                bounded_id(&item.id)
+                    && item.generation > self.floor_generation
+                    && item.sequence > self.settled_sequence
+                    && self.pending[..i]
+                        .iter()
+                        .all(|prior| prior.id != item.id && prior.sequence < item.sequence)
+                    && self.completed.iter().all(|done| done.id != item.id)
+            })
+            && self.completed.iter().enumerate().all(|(i, item)| {
+                bounded_id(&item.id)
+                    && item.text.len() <= MAX_TEXT
+                    && item
+                        .speech_claim
+                        .as_ref()
+                        .is_none_or(|claim| bounded_id(claim))
+                    && self.completed[..i].iter().all(|prior| prior.id != item.id)
+            })
+    }
+}
+
+fn bounded_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 512
 }

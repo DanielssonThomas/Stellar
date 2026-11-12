@@ -290,6 +290,10 @@ def completion_payload(payload):
 
 
 def autonomous_start(payload):
+    if payload.get('display_kind') == 'lifecycle_update':
+        # Do not discard a future version's consent/receipt proof or advance past it.
+        # Delivery remains disabled until end-to-end revocation is implemented.
+        raise Closed()
     return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
             and payload.get('notification_category') != 'diagnostic')
 

@@ -53,6 +53,17 @@ impl Session {
     }
 
     pub(super) fn background_event(&mut self, params: &Value) -> Result<bool, IvyErrorCode> {
+        if params.get("type").and_then(Value::as_str) == Some("message.start")
+            && !params
+                .get("payload")
+                .and_then(Value::as_object)
+                .is_some_and(|payload| {
+                    payload.len() == 1
+                        && payload.get("autonomous").and_then(Value::as_bool).is_some()
+                })
+        {
+            return Err(IvyErrorCode::Protocol);
+        }
         if params.get("admission_id").and_then(Value::as_str) == self.record.admission_id.as_deref()
         {
             return Ok(false);

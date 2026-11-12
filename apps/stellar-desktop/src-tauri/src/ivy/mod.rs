@@ -1,6 +1,8 @@
 mod activity;
 #[cfg(test)]
 mod activity_tests;
+#[cfg(test)]
+mod background_integrity_tests;
 #[cfg(feature = "native-smoke")]
 mod background_probe;
 #[cfg(test)]
@@ -45,6 +47,8 @@ mod session_receipts;
 mod session_tests;
 mod state;
 mod update_store;
+#[cfg(test)]
+mod update_store_tests;
 mod workspace_capture;
 mod workspace_context;
 pub mod workspace_contracts;
