@@ -52,7 +52,7 @@ class Ledger(GuardMixin):
         if valid is not True:
             raise ContractError('binding_changed')
 
-    def bind(self, origin: Origin, *, consent_revision, expires_at, max_admissions):
+    def bind(self, origin: Origin, *, consent_revision, expires_at, max_admissions, _on_bind=None):
         """Only a host-authenticated explicit user grant may call this; no actor JSON/boolean proof."""
         if type(origin) is not Origin:
             raise ContractError('permission_denied')
@@ -72,6 +72,8 @@ class Ledger(GuardMixin):
                 raise ContractError('binding_capacity')
             conn.execute('INSERT INTO stellar_bg_bindings_v1 VALUES(?,?,?,?,?,0,0,?)',
                 (binding['bindingId'], canonical(binding['origin']), consent_revision, expires_at, max_admissions, now))
+            if _on_bind is not None:
+                _on_bind(conn, binding)  # host owner binding commits atomically with the grant
         self.db._execute_write(write)
         return binding
 

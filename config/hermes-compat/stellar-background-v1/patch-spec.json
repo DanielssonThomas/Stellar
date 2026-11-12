@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "state": "inactive_candidate_no_managed_application_authorized",
+  "changes": [
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        generation = session['runtime_generation'] + 1\n",
+      "after": "        # Stellar v1: recheck only reserved rows, inside the actual FIFO claim transaction.\n        if (row['request_id'].startswith('stellar.background.v1:')\n                or 'background_v1' in json.loads(row['payload_json']).get('local_automation_v1', {})):\n            try:\n                from stellar_background.wiring import guard as stellar_guard\n            except ImportError:\n                raise RuntimeStoreError('admission_conflict', field='background_v1') from None\n            stellar_guard(db, conn, dict(row))\n        generation = session['runtime_generation'] + 1\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        _retire_admission_workers(conn, row, epoch)\n        if _terminal_write is not None:\n",
+      "after": "        allowed = True\n        if (row['request_id'].startswith('stellar.background.v1:')\n                or 'background_v1' in json.loads(row['payload_json']).get('local_automation_v1', {})):\n            try:\n                from stellar_background.wiring import terminal_allowed\n            except ImportError:\n                raise RuntimeStoreError('permission_denied', field='background_v1') from None\n            allowed = terminal_allowed(db, conn, dict(row))\n        settled_outcome = outcome if allowed else 'interrupted'\n        settled_result = result if allowed else {'result': {'final_response': '', 'interrupted': True}}\n        _retire_admission_workers(conn, row, epoch)\n        if _terminal_write is not None and allowed:\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        if result is not None:\n            from hermes_state_terminal import RESULT_PREFIX\n            encoded = _json(encode_result(compact_result(result, user_message=json.loads(row['payload_json']).get('text'))))\n",
+      "after": "        if settled_result is not None:\n            from hermes_state_terminal import RESULT_PREFIX\n            encoded = _json(encode_result(compact_result(settled_result, user_message=json.loads(row['payload_json']).get('text'))))\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        conn.execute(\"UPDATE session_admissions SET status='terminal',outcome=? WHERE admission_id=?\", (outcome, admission_id))\n        settle_steer_transfers(conn, epoch=epoch, generation=generation, transfers=_transfers, outcome=outcome)\n",
+      "after": "        conn.execute(\"UPDATE session_admissions SET status='terminal',outcome=? WHERE admission_id=?\", (settled_outcome, admission_id))\n        settle_steer_transfers(conn, epoch=epoch, generation=generation, transfers=_transfers, outcome=settled_outcome)\n"
+    },
+    {
+      "path": "gateway/session_results.py",
+      "before": "    return settled, response\n",
+      "after": "    if row['request_id'].startswith('stellar.background.v1:'):\n        saved = admission_result(db, row['admission_id'])\n        response = (saved or {}).get('result', {}).get('final_response') or ''\n    return settled, response\n"
+    },
+    {
+      "path": "gateway/session_automation.py",
+      "before": "    return card\n\n\ndef committed_route_envelope",
+      "after": "    if descriptor.get('background_v1') is not None:\n        try:\n            from stellar_background.wiring import display\n        except ImportError:\n            return {}  # missing host package is never an authenticated lifecycle card\n        return display(payload, card)\n    return card\n\n\ndef committed_route_envelope"
+    },
+    {
+      "path": "gateway/session_automation.py",
+      "before": "    event.metadata.update(automation_display_metadata(descriptor))\n",
+      "after": "    if descriptor.get('background_v1') is not None:\n        with authority.db._read_ctx() as conn:\n            from stellar_background.wiring import guard\n            guard(authority.db, conn, row)\n        event.metadata.update({'display_kind': 'lifecycle_update', 'display_text': descriptor['display_text']})\n    else:\n        event.metadata.update(automation_display_metadata(descriptor))\n"
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "before": "        ref = SessionRef(self.actor.profile_id, params.get('session_id', ''))\n        from tui_gateway.contracts.registry import (",
+      "after": "        ref = SessionRef(self.actor.profile_id, params.get('session_id', ''))\n        if isinstance(method, str) and method.startswith('stellar.background.'):\n            from stellar_background.wiring import dispatch\n            return await dispatch(self, request)\n        from tui_gateway.contracts.registry import ("
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "before": "                out['usage'] = saved.get('usage') or {}\n        return out\n",
+      "after": "                out['usage'] = saved.get('usage') or {}\n        try:\n            from stellar_background.wiring import receipt as background_receipt\n        except ImportError:\n            return out  # consumer requires descriptor provenance before v1 delivery\n        return background_receipt(self, ref, receipt.admission_id, out)\n"
+    },
+    {
+      "path": "tui_gateway/contracts/events.py",
+      "before": "class MessageStartPayload(Payload):\n",
+      "after": "class MessageStartPayload(Payload):\n    background_v1: dict[str, JsonValue] | None = None\n\n"
+    },
+    {
+      "path": "tui_gateway/contracts/canonical.py",
+      "before": "    usage: dict[str, JsonValue] | None = None\n\n\ncanonical_method(\"prompt.receipt\"",
+      "after": "    usage: dict[str, JsonValue] | None = None\n    background_v1: dict[str, JsonValue] | None = None\n    background_delivery_authorized: bool | None = None\n\n\ncanonical_method(\"prompt.receipt\""
+    },
+    {
+      "path": "hermes_cli/plugins_context.py",
+      "before": "    def has_plugin(self, plugin_id: str) -> bool:\n",
+      "after": "    @property\n    def background_v1(self):\n        \"\"\"Host-issued original-binding producer facade, or None; never private authority access.\"\"\"\n        return getattr(self._manager, '_stellar_background_ports', {}).get(self.plugin_id)\n\n    def has_plugin(self, plugin_id: str) -> bool:\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "            outcome, stored = _captured\n            if outcome not in ('completed', 'interrupted', 'failed'):\n",
+      "after": "            outcome, stored = _captured\n            if (row['request_id'].startswith('stellar.background.v1:')\n                    or 'background_v1' in json.loads(row['payload_json']).get('local_automation_v1', {})):\n                try:\n                    from stellar_background.wiring import terminal_allowed\n                except ImportError:\n                    raise RuntimeStoreError('permission_denied', field='background_v1') from None\n                resolution_allowed = terminal_allowed(db, conn, dict(row))\n                if not resolution_allowed:\n                    outcome, stored = 'interrupted', {'result': {'final_response': '', 'interrupted': True}}\n            if outcome not in ('completed', 'interrupted', 'failed'):\n"
+    },
+    {
+      "path": "gateway/session_settlement_recovery.py",
+      "before": "    complete = {\n        'text': response, 'content': response, 'admission_id': row['admission_id'],\n",
+      "after": "    if row['request_id'].startswith('stellar.background.v1:') and settled['outcome'] != 'completed':\n        return {'text': '', 'content': '', 'admission_id': row['admission_id'],\n                'outcome': 'cancelled' if settled['outcome'] == 'interrupted' else settled['outcome'],\n                'status': 'interrupted' if settled['outcome'] == 'interrupted' else 'error'}\n    complete = {\n        'text': response, 'content': response, 'admission_id': row['admission_id'],\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        outcome = 'interrupted'\n        if _captured is not None and row['owner_epoch'] == epoch:\n",
+      "after": "        outcome, resolution_allowed = 'interrupted', True\n        if _captured is not None and row['owner_epoch'] == epoch:\n"
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "before": "        if _terminal_write is not None:\n            _terminal_write(conn, row)\n        _retire_admission_workers(conn, row, row['owner_epoch'])\n",
+      "after": "        if _terminal_write is not None and resolution_allowed:\n            _terminal_write(conn, row)\n        _retire_admission_workers(conn, row, row['owner_epoch'])\n"
+    }
+  ]
+}

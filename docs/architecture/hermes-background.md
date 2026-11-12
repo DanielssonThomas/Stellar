@@ -35,7 +35,7 @@ The fallback candidate is a narrow host-owned extension over the existing canoni
 The plugin must use its eventual public facade. It must not import host-private authority,
 construct a `SessionActor`, set an internal flag, or patch the core itself.
 
-## Implemented candidate and unimplemented wiring
+## Implemented candidate and remaining integration gates
 
 [contract-v1.json](../../config/hermes-compat/stellar-background-v1/contract-v1.json) defines
 the proposed closed `stellar.background.v1` fields and limits. The Python package alongside
@@ -44,12 +44,37 @@ real Hermes admission, exact-event lookup, claim/terminal guards, scoped revocat
 durable consumer effect custody. It has no imports with registration effects, public listener,
 daemon, schedule, capability advert or automatic migration. No managed source was changed.
 
-The kernel uses an injected **host-only** transaction-local gate. Tests provide a synthetic gate
-and exercise actual `SessionDB`, admission, claim and settlement code. This is not proof that a
-managed owner invokes the guards. Every `requiredHostPorts` entry in the JSON contract must be
-wired and reviewed before runtime capability advertisement. In particular, native capture,
-plugin facade, host drain/recovery, terminal failure settlement, live/replay/receipt projection
-and #299's consumer effect operations remain integration gates. Missing wiring means unsupported.
+The [host callable interface](../../config/hermes-compat/stellar-background-v1/host-interface-v1.json)
+adds a concrete host adapter and eight-file pinned source patch specification. The candidate
+places checks inside actual FIFO claim, terminal settlement and captured-result recovery
+transactions. A refused queued head follows the existing exact-head cancellation path so ordinary
+foreground input can advance. Denied v1 settlement suppresses captured text, transformed responses
+and content-bearing terminal callbacks. Foreground callbacks remain unchanged.
+
+The host captures the original destination and finite consent behind mandatory native-transport,
+explicit-gesture and transaction-local policy verifiers. A one-use consent ticket expires within
+60 seconds and belongs to the actual connection. Legacy owner registration also admits Webapp
+owners and is insufficient native proof. No RPC/tool method mints tickets or accepts an Origin.
+The plugin receives `ctx.background_v1` only through the verified host loader's exact profile/plugin
+manager. Its facade freezes/hashes events before an attempt, submits through tracked ordered writes
+and inspects after uncertain ACKs. Unregister removes only its own facade. Producer incarnation to
+artifact-version binding is immutable and bounded to 20 retained identities; upgrades require a new
+incarnation and fresh consent.
+
+The source candidate projects the same `background_v1` descriptor onto `message.start` and
+`prompt.receipt`; actual `SessionEvents` replay/catch-up retains the frame's existing authority,
+generation, admission, sequence and replay epoch. Native effect RPCs derive custody from the
+authenticated subject **and transport**. Another connection for the same person cannot acknowledge
+that an old connection stopped speech. A lost transport therefore stays revoking until its actual
+owner can acknowledge; authenticated custody recovery would need a separate reviewed contract.
+
+Tests use actual `SessionDB`, patched canonical functions, result handling, event replay and exact
+host method bodies extracted without starting the gateway. Native/policy/gesture callbacks and
+connections are synthetic. Host construction verifies all 15 pinned files/postimages and the
+executing canonical functions; it refuses partial changes, unknown updates or stale loaded code.
+This is not complete loaded-module or managed bootstrap qualification. Native verifier/gesture
+integration, reviewed host composition, consumer persistence/render/speech enforcement, capability
+advertisement and real named-Ivy ACP acceptance remain gates. Missing wiring means unsupported.
 
 ## Authority and threat model
 
@@ -110,22 +135,37 @@ Run the isolated candidate checks with the existing managed interpreter; no depe
 
 ```powershell
 & '<managed-python>' -I -B tools/hermes-background/test_candidate.py --runtime D:/Hermes/hermes-agent
+& '<managed-python>' -I -B tools/hermes-background/test_host_ports.py --runtime D:/Hermes/hermes-agent --evidence artifacts/issue-339/host-ports/qualification.json
 & '<managed-python>' -I -B tools/hermes-background/qualify_process.py --runtime D:/Hermes/hermes-agent --output artifacts/issue-339/process-qualification.json
 ```
 
 They use disposable databases/homes, fake source identities and real local fixture processes.
+Host-port tests prohibit bootstrap, subprocesses and external networking (Windows asyncio's
+loopback self-pipe is allowed). The unrelated restart-notice helper is explicitly mocked because
+its import starts full gateway bootstrap. An initial test exposed that behavior and was stopped;
+it is not a passing isolated test. Managed source and selected installation facts stayed unchanged.
 They do not read production credentials, submit to Ivy or qualify a complete foreground profile.
 The separate read-only MCP diagnostic reproduced selected-profile tool failure inside an ACP
 editor scope while outer and editor-owned connections worked. Its preserved stash
 `d494149db7ed131941345eaa0b50c0793640c76b` must not be blindly restored. Foreground MCP recovery
 needs explicit scope, review and functional verification; v1 must not bypass trust selection.
 
-There is **no install command for this inactive kernel**. Managed application is not ready.
-A future concrete package must pin the exact stable commit and every touched file's pre/post
-hash, refuse mismatch and unrelated modifications, preserve original bytes, and have explicit
-coordinator-owned install/verify/disable/remove/rollback operations. Removal must deny queued
-v1 work independently of a loaded plugin and reconcile outstanding effect custody. A backup
-does not itself prove safe rollback. No automatic reapplication after updates is permitted.
+There is **no install command for this inactive candidate**. `export_patch.py` only exports a diff
+and pre/postimage manifest into this issue's artifacts. `overlay.fixture` only builds empty
+temporary source fixtures and `undo_fixture` requires the complete independently derived manifest
+before restoring any bytes. Tests verify byte-identical source restoration. This is not a durable
+installer, production removal or rollback qualification.
+
+Before any coordinator-owned application: verify the exact commit, 15-file base pin, eight-file
+postimages and candidate artifact hashes; review the diff and genuine native/consumer composition;
+quiesce outside an active Ivy turn; preserve exact original bytes and canonical state; then verify
+loaded code and functional foreground/profile boundaries. No hot patching or automatic reapplication
+after an update is supported. Explicit `Host.detach()` durably disables producer registrations,
+revokes grants and cancels exact queued v1 admissions while retaining all identity/effect records.
+Keep authenticated finish/inspect available until outstanding custody is reconciled. Only after
+that gate may a separately reviewed removal restore exact source bytes and remove the package.
+Unknown edits, mismatched hashes or lost custody stop removal; no timeout certifies stopped effects.
+Do not delete schema/tombstones to free capacity or roll back a canonical database to resend events.
 
 Ivy is the sole coordinated managed writer. Never restart the gateway/Desktop during an active
 Ivy turn; arrange external handoff and preserve the conversation. Required critical independent

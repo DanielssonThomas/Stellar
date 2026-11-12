@@ -15,4 +15,12 @@ def install_schema(db):
             binding_id TEXT NOT NULL, event_id TEXT NOT NULL, kind TEXT NOT NULL,
             client TEXT NOT NULL, operation TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(binding_id,event_id,kind))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_owners_v1 (
+            binding_id TEXT PRIMARY KEY, subject TEXT NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_producers_v1 (
+            producer_id TEXT PRIMARY KEY, version TEXT NOT NULL, incarnation TEXT NOT NULL,
+            epoch INTEGER NOT NULL, active INTEGER NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_versions_v1 (
+            producer_id TEXT NOT NULL, incarnation TEXT NOT NULL, version TEXT NOT NULL,
+            PRIMARY KEY(producer_id,incarnation))''')
     db._execute_write(write)
