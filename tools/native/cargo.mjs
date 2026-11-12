@@ -1,7 +1,10 @@
 import { spawnSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { nativeSmokeSucceeded } from './smoke-result.mjs';
+import {
+  nativeSmokeSucceeded,
+  backgroundSmokeFailure,
+} from './smoke-result.mjs';
 
 const action = process.argv[2];
 const root = resolve(import.meta.dirname, '../..');
@@ -137,6 +140,10 @@ if (action === 'smoke' || action === 'background-smoke') {
     ),
     { force: true },
   );
+  if (backgroundSmoke)
+    rmSync(resolve(root, 'artifacts/native/background-smoke-failure.json'), {
+      force: true,
+    });
   const child = spawn(
     resolve(env.CARGO_TARGET_DIR, 'debug/stellar-desktop.exe'),
     [],
@@ -187,6 +194,17 @@ if (action === 'smoke' || action === 'background-smoke') {
       (backgroundSmoke &&
         !output.includes('STELLAR_SMOKE_STAGE background-spoken-once'))
     ) {
+      if (backgroundSmoke) {
+        mkdirSync(resolve(root, 'artifacts/native'), { recursive: true });
+        writeFileSync(
+          resolve(root, 'artifacts/native/background-smoke-failure.json'),
+          JSON.stringify(
+            backgroundSmokeFailure(code, timedOut, output),
+            null,
+            2,
+          ) + '\n',
+        );
+      }
       console.error(
         'Native smoke lacked a successful IPC completion handshake',
       );

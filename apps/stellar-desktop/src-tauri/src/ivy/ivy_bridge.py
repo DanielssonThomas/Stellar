@@ -441,6 +441,25 @@ async def profile_toolsets():
     return await result
 
 
+def failure_diagnostic(conn, error):
+    # These labels never establish rejection: an RPC error can follow admission.
+    if isinstance(error, getattr(conn, 'rpc_error_type', ())):
+        return {
+            'permission_denied': 'owner_permission', 'invalid_params': 'owner_parameters',
+            'busy': 'owner_busy', 'storage_unavailable': 'owner_storage',
+            'admission_conflict': 'owner_conflict', 'not_found': 'owner_missing',
+            'runtime_draining': 'owner_draining',
+        }.get(str(error), 'owner_other')
+    if isinstance(error, ValueError):
+        return {
+            'Ivy has an active client operation; resume it or wait.': 'client_writer_busy',
+            'Previous operation is unsettled; resume/cancel it before submitting new work': 'client_pending',
+            'Previous submission outcome unknown; inspect its session before clearing runtime/ivy-client/active.json': 'client_unknown',
+            'Unsupported method or parameter': 'client_parameters',
+        }.get(str(error), 'bridge_local')
+    return 'bridge_local'
+
+
 async def request_worker(conn, workspace, queue, approvals=None):
     from stellar_ivy_controls import control, Refused
     from stellar_ivy_edit_policy import synchronize
@@ -598,7 +617,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
         except asyncio.TimeoutError:
             if workspace is not None:
                 workspace.gate.disarm()
-            emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
+            emit({'id': rid, 'error': {'code': 'outcome_uncertain', 'diagnostic': 'deadline'}})
             raise Closed() from None
         except Refused as error:
             emit({'id': rid, 'error': {'code': error.code}})
@@ -606,11 +625,12 @@ async def request_worker(conn, workspace, queue, approvals=None):
             if workspace is not None:
                 workspace.gate.disarm()
             raise
-        except Exception:
+        except Exception as error:
             if workspace is not None:
                 workspace.gate.disarm()
             # Never retry: even a transport exception may follow admission.
-            emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
+            emit({'id': rid, 'error': {'code': 'outcome_uncertain',
+                                       'diagnostic': failure_diagnostic(conn, error)}})
             raise Closed() from None
         finally:
             if resuming:
@@ -650,6 +670,7 @@ async def serve():
         # Discovery validates home and loopback; explicit endpoint forbids autostart.
         async with connect(found.endpoint) as client:
             conn = IvyConnection(client, approvals=bool(access))
+            conn.rpc_error_type = GatewayRPCError
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)

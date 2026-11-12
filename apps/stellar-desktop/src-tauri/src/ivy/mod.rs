@@ -27,6 +27,8 @@ mod observation;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+#[cfg(any(feature = "native-smoke", test))]
+mod process_diagnostics;
 mod question_contracts;
 mod questions;
 #[cfg(test)]

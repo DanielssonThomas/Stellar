@@ -261,6 +261,8 @@ impl Broker {
                     #[cfg(feature = "native-smoke")]
                     if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
                         println!("STELLAR_SMOKE_STAGE bg-rpc-refused");
+                        let diagnostic = super::process_diagnostics::label(error);
+                        println!("STELLAR_SMOKE_STAGE bg-failure-{diagnostic}");
                     }
                     return Err(match error.get("code").and_then(Value::as_str) {
                         Some("busy") => IvyErrorCode::Busy,

@@ -65,6 +65,40 @@ class Connection:
 
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
 
+    async def test_failure_diagnostics_are_allowlisted_and_never_retry_or_settle_submission(self):
+        class OwnerRefusal(ValueError):
+            data = {'private': 'credentials and raw owner details'}
+        cases = [
+            (OwnerRefusal('permission_denied'), 'owner_permission'),
+            (OwnerRefusal('private raw owner exception'), 'owner_other'),
+            (ValueError('permission_denied'), 'bridge_local'),
+            (ValueError('Ivy has an active client operation; resume it or wait.'), 'client_writer_busy'),
+            (RuntimeError('private path and token'), 'bridge_local'),
+            (asyncio.TimeoutError(), 'deadline'),
+        ]
+        for error, diagnostic in cases:
+            conn = Connection()
+            conn.rpc_error_type = OwnerRefusal
+            async def call(method, params):
+                conn.calls.append((method, params))
+                raise error
+            conn.call = call
+            queue = asyncio.Queue()
+            for rid in [1, 2]:
+                await queue.put((rid, 'prompt.submit', {'session_id': 's', 'input_id': 'i', 'text': 'Harmless fixture'}))
+            output = Pipe()
+            with patch.object(sys, 'stdout', output), self.assertRaises(bridge.Closed):
+                await bridge.request_worker(conn, None, queue)
+            self.assertEqual(json.loads(output.buffer.getvalue()),
+                             {'id': 1, 'error': {'code': 'outcome_uncertain', 'diagnostic': diagnostic}})
+            self.assertEqual(len(conn.calls), 1)
+            self.assertEqual(queue.qsize(), 1)
+            self.assertEqual(conn.lease.released, [])
+            self.assertEqual(conn.completed, set())
+            self.assertNotIn(b'private', output.buffer.getvalue())
+            self.assertNotIn(b'credentials', output.buffer.getvalue())
+
+
     async def profile_worker(self, loader, deadline=0.08, description_delay=0):
         class Workspace:
             task = object()

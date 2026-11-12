@@ -4,6 +4,8 @@
 
 Ivy session creation has one 15-second bridge budget covering runtime discovery, profile-tool selection, session RPC and edit-policy verification. Profile selection runs on one dedicated daemon thread so synchronous Hermes imports cannot freeze the event pump or its deadline. Python cannot cancel that thread: a timeout closes the bridge without retrying or accepting late results, and the native broker kills and reaps its owned bridge process. The daemon does not keep interpreter shutdown open. The configured tool selection and session verification remain mandatory.
 
+A background probe that reaches the native process and then fails writes a separate artifacts/native/background-smoke-failure.json record. It contains only allowlisted failure categories, exit/timeout facts and whether submission was attempted. It never establishes rejection, a receipt, successful delivery or permission to retry. Raw exception text, owner error data, prompts and session identity are excluded. Reconcile an uncertain attempt using its original isolated journal and supported gateway reads; preserve uncertainty when no canonical input-to-admission mapping is available.
+
 ## Windows setup and launch
 
 Install Node 22, Corepack/pnpm, Rustup, Visual Studio Build Tools with the C++ desktop workload and Windows SDK, and the Microsoft Edge WebView2 Runtime. Run `pnpm install --frozen-lockfile` at the workspace root. `rustup show` installs the repository's pinned Rust 1.99.1 toolchain with rustfmt and Clippy. `Cargo.lock` pins native dependencies; Tauri 2.12.5, tauri-build 2.7.4 and ts-rs 12.0.1 are explicitly pinned in manifests.
