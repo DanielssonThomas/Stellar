@@ -1,6 +1,6 @@
 name: stellar-herdr
-version: 1.0.0
-description: Governed personal Stellar worker launches and live Herdr views for Ivy.
+version: 1.1.0
+description: Governed Ivy worker launches, Herdr views and opt-in local lifecycle observations.
 kind: standalone
 provides_tools: [stellar_herdr]
 provides_hooks: [pre_llm_call]

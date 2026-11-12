@@ -83,11 +83,12 @@ class Core:
         recent = output.get('text', '')
         return {**detail, 'untrusted_terminal_output': recent[-3500:] if isinstance(recent, str) else ''}
 
-    def launch(self, issue, role, cwd, argv):
+    def launch(self, issue, role, cwd, argv, *, incarnation):
         result = self.call(
             'run', '--bg', '--no-parent', '--no-notify', '--json',
             '--name', f'stellar-{issue}', '--label', LABEL, '--label', f'issue={issue}',
-            '--label', f'role={role}', '--cwd', cwd, '--', *argv,
+            '--label', f'role={role}', '--label', f'stellar-launch={incarnation}',
+            '--cwd', cwd, '--', *argv,
         )
         if not ADDRESS.fullmatch(result.get('address', '')):
             raise Unavailable('Herdr did not confirm a worker terminal.')

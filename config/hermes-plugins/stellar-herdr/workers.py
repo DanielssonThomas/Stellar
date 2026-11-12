@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -111,14 +112,19 @@ def submit(root, settings, core, issue, role, session, task):
         + task,
         encoding='utf-8',
     )
+    incarnation = uuid.uuid4().hex
     try:
         terminal = core.launch(issue, role, cwd, [
             settings['hermes'], '-p', role, 'chat', '--in', cwd, '--query-file', task_file,
             '--oneshot', '--max-turns', '24', '--format', 'stream-json',
-        ])
+        ], incarnation=incarnation)
     except Unavailable:
         raise Unavailable('Herdr did not confirm the launch. The receipt was retained. Inspect Core and the worktree before reassigning.') from None
-    row = {'issue': issue, 'terminal': terminal, 'role': role, 'launch': 'accepted'}
+    row = {
+        'schema': 1, 'issue': issue, 'terminal': terminal, 'role': role, 'launch': 'accepted',
+        'claim_session': session, 'branch': branch, 'target': target, 'baseline': head,
+        'incarnation': incarnation, 'launched_at': time.time(),
+    }
     (attempt / 'terminal.json').write_text(json.dumps(row), encoding='utf-8')
     if preference(root) == 'automatic':
         try:
@@ -142,6 +148,9 @@ def operate(profile, args):
     core = Core(settings)
     action = args.get('action')
     issue = args.get('issue')
+    if action in ('tracking', 'observations', 'reconcile'):
+        from .observation import operate_observation
+        return operate_observation(root, settings, core, args)
     if action == 'status':
         return {'view_preference': preference(root), 'workers': core.terminals()[:20]}
     if action == 'progress':
