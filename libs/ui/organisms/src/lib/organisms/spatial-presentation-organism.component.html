@@ -4,38 +4,16 @@
     [class.is-compact]="compact()"
     role="region"
     aria-labelledby="spatial-title"
+    [attr.aria-description]="current.label"
     aria-keyshortcuts="Escape Alt+S F"
     (keydown.escape)="escape($event)"
     (keydown)="shortcut($event)"
     animate.enter="scene-enter"
     animate.leave="scene-leave"
   >
-    <header class="projection-heading">
-      <div class="projection-mark">
-        <span class="locator" aria-hidden="true"></span>
-        <div>
-          <p class="microtype">
-            Ivy projection <span aria-hidden="true">/</span>
-            {{
-              state().featured.length === 2
-                ? 'Compare'
-                : state().featured.length
-                  ? 'In focus'
-                  : 'Overview'
-            }}
-          </p>
-          <h2
-            #title
-            id="spatial-title"
-            tabindex="-1"
-            [attr.title]="current.description"
-          >
-            {{ current.title }}
-          </h2>
-        </div>
-      </div>
-      <span class="projection-label microtype">{{ current.label }}</span>
-    </header>
+    <h2 #title id="spatial-title" class="sr-only" tabindex="-1">
+      {{ current.title }}
+    </h2>
 
     <div #context class="projection-context">
       <button

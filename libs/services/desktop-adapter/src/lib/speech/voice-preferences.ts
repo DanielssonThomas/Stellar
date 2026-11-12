@@ -19,6 +19,7 @@ function localStoragePort(): Pick<Storage, 'getItem' | 'setItem'> | undefined {
 export class VoicePreferences {
   wakeSensitivity: WakeSensitivity = 'standard';
   showRecognition = false;
+  showResponseCaptions = false;
   constructor(private readonly storage = localStoragePort()) {
     try {
       this.wakeSensitivity =
@@ -27,6 +28,8 @@ export class VoicePreferences {
           : 'standard';
       this.showRecognition =
         storage?.getItem('stellar.voice.showRecognition') === 'true';
+      this.showResponseCaptions =
+        storage?.getItem('stellar.voice.showResponseCaptions') === 'true';
     } catch {
       /* Current-session controls remain usable without storage. */
     }
@@ -44,6 +47,17 @@ export class VoicePreferences {
     this.showRecognition = value;
     try {
       this.storage?.setItem('stellar.voice.showRecognition', String(value));
+    } catch {
+      /* Session-only preference. */
+    }
+  }
+  setResponseCaptions(value: boolean) {
+    this.showResponseCaptions = value;
+    try {
+      this.storage?.setItem(
+        'stellar.voice.showResponseCaptions',
+        String(value),
+      );
     } catch {
       /* Session-only preference. */
     }

@@ -120,6 +120,8 @@ export class DesktopExperienceTemplate {
   readonly passiveListening = input(false);
   readonly assistantStatus = input('Ivy disconnected');
   readonly assistantReply = input('');
+  readonly showResponseCaptions = input(false);
+  readonly showResponseCaptionsChange = output<boolean>();
   readonly responseCaptionText = input('');
   readonly responseCaptionKind = input<'commentary' | 'final'>('commentary');
   readonly assistantBusy = input(false);
@@ -179,8 +181,6 @@ export class DesktopExperienceTemplate {
   readonly reconcileIvy = output<void>();
   readonly submitText = output<string>();
   readonly voiceStatus = input('Local voice idle');
-  readonly voiceInputText = input('');
-  readonly recognitionVisible = input(false);
   readonly recognitionText = input('');
   readonly recognitionStatus = input('');
   readonly wakeSensitivity = input<'standard' | 'high'>('standard');

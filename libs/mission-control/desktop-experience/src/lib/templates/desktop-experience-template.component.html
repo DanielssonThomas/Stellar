@@ -120,7 +120,7 @@
 
   @if (!['suspended', 'shutdown'].includes(state().phase)) {
     <div class="conversation-captions">
-      @if (responseCaptionText().trim()) {
+      @if (showResponseCaptions() && responseCaptionText().trim()) {
         <stellar-response-caption-molecule
           [text]="responseCaptionText()"
           [kind]="responseCaptionKind()"
@@ -128,21 +128,10 @@
           [reducedMotion]="state().reducedMotion"
         />
       }
-      @if (
-        (recognitionVisible() || voiceInputText()) &&
-        (recognitionVisible() || !solActive() || promptStatus() === 'idle')
-      ) {
+      @if (showRecognition()) {
         <stellar-voice-transcript-molecule
-          [text]="
-            recognitionVisible()
-              ? recognitionText() || 'Listening for speech…'
-              : voiceInputText()
-          "
-          [status]="
-            recognitionVisible()
-              ? recognitionStatus() || 'Local recognition · no speech sent'
-              : ''
-          "
+          [text]="recognitionText() || 'Listening for speech…'"
+          [status]="recognitionStatus() || 'Local recognition · no speech sent'"
           [loading]="loading()"
           [reducedMotion]="state().reducedMotion"
         />
@@ -462,6 +451,14 @@
                 [checked]="!voiceMuted()"
                 [reducedMotion]="state().reducedMotion"
                 (checkedChange)="muteVoice.emit(!$event)"
+              />
+              <stellar-toggle-switch-atom
+                [loading]="loading()"
+                label="Show Ivy captions"
+                description="Display Ivy’s updates and replies on the desktop."
+                [checked]="showResponseCaptions()"
+                [reducedMotion]="state().reducedMotion"
+                (checkedChange)="showResponseCaptionsChange.emit($event)"
               />
               <div class="settings-button-row">
                 @if (voiceBusy()) {

@@ -43,6 +43,7 @@ export class DesktopVoice {
     this.preferences.wakeSensitivity,
   );
   readonly showRecognition = signal(this.preferences.showRecognition);
+  readonly showResponseCaptions = signal(this.preferences.showResponseCaptions);
   readonly recognition = signal<RecognitionObservation | null>(null);
   private readonly current = signal<VoiceView>({
     status: 'Local voice idle',
@@ -232,6 +233,11 @@ export class DesktopVoice {
     this.showRecognition.set(value);
     if (!value) this.recognition.set(null);
     this.conversation.setRecognitionOptions(this.wakeSensitivity(), value);
+  }
+
+  setShowResponseCaptions(value: boolean) {
+    this.preferences.setResponseCaptions(value);
+    this.showResponseCaptions.set(value);
   }
 
   setMuted(muted: boolean) {

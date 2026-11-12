@@ -24,50 +24,9 @@
   text-transform: uppercase;
   color: var(--gold);
 }
-.projection-heading,
 .projection-context {
   position: absolute;
   top: clamp(0.75rem, 3.1vh, 1.8rem);
-}
-.projection-heading {
-  left: clamp(1rem, 3.8vw, 3.5rem);
-  display: flex;
-  align-items: center;
-  gap: 1.2rem;
-}
-.projection-mark {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  min-width: 0;
-}
-.projection-mark .microtype {
-  margin: 0 0 0.25rem;
-}
-.projection-mark .microtype span {
-  opacity: 0.6;
-  padding-inline: 0.15rem;
-}
-.locator {
-  width: 0.55rem;
-  height: 0.55rem;
-  flex: 0 0 0.55rem;
-  border: 1px solid var(--gold);
-  transform: rotate(45deg);
-}
-h2 {
-  margin: 0;
-  font: 500 clamp(0.85rem, 1.35vw, 1.1rem) / 1.15 var(--stellar-font-family);
-  letter-spacing: 0.025em;
-  max-width: 44ch;
-  overflow-wrap: anywhere;
-}
-h2:focus {
-  outline: none;
-}
-.projection-label {
-  border-left: 1px solid var(--gold-line);
-  padding-left: 1rem;
 }
 
 button,
@@ -139,27 +98,6 @@ a:focus-visible {
 }
 .selection-hint {
   margin-top: 0.22rem;
-}
-@media (max-width: 640px) {
-  .projection-heading {
-    gap: 0.55rem;
-    align-items: start;
-    max-width: 64vw;
-  }
-  .projection-mark {
-    align-items: start;
-  }
-  .locator {
-    margin-top: 0.25rem;
-  }
-  .projection-label {
-    position: absolute;
-    inset-inline-start: 1.2rem;
-    top: calc(100% + 0.35rem);
-    padding: 0;
-    border: 0;
-    white-space: nowrap;
-  }
 }
 :host(.motion-reduced) *,
 :host(.motion-reduced) *::before,

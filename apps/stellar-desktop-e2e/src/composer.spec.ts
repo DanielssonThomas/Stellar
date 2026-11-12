@@ -409,15 +409,7 @@ test('wake-only foreground flow resumes active Terra after cancelling the first 
     submissions: [{ text: 'tell me the plan', dissolved: false }],
   });
   expect((await observed()).sessions).toEqual(['terra']);
-  await expect(transcript.getByRole('status')).toHaveText('tell me the plan');
-  const bounds = await transcript.evaluate((element) => {
-    const { x, y, width, height } = element.getBoundingClientRect();
-    return { x, y, width, height, viewportHeight: window.innerHeight };
-  });
-  expect(bounds.x).toBeGreaterThanOrEqual(12);
-  expect(bounds.x).toBeLessThan(32);
-  expect(bounds.width).toBeLessThanOrEqual(340);
-  expect(bounds.y + bounds.height).toBeCloseTo(bounds.viewportHeight - 16, 0);
+  await expect(transcript).toHaveCount(0);
   expect(
     await page.evaluate(
       () =>
