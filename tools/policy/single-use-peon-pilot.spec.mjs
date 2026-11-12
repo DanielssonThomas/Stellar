@@ -433,6 +433,7 @@ test('a stopped recorded failure permits one feedback event and one correction',
     assert.equal(f.observed.limits[0].maxModelTokensPerWorker, 32_000);
     assert.equal(f.observed.limits[1].maxModelTokensPerWorker, 31_000);
     assert.equal(f.observed.limits[1].maxToolCallsPerWorker, 61);
+    assert.equal(f.observed.limits[0].maxRuntimeMsPerWorker, 600_000);
     const chargedRuntime = result.independent.usage.runtimeMs;
     assert.ok(chargedRuntime > 0);
     assert.equal(
