@@ -226,6 +226,7 @@ if (action === 'smoke') {
       'ivy_bridge_test.py',
       'ivy_approvals_test.py',
       'ivy_workspace_bridge_test.py',
+      'engineering_intelligence_test.py',
       'workspace_protocol_test.py',
       'workspace_credentials_test.py',
       'speech_worker_test.py',

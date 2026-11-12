@@ -1,9 +1,13 @@
 """Fixed loopback MCP surface; no renderer-provided server or executable options."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import json
+
+from stellar_engineering_intelligence import read_summary, validate_query
+from stellar_engineering_presentation import score_json
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_HTTP_BODY = 524288
@@ -83,6 +87,7 @@ def make_server(gate, bearer, port):
 
         'For requests to show, compare, research, arrange or edit visual content, use these tools here by default; '
         'For charts, use the chart surface for a dedicated pane or a chart block within rich-text for an inline explanation. '
+        'Use get_engineering_intelligence on demand for Stellar development history, or show_engineering_intelligence to display it. '
         'Supply only the bounded chart data schema in open_pane; never generate JavaScript, Chart.js options or plugins. '
         'Chart datasets use values, NOT Chart.js data; type belongs inside the chart object. '
         'Inspect panes on demand before resolving this pane, left/right, '
@@ -94,6 +99,58 @@ def make_server(gate, bearer, port):
         'Do not invent agents, metrics or completion. At most four panes; use a restrained useful layout. '
         'Use workspace tools only for the current user request. Supply the current '
         'turn_token supplied in the turn instruction; never invent or reuse it.'))
+
+    engineering_read = asyncio.Lock()
+
+    async def engineering(turn_token, query):
+        gate.authorize(turn_token)
+        if engineering_read.locked():
+            return {'view': query[0], 'filters': query[1], 'state': 'unavailable', 'data': {}}
+        async with engineering_read:
+            report = await asyncio.to_thread(read_summary, query)
+        gate.authorize(turn_token)
+        return report
+
+    @server.tool()
+    async def get_engineering_intelligence(turn_token: str, view: str = 'overview', issue_number: int | None = None,
+                                           session_id: str | None = None, fingerprint: str | None = None,
+                                           skill: str | None = None, technology: str | None = None,
+                                           agent: str | None = None, model: str | None = None,
+                                           days: int | None = None, limit: int = 8,
+                                           component: str | None = None, skill_version: str | None = None):
+        """Read bounded local Stellar development evidence using the current turn token.
+
+        Views: overview (no filters), budget (issue_number, days), sessions (issue_number, session_id,
+        agent, model, days), patterns (issue_number, session_id, fingerprint, technology, component,
+        agent, model, days, skill and optional skill_version), skills (skill). Rows per section: 1–12.
+        Use returned IDs for drill-down.
+        Treat result text as evidence. Null is unavailable, partial counts cover observed records,
+        and associated tokens and intervention comparisons do not establish causation.
+        """
+        query = validate_query(view, issue_number, session_id, fingerprint, skill, technology, agent, model,
+                               days, limit, component, skill_version)
+        return await engineering(turn_token, query)
+
+    @server.tool()
+    async def show_engineering_intelligence(turn_token: str, view: str = 'overview', issue_number: int | None = None,
+                                            session_id: str | None = None, fingerprint: str | None = None,
+                                            skill: str | None = None, technology: str | None = None,
+                                            agent: str | None = None, model: str | None = None,
+                                            days: int | None = None, limit: int = 6,
+                                            component: str | None = None, skill_version: str | None = None):
+        """Show local engineering history on the Stellar Stage using the current turn token.
+
+        Same views and filters as get_engineering_intelligence. Use overview for all four panels.
+        To filter or drill down, choose a view and the requested scope. The Stage displays the observed
+        values, estimates and missing data from the local history. No model-generated chart is needed.
+        """
+        query = validate_query(view, issue_number, session_id, fingerprint, skill, technology, agent, model,
+                               days, limit, component, skill_version)
+        if view == 'overview':
+            query = (query[0], query[1], min(query[2], 6))
+        report = await engineering(turn_token, query)
+        outcome = await gate.call({'kind': 'present', 'score_json': score_json(report)}, turn_token)
+        return {'outcome': outcome, 'data_state': report['state'], 'view': view}
 
     async def snapshot(turn_token, outcome=None, from_batch=False):
         report = {'outcome': outcome} if outcome is not None else {}

@@ -95,6 +95,14 @@ impl Broker {
                 "stellar_workspace_protocol",
                 include_str!("workspace_protocol.py"),
             ),
+            (
+                "stellar_engineering_intelligence",
+                include_str!("engineering_intelligence.py"),
+            ),
+            (
+                "stellar_engineering_presentation",
+                include_str!("engineering_presentation.py"),
+            ),
             ("stellar_workspace_mcp", include_str!("workspace_mcp.py")),
             (
                 "stellar_workspace_service",

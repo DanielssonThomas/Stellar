@@ -29,6 +29,8 @@ async def main():
     load('stellar_ivy_edit_policy', 'ivy_edit_policy.py')
     load('stellar_ivy_conversation', 'ivy_conversation.py')
     protocol = load('stellar_workspace_protocol', 'workspace_protocol.py')
+    load('stellar_engineering_intelligence', 'engineering_intelligence.py')
+    load('stellar_engineering_presentation', 'engineering_presentation.py')
     mcp = load('stellar_workspace_mcp', 'workspace_mcp.py')
     service = load('stellar_workspace_service', 'workspace_service.py')
 
