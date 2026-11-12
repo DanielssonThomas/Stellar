@@ -86,9 +86,9 @@ for (const width of [1600, 640]) {
     await expect(page.locator('.pane-controls')).toHaveCount(0);
     await expect(first).toHaveCSS('padding-top', '16px');
     await recognize(page, 'Show two stoic quotes side by side.');
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Show two stoic' }),
-    ).toHaveText('Show two stoic quotes side by side.');
+    await expect(page.locator('stellar-voice-transcript-molecule')).toHaveCount(
+      0,
+    );
     await page.screenshot({
       path: testInfo.outputPath(`presentation-${width}.png`),
     });
