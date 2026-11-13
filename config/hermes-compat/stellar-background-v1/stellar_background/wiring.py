@@ -2,8 +2,46 @@
 from __future__ import annotations
 
 import json
+import hashlib
+from pathlib import Path
 
 from .contract import CAPABILITY, ContractError, canonical, closed
+
+CONTRACT_SHA256 = '008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724'
+INTERFACE_SHA256 = '392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e'
+
+
+def negotiation(out):
+    """A: reserve exact transport fields, but never advertise this unqualified candidate.
+
+    Genuine native/consumer activation is a separate gate. Neither model JSON, caller flags,
+    fixture verifiers nor the installation package can set a positive runtime capability here.
+    """
+    if hashlib.sha256((Path(__file__).resolve().parents[1] / 'contract-v1.json').read_bytes()).hexdigest() != CONTRACT_SHA256:
+        raise ContractError('contract_mismatch')
+    if hashlib.sha256((Path(__file__).resolve().parents[1] / 'host-interface-v1.json').read_bytes()).hexdigest() != INTERFACE_SHA256:
+        raise ContractError('interface_mismatch')
+    result = {**out, 'capabilities': [v for v in out.get('capabilities', []) if v != CAPABILITY]}
+    result.pop('background_v1_contract_sha256', None)
+    result.pop('background_v1_interface_sha256', None)
+    return result
+
+
+def row_descriptor(row):
+    payload = row.get('payload') if 'payload' in row else json.loads(row['payload_json'])
+    card = (payload.get('local_automation_v1') or {}).get('background_v1')
+    if (type(card) is not dict or card.get('capability') != CAPABILITY
+            or card.get('kind') != 'lifecycle_update' or card.get('schemaVersion') != 1):
+        from hermes_state_runtime import RuntimeStoreError
+        raise RuntimeStoreError('permission_denied', field='background_v1', detail='descriptor unavailable')
+    return json.loads(canonical(card))
+
+
+def completion(row, settled, complete):
+    if not reserved(row):
+        return complete
+    # The input is the exact canonical claimed row, not arbitrary model output or a display flag.
+    return {**complete, 'display_kind': 'lifecycle_update', 'background_v1': row_descriptor(row)}
 
 
 def reserved(row):
@@ -58,9 +96,9 @@ def receipt(connection, ref, admission_id, out):
         return out
     host = getattr(connection.authority.db, '_stellar_background_host', None)
     if host is None:
-        return {**out, 'background_delivery_authorized': False}
+        return {**out, 'background_v1': row_descriptor(row), 'background_delivery_authorized': False}
     with host.authority.db._read_ctx() as conn:
-        ledger = host.ledger_for_row(conn, row)
+        host.ledger_for_row(conn, row)
         saved = conn.execute('SELECT * FROM stellar_bg_events_v1 WHERE request_id=?', (row['request_id'],)).fetchone()
         owner = host.consumer(connection, ref.session_id, saved['binding_id'])
         value = owner.call('inspect', {'eventId': saved['event_id'], 'digest': saved['digest']})
@@ -82,6 +120,7 @@ async def dispatch(connection, request):
         if host is None:
             raise ContractError('host_wiring_unavailable')
         method = request['method'].removeprefix('stellar.background.')
+        then = None
         if method == 'bind':
             closed(params, ('session_id', 'consentTicket'))
             operation = partial(host.bind, connection, params['session_id'], params['consentTicket'])
@@ -92,9 +131,12 @@ async def dispatch(connection, request):
             if method not in keys:
                 raise ContractError('unknown_method')
             closed(params, ('session_id', 'bindingId', *keys[method]))
-            consumer = host.consumer(connection, params['session_id'], params['bindingId'])
+            consumer = host.consumer(connection, params['session_id'], params['bindingId'],
+                capability='session:read' if method == 'inspect' else 'session:control')
             operation = partial(consumer.call, method, {k: params[k] for k in keys[method]})
-        result = await tracked_write(connection.authority, operation)
+            if method == 'revoke':
+                then = lambda result: host.settle_cancellations(params['bindingId'], result)
+        result = await tracked_write(connection.authority, operation, then=then)
         return {'jsonrpc': '2.0', 'id': ident, 'result': result}
     except (ContractError, RuntimeStoreError) as exc:
         reason = exc.code if isinstance(exc, ContractError) else exc.reason

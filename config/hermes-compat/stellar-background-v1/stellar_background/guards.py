@@ -119,6 +119,8 @@ class GuardMixin:
     def revoke(self, binding_id):
         def write(conn):
             binding = self._get(conn, binding_id)
+            from .cancellations import reserve
+            reserve(conn, binding_id)
             conn.execute('UPDATE stellar_bg_bindings_v1 SET revoked=1 WHERE binding_id=?', (binding_id,))
             conn.execute("UPDATE session_admissions SET status='terminal',outcome='cancelled' "
                 "WHERE status='queued' AND principal_id=? AND target_session_id=? AND request_id IN "

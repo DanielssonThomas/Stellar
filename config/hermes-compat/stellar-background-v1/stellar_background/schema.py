@@ -23,4 +23,10 @@ def install_schema(db):
         conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_versions_v1 (
             producer_id TEXT NOT NULL, incarnation TEXT NOT NULL, version TEXT NOT NULL,
             PRIMARY KEY(producer_id,incarnation))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_installation_v1 (
+            singleton INTEGER PRIMARY KEY CHECK(singleton=1), phase TEXT NOT NULL, package_digest TEXT NOT NULL)''')
+        conn.execute("INSERT OR IGNORE INTO stellar_bg_installation_v1 VALUES(1,'unmanaged_candidate','')")
+        conn.execute('''CREATE TABLE IF NOT EXISTS stellar_bg_cancellations_v1 (
+            admission_id TEXT PRIMARY KEY, binding_id TEXT NOT NULL, session_id TEXT NOT NULL,
+            notified INTEGER NOT NULL DEFAULT 0)''')
     db._execute_write(write)

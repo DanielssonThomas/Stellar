@@ -45,7 +45,7 @@
     {
       "path": "gateway/session_controls.py",
       "before": "                out['usage'] = saved.get('usage') or {}\n        return out\n",
-      "after": "                out['usage'] = saved.get('usage') or {}\n        try:\n            from stellar_background.wiring import receipt as background_receipt\n        except ImportError:\n            return out  # consumer requires descriptor provenance before v1 delivery\n        return background_receipt(self, ref, receipt.admission_id, out)\n"
+      "after": "                out['usage'] = saved.get('usage') or {}\n        try:\n            from stellar_background.wiring import receipt as background_receipt\n        except ImportError:\n            from hermes_state_runtime import get_session_admission\n            row = get_session_admission(self.authority.db, admission_id=receipt.admission_id)\n            if row and row['request_id'].startswith('stellar.background.v1:'):\n                raise RuntimeStoreError('permission_denied', field='background_v1') from None\n            return out\n        return background_receipt(self, ref, receipt.admission_id, out)\n"
     },
     {
       "path": "tui_gateway/contracts/events.py",
@@ -70,7 +70,7 @@
     {
       "path": "gateway/session_settlement_recovery.py",
       "before": "    complete = {\n        'text': response, 'content': response, 'admission_id': row['admission_id'],\n",
-      "after": "    if row['request_id'].startswith('stellar.background.v1:') and settled['outcome'] != 'completed':\n        return {'text': '', 'content': '', 'admission_id': row['admission_id'],\n                'outcome': 'cancelled' if settled['outcome'] == 'interrupted' else settled['outcome'],\n                'status': 'interrupted' if settled['outcome'] == 'interrupted' else 'error'}\n    complete = {\n        'text': response, 'content': response, 'admission_id': row['admission_id'],\n"
+      "after": "    if row['request_id'].startswith('stellar.background.v1:') and settled['outcome'] != 'completed':\n        from stellar_background.wiring import completion as background_completion\n        return background_completion(row, settled, {'text': '', 'content': '', 'admission_id': row['admission_id'],\n                'outcome': 'cancelled' if settled['outcome'] == 'interrupted' else settled['outcome'],\n                'status': 'interrupted' if settled['outcome'] == 'interrupted' else 'error'})\n    complete = {\n        'text': response, 'content': response, 'admission_id': row['admission_id'],\n"
     },
     {
       "path": "hermes_state_runtime.py",
@@ -81,6 +81,31 @@
       "path": "hermes_state_runtime.py",
       "before": "        if _terminal_write is not None:\n            _terminal_write(conn, row)\n        _retire_admission_workers(conn, row, row['owner_epoch'])\n",
       "after": "        if _terminal_write is not None and resolution_allowed:\n            _terminal_write(conn, row)\n        _retire_admission_workers(conn, row, row['owner_epoch'])\n"
+    },
+    {
+      "path": "gateway/session_settlement_recovery.py",
+      "before": "    return complete\n\n\ndef _publish_completion",
+      "after": "    if row['request_id'].startswith('stellar.background.v1:'):\n        from stellar_background.wiring import completion as background_completion\n        return background_completion(row, settled, complete)\n    return complete\n\n\ndef _publish_completion"
+    },
+    {
+      "path": "tui_gateway/contracts/events.py",
+      "before": "class MessageCompletePayload(Payload):\n",
+      "after": "class MessageCompletePayload(Payload):\n    content: str | None = None\n    admission_id: str | None = None\n    outcome: str | None = None\n    display_kind: str | None = None\n    background_v1: dict[str, JsonValue] | None = None\n\n"
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "before": "        return {'instance_id': self.authority.instance_id, 'profile_id': self.authority.profile_id,\n",
+      "after": "        out = {'instance_id': self.authority.instance_id, 'profile_id': self.authority.profile_id,\n"
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "before": "                'skin': await asyncio.to_thread(resolved_skin)}\n",
+      "after": "                'skin': await asyncio.to_thread(resolved_skin)}\n        from stellar_background.wiring import negotiation\n        return negotiation(out)\n"
+    },
+    {
+      "path": "gateway/session_authority.py",
+      "before": "                live.event_stream.publish(ref.session_id, {\n                    'text': '', 'content': '', 'admission_id': admission_id, 'outcome': outcome})\n",
+      "after": "                payload = {'text': '', 'content': '', 'admission_id': admission_id, 'outcome': outcome}\n                row = get_session_admission(self.db, admission_id=admission_id)\n                if row is not None and row['request_id'].startswith('stellar.background.v1:'):\n                    from stellar_background.wiring import completion as background_completion\n                    payload = background_completion(row, row, payload)\n                    live.event_stream.execution = {'authority_epoch': row['owner_epoch'],\n                        'execution_generation': row['generation'], 'admission_id': admission_id}\n                live.event_stream.publish(ref.session_id, payload)\n"
     }
   ]
 }

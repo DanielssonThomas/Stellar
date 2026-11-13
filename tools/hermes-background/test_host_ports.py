@@ -53,7 +53,7 @@ class HostTests(unittest.TestCase):
                     or ref.session_id not in self.authority.sessions or capability not in actor.capabilities):
                 raise RuntimeStoreError('permission_denied')
         self.authority.authorize = authorize
-        actor = SessionActor('native-owner', 'fixture-ivy', frozenset({'session:control'}), 'transport')
+        actor = SessionActor('native-owner', 'fixture-ivy', frozenset({'session:read', 'session:control'}), 'transport')
         self.authority._native_legacy_transports = {'transport': actor}
         self.connection = SimpleNamespace(authority=self.authority, actor=actor, subscriptions={'original': 'sub'})
         self.host = Host(self.authority, runtime_root=OVERLAY, verify_native=lambda c: c is self.connection,
@@ -470,6 +470,148 @@ class HostTests(unittest.TestCase):
         for method, params in [('approve', base), ('submit', base), ('revoke', {**base, 'profile': 'other'}),
                                ('revoke', {**base, 'client': 'forged'}), ('bind', {**base, 'origin': {}})]:
             self.assertIn('error', call(method, params))
+
+    def test_af_existing_camelcase_inspector_has_no_invented_binding_lookup(self):
+        from stellar_background.wiring import dispatch
+        def call(method, params):
+            return asyncio.run(dispatch(self.connection, {'id': 1, 'method': method, 'params': params}))
+        binding = self.binding['bindingId']
+        submitted = self.submit()
+        args = {'session_id': 'original', 'bindingId': binding, 'eventId': 'e1', 'digest': submitted['descriptor']['digest']}
+        result = call('stellar.background.inspect', args)
+        self.assertEqual(result['result']['receipt']['admission_id'], submitted['receipt']['admission_id'])
+        for extra in ({'profile': 'other'}, {'client': 'model'}, {'origin': {}}):
+            self.assertIn('error', call('stellar.background.inspect', {**args, **extra}))
+        self.assertIn('error', call('session.background.bindings', {'session_id': 'original'}))
+        self.assertIn('error', call('session.background.inspect', {'session_id': 'original', 'binding_id': binding,
+            'event_id': 'e1', 'digest': submitted['descriptor']['digest']}))
+        self.db.create_session('other', source='local')
+        self.authority.sessions['other'] = SimpleNamespace(route='other-route', detached=False)
+        self.connection.subscriptions['other'] = 'other-sub'
+        self.assertIn('error', call('stellar.background.inspect', {**args, 'session_id': 'other'}))
+
+    def test_af_describe_never_advertises_from_fixtures_or_caller_text(self):
+        from stellar_background.wiring import negotiation, CAPABILITY, CONTRACT_SHA256, INTERFACE_SHA256
+        out = negotiation({'profile_id': 'fixture-ivy', 'capabilities': ['ordinary', CAPABILITY],
+                           'background_v1_contract_sha256': CONTRACT_SHA256,
+                           'background_v1_interface_sha256': INTERFACE_SHA256, 'callerApproved': True})
+        self.assertEqual(out['capabilities'], ['ordinary'])
+        self.assertNotIn('background_v1_contract_sha256', out)
+        self.assertNotIn('background_v1_interface_sha256', out)
+
+    def test_af_completion_replay_and_missing_host_receipt_never_downgrade(self):
+        from gateway.session_settlement_recovery import completion_payload
+        from gateway.session_events import SessionEvents
+        from gateway.session_contract import SessionRef
+        from tui_gateway.contracts.events import MessageCompletePayload
+        from stellar_background.wiring import receipt
+        submitted = self.submit()
+        row = self.complete()
+        complete = completion_payload(row, row, 'fixture answer', {'result': {'final_response': 'fixture answer'}})
+        self.assertEqual(complete['background_v1'], submitted['descriptor'])
+        self.assertEqual(complete['display_kind'], 'lifecycle_update')
+        MessageCompletePayload.model_validate(complete)
+        stream = SessionEvents()
+        stream.execution = {'admission_id': row['admission_id'], 'authority_epoch': row['owner_epoch'],
+                            'execution_generation': row['generation']}
+        stream.publish('original', complete)
+        replay = stream.since(stream.epoch, 0)['events'][0]
+        self.assertEqual(replay['payload']['background_v1'], complete['background_v1'])
+        stream.release()
+        info = self.consumer().call('inspect', {'eventId': 'e1', 'digest': submitted['descriptor']['digest']})
+        del self.db._stellar_background_host
+        projected = receipt(self.connection, SessionRef('fixture-ivy', 'original'), row['admission_id'], info['receipt'])
+        self.assertEqual(projected['background_v1'], complete['background_v1'])
+        self.assertFalse(projected['background_delivery_authorized'])
+
+    def test_revoke_pays_canonical_waiter_and_stream_obligations_once(self):
+        from hermes_state_runtime import get_session_admission
+        from gateway.session_events import SessionEvents
+        from gateway.session_producer_lifecycle import drop_producer_turn
+        from stellar_background.wiring import dispatch
+        submitted = self.submit()
+        admission = submitted['receipt']['admission_id']
+        host, live = self.authority, self.authority.sessions['original']
+        live.event_stream = SessionEvents()
+        live.event_stream.execution = {'admission_id': 'foreground-stamp'}
+        host.cancel_obligations, host.native_waiters, host.producer_turns = set(), {admission}, {admission: None}
+        host._schedule = lambda ref: None
+        method = self.host_function('gateway/session_authority.py', 'SessionAuthority', '_settle_cancelled',
+            {'get_session_admission': get_session_admission, 'drop_producer_turn': drop_producer_turn,
+             'busy_row_settled': lambda *a: None})
+        host._settle_cancelled = partial(method, host)
+        async def run():
+            waiter = asyncio.get_running_loop().create_future()
+            host.waiters = {admission: waiter}
+            request = {'id': 1, 'method': 'stellar.background.revoke',
+                       'params': {'session_id': 'original', 'bindingId': self.binding['bindingId']}}
+            first = await dispatch(self.connection, request)
+            self.assertTrue(waiter.done())
+            self.assertIsNone(waiter.result())
+            self.assertNotIn(admission, host.native_waiters)
+            self.assertNotIn(admission, host.producer_turns)
+            count = live.event_stream.sequence
+            await dispatch(self.connection, request)
+            self.assertEqual(live.event_stream.sequence, count)
+            return first
+        self.assertTrue(asyncio.run(run())['result']['revocationCommitted'])
+        replay = live.event_stream.since(live.event_stream.epoch, 0)['events']
+        self.assertEqual(replay[0]['payload']['background_v1'], submitted['descriptor'])
+        self.assertEqual(live.event_stream.execution, {'admission_id': 'foreground-stamp'})
+        live.event_stream.release()
+
+    def test_loaded_noncanonical_host_module_drift_refuses(self):
+        import gateway.session_automation as automation
+        from stellar_background.provenance import verify_candidate
+        with patch.object(automation, 'admission_display', lambda *a: {}):
+            self.assertCode('loaded_runtime_mismatch', lambda: verify_candidate(OVERLAY))
+
+    def test_submit_racing_revoke_and_lost_ack_keep_durable_obligations(self):
+        from hermes_state_runtime import get_session_admission
+        from gateway.session_events import SessionEvents
+        from gateway.session_producer_lifecycle import drop_producer_turn
+        from stellar_background.ledger import Ledger
+        from stellar_background.wiring import dispatch
+        first = self.submit()['receipt']['admission_id']
+        host, live = self.authority, self.authority.sessions['original']
+        live.event_stream = SessionEvents()
+        host.cancel_obligations, host.native_waiters, host.producer_turns = set(), {first}, {first: None}
+        host._schedule = lambda ref: None
+        method = self.host_function('gateway/session_authority.py', 'SessionAuthority', '_settle_cancelled',
+            {'get_session_admission': get_session_admission, 'drop_producer_turn': drop_producer_turn,
+             'busy_row_settled': lambda *a: None})
+        host._settle_cancelled = partial(method, host)
+        real_revoke = Ledger.revoke
+        async def run():
+            loop = asyncio.get_running_loop()
+            host.waiters = {first: loop.create_future()}
+            async def concurrent_submit():
+                receipt = await self.producer.submit(self.binding['bindingId'], self.event('race-event'))
+                ident = receipt['receipt']['admission_id']
+                host.waiters[ident] = loop.create_future()
+                host.native_waiters.add(ident)
+                host.producer_turns[ident] = None
+                return ident
+            def lose_ack(ledger, binding):
+                asyncio.run_coroutine_threadsafe(concurrent_submit(), loop).result(timeout=10)
+                real_revoke(ledger, binding)
+                raise ConnectionError('fixture revoke committed before lost ACK')
+            request = {'id': 1, 'method': 'stellar.background.revoke',
+                       'params': {'session_id': 'original', 'bindingId': self.binding['bindingId']}}
+            with patch.object(Ledger, 'revoke', lose_ack):
+                with self.assertRaises(ConnectionError):
+                    await dispatch(self.connection, request)
+            waiters = list(host.waiters.values())
+            self.assertTrue(all(not w.done() for w in waiters))
+            with self.db._read_ctx() as conn:
+                self.assertEqual(conn.execute('SELECT count(*) FROM stellar_bg_cancellations_v1 WHERE notified=0').fetchone()[0], 2)
+            await dispatch(self.connection, request)
+            self.assertTrue(all(w.done() for w in waiters))
+            with self.db._read_ctx() as conn:
+                self.assertEqual(conn.execute('SELECT count(*) FROM stellar_bg_cancellations_v1 WHERE notified=1').fetchone()[0], 2)
+        asyncio.run(run())
+        self.assertEqual(live.event_stream.sequence, 2)
+        live.event_stream.release()
 
     def test_producer_unregister_and_wrong_owner_do_not_grant_delivery(self):
         submitted = self.submit()

@@ -16,11 +16,11 @@
     },
     "gateway/session_controls.py": {
       "before": "44624fbc34c86529db0963eb9dd2183b56b2c8034650053c6a6dc8c3556dc352",
-      "after": "3b1438000fb281af056bc8167326c00524e117e3c76e0088e996f7efe0cbab97"
+      "after": "aa05bcd04455e1363a545752b2d68a718218f9c4c542ba89464a9067d4cb19a0"
     },
     "tui_gateway/contracts/events.py": {
       "before": "a00ee5eb6bed147f65ad9dce3fcc5a1b27fdc52051b9a55c9f539af09a7b7922",
-      "after": "d58252a89a97edc4d022b2a7fcbc922b8a9eef9927b9bb3c5187e4a31e73e91f"
+      "after": "1fdfd67bd873b55fe116d4c13a4a5c610ccd55b44fca720eec1b2966fa78f924"
     },
     "tui_gateway/contracts/canonical.py": {
       "before": "6076fdf3e044265eb9d08046a9ea11cc913e43ff63f35c9389e09b6c7ad91135",
@@ -32,7 +32,11 @@
     },
     "gateway/session_settlement_recovery.py": {
       "before": "f33174eafa49c4ec5fe7dcf18fa70c8ed9fb8e232de86a1fb3ae66c36f1bf312",
-      "after": "7417fd8e55c7b0628a93f256a025919bafca23f7df731eb52a1ef8b6507f0dfa"
+      "after": "3e0d221f86e4c3c8c1a3f282f0fc2102c13ffcb36bab76a6a5cf3ae676e8d7de"
+    },
+    "gateway/session_authority.py": {
+      "before": "ec45262a22582fe3a94f99f9b7d73f94a251c52e792dbf9992710baa419fe2c3",
+      "after": "38334840f899584b3fccba469bcd12a0606a02fada69a7150012ecf0f12a7301"
     }
   }
 }

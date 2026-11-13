@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "state": "inactive_disposable_qualification_only",
+  "baselineProducer": "474c1b80f0fc33063895812c2af48b7cdc58ef08",
+  "baselineConsumer": "7ef1c3497a10e5626283e3747ed7072f88ccf46d",
+  "contractSha256": "008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724",
+  "interfaceSha256": "392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e",
+  "reconciliation": {
+    "A": "Accept both exact artifact fingerprints. runtime.describe hook withholds capability and both fingerprint fields; fixtures/caller text cannot activate it. Genuine coordinated activation remains a separate gate.",
+    "B": "Accept existing stellar.background.bind(session_id,consentTicket), exact Binding ACK, and local consumer persistence/uncertainty. No bindings-list RPC or recovery rebind. Genuine native attestation/gesture adapter to Host.approve remains missing and cannot be replaced by model/caller text.",
+    "C": "Accept existing stellar.background.inspect(session_id,bindingId,eventId,digest), closed variants and no resend authority. No snake_case alias. Native must correlate exact prompt.receipt too.",
+    "D": "Preserve start/replay provenance and receipt marker/flag. Additionally carry matching descriptor on completed/cancelled frames; non-start frames remain content-free triggers for native reinspection. Missing host still returns descriptor plus false delivery. Missing package refuses reserved receipt instead of downgrading. Canonical cancellation observer obligations commit with revocation and are paid by tracked owner-loop settlement.",
+    "E": "Accept existing begin/finish/revoke, native durable operation IDs and authenticated subject+transport custody. No caller client field or takeover. Propose bounded inspection/stop policy below; native/renderer actual ACK implementation belongs to t1c and requires agreement/review before activation.",
+    "F": "Accept same canonical DB and no new execution queue. Disposable-only version-pinned package exercises install/verify/disable/remove/rollback/recover. Retain all DB/event/receipt/effect/cancellation fences. No-history removal restores exact base; historical receipts retain a minimal denial/receipt shim. Outstanding execution/custody, foreign versions, unknown edits or loaded-module drift refuse. No managed application approval."
+  },
+  "proposedConsumerMonitor": {
+    "state": "requires_consumer_accept_or_amend_before_activation",
+    "inspectionIntervalMilliseconds": 1000,
+    "maximumFreshInspectionAgeMillisecondsAtEffectDispatch": 1000,
+    "maximumCoalescedActiveEventsPerSession": 16,
+    "coalesceRenderAndSpeechPerEvent": true,
+    "deadline": "min(consent expiresAt,eventExpiresAt); no extension or new event identity",
+    "inspect": "Before begin, immediately before actual dispatch and while the exact operation retains custody. Original binding/event/digest only. Read-only; never prompt/submit/rebind fallback.",
+    "denialUnknownOrOutage": "Withhold future effects and request removal/stop of only the owned queued/active operation. Retain custody until actual cleanup/stop ACK, then exact finish. No timeout, disconnect, restart or elapsed lease proves physical stop.",
+    "timingLimit": "A suspended or stalled client cannot promise physical stop within the polling interval. Missed checks fail closed on resumption; effectsStopped remains false until actual acknowledgement. Real timing/audibility acceptance remains unqualified."
+  }
+}

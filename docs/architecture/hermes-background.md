@@ -26,7 +26,7 @@ It remains useful as a future live positive control. A wrapper exit is never evi
 review/checks/merge or an issue succeeded. Do not fabricate registry events or adopt old processes.
 
 [Hermes PR #110031](https://github.com/NousResearch/hermes-agent/pull/110031), exact inspected
-head `05a5d33c363645451d4ef50ca7db0f2aa6082da3`, is unmerged. Its Desktop route requires a
+head `05a5d33c363645451d4ef50ca7db0f2aa6082da3`, was unmerged when inspected. Its Desktop route requires a
 default-profile native `serve` session and returns Future receipts; it is not qualified for
 Stellar named-Ivy ACP or durable payload-conflict reconciliation. Its body names a different
 historical head. Neither that prose nor upstream native Desktop evidence certifies this route.
@@ -45,7 +45,7 @@ durable consumer effect custody. It has no imports with registration effects, pu
 daemon, schedule, capability advert or automatic migration. No managed source was changed.
 
 The [host callable interface](../../config/hermes-compat/stellar-background-v1/host-interface-v1.json)
-adds a concrete host adapter and eight-file pinned source patch specification. The candidate
+adds a concrete host adapter and nine-file pinned source patch specification. The candidate
 places checks inside actual FIFO claim, terminal settlement and captured-result recovery
 transactions. A refused queued head follows the existing exact-head cancellation path so ordinary
 foreground input can advance. Denied v1 settlement suppresses captured text, transformed responses
@@ -61,8 +61,8 @@ and inspects after uncertain ACKs. Unregister removes only its own facade. Produ
 artifact-version binding is immutable and bounded to 20 retained identities; upgrades require a new
 incarnation and fresh consent.
 
-The source candidate projects the same `background_v1` descriptor onto `message.start` and
-`prompt.receipt`; actual `SessionEvents` replay/catch-up retains the frame's existing authority,
+The source candidate projects the same `background_v1` descriptor onto `message.start`,
+`message.complete`, queued cancellation and `prompt.receipt`; actual `SessionEvents` replay/catch-up retains the frame's existing authority,
 generation, admission, sequence and replay epoch. Native effect RPCs derive custody from the
 authenticated subject **and transport**. Another connection for the same person cannot acknowledge
 that an old connection stopped speech. A lost transport therefore stays revoking until its actual
@@ -71,7 +71,9 @@ owner can acknowledge; authenticated custody recovery would need a separate revi
 Tests use actual `SessionDB`, patched canonical functions, result handling, event replay and exact
 host method bodies extracted without starting the gateway. Native/policy/gesture callbacks and
 connections are synthetic. Host construction verifies all 15 pinned files/postimages and the
-executing canonical functions; it refuses partial changes, unknown updates or stale loaded code.
+executing canonical functions and already-loaded critical host call sites; it refuses partial
+changes, unknown updates or stale/foreign loaded code. A packaged fixture also verifies the exact
+loaded package directory, immutable bundle and canonical package/phase identity.
 For the managed layout, the selected dependency workspace has no install stamp. Composition must
 explicitly supply its bootstrap root and managed facts path together. The verifier checks the
 bootstrap stamp, the facts-selected environment/lock paths, exact workspace bytes and loaded code
@@ -124,6 +126,14 @@ terminal settlement guard deny stale work. A terminal guard refusal must be sett
 host adapter as interrupted/unknown without completed delivery; retaining a started row is
 uncertainty, not acceptance. Recovery must preserve that distinction.
 
+Revocation reserves bounded observer obligations in the same canonical transaction as queued
+cancellation. The live owner uses tracked `Host.detach_and_settle()` or the public revoke RPC to
+pay ordinary canonical waiter, producer-bracket and event-stream settlement. A concurrent submit
+which wins before revocation is included; commit-then-error retains the obligation for exact
+retry. A publication interruption may repeat a completion frame, never admission or inference.
+Stable event/receipt identity and effect custody remain the side-effect fences. Quiescent package
+disable retains these records without claiming that a viewer received a frame.
+
 Consumers must independently validate the closed descriptor on live events, replay and the
 canonical receipt before persistence, rendering and speech. `deliveryAuthorized` alone is not
 execution authority. `begin_effect` reserves one render/speech operation. A lost ACK returns
@@ -140,6 +150,7 @@ Run the isolated candidate checks with the existing managed interpreter; no depe
 ```powershell
 & '<managed-python>' -I -B tools/hermes-background/test_candidate.py --runtime D:/Hermes/hermes-agent
 & '<managed-python>' -I -B tools/hermes-background/test_host_ports.py --runtime D:/Hermes/hermes-agent --evidence artifacts/issue-339/host-ports/qualification.json
+& '<managed-python>' -I -B tools/hermes-background/test_package.py --runtime D:/Hermes/hermes-agent --evidence artifacts/issue-339/package/qualification.json
 & '<managed-python>' -I -B tools/hermes-background/qualify_process.py --runtime D:/Hermes/hermes-agent --output artifacts/issue-339/process-qualification.json
 ```
 
@@ -154,20 +165,78 @@ editor scope while outer and editor-owned connections worked. Its preserved stas
 `d494149db7ed131941345eaa0b50c0793640c76b` must not be blindly restored. Foreground MCP recovery
 needs explicit scope, review and functional verification; v1 must not bypass trust selection.
 
-There is **no install command for this inactive candidate**. `export_patch.py` only exports a diff
-and pre/postimage manifest into this issue's artifacts. `overlay.fixture` only builds empty
-temporary source fixtures and `undo_fixture` requires the complete independently derived manifest
-before restoring any bytes. Tests verify byte-identical source restoration. This is not a durable
-installer, production removal or rollback qualification.
+## Current consumer reconciliation
 
-Before any coordinator-owned application: verify the exact commit, 15-file base pin, eight-file
+The [A–F amendment record](../../config/hermes-compat/stellar-background-v1/integration-amendments-7ef1c34.json)
+reconciles producer `474c1b8` with the superseding continuation of consumer `7ef1c34`.
+Historical proposed `session.background.*` names are not implemented. Keep the closed
+`stellar.background.bind/inspect/effect.begin/effect.finish/revoke` interface. No bindings-list or
+lost-bind-ACK recovery RPC exists. A stream descriptor cannot reconstruct consent or authorize rebind.
+The original contract and interface artifact bytes retain fingerprints `008c72c9…ec724` and
+`392c027a…6821e`. Future negotiation requires both full hashes; this candidate's describe hook
+withholds the capability and both fields. Fixture/caller flags cannot activate them.
+
+Native gesture/transport attestation to the host-only approve port remains a separate genuine
+adapter gate. The proposed consumer monitor coalesces at most 16 active events/session, inspects
+each original event at a 1-second target interval and immediately before dispatch, and uses the
+earlier event/consent expiry as a deadline. Denial, unknown, outage or stale inspection requests
+owned cleanup/stop and withholds future effects. Only actual native/render/playback acknowledgement
+permits finish. A suspended client cannot promise a physical 1-second stop; unknown custody stays
+unknown. Consumer accept/amend and real timing tests are required before activation. No monitor,
+schedule, native IPC or renderer effect is installed by this host package.
+
+## Disposable package lifecycle
+
+The [fixture lifecycle tool](../../tools/hermes-background/package_fixture.py) is executable only
+against explicitly enrolled, empty temporary directories. It copies the 15 pinned source files,
+original stamp and nine exact preimages, and retains a byte-pinned operator bundle. Other Python
+dependencies remain read-only imports from the pinned source in isolated probes. This is a
+runtime **source fixture**, not an alternate production installation or complete Hermes bootstrap.
+`export_patch.py` remains a diff/manifest exporter with no apply operation.
+
+For example, with an existing managed interpreter and a new empty directory under TEMP:
+
+```powershell
+& '<managed-python>' -I -B tools/hermes-background/package_fixture.py prepare --root '<empty-TEMP-fixture>' --source D:/Hermes/hermes-agent
+& '<managed-python>' -I -B '<fixture>/bundle/fixture-entry.py' install --root '<fixture>' --source D:/Hermes/hermes-agent
+& '<managed-python>' -I -B '<fixture>/bundle/fixture-entry.py' verify --root '<fixture>' --source D:/Hermes/hermes-agent
+& '<managed-python>' -I -B '<fixture>/bundle/fixture-entry.py' disable --root '<fixture>' --source D:/Hermes/hermes-agent
+& '<managed-python>' -I -B '<fixture>/bundle/fixture-entry.py' remove --root '<fixture>' --source D:/Hermes/hermes-agent
+```
+
+There is no override for managed paths, unknown versions, indirect paths or foreign databases.
+All lifecycle code is pinned to the retained bundle; a changed checkout cannot operate an old
+fixture unless its exact original bundle is used. Source/version mismatch still refuses; there
+is no automatic update migration/reapplication. Run fixture entry points with `-I -B`; unexpected
+payload/cache files refuse rather than becoming trusted code.
+
+Install disables old grants and commits canonical phase denial before source mutation. File
+replacement uses fsynced unique staging and atomic rename; the phase journal is separately fsynced.
+Windows has no portable directory fsync, so no universal power-loss durability is claimed. Explicit
+`recover` accepts only known adjacent DB/journal phases after verifying every allowed source/package
+image. Interrupted install/remove/rollback and reinstall have fault tests. Unknown bytes or phases
+refuse. Bounded non-executable staging orphans remain evidence; they are never imported, executed or
+silently cleared. Mutation holds an exclusive fixture runtime lease; active/unknown executions,
+workers or unacknowledged effects prevent removal. No database snapshot rollback occurs.
+
+Disable revokes grants/registration and exact queued admissions while retaining canonical DB,
+receipts, keys, revisions, custody and cancellation fences. It never certifies physical stop.
+Removal has two explicit outcomes: with no v1 events, restore byte-identical base source and remove
+the runtime package; with retained history, remove producer/activation code but retain the minimal
+denial/receipt shim. Bare stock restoration with retained events refuses because it would strip
+mandatory provenance from old receipts. The immutable bundle, original preimages and DB remain in
+the fixture in both modes. The retained shim advertises nothing and authorizes no effect. A future
+upstream migration of those retained fences needs a separate reviewed contract.
+
+Before any coordinator-owned application: verify the exact commit, 15-file base pin, nine-file
 postimages and candidate artifact hashes; review the diff and genuine native/consumer composition;
 quiesce outside an active Ivy turn; preserve exact original bytes and canonical state; then verify
 loaded code and functional foreground/profile boundaries. No hot patching or automatic reapplication
 after an update is supported. Explicit `Host.detach()` durably disables producer registrations,
 revokes grants and cancels exact queued v1 admissions while retaining all identity/effect records.
-Keep authenticated finish/inspect available until outstanding custody is reconciled. Only after
-that gate may a separately reviewed removal restore exact source bytes and remove the package.
+The live owner must use the tracked settlement port. Keep authenticated finish/inspect available
+until outstanding custody is reconciled. Managed application/removal remains unapproved: disposable
+fault/foreground tests do not qualify the real native verifier, consumer, full bootstrap or speech.
 Unknown edits, mismatched hashes or lost custody stop removal; no timeout certifies stopped effects.
 Do not delete schema/tombstones to free capacity or roll back a canonical database to resend events.
 

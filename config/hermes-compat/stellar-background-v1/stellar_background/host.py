@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import threading
+import re
 from dataclasses import dataclass
 
 from .contract import ContractError, Origin, canonical, closed, event_digest, integer, text
@@ -22,6 +23,19 @@ class Host:
             raise ContractError('host_wiring_unavailable')
         from .provenance import verify_candidate
         verify_candidate(runtime_root, bootstrap_root=bootstrap_root, facts_path=facts_path)
+        with authority.db._read_ctx() as conn:
+            row = conn.execute('SELECT package_digest FROM stellar_bg_installation_v1 WHERE singleton=1').fetchone()
+        if row is not None and row[0]:
+            from pathlib import Path
+            from .package import package_digest
+            import sys
+            directory = Path(runtime_root).resolve() / 'stellar_background_compat'
+            if row[0] != package_digest() or any(
+                not Path(m.__file__).resolve().is_relative_to(directory)
+                for name, m in list(sys.modules.items()) if name == 'stellar_background' or name.startswith('stellar_background.')):
+                raise ContractError('package_module_mismatch')
+            from .package import Package
+            Package(Path(runtime_root).resolve().parent).verify(authority.db)
         self.authority, self.clock = authority, clock
         self.verify_native, self.verify_gesture, self.policy_gate = verify_native, verify_gesture, policy_gate
         self._producers, self._tickets, self._exposed = {}, {}, {}
@@ -39,6 +53,8 @@ class Host:
                 raise ContractError('producer_already_registered')
             port = Producer(self, producer_id, version, incarnation)
             def register(conn):
+                if not self._enabled(conn):
+                    raise ContractError('installation_disabled')
                 old = conn.execute('SELECT version FROM stellar_bg_versions_v1 WHERE producer_id=? AND incarnation=?',
                                    (producer_id, incarnation)).fetchone()
                 if old is not None and old[0] != version:
@@ -85,19 +101,9 @@ class Host:
 
     def detach(self):
         """Coordinator's disable: durable revoke first, retain all identity/effect tombstones."""
-        def write(conn):
-            conn.execute('UPDATE stellar_bg_producers_v1 SET active=0')
-            bindings = conn.execute('SELECT binding_id FROM stellar_bg_bindings_v1').fetchall()
-            # Use the same exact producer/target predicate as Ledger.revoke, inside this txn.
-            conn.execute('UPDATE stellar_bg_bindings_v1 SET revoked=1')
-            conn.execute("UPDATE session_admissions SET status='terminal',outcome='cancelled' "
-                "WHERE status='queued' AND EXISTS (SELECT 1 FROM stellar_bg_events_v1 e "
-                'JOIN stellar_bg_bindings_v1 b USING(binding_id) WHERE e.request_id=session_admissions.request_id '
-                "AND session_admissions.principal_id='automation:' || json_extract(b.origin_json,'$.route') "
-                "AND session_admissions.target_session_id=json_extract(b.origin_json,'$.sessionId'))")
-            return {b[0]: Ledger._revocation(conn, b[0]) for b in bindings}
+        from .lifecycle import disable
         with self._lock:
-            result = self.authority.db._execute_write(write)
+            result = self.authority.db._execute_write(disable)
             for port in self._producers.values():
                 self._unexpose(port)
             self._producers.clear()
@@ -109,6 +115,21 @@ class Host:
         return Ledger(self.authority.db, producer_id=producer, profile_id=self.authority.profile_id,
                       gate=self._gate, clock=self.clock)
 
+    async def settle_cancellations(self, binding_id, result):
+        from .cancellations import pay
+        return await pay(self, binding_id, result)
+
+    async def detach_and_settle(self):
+        """Live owner loop uses this tracked port; sync detach is for quiescent composition only."""
+        from gateway.session_runtime_workers import tracked_write
+        return await tracked_write(self.authority, self.detach,
+            then=lambda result: self.settle_cancellations(None, result))
+
+    @staticmethod
+    def _enabled(conn):
+        row = conn.execute('SELECT phase FROM stellar_bg_installation_v1 WHERE singleton=1').fetchone()
+        return row is not None and row[0] in ('active_candidate', 'unmanaged_candidate')
+
     def _gate(self, conn, binding):
         origin = binding['origin']
         port = self._producers.get(origin['producerId'])
@@ -118,7 +139,7 @@ class Host:
         row = conn.execute('SELECT ended_at FROM sessions WHERE id=?', (origin['physicalTarget'],)).fetchone()
         registration = conn.execute('SELECT * FROM stellar_bg_producers_v1 WHERE producer_id=?',
                                     (origin['producerId'],)).fetchone()
-        return (port is not None and port.incarnation == origin['workerIncarnation']
+        return (self._enabled(conn) and port is not None and port.incarnation == origin['workerIncarnation']
             and registration is not None and registration['active'] == 1
             and registration['epoch'] == authority.epoch and registration['version'] == port.version
             and registration['incarnation'] == port.incarnation
@@ -127,13 +148,14 @@ class Host:
             and authority.db._compression_tip_on(conn, origin['sessionId']) == origin['physicalTarget']
             and self.policy_gate(conn, binding, port.version) is True)
 
-    def _native(self, connection, session_id):
+    def _native(self, connection, session_id, *, capability='session:control'):
         from gateway.session_contract import SessionRef
         authority, actor = self.authority, connection.actor
         if connection.authority is not authority:
             raise ContractError('permission_denied')
         ref = SessionRef(authority.profile_id, session_id)
-        authority.authorize(actor, ref, 'session:control')
+        text(session_id, 512, identifier=True)
+        authority.authorize(actor, ref, capability)
         # Legacy ownership registration alone also admits Webapp owners; it is insufficient.
         # verify_native must consume the existing authenticated transport gate, not JSON labels.
         if (getattr(authority, '_native_legacy_transports', {}).get(actor.transport_id) != actor
@@ -188,9 +210,11 @@ class Host:
             del self._tickets[ticket]
             return binding
 
-    def consumer(self, connection, session_id, binding_id):
-        self._native(connection, session_id)
-        text(binding_id, 64, identifier=True)
+
+    def consumer(self, connection, session_id, binding_id, *, capability='session:control'):
+        self._native(connection, session_id, capability=capability)
+        if type(binding_id) is not str or re.fullmatch(r'[0-9a-f]{32}', binding_id) is None:
+            raise ContractError('invalid_params')
         with self.authority.db._read_ctx() as conn:
             row = conn.execute('SELECT o.subject,b.origin_json FROM stellar_bg_owners_v1 o '
                 'JOIN stellar_bg_bindings_v1 b USING(binding_id) WHERE binding_id=?', (binding_id,)).fetchone()
@@ -263,7 +287,8 @@ class Consumer:
 
     def call(self, method, params):
         # Reauthorize every operation, including a handle retained after detach/reconnect.
-        self.host.consumer(self.connection, self.session, self.binding)
+        self.host.consumer(self.connection, self.session, self.binding,
+            capability='session:read' if method == 'inspect' else 'session:control')
         if method == 'inspect':
             closed(params, ('eventId', 'digest'))
             return self.ledger.inspect(self.binding, params['eventId'], params['digest'])
