@@ -398,3 +398,27 @@ independent critical code review and fault/race/clock tests followed. The curren
 wired to the journal and no managed migration/package update occurred. Actual host ticket,
 authenticated attachment, native/OS/launch integration, power-loss behavior and operational
 TCB acceptance remain separate gates. Existing immutable v3 contract/design files are intact.
+
+The [private host connection proposal](../../config/hermes-compat/native-consent/host-connection-adapter-v3-proposal.md)
+defines a further isolated DATA composition. Its public [attach factory](../../config/hermes-compat/native-consent/host_connection_v3/__init__.py)
+always refuses. The private plan retains an original object by identity and frozen scope,
+serializes positive operations until known commit, pins challenge and earlier ticket
+monotonic deadlines, and seals on changed scope, cancellation or unknown outcome. A
+transaction-local one-use Ledger facade chooses revision and consumes the journal in the
+same actual canonical transaction; cancellation preserves existing effect obligations.
+This supplies neither a native connection nor genuine consent. No existing Host route is
+modified. Actual guardian-owned launch/transport/callback registry and transaction-local
+capability validation remain missing; data equality and callbacks returning true cannot
+replace them. Native positive constructors and operational attachment remain unavailable.
+
+The [shared test-graph verifier](../../tools/native/verify-shared-consent.mjs) combines pinned
+producer/consumer Git exports in a new Temp fixture. Only that fixture receives the paired
+root workspace, consumer crate manifest and test-only Desktop module edits. The root patch
+is retained as an unapplied artifact. Offline lock verification accepts only the local UI
+package and Desktop test-dependency edges. An existing qualified interpreter must be named
+by `STELLAR_FIXTURE_PYTHON`; `STELLAR_FIXTURE_TARGET` may select an isolated build cache.
+The verifier builds frontend assets before compiling the complete Windows Cargo workspace,
+then checks bindings and size. It installs no dependencies and launches no application or
+OS verifier. Reports retain immutable inputs, resolved tool/interpreter identities and
+actual check logs. Fixture tickets/objects never attest authentication, user input or
+TCB acceptance. Consumer source remains exclusively #299-owned.
