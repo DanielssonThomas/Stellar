@@ -1,14 +1,47 @@
 import { expect, test } from '@playwright/test';
 import type { IvySnapshot, SpeechSnapshot } from '@stellar/desktop-contracts';
+import { decodeIvySnapshot } from '@stellar/desktop-contracts';
+import { readFileSync } from 'node:fs';
+
+const fixturePath = process.env['STELLAR_ORDINARY_SNAPSHOT_FIXTURE'];
+function readNativeFixture() {
+  if (fixturePath === undefined) return null;
+  const value: unknown = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw Error('Expected disconnected native fixture');
+  const data = value as Record<string, unknown>;
+  const visible = decodeIvySnapshot(data['visible']);
+  const claimed = decodeIvySnapshot(data['claimed']);
+  const updates = visible.background_updates;
+  const claims = claimed.background_updates;
+  if (
+    data['fixtureOnly'] !== true ||
+    updates?.length !== 1 ||
+    updates[0].id !== 'ordinary' ||
+    updates[0].text !== 'Ordinary admitted answer 299' ||
+    updates[0].speech_claim !== null ||
+    claims?.length !== 1 ||
+    claims[0].id !== updates[0].id ||
+    claims[0].text !== updates[0].text ||
+    !claims[0].speech_claim
+  )
+    throw Error('Missing native ordinary update and persisted claim');
+  return { visible, claimed, fixtureOnly: true };
+}
+const nativeFixture = readNativeFixture();
+const answer =
+  nativeFixture?.visible.background_updates?.[0]?.text ??
+  'The delegated change is ready for review.';
 
 test('background update appears and speaks once without microphone input or another user message', async ({
   page,
 }) => {
-  await page.addInitScript(() => {
+  await page.addInitScript((native) => {
     const callbacks = new Map<string, (event: { payload: unknown }) => void>();
     const result = {
       submissions: 0,
       speech: 0,
+      lastSpeech: '',
       microphone: 0,
       claims: 0,
       ready: false,
@@ -50,7 +83,7 @@ test('background update appears and speaks once without microphone input or anot
         complete: () => {
           state = {
             ...state,
-            background_updates: [
+            background_updates: native?.visible.background_updates ?? [
               {
                 id: 'background-299',
                 text: 'The delegated change is ready for review.',
@@ -111,6 +144,7 @@ test('background update appears and speaks once without microphone input or anot
             if (name === 'speech_snapshot') return speech;
             if (name === 'speech_speak') {
               result.speech++;
+              result.lastSpeech = String(args.request['text']);
               speech = {
                 ...speech,
                 revision: '1',
@@ -139,7 +173,7 @@ test('background update appears and speaks once without microphone input or anot
         throw new Error('Microphone must remain unused');
       },
     });
-  });
+  }, nativeFixture);
   await page.goto('/');
   const result = () =>
     page.evaluate(
@@ -150,6 +184,7 @@ test('background update appears and speaks once without microphone input or anot
               result: {
                 submissions: number;
                 speech: number;
+                lastSpeech: string;
                 microphone: number;
                 claims: number;
                 ready: boolean;
@@ -164,14 +199,11 @@ test('background update appears and speaks once without microphone input or anot
       window as unknown as { __backgroundFixture: { complete(): void } }
     ).__backgroundFixture.complete(),
   );
-  await expect(page.locator('.assistant-reply')).toContainText(
-    'The delegated change is ready for review.',
-  );
+  await expect(page.locator('.assistant-reply')).toContainText(answer);
   await expect(page.locator('[data-background-update]')).toBeVisible();
-  await expect(page.locator('[data-background-update]')).toContainText(
-    'The delegated change is ready for review.',
-  );
+  await expect(page.locator('[data-background-update]')).toContainText(answer);
   await expect.poll(async () => (await result()).speech).toBe(1);
+  expect((await result()).lastSpeech).toBe(answer);
   await page.evaluate(() =>
     (
       window as unknown as { __backgroundFixture: { replay(): void } }

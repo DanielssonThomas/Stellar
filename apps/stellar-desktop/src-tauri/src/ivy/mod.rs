@@ -44,6 +44,8 @@ mod lifecycle_wire_tests;
 #[cfg(test)]
 mod native_consent_client;
 mod observation;
+#[cfg(test)]
+mod ordinary_completion_tests;
 pub mod presentation;
 mod presentation_decode;
 mod process;

@@ -224,7 +224,7 @@ asyncio.run(run())
 
 
 
-    async def test_background_starts_forward_only_verified_metadata_marker(self):
+    async def test_background_candidates_project_metadata_without_input_authority(self):
         conn = Connection()
         for index, payload in enumerate([
                 {'display_kind': 'async_delegation_complete', 'text': 'private raw tool output'},
@@ -240,7 +240,7 @@ asyncio.run(run())
             await bridge.pump(conn)
         events = [json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
         self.assertEqual([event['payload'] for event in events],
-                         [{'autonomous': True}, {'autonomous': True}, {'autonomous': False}, {'autonomous': False}])
+                         [{'autonomous': True}, {'autonomous': True}, {'autonomous': False}, {'autonomous': True}])
         self.assertEqual(events[0]['authority_epoch'], 2)
 
     async def test_replay_is_selected_session_only_and_projects_bounded_metadata(self):

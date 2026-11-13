@@ -317,7 +317,9 @@ def autonomous_start(payload):
         # Do not discard a future version's consent/receipt proof or advance past it.
         # Delivery remains disabled until end-to-end revocation is implemented.
         raise Closed()
-    return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
+    # Ordinary admitted turns have no display card. This is only a receipt candidate:
+    # native excludes the foreground admission and verifies the canonical answer.
+    return (payload.get('display_kind') in {None, 'async_delegation_complete', 'process_complete'}
             and payload.get('notification_category') != 'diagnostic')
 
 

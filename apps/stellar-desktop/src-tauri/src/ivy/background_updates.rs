@@ -91,6 +91,21 @@ impl Session {
             && params.pointer("/payload/autonomous") == Some(&Value::Bool(true))
         {
             let mut admission = identity(params)?;
+            if self.record.unsettled && self.record.admission_id.is_none() {
+                // A lost foreground submit ACK cannot establish distinct background custody.
+                return Err(IvyErrorCode::Uncertain);
+            }
+            let retained = updates.pending.iter().any(|a| a.id == admission.id)
+                || updates.completed.iter().any(|u| u.id == admission.id);
+            if !retained
+                && updates
+                    .cursor
+                    .as_ref()
+                    .is_some_and(|(_, last)| params["seq"].as_u64().is_some_and(|seq| seq <= *last))
+            {
+                // A previous foreground start is not a new background admission on replay.
+                return Ok(true);
+            }
             let receipt = self.call(
                 "prompt.receipt",
                 json!({"session_id":sid,"admission_id":admission.id,"include_result":true}),
