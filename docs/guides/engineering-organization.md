@@ -74,7 +74,7 @@ Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manu
 
 ### Local lifecycle observations and the background delivery boundary
 
-The repository plugin can record opted-in lifecycle observations. **It does not yet send background alerts or wake Desktop.** The installed public Hermes injection API cannot provide the original-session pin, stable producer identity, trusted completion descriptor and durable admission receipt required by [#339](https://github.com/DanielssonThomas/Stellar/issues/339) and the [#299](https://github.com/DanielssonThomas/Stellar/issues/299) consumer. A successful scheduling boolean is not a delivery receipt. Do not substitute private authority calls, loosen the consumer's fences, or enable injection permissions to work around this gap.
+The repository plugin records opted-in lifecycle observations and implements forwarding to the reviewed, **uninstalled** Hermes notification candidate. Installed-runtime and Desktop acceptance remain incomplete. The installed public injection API cannot provide the original-session pin, stable producer identity, trusted descriptor and durable admission receipt required by [#339](https://github.com/DanielssonThomas/Stellar/issues/339) and the [#299](https://github.com/DanielssonThomas/Stellar/issues/299) consumer. A scheduling boolean is not a receipt. Do not substitute private authority calls, loosen consumer checks or change injection permissions to work around an unavailable API.
 
 Tracking defaults off and is separate from the manual/automatic window preference. Enable it only when the user explicitly requests observation of an exact launch, using `stellar_herdr` or the plugin CLI:
 
@@ -97,9 +97,9 @@ Tracking defaults off and is separate from the manual/automatic window preferenc
 }
 ```
 
-New launches retain a versioned receipt with a random incarnation also attached to Core's worker labels, exact issue/worker/claim/branch/target and baseline SHA. Older receipts lack this provenance and cannot be opted into observation. They remain available through ordinary status/progress; do not relabel an old terminal or invent a receipt. Enabling tracking verifies current structured sources and establishes a silent baseline. Re-enabling starts a new consent revision with a fresh baseline. `{"action":"tracking","issue":23,"enabled":false}` revokes all observation for that issue, clears its transition records and invalidates an in-flight reconciliation. A concurrent consent change also invalidates a slow enable request.
+New launches retain a versioned receipt with a random incarnation also attached to Core's worker labels, exact issue/worker/claim/branch/target and baseline SHA. Older receipts lack this provenance and cannot be opted into observation. They remain available through ordinary status/progress; do not relabel an old terminal or invent a receipt. Enabling tracking verifies current structured sources and establishes a silent baseline. Re-enabling starts a new tracking revision with a fresh baseline. `{"action":"tracking","issue":23,"enabled":false}` disables local observation, removes displayed transitions and invalidates in-flight reconciliation. Notification attempts and unknown outcomes remain retained; host revocation can remain pending. A concurrent tracking change also invalidates a slow enable request.
 
-`{"action":"reconcile"}` performs one bounded observation tick. `{"action":"observations"}` reads tracking health and recent local transitions. SQLite transactions in `integration/stellar-herdr/observations.sqlite3` preserve consent, snapshots and deterministic transition identities across restarts. These identities are local journal keys, **not authenticated wake admissions**. No conversation route or transcript is stored. The observer reads only claim metadata, structured Core metadata and GitHub issue/PR/check metadata. It does not read terminal output, start Core, assign work, approve reviews, merge or deploy.
+`{"action":"reconcile"}` performs one bounded observation tick. `{"action":"observations"}` reads tracking health and recent local transitions. SQLite transactions in `integration/stellar-herdr/observations.sqlite3` preserve tracking revisions, snapshots and deterministic transition identities across restarts. A transition alone is **not a wake admission**. Optional notification bookkeeping retains the host-captured profile/session/route binding, immutable event evidence and canonical receipt metadata; it does not capture conversation transcripts. The observer reads only claim metadata, structured Core metadata and GitHub issue/PR/check metadata. It does not read terminal output, start Core, assign work, approve reviews, merge or deploy.
 
 Each successful observation requires the same claim and GitHub owner/target, plus Core's exact incarnation. An unexpired active claim or its unchanged released record is accepted; reassignment, expiry, missing retained worker data, ambiguous PR links or unavailable sources suppress transitions. A PR must close the exact repository issue, use the claimed branch and target in the same repository, and expose a full head SHA. Worker exit records only the process exit code; `worker_blocked` reflects structured Core status. Waiting for review requires a non-draft open PR and GitHub `status:review`. Check results are scoped to the returned PR head; empty, truncated, unknown, skipped or pending checks never establish success. Merge is distinct from `workflow_verified`, which additionally requires a closed `status:done` issue, checked issue criteria and successful head checks. This last observation reports workflow metadata, not an independent verification of the artifacts.
 
@@ -130,6 +130,35 @@ Genuine `terminal(background=true, notify_on_complete=true)` completion remains 
 supported lifecycle path where the calling session supports asynchronous delivery. It must not
 be fabricated to represent an arbitrary GitHub observation. No runtime activation follows from
 this source qualification; named-Ivy Desktop delivery remains unverified.
+
+Plugin1.2 forwards through `ctx.notification` only. Its required runtime proposal is pinned to
+Hermes3b421578 plus patch SHA256c0a21ab5118d6f7ab23b617e7ea2d2f81d072fa1d9fcd63ba0ba857d8d7356ce.
+The async `stellar_herdr` tracking tool binds in the original real turn context. The CLI and
+standalone silent cron script remain observation-only: they cannot create a conversation binding.
+No schedule, daemon, permission grant or notification is installed by registration.
+
+Three registered RPCs reuse Hermes's existing authenticated session dispatch:
+`plugin.stellar-herdr.observations.reconcile` accepts the selected `session_id`;
+`observations.inspect` and `observations.revoke` also require the exact retained `event_id`.
+The server-authorized session must match the original binding owner. A worker's launch-claim
+`session_id` in a tracking tool request is a separate identity. RPCs accept no caller-selected
+binding, destination or observation payload. Reconciliation reserves exact incarnation/revision
+pairs and processes only the authorized session's notifications.
+
+`notification_bindings` and `notification_attempts` add local bookkeeping to the existing observer
+database. Before its first possible host submission, one transaction freezes the evidence and
+records UNKNOWN. Only that inserting caller may first-send; a crash before sending can therefore
+miss an alert. Later ticks inspect the same identity and never take over or blindly resend.
+Known receipts cannot regress or become another admission. Up to four due attempts rotate per
+tick; 100 retained bindings/1000 attempts bound storage without deleting UNKNOWN evidence.
+Expiry, supersession, retry exhaustion and journal-full disable paths also reconcile revocation.
+
+Inspection preserves the raw canonical host result and separately combines host eligibility with
+fresh local tracking/event evidence. Local opt-out closes eligibility before awaiting host
+revocation. A started/unknown host operation is not a successful physical-stop receipt. The host
+truthfully stamps `internal_notification` and a bound producer descriptor. Consumer checkpoint
+b61907d rejects that named marker; its owner must explicitly implement and review classification,
+receipt and cancellation handling. Do not strip the marker or manufacture process completion.
 
 ## Identity templates and Hermes profiles
 

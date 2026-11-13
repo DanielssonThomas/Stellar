@@ -17,7 +17,8 @@ DESCRIPTION = (
     'Show, focus or hide the optional Herdr app when the user asks. Preference can be manual '
     'or automatic. Hiding the window leaves Core workers running.'
     ' Only on explicit user request, enable tracking for an exact launch claim or disable it for an issue.'
-    ' Tracking records local source-backed observations only; background wake delivery is unavailable.'
+    ' Tracking binds notification delivery to the original conversation when the runtime supports it. '
+    'Unavailable or uncertain admission is reported; a receipt does not prove presentation or speech.'
 )
 SCHEMA = {
     'name': 'stellar_herdr',
@@ -79,6 +80,21 @@ def cli(args):
 
 
 def register(ctx):
+    from .notification_producer import NotificationProducer
+    producer = NotificationProducer(profile(), ctx)
+
+    async def bound_handle(args, **_kwargs):
+        try:
+            return json.dumps(await producer.handle(args), ensure_ascii=False)
+        except Unavailable as error:
+            return json.dumps({'error': str(error)})
+        except (OSError, sqlite3.Error):
+            return json.dumps({'error': 'The Ivy Herdr integration could not access its local state.'})
+
     ctx.register_hook('pre_llm_call', worker_context)
-    ctx.register_tool(name='stellar_herdr', toolset='stellar-herdr', schema=SCHEMA, handler=handle)
+    ctx.register_tool(name='stellar_herdr', toolset='stellar-herdr', schema=SCHEMA, handler=bound_handle, is_async=True)
+    if callable(getattr(ctx, 'register_rpc', None)):
+        ctx.register_rpc('observations.inspect', producer.rpc_inspect)
+        ctx.register_rpc('observations.revoke', producer.rpc_revoke)
+        ctx.register_rpc('observations.reconcile', producer.rpc_reconcile)
     ctx.register_cli_command('stellar-herdr', 'Show and manage Ivy Stellar delegates', setup, cli)

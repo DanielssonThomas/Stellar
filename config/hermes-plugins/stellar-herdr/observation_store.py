@@ -94,12 +94,16 @@ class ObservationStore:
                        '(SELECT incarnation FROM tracking WHERE issue=?)', (issue,))
             db.execute("UPDATE tracking SET enabled=0, revision=revision+1, lease=NULL, health='opted_out' WHERE issue=?", (issue,))
 
-    def reserve(self, now):
+    def reserve(self, now, *, tracks=None):
         with self.transaction() as db:
             self.prune(db, now)
+            if tracks is not None and not tracks:
+                return None
+            scope = (' AND (' + ' OR '.join('(incarnation=? AND revision=?)' for _ in tracks) + ')'
+                     if tracks is not None else '')
             row = db.execute('SELECT * FROM tracking WHERE enabled=1 AND next_poll<=? '
-                             'AND (lease IS NULL OR lease_until<=?) ORDER BY next_poll LIMIT 1',
-                             (now, now)).fetchone()
+                             'AND (lease IS NULL OR lease_until<=?)' + scope + ' ORDER BY next_poll LIMIT 1',
+                             (now, now, *(value for track in (tracks or ()) for value in track))).fetchone()
             if row is None:
                 return None
             token = uuid.uuid4().hex

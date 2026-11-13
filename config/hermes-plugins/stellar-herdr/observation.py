@@ -26,11 +26,12 @@ def receipt_for(root, issue, role, session):
     return receipt
 
 
-def reconcile(store, settings, core, *, clock=time.time):
+def reconcile(store, settings, core, *, clock=time.time, tracks=None):
     count = 0
     # One source attempt per reservation, at most four tracks per scheduler tick.
     for _ in range(4):
-        reserved = store.reserve(clock())
+        reserved = (store.reserve(clock()) if tracks is None
+                    else store.reserve(clock(), tracks=tracks))
         if reserved is None:
             break
         try:
@@ -54,7 +55,12 @@ def operate_observation(root, settings, core, args):
         raise Unavailable('Tracking requires an issue and explicit enabled true or false.')
     if not args['enabled']:
         store.disable(issue)
-        return {'issue': issue, 'tracking': False, 'delivery': 'disabled'}
+        from .notification_store import NotificationStore
+        bound = NotificationStore(root)
+        bound.sync(time.time())
+        phases = bound.summary(time.time())['notification_bindings']
+        return {'issue': issue, 'tracking': False,
+                'delivery': 'revoke_pending' if phases.get('revoke_pending') else 'disabled'}
     receipt = receipt_for(root, issue, args.get('role'), args.get('session_id'))
     expected_revision = store.consent_revision()
     facts = snapshot(settings, core, receipt)
