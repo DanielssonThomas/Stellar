@@ -71,6 +71,10 @@ impl Broker {
             ("stellar_ivy_inspector", include_str!("ivy_inspector.py")),
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
             ("stellar_ivy_lifecycle", include_str!("ivy_lifecycle.py")),
+            (
+                "stellar_ivy_notifications",
+                include_str!("ivy_notifications.py"),
+            ),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
             (
                 "stellar_ivy_conversation",

@@ -43,6 +43,16 @@ export class SpeechAdapterService {
   private foregroundDucking = false;
   private foregroundListening = false;
   private readonly pendingSpeech = new Set<symbol>();
+  private readonly speechOperations = new Map<
+    string,
+    {
+      cancelled: boolean;
+      pending: boolean;
+      retired: boolean;
+      snapshot?: SpeechSnapshot;
+    }
+  >();
+  private readonly usedSpeechIds = new Set<string>();
   private readonly current = signal(initialSpeechSnapshot());
   readonly state = this.current.asReadonly();
   private disposed = false;
@@ -147,28 +157,85 @@ export class SpeechAdapterService {
     });
   }
 
-  speak(text: string, utteranceId: string): Promise<SpeechSnapshot> {
+  speak(
+    text: string,
+    utteranceId: string,
+    current = () => true,
+  ): Promise<SpeechSnapshot> {
     const generation = this.generation;
+    if (this.usedSpeechIds.has(utteranceId) || this.usedSpeechIds.size >= 8192)
+      return Promise.reject(new SpeechAdapterError('native', 'busy'));
+    for (const [id, previous] of this.speechOperations) {
+      if (this.speechOperations.size < 32) break;
+      if (!previous.pending && previous.retired)
+        this.speechOperations.delete(id);
+    }
+    if (this.speechOperations.size >= 32)
+      return Promise.reject(new SpeechAdapterError('native', 'busy'));
+    const operation: {
+      cancelled: boolean;
+      pending: boolean;
+      retired: boolean;
+      snapshot?: SpeechSnapshot;
+    } = { cancelled: false, pending: true, retired: false };
+    this.usedSpeechIds.add(utteranceId);
+    this.speechOperations.set(utteranceId, operation);
+    let dispatched = false;
     return this.run(async () => {
       await this.prepare();
       this.assertCurrent(generation);
+      if (operation.cancelled || !current()) {
+        operation.pending = false;
+        operation.retired = true;
+        throw new SpeechAdapterError('native', 'cancelled');
+      }
       const request = Symbol();
       this.pendingSpeech.add(request);
       this.updateDucking();
       try {
+        dispatched = true;
         const snapshot = await this.adapter.speak({
           version: 1,
           epoch: this.current().epoch,
           utterance_id: utteranceId,
           text,
         });
+        operation.snapshot = snapshot;
         this.accept(snapshot, true);
-        return this.current();
+        this.retireSpeech(this.current());
+        if (
+          operation.cancelled ||
+          !current() ||
+          generation !== this.generation
+        ) {
+          await this.stopOperation(utteranceId);
+          throw new SpeechAdapterError('native', 'cancelled');
+        }
+        return snapshot;
       } finally {
+        operation.pending = false;
         this.pendingSpeech.delete(request);
         this.updateDucking();
       }
+    }).finally(() => {
+      operation.pending = false;
+      if (!dispatched) operation.retired = true;
     });
+  }
+
+  async stopOperation(utteranceId: string): Promise<void> {
+    const operation = this.speechOperations.get(utteranceId);
+    if (!operation) return; // A queued entry still has its current() fence.
+    operation.cancelled = true;
+    const snapshot = operation.snapshot;
+    if (!snapshot) return; // In-flight ACK is unknown; speak() owns late-ACK cleanup.
+    if (!snapshot.operation_instance || snapshot.operation_id !== utteranceId)
+      throw new SpeechAdapterError('contract');
+    const result = await this.adapter.stop(snapshot.epoch, {
+      operation_id: utteranceId,
+      operation_instance: snapshot.operation_instance,
+    });
+    this.accept(result, true);
   }
 
   stop(): Promise<SpeechSnapshot> {
@@ -220,8 +287,22 @@ export class SpeechAdapterService {
     }
   }
 
+  private retireSpeech(snapshot: SpeechSnapshot) {
+    for (const operation of this.speechOperations.values()) {
+      if (
+        snapshot.state === 'idle' &&
+        snapshot.operation_instance &&
+        snapshot.operation_instance ===
+          operation.snapshot?.operation_instance &&
+        BigInt(snapshot.epoch) >= BigInt(operation.snapshot.epoch)
+      )
+        operation.retired = true;
+    }
+  }
+
   private accept(snapshot: SpeechSnapshot, confirmedReply = false) {
     if (this.disposed) return;
+    this.retireSpeech(snapshot);
     const revision = BigInt(snapshot.revision);
     if (
       revision < this.highestRevision ||

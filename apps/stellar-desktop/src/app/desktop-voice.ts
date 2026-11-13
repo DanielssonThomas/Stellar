@@ -78,11 +78,10 @@ export class DesktopVoice {
       this.updateFailure.set(false);
       return this.conversation.say(text, id, current);
     },
-    stop: (id) =>
-      this.conversation.narrationOwner()?.id === id ||
-      this.speech.state().operation_id === id
-        ? this.speech.stop()
-        : Promise.resolve(),
+    stop: (id) => {
+      this.conversation.cancelNarration(id);
+      return this.speech.stopOperation(id);
+    },
     waitForQuestion: () => this.questionCue.wait(),
     id: () => crypto.randomUUID(),
     changed: () =>
@@ -164,7 +163,7 @@ export class DesktopVoice {
       };
       this.reflex.timeline.speech(id, 'synthesis');
       return this.speech
-        .speak(text, id)
+        .speak(text, id, current)
         .then((snapshot) => {
           if (this.narration?.id === id) {
             const observed = this.speech.state();

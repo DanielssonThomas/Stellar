@@ -27,6 +27,9 @@ impl Session {
         }
         self.validate_update_event(params)?;
         self.lifecycle_fence(params)?;
+        if self.plugin_event(params)? {
+            return Ok(());
+        }
         if self.lifecycle_event(params)? {
             return Ok(());
         }

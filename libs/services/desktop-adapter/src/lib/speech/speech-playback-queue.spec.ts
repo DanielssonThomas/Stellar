@@ -40,6 +40,73 @@ function fixture(waitForSlot?: () => Promise<void>) {
   return { queue, speak, observe, state: () => state };
 }
 describe('owned sequential speech playback', () => {
+  it('does not settle from another instance using the same utterance ID before ACK', async () => {
+    let acknowledge!: (snapshot: SpeechSnapshot) => void;
+    const initial = initialSpeechSnapshot();
+    const queue = new SpeechPlaybackQueue({
+      state: () => initial,
+      speak: () =>
+        new Promise((done) => {
+          acknowledge = done;
+        }),
+    });
+    let finished = false;
+    const result = queue.play('Original', 'same-id').then(() => {
+      finished = true;
+    });
+    queue.observe({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'b'.repeat(32),
+      revision: '3',
+    });
+    acknowledge({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'a'.repeat(32),
+      revision: '1',
+      state: 'synthesizing',
+    });
+    await settle();
+    expect(finished).toBe(false);
+    queue.observe({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'a'.repeat(32),
+      revision: '4',
+    });
+    await result;
+    expect(finished).toBe(true);
+  });
+  it('holds a canceled in-flight owner until late dispatch and cleanup settle', async () => {
+    let finish!: () => void;
+    const state = initialSpeechSnapshot();
+    const speak = vi.fn(
+      async (_text: string, id: string): Promise<SpeechSnapshot> => {
+        if (id === 'revoked') {
+          await new Promise<void>((done) => {
+            finish = done;
+          });
+          throw new Error('Exact native cleanup completed');
+        }
+        return { ...state, revision: '2', operation_id: id };
+      },
+    );
+    const queue = new SpeechPlaybackQueue({ state: () => state, speak });
+    const revoked = expect(queue.play('Original', 'revoked')).rejects.toThrow(
+      'cancelled',
+    );
+    queue.cancel('revoked');
+    const foreground = queue.play('Unrelated', 'foreground');
+    expect(speak).toHaveBeenCalledOnce();
+    expect(queue.busy()).toBe(true);
+    finish();
+    await revoked;
+    await expect(foreground).resolves.toMatchObject({
+      operation_id: 'foreground',
+    });
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
   it('waits for a long spatial briefing before starting the native deadline', async () => {
     vi.useFakeTimers();
     try {

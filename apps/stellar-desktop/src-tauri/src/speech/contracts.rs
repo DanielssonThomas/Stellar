@@ -78,6 +78,9 @@ pub struct SpeechSnapshot {
     pub epoch: String,
     pub revision: String,
     pub operation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub operation_instance: Option<String>,
     pub state: SpeechState,
     pub error: Option<SpeechError>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -110,6 +113,7 @@ impl Default for SpeechSnapshot {
             epoch: "0".into(),
             revision: "0".into(),
             operation_id: None,
+            operation_instance: None,
             state: SpeechState::Idle,
             error: None,
             timings: None,
@@ -122,6 +126,26 @@ impl Default for SpeechSnapshot {
 pub struct SpeechStopRequest {
     pub version: u16,
     pub epoch: String,
+    #[serde(
+        default,
+        deserialize_with = "stop_target",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[ts(optional)]
+    pub target: Option<SpeechStopTarget>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechStopTarget {
+    pub operation_id: String,
+    pub operation_instance: String,
+}
+
+fn stop_target<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<SpeechStopTarget>, D::Error> {
+    SpeechStopTarget::deserialize(d).map(Some)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]

@@ -19,6 +19,7 @@ bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
                        ('stellar_ivy_lifecycle', 'ivy_lifecycle.py'),
+                       ('stellar_ivy_notifications', 'ivy_notifications.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
                        ('stellar_ivy_conversation', 'ivy_conversation.py'),
                        ('stellar_ivy_voice_expression', 'ivy_voice_expression.py')]:
@@ -547,6 +548,7 @@ asyncio.run(run())
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()
         offered, cancelled = [], []
+        conn.active = {'session_id': 'session', 'admission_id': 'admission'}
 
         class Handler:
             def offer(self, params):

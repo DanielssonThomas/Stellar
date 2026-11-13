@@ -46,6 +46,9 @@ mod native_consent_client;
 mod observation;
 #[cfg(test)]
 mod ordinary_completion_tests;
+#[cfg(test)]
+mod plugin_notification_tests;
+mod plugin_notifications;
 pub mod presentation;
 mod presentation_decode;
 mod process;

@@ -9,6 +9,7 @@ pub(super) type Publisher = Arc<dyn Fn(SpeechSnapshot) + Send + Sync>;
 pub(super) type SettlementGate = Arc<dyn Fn() + Send + Sync>;
 pub(super) struct Operation {
     pub(super) serial: u64,
+    pub(super) admitted: SpeechSnapshot,
     pub(super) child: ChildSlot,
     pub(super) cancelled: AtomicBool,
     pub(super) scratch: Option<Scratch>,

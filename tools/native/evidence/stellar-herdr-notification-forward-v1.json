@@ -1,0 +1,448 @@
+{
+  "fixture": true,
+  "inference": "fake; no provider call",
+  "composition": {
+    "runtime_base": "3b421578588243f920886e6fe79a6faa87ea026e",
+    "runtime_patch_sha256": "c0a21ab5118d6f7ab23b617e7ea2d2f81d072fa1d9fcd63ba0ba857d8d7356ce",
+    "fresh_exports": true,
+    "runtime_archive_sha256": "f9e21303539adf22a1c86955cdfc0ad41b13eed0aa4f3b28608a509e4323a3ac",
+    "stellar_archive_sha256": "322fcfd8bd7dda28677d55655567500b9c8b0d2250306029962f712acbcb77d6",
+    "runtime_postimages": [
+      {
+        "path": "gateway/plugin_notifications.py",
+        "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "candidate_sha256": "2d4522bc06bd3e2f22db01317e4b373e30fa0da378b6b46962e4845bf2ef0715",
+        "new": true
+      },
+      {
+        "path": "gateway/plugin_notifications_state.py",
+        "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "candidate_sha256": "e1ad16c395fb881bb8f92412ac225eefb67fccd8281870c78fb0a20aff028c04",
+        "new": true
+      },
+      {
+        "path": "gateway/session_automation.py",
+        "original_sha256": "623ced268132b0088a7352f573eb4f6ccc22e0aca17002d049193b52c7db94bc",
+        "candidate_sha256": "a3f6a7de171777a7e5a6a9350965c744c4dd89fbee8e11bd85e83e861a764d14",
+        "new": false
+      },
+      {
+        "path": "gateway/session_authority.py",
+        "original_sha256": "ec45262a22582fe3a94f99f9b7d73f94a251c52e792dbf9992710baa419fe2c3",
+        "candidate_sha256": "00a86ec62c7c0a10a2fba2db2bcec910daa213f209db7d439f141914ec3e4deb",
+        "new": false
+      },
+      {
+        "path": "hermes_cli/plugins_notifications.py",
+        "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "candidate_sha256": "736678a4267cdeaff2fec772639c4d5a854e00a49bb32bec0da2936d167e28f6",
+        "new": true
+      },
+      {
+        "path": "hermes_cli/plugins_context.py",
+        "original_sha256": "d75a6fef102140431f68bc1a402d58977b5024ad21d5b1df284a9dad41250df4",
+        "candidate_sha256": "e07fa251c0fbdf5db014d9496131b4eaed98d85fe3c9ae3bf615948e67eafc42",
+        "new": false
+      },
+      {
+        "path": "hermes_cli/plugin_isolation.py",
+        "original_sha256": "57b9d5eca0e7828d2302274c023c3440d16b056c7ef41bdefbb0e326de281f1e",
+        "candidate_sha256": "0b2b1a4e097548fcfae26d5a3dead1cafbdbe0793d74c1ba339278d6cc787a4c",
+        "new": false
+      },
+      {
+        "path": "hermes_state_runtime.py",
+        "original_sha256": "6bbcc688799d3ea784545b5227d20e07f8b5ce8f26fcf545825bc8a60462ee3f",
+        "candidate_sha256": "3d4ffe33e6ff919fea0fdf3bae6c7a908185e031bf02960bd3014562ac8b29ac",
+        "new": false
+      },
+      {
+        "path": "tests/gateway/test_plugin_notifications.py",
+        "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "candidate_sha256": "6474c754a693209357c24d2811cbbc843e8795796642382b187500c355279269",
+        "new": true
+      },
+      {
+        "path": "website/docs/user-guide/features/plugins.md",
+        "original_sha256": "608c177497e5ca74ed35c7c941057b06105a81de727e46c264b7f3d45de3a9ac",
+        "candidate_sha256": "37472b5d1bacd6d9c9f0b6b4f9ce197eded4b4726f3e0ad4b218dc3ac7d8a110",
+        "new": false
+      }
+    ],
+    "stellar_base": "2bbff9fdcbee62df2287626567d14bed8776adad",
+    "consumer": "b61907de4809e3f593adf65cdee7766db74c8e66",
+    "consumer_hashes": {
+      "apps/stellar-desktop-e2e/src/background-updates.spec.ts": "a25e9019da35279b29db8e90aba59fa87de0f73f5b70a62dd554f3f9336c8c79",
+      "apps/stellar-desktop/src-tauri/src/ivy/background_updates.rs": "9864629b9df386ca4da2937fb0967f6e89902cd879f154fddd7521f32cab151c",
+      "apps/stellar-desktop/src-tauri/src/ivy/ivy_bridge.py": "4940602842fe44b71cdbde1aad4a1c7416c93a1af1c4dab82fe0f071db1a51c9",
+      "apps/stellar-desktop/src-tauri/src/ivy/mod.rs": "0459d32e91223e8637c34c8070b3d2e3e158849bf8e9d2746dc05e8921f55d56",
+      "apps/stellar-desktop/src-tauri/src/ivy/ordinary_completion_tests.rs": "d52e4f42c1fa341931e06544498f1cace72fd91185846d28de0045ffb79ac0ff",
+      "docs/guides/desktop-development.md": "fffd754c5a84fa9a00c2e4b1a95c9ddea8144f36a86cede671d5d1b20d2b3c69",
+      "tools/native/ivy_bridge_test.py": "4814fb97c6cfaf709c87cf1cc7bcf869e69aaa0ca3b27465afbb843dd1ebb703",
+      "tools/native/ivy_ordinary_completion_test.py": "375632e26a66d2cc81ad2f1cbab78ead1fa5ed17b7dbc94e8974b7fc6df4b7dd",
+      "tools/native/verify-ordinary-completion.mjs": "bc790b302b3296c52d0e74d5110868f1d099f56510d355f06f12d267d4175f08"
+    },
+    "observer_source": "D:\\Hermes\\profiles\\ivy\\cache\\scratch\\stellar-339-observer-qualified-20261113\\observer",
+    "consumer_source": "D:\\Hermes\\profiles\\ivy\\cache\\scratch\\stellar-339-observer-qualified-20261113\\consumer-lf",
+    "observer_hashes": {
+      "core.py": "4de81b2b429b0c25b37745e14aa6ea3891efaa9448f0800bf10ba5350750c8f7",
+      "notification_producer.py": "ce20fbd15e1957bd78b6ceedf267ece095881a06cbe2dd0a31fe4f1233d45d84",
+      "notification_store.py": "83d6b9d0480af7abe8e32579ea1948b77506c898854a89a6bc50d4e8cd5dba70",
+      "observation.py": "84b65a4ee4ffcde6718dcacf7bbcf102ef09465b923f71ee1d14799f69e36d2c",
+      "observation_sources.py": "82d3721bf60a0645adaa1bbc8538a0a291b55ecb9d63d0a7e78c8050458308b5",
+      "observation_store.py": "ea20b48d53c421ed1cab80548bb6d7bdaa7a7f8f4b9457f711e6907e06399abb",
+      "observer_tick.py": "49b687a386ad5312e038719d64136cf2922f85e64dc3ab7e7045bc09f84a3d1c",
+      "plugin.yaml": "09a05563d96eee9415160d3f26544f416dfd86f7c0e687f89417d82a2fb3f49c",
+      "workers.py": "6764bba3ad3161564c8e06e94a63b8c92ab303c4fdcf735232b251b2a2261049",
+      "__init__.py": "15d770f8e3431887751ad68c1ebad7ab6e17bb9baeac4c9c1b2d89d006e6051d"
+    },
+    "composition_test_sha256": "bde3f3a8c493137a2cf041960ad7d9a63e5b7dda13756967669459b9b7a2846c",
+    "operational": false
+  },
+  "binding": {
+    "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+    "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+    "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+    "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+    "plugin_id": "stellar-herdr",
+    "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revision": 1,
+    "expires_at": 1795191947.2628133,
+    "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb"
+  },
+  "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+  "raw_start": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "authority_epoch": 1,
+      "execution_generation": 1,
+      "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+      "type": "message.start",
+      "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+      "payload": {
+        "display_kind": "internal_notification",
+        "display_text": "Background observation",
+        "text": "Background observation (evidence only; no action authority):\n{\"fact\":{\"exit_code\":0},\"instruction\":\"Observation evidence only. Verify fresh Herdr/GitHub facts before reporting; process exit does not establish issue completion or grant action authority.\",\"issue\":23,\"milestone\":\"worker_exited\",\"observedAt\":1794587208.1810186,\"schemaVersion\":1,\"validUntil\":1794587508.1810186,\"worker\":{\"baseline\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"issue/23-fix\",\"claim_session\":\"fixture-job-23\",\"incarnation\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"issue\":23,\"launch\":\"accepted\",\"role\":\"peon-cloud\",\"schema\":1,\"target\":\"develop\",\"terminal\":\"t42\"}}",
+        "plugin_notification": {
+          "binding": {
+            "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+            "expires_at": 1795191947.2628133,
+            "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+            "revision": 1,
+            "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "5444ebee8a3b59cc9087d70250ae15f098d7d57f6254a2378f247c2ab7b940c9",
+          "schema_version": 1
+        }
+      },
+      "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+      "seq": 2
+    }
+  },
+  "raw_terminal": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "authority_epoch": 1,
+      "execution_generation": 1,
+      "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+      "type": "message.complete",
+      "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+      "payload": {
+        "text": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+        "content": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+        "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+        "outcome": "completed",
+        "status": "complete"
+      },
+      "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+      "seq": 4
+    }
+  },
+  "raw_revoke": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "type": "plugin.stellar-herdr.notification.revoked",
+      "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+      "payload": {
+        "plugin_id": "stellar-herdr",
+        "binding": {
+          "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+          "expires_at": 1795191947.2628133,
+          "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+          "revision": 1,
+          "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "in_flight": []
+      },
+      "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+      "seq": 6
+    }
+  },
+  "raw_events": [
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "type": "session.info",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "stored_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "pending": [
+            {
+              "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+              "ref": {
+                "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+                "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0"
+              },
+              "sequence": 1,
+              "status": "queued",
+              "outcome": null,
+              "authority_epoch": 1,
+              "execution_generation": null,
+              "input_id": "[\"plugin-notification\",\"c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb\",1,\"5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921\"]",
+              "text": "Background observation (evidence only; no action authority):\n{\"fact\":{\"exit_code\":0},\"instruction\":\"Observation evidence only. Verify fresh Herdr/GitHub facts before reporting; process exit does not establish issue completion or grant action authority.\",\"issue\":23,\"milestone\":\"worker_exited\",\"observedAt\":1794587208.1810186,\"schemaVersion\":1,\"validUntil\":1794587508.1810186,\"worker\":{\"baseline\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"issue/23-fix\",\"claim_session\":\"fixture-job-23\",\"incarnation\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"issue\":23,\"launch\":\"accepted\",\"role\":\"peon-cloud\",\"schema\":1,\"target\":\"develop\",\"terminal\":\"t42\"}}",
+              "controls": [],
+              "steering": false
+            }
+          ],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": false,
+          "execution_generation": 0,
+          "revision": 0
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 1
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+        "type": "message.start",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "display_kind": "internal_notification",
+          "display_text": "Background observation",
+          "text": "Background observation (evidence only; no action authority):\n{\"fact\":{\"exit_code\":0},\"instruction\":\"Observation evidence only. Verify fresh Herdr/GitHub facts before reporting; process exit does not establish issue completion or grant action authority.\",\"issue\":23,\"milestone\":\"worker_exited\",\"observedAt\":1794587208.1810186,\"schemaVersion\":1,\"validUntil\":1794587508.1810186,\"worker\":{\"baseline\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"issue/23-fix\",\"claim_session\":\"fixture-job-23\",\"incarnation\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"issue\":23,\"launch\":\"accepted\",\"role\":\"peon-cloud\",\"schema\":1,\"target\":\"develop\",\"terminal\":\"t42\"}}",
+          "plugin_notification": {
+            "binding": {
+              "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+              "expires_at": 1795191947.2628133,
+              "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+              "plugin_id": "stellar-herdr",
+              "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+              "revision": 1,
+              "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+              "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+              "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+            "payload_digest": "5444ebee8a3b59cc9087d70250ae15f098d7d57f6254a2378f247c2ab7b940c9",
+            "schema_version": 1
+          }
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 2
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+        "type": "session.info",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "stored_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "pending": [
+            {
+              "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+              "ref": {
+                "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+                "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0"
+              },
+              "sequence": 1,
+              "status": "started",
+              "outcome": null,
+              "authority_epoch": 1,
+              "execution_generation": 1,
+              "input_id": "[\"plugin-notification\",\"c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb\",1,\"5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921\"]",
+              "text": "Background observation (evidence only; no action authority):\n{\"fact\":{\"exit_code\":0},\"instruction\":\"Observation evidence only. Verify fresh Herdr/GitHub facts before reporting; process exit does not establish issue completion or grant action authority.\",\"issue\":23,\"milestone\":\"worker_exited\",\"observedAt\":1794587208.1810186,\"schemaVersion\":1,\"validUntil\":1794587508.1810186,\"worker\":{\"baseline\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"issue/23-fix\",\"claim_session\":\"fixture-job-23\",\"incarnation\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"issue\":23,\"launch\":\"accepted\",\"role\":\"peon-cloud\",\"schema\":1,\"target\":\"develop\",\"terminal\":\"t42\"}}",
+              "controls": [],
+              "steering": false
+            }
+          ],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": true,
+          "execution_generation": 1,
+          "revision": 0
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 3
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+        "type": "message.complete",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "text": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+          "content": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+          "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+          "outcome": "completed",
+          "status": "complete"
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 4
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+        "type": "session.info",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "stored_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "pending": [],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": false,
+          "execution_generation": 1,
+          "revision": 1
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 5
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "type": "plugin.stellar-herdr.notification.revoked",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+        "payload": {
+          "plugin_id": "stellar-herdr",
+          "binding": {
+            "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+            "expires_at": 1795191947.2628133,
+            "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+            "revision": 1,
+            "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "in_flight": []
+        },
+        "replay_epoch": "ce954972699641d2ac8cb435dae128c3",
+        "seq": 6
+      }
+    }
+  ],
+  "canonical_receipt_rpc": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+        "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0"
+      },
+      "sequence": 1,
+      "status": "terminal",
+      "outcome": "completed",
+      "authority_epoch": 1,
+      "execution_generation": 1
+    }
+  },
+  "producer_inspection_rpc": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "host": {
+        "status": "known",
+        "binding": {
+          "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+          "expires_at": 1795191947.2628133,
+          "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+          "revision": 1,
+          "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+        "descriptor": {
+          "binding": {
+            "binding_id": "c9e656073b468180112d550a7d0f0fd71e1940c88a4cb522d90c3913dee192cb",
+            "expires_at": 1795191947.2628133,
+            "owner_session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+            "revision": 1,
+            "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "session_key": "agent:main:local:dm:local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "5444ebee8a3b59cc9087d70250ae15f098d7d57f6254a2378f247c2ab7b940c9",
+          "schema_version": 1
+        },
+        "receipt": {
+          "admission_id": "b867b9b87fa2450397cf2f2a60d1bfb6",
+          "ref": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-dvc1li7z\\pytest-of-unknown\\pytest-0\\test_observed_exit_canonical_f0",
+            "session_id": "local-d41fefabd036102570bc0401f5ce4bb9dcb278d9a4c4c09805a1927723fa64e0"
+          },
+          "sequence": 1,
+          "status": "terminal",
+          "outcome": "completed",
+          "authority_epoch": 1,
+          "execution_generation": 1
+        },
+        "result": {
+          "result": {
+            "_messages_are_turn_suffix": true,
+            "final_response": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+            "messages": []
+          },
+          "usage": {}
+        },
+        "delivery_allowed": true
+      },
+      "local_eligible": true,
+      "delivery_allowed": true
+    }
+  },
+  "consumer_b619_accepts_internal_notification": false
+}

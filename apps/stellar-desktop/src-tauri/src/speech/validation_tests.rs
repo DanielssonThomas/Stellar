@@ -57,6 +57,7 @@ fn speech_text_limit_counts_utf8_bytes_and_identity_is_canonical() {
         epoch: "0".into(),
         revision: u64::MAX.to_string(),
         operation_id: Some(ID.into()),
+        operation_instance: None,
         state: SpeechState::Speaking,
         error: None,
         timings: None,

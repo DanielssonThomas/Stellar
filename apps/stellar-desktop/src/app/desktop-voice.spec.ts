@@ -62,6 +62,7 @@ function fixture(snapshot: ReturnType<typeof vi.fn>, slot?: Promise<void>) {
           initialize: vi.fn(async () => undefined),
           setDucking: vi.fn(),
           stop: vi.fn(async () => undefined),
+          stopOperation: vi.fn(async () => undefined),
         },
       },
       {
@@ -162,7 +163,8 @@ describe('desktop voice session composition', () => {
     expect(speak).toHaveBeenCalledOnce();
     state.set({ ...state(), background_updates: [] });
     TestBed.tick();
-    expect(speech.stop).toHaveBeenCalledOnce();
+    expect(speech.stopOperation).toHaveBeenCalledWith(speak.mock.calls[0][1]);
+    expect(speech.stop).not.toHaveBeenCalled();
     speechState.set({ ...speechState(), revision: '2', state: 'idle' });
     TestBed.tick();
     acknowledge();
@@ -262,6 +264,7 @@ describe('desktop voice session composition', () => {
       expect(speak).toHaveBeenCalledExactlyOnceWith(
         'Could you check this out?',
         expect.any(String),
+        expect.any(Function),
       );
       TestBed.resetTestingModule();
     },

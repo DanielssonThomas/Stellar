@@ -13,6 +13,8 @@ type Active = {
   epoch: string;
   revision: bigint;
   returned: boolean;
+  instance?: string;
+  cancelled?: boolean;
   terminal?: SpeechSnapshot;
   deadline?: ReturnType<typeof setTimeout>;
 };
@@ -84,10 +86,13 @@ export class SpeechPlaybackQueue {
     }
     if (
       snapshot.operation_id !== active.entry.id ||
+      (active.instance !== undefined &&
+        snapshot.operation_instance !== active.instance) ||
       BigInt(snapshot.revision) <= active.revision
     )
       return;
-    if (active.returned) this.ports.acknowledged?.(snapshot);
+    if (active.returned && !active.cancelled)
+      this.ports.acknowledged?.(snapshot);
     if (snapshot.state === 'unavailable') {
       this.reject(active, new Error('Speech unavailable'));
       return;
@@ -96,7 +101,8 @@ export class SpeechPlaybackQueue {
     if (active.returned && active.terminal) {
       this.active = undefined;
       clearTimeout(active.deadline);
-      active.entry.resolve(active.terminal);
+      if (active.cancelled) active.entry.reject(new Error('Speech cancelled'));
+      else active.entry.resolve(active.terminal);
       this.pump();
     }
   }
@@ -108,6 +114,16 @@ export class SpeechPlaybackQueue {
   }
   busy() {
     return Boolean(this.active || this.pending.length);
+  }
+
+  cancel(id: string) {
+    const removed = this.pending.filter((entry) => entry.id === id);
+    this.pending = this.pending.filter((entry) => entry.id !== id);
+    if (this.active?.entry.id === id) {
+      this.active.cancelled = true;
+    }
+    for (const entry of removed) entry.reject(new Error('Speech cancelled'));
+    this.pump();
   }
 
   clear() {
@@ -183,7 +199,7 @@ export class SpeechPlaybackQueue {
     active.deadline = setTimeout(() => {
       if (this.active !== active) return;
       this.reject(active, new Error('Speech completion was not observed'));
-      void this.ports.stop?.().catch(() => undefined);
+      if (!active.cancelled) void this.ports.stop?.().catch(() => undefined);
     }, 125000);
     void this.ports
       .speak(
@@ -191,16 +207,34 @@ export class SpeechPlaybackQueue {
         entry.id,
         () =>
           this.active === active &&
+          !active.cancelled &&
           active.generation === this.generation &&
           entry.current(),
       )
       .then(
         (snapshot) => {
           if (this.active !== active) return;
+          active.instance = snapshot.operation_instance;
+          if (
+            active.instance !== undefined &&
+            active.terminal?.operation_instance !== active.instance
+          )
+            active.terminal = undefined;
           active.returned = true;
           this.observe(snapshot);
         },
-        () => this.reject(active, new Error('Speech dispatch failed')),
+        () => {
+          if (
+            this.active === active &&
+            active.cancelled &&
+            this.ports.state().state === 'idle'
+          ) {
+            this.active = undefined;
+            clearTimeout(active.deadline);
+            active.entry.reject(new Error('Speech cancelled'));
+            this.pump();
+          } else this.reject(active, new Error('Speech dispatch failed'));
+        },
       );
   }
 }

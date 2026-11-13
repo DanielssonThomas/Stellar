@@ -3,7 +3,9 @@ import type { IvySnapshot, SpeechSnapshot } from '@stellar/desktop-contracts';
 import { decodeIvySnapshot } from '@stellar/desktop-contracts';
 import { readFileSync } from 'node:fs';
 
-const fixturePath = process.env['STELLAR_ORDINARY_SNAPSHOT_FIXTURE'];
+const pluginFixturePath = process.env['STELLAR_PLUGIN_SNAPSHOT_FIXTURE'];
+const fixturePath =
+  pluginFixturePath ?? process.env['STELLAR_ORDINARY_SNAPSHOT_FIXTURE'];
 function readNativeFixture() {
   if (fixturePath === undefined) return null;
   const value: unknown = JSON.parse(readFileSync(fixturePath, 'utf8'));
@@ -17,8 +19,12 @@ function readNativeFixture() {
   if (
     data['fixtureOnly'] !== true ||
     updates?.length !== 1 ||
-    updates[0].id !== 'ordinary' ||
-    updates[0].text !== 'Ordinary admitted answer 299' ||
+    (pluginFixturePath !== undefined
+      ? data['source'] !== 'stellar-herdr-notification-forward-v1.json' ||
+        updates[0].text !==
+          'Fixture: the worker exited 0; the issue remains OPEN and requires review.'
+      : updates[0].id !== 'ordinary' ||
+        updates[0].text !== 'Ordinary admitted answer 299') ||
     updates[0].speech_claim !== null ||
     claims?.length !== 1 ||
     claims[0].id !== updates[0].id ||
@@ -149,6 +155,7 @@ test('background update appears and speaks once without microphone input or anot
                 ...speech,
                 revision: '1',
                 operation_id: String(args.request['utterance_id']),
+                operation_instance: 'a'.repeat(32),
                 state: 'speaking',
               };
               emit('speech-state', speech);

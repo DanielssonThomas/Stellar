@@ -166,6 +166,7 @@ export type {
   SpeechRequest,
   SpeechDuckingRequest,
   SpeechStopRequest,
+  SpeechStopTarget,
   SpeechTranscribeRequest,
   SpeechTranscript,
   SpeechSpeakRequest,

@@ -9,7 +9,7 @@ fn number(value: Option<&Value>) -> Result<u64, IvyErrorCode> {
     value.and_then(Value::as_u64).ok_or(IvyErrorCode::Protocol)
 }
 
-fn identity(params: &Value) -> Result<Admission, IvyErrorCode> {
+pub(super) fn identity(params: &Value) -> Result<Admission, IvyErrorCode> {
     let id = params
         .get("admission_id")
         .and_then(Value::as_str)
@@ -21,6 +21,16 @@ fn identity(params: &Value) -> Result<Admission, IvyErrorCode> {
         authority: number(params.get("authority_epoch"))?,
         sequence: 0,
     })
+}
+
+pub(super) fn answer_text(raw: &str) -> String {
+    super::presentation_decode::parse_presentation(raw)
+        .into_iter()
+        .find_map(|item| match item {
+            super::presentation::IvyPresentation::Text { text } => Some(text),
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 fn verified(receipt: &Value, session: &str, admission: &Admission) -> Result<(), IvyErrorCode> {
@@ -146,11 +156,28 @@ impl Session {
         let path = self.journal.updates_path();
         let mut updates = Updates::load(&path, &sid)?;
         while let Some(admission) = updates.pending.first().cloned() {
-            let receipt = self.call(
-                "prompt.receipt",
-                json!({"session_id":sid,"admission_id":admission.id,"include_result":true}),
-            )?;
-            verified(&receipt, &sid, &admission)?;
+            let inspected = if let Some(notice) = updates.notices.get(&admission.id) {
+                if notice.revoked {
+                    updates.pending.remove(0);
+                    updates.notices.remove(&admission.id);
+                    updates.save(&path)?;
+                    continue;
+                }
+                Some(self.inspect_notice(notice)?)
+            } else {
+                None
+            };
+            let receipt = if let Some(v) = &inspected {
+                v.receipt.clone()
+            } else {
+                self.call(
+                    "prompt.receipt",
+                    json!({"session_id":sid,"admission_id":admission.id,"include_result":true}),
+                )?
+            };
+            if inspected.is_none() || receipt["execution_generation"].as_u64().is_some() {
+                verified(&receipt, &sid, &admission)?;
+            }
             if number(receipt.get("sequence"))? != admission.sequence {
                 return Err(IvyErrorCode::Protocol);
             }
@@ -161,26 +188,41 @@ impl Session {
                 _ => return Err(IvyErrorCode::Protocol),
             }
             if receipt.get("outcome").and_then(Value::as_str) == Some("completed") {
-                let raw = receipt
-                    .pointer("/result/final_response")
-                    .and_then(Value::as_str)
-                    .ok_or(IvyErrorCode::Protocol)?;
-                let text = super::presentation_decode::parse_presentation(raw)
-                    .into_iter()
-                    .find_map(|item| match item {
-                        super::presentation::IvyPresentation::Text { text } => Some(text),
-                        _ => None,
+                if inspected.as_ref().is_some_and(|v| !v.allowed && !v.retired) {
+                    break;
+                }
+                if inspected.as_ref().is_some_and(|v| v.retired) {
+                    updates.settled_sequence = admission.sequence;
+                    updates.pending.remove(0);
+                    updates.notices.remove(&admission.id);
+                    updates.save(&path)?;
+                    continue;
+                }
+                let raw = inspected
+                    .as_ref()
+                    .and_then(|v| v.text.as_deref())
+                    .or_else(|| {
+                        receipt
+                            .pointer("/result/final_response")
+                            .and_then(Value::as_str)
                     })
-                    .unwrap_or_default();
+                    .ok_or(IvyErrorCode::Protocol)?;
+                let text = answer_text(raw);
                 if text.len() > MAX_TEXT {
                     return Err(IvyErrorCode::Uncertain);
                 }
                 if !text.trim().is_empty() {
                     if updates.completed.len() == 8 {
-                        if updates.completed[0].speech_claim.is_none() {
+                        if updates.completed[0].speech_claim.is_none()
+                            && !updates
+                                .notices
+                                .get(&updates.completed[0].id)
+                                .is_some_and(|n| n.revoked)
+                        {
                             break;
                         }
-                        updates.completed.remove(0);
+                        let removed = updates.completed.remove(0);
+                        updates.notices.remove(&removed.id);
                     }
                     updates.completed.push(IvyBackgroundUpdate {
                         id: admission.id.clone(),
@@ -190,19 +232,21 @@ impl Session {
                 }
             } else if !matches!(
                 receipt.get("outcome").and_then(Value::as_str),
-                Some("failed" | "cancelled" | "interrupted")
+                Some("failed" | "cancelled" | "interrupted" | "rejected")
             ) {
                 return Err(IvyErrorCode::Uncertain);
             }
             updates.settled_sequence = admission.sequence;
             updates.pending.remove(0);
+            if !updates.completed.iter().any(|u| u.id == admission.id) {
+                updates.notices.remove(&admission.id);
+            }
             updates.save(&path)?;
         }
-        self.publish_updates(updates.completed);
-        Ok(())
+        self.publish_checked_updates(&updates)
     }
 
-    fn publish_updates(&self, updates: Vec<IvyBackgroundUpdate>) {
+    pub(super) fn publish_updates(&self, updates: Vec<IvyBackgroundUpdate>) {
         let updates = (!updates.is_empty()).then_some(updates);
         if self
             .shared
@@ -227,6 +271,12 @@ impl Session {
             .ok_or(IvyErrorCode::Unavailable)?;
         let path = self.journal.updates_path();
         let mut updates = Updates::load(&path, &sid)?;
+        if let Some(notice) = updates.notices.get(&request.update_id)
+            && (notice.revoked || !self.inspect_notice(notice)?.allowed)
+        {
+            self.publish_checked_updates(&updates)?;
+            return Err(IvyErrorCode::Unavailable);
+        }
         let update = updates
             .completed
             .iter_mut()
@@ -236,7 +286,7 @@ impl Session {
             update.speech_claim = Some(request.request_id);
             updates.save(&path)?;
         }
-        self.publish_updates(updates.completed);
+        self.publish_checked_updates(&updates)?;
         self.shared
             .view
             .lock()
@@ -299,6 +349,7 @@ impl Session {
         updates.floor_generation = generation;
         updates.pending.clear();
         updates.completed.clear();
+        updates.notices.clear();
         updates.save(&path)?;
         self.publish_updates(vec![]);
         Ok(())

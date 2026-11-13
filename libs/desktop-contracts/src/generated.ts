@@ -123,11 +123,12 @@ export type SpeechDuckingRequest = { version: number,
  * Renew a six-second native lease; false starts restoration.
  */
 active: boolean, };
-export type SpeechStopRequest = { version: number, epoch: string, };
+export type SpeechStopRequest = { version: number, epoch: string, target?: SpeechStopTarget, };
+export type SpeechStopTarget = { operation_id: string, operation_instance: string, };
 export type SpeechTranscribeRequest = { version: number, epoch: string, utterance_id: string, sample_rate_hz: number, pcm: Array<number>, analyze_expression?: boolean, };
 export type SpeechTranscript = { version: number, utterance_id: string, text: string, };
 export type SpeechSpeakRequest = { version: number, epoch: string, utterance_id: string, text: string, };
-export type SpeechSnapshot = { version: number, epoch: string, revision: string, operation_id: string | null, state: SpeechState, error: SpeechError | null, timings?: Array<SpeechTiming>, };
+export type SpeechSnapshot = { version: number, epoch: string, revision: string, operation_id: string | null, operation_instance?: string, state: SpeechState, error: SpeechError | null, timings?: Array<SpeechTiming>, };
 export type KeywordMode = "passive" | "passive_sensitive" | "listening" | "composing";
 export type KeywordCommand = "ivy" | "done" | "clear" | "prompt" | "prompt cancel" | "new session" | "reload mcp";
 export type KeywordRequest = { version: number, epoch: string, stream_id: string, sequence: number, pcm: Array<number>, threshold: number, mode: KeywordMode, };

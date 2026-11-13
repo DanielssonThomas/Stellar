@@ -49,7 +49,7 @@ pub(super) fn fixture(receipt: &str) -> (Session, std::path::PathBuf) {
         r#"
 while ($line = [Console]::ReadLine()) {{
   $request = $line | ConvertFrom-Json
-  $result = if ($request.method -eq 'session.resume') {{ @{{session_id='session';pending=@();replay_epoch='replay';last_sequence=0}} }} elseif ($request.method -eq 'session.events.since') {{ @{{events=@();truncated=$false;replay_epoch='replay';last_sequence=10}} }} elseif ($request.method -eq 'prompt.receipt') {{ {receipt} }} else {{ exit 2 }}
+  $result = if ($request.method -eq 'session.resume') {{ @{{session_id='session';pending=@();replay_epoch='replay';last_sequence=0}} }} elseif ($request.method -eq 'session.events.since') {{ @{{events=@();truncated=$false;replay_epoch='replay';last_sequence=10}} }} elseif ($request.method -in @('prompt.receipt','stellar.notification.inspect')) {{ {receipt} }} else {{ exit 2 }}
   [Console]::WriteLine((@{{id=$request.id;result=$result}} | ConvertTo-Json -Compress -Depth 8))
 }}
 "#
