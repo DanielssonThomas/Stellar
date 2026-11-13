@@ -245,3 +245,80 @@ Ivy turn; arrange external handoff and preserve the conversation. Required criti
 review, exact-schema consumer agreement, removal/foreground tests and an actual governed
 named-Ivy ACP idle/concurrent lifecycle-to-visible-answer/speech-once demonstration precede
 acceptance. The uncertain old #299 submission remains untouched. No merge/deploy is authorized.
+
+## Native consent development boundary
+
+The [passive native core](../../tools/native/consent-broker/src/lib.rs) supplies Rust-owned,
+closed native-channel DTOs, direct duplicate-rejecting decoding, a bounded challenge lifecycle
+and a code-set manifest validator. It is a separate dependency boundary for the future native
+broker and Desktop client, with no Tauri registration or frontend IPC/binding change. No
+positive production constructor exists: `Broker::unavailable()` returns `HostUnverified`.
+Private, move-only attachment/callback/intent capabilities cannot be constructed by safe
+external callers. Synthetic constructors and callback associations exist only under `cfg(test)`.
+Rust privacy does not protect against malicious code inside the trusted process.
+
+The candidate native-only wire frame is `{"method":"prepareConsent","params":{"session_id":"..."}}`,
+or `completeConsent`/`cancelConsent` with only `challengeId`. Completion accepts no wire
+`gestureProof`, PID, HWND, actor, transport ID or boolean. Response decoding is selected by the
+outstanding request; arbitrary decoded DTOs are data, never authenticated trust evidence.
+The semantic proposal's v1 result shapes and finite bounds remain unchanged. There is no
+native pipe listener or callable live endpoint. The proposed local pipe and OS callback remain
+design prerequisites, not capabilities supplied by these codecs.
+
+Pending/confirming state is limited to 16 entries; all retained entries, including uncertainty
+and cancellation fences, are limited to 64. The core refuses exhaustion and has no eviction or
+reset API. It conservatively refuses a second challenge for the same attachment even after a
+terminal state. There is no reauthorization, restart reconstruction or recovery operation.
+Both wall and monotonic time bound confirmation. Scope/options, policy, attachment generation
+and original connection are immutable; cancellation and invalidation fence late callbacks.
+An internal grant intent is not a ticket. Reserving it changes state to uncertain before any
+future host effect; failure cannot put it back into pending. No host approval/ticket adapter
+is implemented. Downstream lost-bind uncertainty must remain durable in its existing owner;
+the in-memory core supplies no authority to clear it after restart.
+
+The code manifest explicitly identifies **code-set identity only**, not launch authorization,
+immutability or attestation. It pins the existing baseline artifacts and lists 5–64 artifacts,
+exactly one broker/Desktop/guardian/interpreter/host plus dependency entries. Relative ASCII
+paths are at most 240 bytes; Windows device names, alternate streams, aliases, traversal,
+case collisions and file/directory collisions refuse. Root programs are 1 byte–4 GiB; dependency
+files may be empty (for example Python `__init__.py`). Each file is at most 4 GiB, total
+at most 16 GiB; manifest input is at most 64 KiB. The validator checks metadata only and cannot
+prove that a dependency closure is complete, that actual loaded bytes match, or that files
+remain unchanged. No live gateway can be adopted by matching its PID, path or discovery file.
+
+The proposed `cooperative-tcb-v1` boundary trusts the kernel and reviewed broker, guardian,
+Desktop and host code/dependency/launch closure. It covers untrusted local callers and
+model/tool/renderer automation. It does **not** protect against same-logon arbitrary code that
+can alter/inject/debug a trusted process, substitute its code/environment, or control trusted
+UI/accessibility/input injection. Native IPC identity and an OS verification result do not
+close that gap or prove physical human input. Activation requires explicit acceptance of this
+limited boundary or a separately qualified stronger isolation route. Development authorization
+does not accept it for operation. The current mutable shared gateway is not qualified.
+
+Future native launch custody must own a newly created, pinned gateway instance and retained
+process/connection handles; validate both Desktop and selected host; fix interpreter flags,
+module paths, dependency closure and environment; and forbid arbitrary discovery/adoption.
+The exact launch recipe, private OS peer adapter, native affirmative scope UI, owned
+`IUserConsentVerifierInterop::RequestVerificationForWindowAsync` callback and canonical host
+adapter need separate critical review and qualification. No ordinary dialog, model text,
+serialized verification result or fixture may replace them. Actual OS prompts, enrollment,
+launch replacement, application and live qualification are not authorized by this change.
+Issue #339 owns that broker/host boundary; #299 owns native client/UI and exact-operation
+speech/renderer custody. Existing contract/interface hashes and installed capability remain
+unchanged. See the [channel handoff](../../config/hermes-compat/native-consent/channel-v2.json)
+for the immutable development surface and outstanding gates.
+
+The separate `LaunchManifest` validator fixes a review recipe to exact validated CodeManifest
+bytes. It names only unique guardian/interpreter/host roles; Python flags are exactly `-I -S -B`.
+Module search, cwd, DLL search, environment and inherited handles have closed policy values;
+arbitrary arguments/environment/paths and existing-gateway adoption refuse. `executionEnabled`
+must be false. These policy strings do not enforce OS properties: no executor exists, the
+current runtime has not qualified that recipe, and no fallback is allowed. Native launch and
+custody implementation/qualification remain required before operation.
+
+Identifier classification uses reproducible [Unicode-16 data](../../tools/native/consent-broker/data/printable-16.json)
+from the pinned CPython baseline, not the Rust toolchain's potentially newer Unicode database.
+The [stdlib-only exporter](../../tools/hermes-background/export_consent_unicode.py) checks every
+code point and refuses a Unicode version change; `--check` verifies the committed bytes. The
+challenge digest uses sorted compact UTF-8 JSON and a fixed cross-language vector. Neither
+classification data nor test callback/digest fixtures attest a user or produce a real receipt.
