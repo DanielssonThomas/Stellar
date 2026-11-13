@@ -27,6 +27,7 @@ METHODS = {
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'stellar.notification.inspect': {'session_id': str, 'admission_id': str, 'descriptor': dict},
     'stellar.notification.reconcile': {'session_id': str},
+    'stellar.session.recover': {'session_id': str, 'after_sequence': int, 'retained': list},
     'stellar.background.bind': {'session_id': str, 'consentTicket': str},
     'stellar.background.inspect': {'session_id': str, 'bindingId': str, 'eventId': str, 'digest': str},
     'stellar.background.revoke': {'session_id': str, 'bindingId': str},
@@ -403,6 +404,12 @@ async def replay_events(conn, params, workspace):
     if params['session_id'] != getattr(conn, 'selected_session', None):
         raise Closed()
     result = await asyncio.wait_for(conn.client.rpc('session.events.since', **params), DEADLINE)
+    if (type(result) is dict and result.get('truncated') is True
+            and result.get('snapshot_required') is True and result.get('events') == []
+            and string(result.get('replay_epoch')) and type(result.get('last_sequence')) is int
+            and result['last_sequence'] >= 0):
+        return {'events':[], 'truncated':True, 'snapshot_required':True,
+                'replay_epoch':result['replay_epoch'], 'last_sequence':result['last_sequence']}
     if (type(result) is not dict or type(result.get('events')) is not list
             or len(result['events']) > 1024 or type(result.get('truncated')) is not bool
             or result.get('replay_epoch') != params['replay_epoch']
@@ -606,7 +613,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'stellar.notification.reconcile':
+            if method == 'stellar.session.recover':
+                from stellar_ivy_recovery import recover
+                result = await recover(conn, params, PROFILE, DEADLINE,
+                    lambda peer, cursor: replay_events(peer, cursor, workspace))
+            elif method == 'stellar.notification.reconcile':
                 if reconciler is None:
                     raise Refused('unavailable')
                 result = await reconciler.forward(params)
@@ -728,7 +739,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                     lifecycle_private_text(result, workspace)
                 else:
                     await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect', 'stellar.notification.inspect', 'stellar.notification.reconcile',
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect', 'stellar.notification.inspect', 'stellar.notification.reconcile', 'stellar.session.recover',
                           *[m for m in METHODS if m.startswith('stellar.background.')]} or (
                           method == 'prompt.receipt' and 'background_v1' in result):
                 pass

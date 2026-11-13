@@ -174,8 +174,14 @@ async def inspect_forward(conn, params, profile, deadline):
     notice = marker(params['descriptor'], profile, params['session_id'], 'stellar-herdr')
     digest(notice['event_id'])
     text(params['admission_id'], 512)
-    response = await asyncio.wait_for(conn.client.rpc('plugin.stellar-herdr.observations.inspect',
-        session_id=params['session_id'], event_id=notice['event_id']), deadline)
+    try:
+        response = await asyncio.wait_for(conn.client.rpc('plugin.stellar-herdr.observations.inspect',
+            session_id=params['session_id'], event_id=notice['event_id']), deadline)
+    except Exception as error:
+        if isinstance(error, getattr(conn, 'rpc_error_type', ())):
+            from stellar_ivy_controls import Refused
+            raise Refused('unavailable') from None
+        raise
     result = forwarded(response, notice, params['admission_id'])
     retain(conn, params['session_id'], params['admission_id'], notice)
     return result

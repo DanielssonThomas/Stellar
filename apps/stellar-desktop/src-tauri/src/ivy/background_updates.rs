@@ -163,7 +163,11 @@ impl Session {
                     updates.save(&path)?;
                     continue;
                 }
-                Some(self.inspect_notice(notice)?)
+                match self.inspect_notice(notice) {
+                    Ok(value) => Some(value),
+                    Err(IvyErrorCode::Unavailable) => break,
+                    Err(error) => return Err(error),
+                }
             } else {
                 None
             };
@@ -247,6 +251,26 @@ impl Session {
     }
 
     pub(super) fn publish_updates(&self, updates: Vec<IvyBackgroundUpdate>) {
+        if self
+            .broker
+            .as_ref()
+            .is_some_and(|broker| broker.recovery_hold)
+        {
+            return;
+        }
+        if !updates.is_empty() {
+            let sid = self
+                .record
+                .session_id
+                .as_deref()
+                .ok_or(IvyErrorCode::Unavailable);
+            if sid
+                .and_then(|sid| Updates::load(&self.journal.updates_path(), sid))
+                .map_or(true, |state| state.recovery_pending)
+            {
+                return;
+            }
+        }
         let updates = (!updates.is_empty()).then_some(updates);
         if self
             .shared
@@ -271,6 +295,9 @@ impl Session {
             .ok_or(IvyErrorCode::Unavailable)?;
         let path = self.journal.updates_path();
         let mut updates = Updates::load(&path, &sid)?;
+        if updates.recovery_pending {
+            return Err(IvyErrorCode::Unavailable);
+        }
         if let Some(notice) = updates.notices.get(&request.update_id)
             && (notice.revoked || !self.inspect_notice(notice)?.allowed)
         {
@@ -295,7 +322,6 @@ impl Session {
     }
 
     pub(super) fn resume_updates(&mut self, resumed: &Value) -> Result<(), IvyErrorCode> {
-        self.poll_updates()?;
         let sid = self
             .record
             .session_id
@@ -303,11 +329,17 @@ impl Session {
             .ok_or(IvyErrorCode::Unavailable)?;
         let path = self.journal.updates_path();
         let mut updates = Updates::load(&path, &sid)?;
+        if updates.recovery_pending {
+            return self.recover_updates();
+        }
         if let Some((epoch, sequence)) = &updates.cursor {
             let replay = self.call(
                 "session.events.since",
                 json!({"session_id":sid,"replay_epoch":epoch,"last_sequence":sequence}),
             )?;
+            if replay["truncated"] == true && replay["snapshot_required"] == true {
+                return self.recover_updates();
+            }
             if replay.get("truncated") != Some(&Value::Bool(false))
                 || replay.get("replay_epoch").and_then(Value::as_str) != Some(epoch)
                 || number(replay.get("last_sequence"))? < *sequence
@@ -330,6 +362,9 @@ impl Session {
                     .unwrap_or(0)
             });
         } else {
+            if !updates.pending.is_empty() || !updates.completed.is_empty() {
+                return self.recover_updates();
+            }
             let epoch = resumed
                 .get("replay_epoch")
                 .and_then(Value::as_str)

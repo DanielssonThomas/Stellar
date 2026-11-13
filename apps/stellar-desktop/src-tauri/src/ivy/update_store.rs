@@ -20,10 +20,12 @@ pub(super) struct Admission {
     pub sequence: u64,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Updates {
     pub session: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_pending: bool,
     pub floor_generation: u64,
     pub settled_sequence: u64,
     pub cursor: Option<(String, u64)>,

@@ -21,6 +21,8 @@ for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_iv
                        ('stellar_ivy_reconcile', 'ivy_reconcile.py'),
                        ('stellar_ivy_lifecycle', 'ivy_lifecycle.py'),
                        ('stellar_ivy_notifications', 'ivy_notifications.py'),
+                       ('stellar_ivy_recovery_store', 'ivy_recovery_store.py'),
+                       ('stellar_ivy_recovery', 'ivy_recovery.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
                        ('stellar_ivy_conversation', 'ivy_conversation.py'),
                        ('stellar_ivy_voice_expression', 'ivy_voice_expression.py')]:

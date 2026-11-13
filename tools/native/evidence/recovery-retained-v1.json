@@ -1,0 +1,423 @@
+{
+  "fixtureOnly": true,
+  "realInference": false,
+  "installedStateUsed": false,
+  "binding": {
+    "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+    "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+    "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+    "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+    "plugin_id": "stellar-herdr",
+    "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revision": 1,
+    "expires_at": 1795214393.2651322,
+    "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5"
+  },
+  "raw_start": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "authority_epoch": 1,
+      "execution_generation": 1,
+      "admission_id": "e5d7225dabb14f87aa6185944bab839d",
+      "type": "message.start",
+      "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+      "payload": {
+        "display_kind": "internal_notification",
+        "display_text": "Background observation",
+        "text": "Background observation (evidence only; no action authority):\n{\"fact\":{\"exit_code\":0},\"instruction\":\"Observation evidence only. Verify fresh Herdr/GitHub facts before reporting; process exit does not establish issue completion or grant action authority.\",\"issue\":23,\"milestone\":\"worker_exited\",\"observedAt\":1794609654.237089,\"schemaVersion\":1,\"validUntil\":1794609954.237089,\"worker\":{\"baseline\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"issue/23-fix\",\"claim_session\":\"fixture-job-23\",\"incarnation\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"issue\":23,\"launch\":\"accepted\",\"role\":\"peon-cloud\",\"schema\":1,\"target\":\"develop\",\"terminal\":\"t42\"}}",
+        "plugin_notification": {
+          "binding": {
+            "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+            "expires_at": 1795214393.2651322,
+            "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "revision": 1,
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "7a055a7e911619b12f252b227a7eab598b14939134c8096db1813fd9f6d99a6f",
+          "schema_version": 1
+        }
+      },
+      "replay_epoch": "9dfceb56a41f4ace80ce4193b6ec8f2d",
+      "seq": 2
+    }
+  },
+  "producer_inspection_rpc": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "host": {
+        "status": "known",
+        "binding": {
+          "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+          "expires_at": 1795214393.2651322,
+          "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+          "revision": 1,
+          "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+        "descriptor": {
+          "binding": {
+            "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+            "expires_at": 1795214393.2651322,
+            "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "revision": 1,
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "7a055a7e911619b12f252b227a7eab598b14939134c8096db1813fd9f6d99a6f",
+          "schema_version": 1
+        },
+        "receipt": {
+          "admission_id": "e5d7225dabb14f87aa6185944bab839d",
+          "ref": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b"
+          },
+          "sequence": 1,
+          "status": "terminal",
+          "outcome": "completed",
+          "authority_epoch": 1,
+          "execution_generation": 1
+        },
+        "result": {
+          "result": {
+            "_messages_are_turn_suffix": true,
+            "final_response": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+            "messages": []
+          },
+          "usage": {}
+        },
+        "delivery_allowed": true
+      },
+      "local_eligible": true,
+      "delivery_allowed": true
+    }
+  },
+  "recovered_inspection_rpc": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "host": {
+        "status": "known",
+        "binding": {
+          "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+          "expires_at": 1795214393.2651322,
+          "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+          "revision": 1,
+          "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+        "descriptor": {
+          "binding": {
+            "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+            "expires_at": 1795214393.2651322,
+            "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "revision": 1,
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "7a055a7e911619b12f252b227a7eab598b14939134c8096db1813fd9f6d99a6f",
+          "schema_version": 1
+        },
+        "receipt": {
+          "admission_id": "e5d7225dabb14f87aa6185944bab839d",
+          "ref": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b"
+          },
+          "sequence": 1,
+          "status": "terminal",
+          "outcome": "completed",
+          "authority_epoch": 1,
+          "execution_generation": 1
+        },
+        "result": {
+          "result": {
+            "_messages_are_turn_suffix": true,
+            "final_response": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+            "messages": []
+          },
+          "usage": {}
+        },
+        "delivery_allowed": false
+      },
+      "local_eligible": false,
+      "delivery_allowed": false
+    }
+  },
+  "resume_after_restart": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+      "stored_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+      "messages": [],
+      "message_count": 0,
+      "todo_state": null,
+      "running": false,
+      "authority_epoch": 2,
+      "replay_epoch": "5ad1d28449cc4995886a967663b36377",
+      "last_sequence": 0,
+      "subscription_id": "7d790485475a4d2096af0840e4d55b44",
+      "revision": 1,
+      "execution_generation": 1,
+      "pending": [],
+      "prompts": [],
+      "info": {
+        "tools": {
+          "other": ["tool_search", "tool_describe", "tool_call"]
+        },
+        "skills": {},
+        "mcp_servers": [],
+        "version": "unknown",
+        "release_date": "2026.9.24",
+        "update_behind": null,
+        "update_command": "hermes update",
+        "branch": "",
+        "project": null,
+        "provider": "",
+        "enabled_toolsets": ["stellar-herdr"],
+        "tool_availability": {
+          "unavailable_toolsets": [],
+          "lazy_tools": [],
+          "disabled_tools": []
+        },
+        "source": "gui",
+        "model": "fixture",
+        "lazy": true,
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+        "desktop_protocol": "hermes-gateway-v1",
+        "profile_name": "default",
+        "cwd": "C:\\Users\\thoma\\AppData\\Local\\Temp\\stellar299-recovery-YZQpUv\\runtime",
+        "reasoning_effort": "",
+        "reasoning_effort_wire": "",
+        "service_tier": "",
+        "fast": false,
+        "launch_request": {
+          "model": "fixture",
+          "source": "gui",
+          "toolsets": []
+        },
+        "title": null,
+        "started_at": 1794609593.246716,
+        "last_active_at": 1794609593.246716,
+        "yolo": false,
+        "archived": false,
+        "api_mode": null,
+        "tool_count": 3,
+        "credential_hint": null,
+        "usage": {
+          "model": "fixture",
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "prompt": 0,
+          "completion": 0,
+          "total": 0,
+          "calls": 0
+        }
+      },
+      "pending_connection": null,
+      "open_requests": []
+    }
+  },
+  "replay_after_restart": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "events": [],
+      "latest_seq": 0,
+      "last_sequence": 0,
+      "epoch": "5ad1d28449cc4995886a967663b36377",
+      "replay_epoch": "5ad1d28449cc4995886a967663b36377",
+      "truncated": true,
+      "snapshot_required": true,
+      "count": 0,
+      "open_requests": []
+    }
+  },
+  "revocation_rpc": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+      "tracking": false,
+      "revocation": {
+        "binding": {
+          "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+          "expires_at": 1795214393.2651322,
+          "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+          "revision": 1,
+          "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "revoked": true,
+        "in_flight": []
+      },
+      "state": "revoked"
+    }
+  },
+  "raw_revoke": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "type": "plugin.stellar-herdr.notification.revoked",
+      "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+      "payload": {
+        "plugin_id": "stellar-herdr",
+        "binding": {
+          "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+          "expires_at": 1795214393.2651322,
+          "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+          "revision": 1,
+          "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "in_flight": []
+      },
+      "replay_epoch": "9dfceb56a41f4ace80ce4193b6ec8f2d",
+      "seq": 6
+    }
+  },
+  "old_epoch": "9dfceb56a41f4ace80ce4193b6ec8f2d",
+  "admit_count": 1,
+  "recovery_rpc": {
+    "snapshot": {
+      "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+      "authority_epoch": 2,
+      "execution_generation": 1,
+      "revision": 1,
+      "last_sequence": 0,
+      "replay_epoch": "5ad1d28449cc4995886a967663b36377",
+      "physical_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b"
+    },
+    "entries": [
+      {
+        "receipt": {
+          "admission_id": "e5d7225dabb14f87aa6185944bab839d",
+          "ref": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b"
+          },
+          "sequence": 1,
+          "status": "terminal",
+          "outcome": "completed",
+          "authority_epoch": 1,
+          "execution_generation": 1
+        },
+        "input_id": "[\"plugin-notification\",\"65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5\",1,\"5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921\"]",
+        "kind": "notification",
+        "descriptor": {
+          "binding": {
+            "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+            "expires_at": 1795214393.2651322,
+            "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "revision": 1,
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "7a055a7e911619b12f252b227a7eab598b14939134c8096db1813fd9f6d99a6f",
+          "schema_version": 1
+        }
+      }
+    ],
+    "tail": {
+      "events": [],
+      "replay_epoch": "5ad1d28449cc4995886a967663b36377",
+      "last_sequence": 0,
+      "truncated": false
+    }
+  },
+  "recovered_inspections": {
+    "e5d7225dabb14f87aa6185944bab839d": {
+      "host": {
+        "status": "known",
+        "binding": {
+          "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+          "expires_at": 1795214393.2651322,
+          "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "plugin_id": "stellar-herdr",
+          "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+          "revision": 1,
+          "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+          "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+        "descriptor": {
+          "binding": {
+            "binding_id": "65eb1db21fa73c50789885e35bdcdd6ed51879eee91ce6ff34601c65b4ce5cd5",
+            "expires_at": 1795214393.2651322,
+            "owner_session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "plugin_id": "stellar-herdr",
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "revision": 1,
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "session_key": "agent:main:local:dm:local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b",
+            "tracking_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "event_id": "5417009fa4a46c379841fcbbe11c2aa9fbaba3fed07e1d35e07f01dd3ae91921",
+          "payload_digest": "7a055a7e911619b12f252b227a7eab598b14939134c8096db1813fd9f6d99a6f",
+          "schema_version": 1
+        },
+        "receipt": {
+          "admission_id": "e5d7225dabb14f87aa6185944bab839d",
+          "ref": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-wk303nfc\\pytest-of-unknown\\pytest-0\\test_retained_notice_canonical0",
+            "session_id": "local-052d64f5d48237c3202288546131f9abebfbe6ec6ad826e5478f87d3800d273b"
+          },
+          "sequence": 1,
+          "status": "terminal",
+          "outcome": "completed",
+          "authority_epoch": 1,
+          "execution_generation": 1
+        },
+        "result": {
+          "result": {
+            "_messages_are_turn_suffix": true,
+            "final_response": "Fixture: the worker exited 0; the issue remains OPEN and requires review.",
+            "messages": []
+          },
+          "usage": {}
+        },
+        "delivery_allowed": false
+      },
+      "local_eligible": false,
+      "delivery_allowed": false
+    }
+  },
+  "missed": false
+}

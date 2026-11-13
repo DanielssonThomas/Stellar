@@ -331,6 +331,10 @@ impl Session {
         &mut self,
         updates: &Updates,
     ) -> Result<(), IvyErrorCode> {
+        if updates.recovery_pending {
+            self.publish_updates(vec![]);
+            return Ok(());
+        }
         let mut visible = vec![];
         for update in &updates.completed {
             if let Some(notice) = updates.notices.get(&update.id) {
@@ -359,6 +363,7 @@ impl Session {
                         visible.push(update.clone());
                     }
                     Ok(_) => {}
+                    Err(IvyErrorCode::Unavailable) => {}
                     Err(error) => {
                         self.publish_updates(
                             updates

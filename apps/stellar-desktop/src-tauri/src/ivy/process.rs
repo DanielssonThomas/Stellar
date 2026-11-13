@@ -42,6 +42,7 @@ pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u
     Ok(line)
 }
 pub struct Broker {
+    pub(super) recovery_hold: bool,
     input: SharedInput,
     frames: Receiver<Result<Value, IvyErrorCode>>,
     child: OwnedChild,
@@ -76,6 +77,11 @@ impl Broker {
                 include_str!("ivy_notifications.py"),
             ),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
+            (
+                "stellar_ivy_recovery_store",
+                include_str!("ivy_recovery_store.py"),
+            ),
+            ("stellar_ivy_recovery", include_str!("ivy_recovery.py")),
             ("stellar_ivy_reconcile", include_str!("ivy_reconcile.py")),
             (
                 "stellar_ivy_conversation",
@@ -173,6 +179,7 @@ impl Broker {
             }
         });
         Ok(Self {
+            recovery_hold: false,
             input: Arc::new(Mutex::new(input)),
             frames,
             child,

@@ -58,6 +58,9 @@ mod question_contracts;
 mod questions;
 #[cfg(test)]
 mod recovery_tests;
+mod replay_recovery;
+#[cfg(test)]
+mod replay_recovery_tests;
 mod response_segments;
 #[cfg(test)]
 mod response_segments_tests;
@@ -275,3 +278,6 @@ pub fn workspace_tool_reply(
 
 #[cfg(test)]
 mod question_tests;
+
+#[cfg(test)]
+mod replay_recovery_barrier_tests;
