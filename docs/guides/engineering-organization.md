@@ -180,6 +180,23 @@ native receipt checks, and rebuilds the native host with the unchanged verified 
 It verifies that the new executable contains the exact timer/bridge source; the retained older
 binary remains valid evidence for its older pair. No installed runtime or live delivery follows.
 
+The retained-record recovery qualification uses `prepare_recovery_qualification.py` to export
+that exact pair with a test-only native module. A real disposable authority restart retains
+canonical receipts but changes the replay epoch. Consumer e35a746 rejects the resulting gap,
+including after authenticated notice revocation; original-host inspection is also unavailable
+for unrevoked retained notices. The copied UNKNOWN record, notices and speech claim remain
+intact, but this is a verified refusal, not working recovery. Consumer same-session checkpoint
+recovery must be qualified before activation; clearing journals or merely replacing the cursor
+does not establish that missed events were recovered.
+
+`tools/hermes-background/external_operator.py plan` records task-scoped metadata only. Its
+cutover/recovery entry requires a GREEN qualification and a separate explicit maintenance
+handoff after Ivy has informed the user and completed its response. It never infers completion
+from a timer or silence. The current qualification is BLOCKED. Planned effects include graceful
+Desktop close, the eleven-profile host lifecycle, pinned maintained source application and the
+documented Ivy producer-code installation; settings/history are not restored over new records.
+Five minutes was an earlier interruption estimate, not an issue acceptance limit or hard cutoff.
+
 ## Identity templates and Hermes profiles
 
 ### Optional subscription-backed cloud profiles (30 October 2026)
