@@ -1,0 +1,54 @@
+{
+  "valid_payload_json": "{\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"open\",\"description\":\"Literal {title,title} is text\",\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}",
+  "invalid": [
+    {
+      "name": "duplicate title",
+      "payload_json": "{\"title\":\"Discarded\",\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"open\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    },
+    {
+      "name": "duplicate state",
+      "payload_json": "{\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"closed\",\"state\":\"open\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    },
+    {
+      "name": "escaped duplicate title",
+      "payload_json": "{\"title\":\"Discarded\",\"tit\\u006ce\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"open\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    },
+    {
+      "name": "escaped duplicate state",
+      "payload_json": "{\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"closed\",\"sta\\u0074e\":\"open\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    }
+  ],
+  "semantic_invalid": [
+    {
+      "name": "invalid source without duplicates",
+      "payload_json": "{\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://evil.example/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"open\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    },
+    {
+      "name": "invalid state without duplicates",
+      "payload_json": "{\"title\":\"Issue\",\"repository\":\"example/repo\",\"issue_number\":12,\"source\":\"https://github.com/example/repo/issues/12\",\"observed_at_ms\":\"1794554249258\",\"status\":\"ready\",\"issue\":{\"state\":\"in-progress\",\"description\":null,\"workflow_status\":null,\"labels\":[],\"owner\":null,\"blockers\":[],\"pull_requests\":[]}}"
+    }
+  ],
+  "spatial_wrappers": [
+    {
+      "name": "prepare",
+      "hidden_suffix": ",\"prepare\":[]}",
+      "hidden_escaped_suffix": ",\"\\u0070repare\":[]}",
+      "prefix": "{\"prepare\":[{\"kind\":\"show\",\"panel\":{\"id\":\"issue\",\"title\":\"Issue\",\"category\":\"GitHub\",\"summary\":\"Observed issue\",\"detail\":{\"surface\":\"github-issue\",\"payload\":",
+      "suffix": "}}}]}"
+    },
+    {
+      "name": "actions",
+      "hidden_suffix": ",\"segments\":[]}",
+      "hidden_escaped_suffix": ",\"segm\\u0065nts\":[]}",
+      "prefix": "{\"segments\":[{\"text\":\"Issue\",\"actions\":[{\"kind\":\"show\",\"panel\":{\"id\":\"issue\",\"title\":\"Issue\",\"category\":\"GitHub\",\"summary\":\"Observed issue\",\"detail\":{\"surface\":\"github-issue\",\"payload\":",
+      "suffix": "}}}]}]}"
+    },
+    {
+      "name": "after",
+      "hidden_suffix": ",\"segments\":[]}",
+      "hidden_escaped_suffix": ",\"segm\\u0065nts\":[]}",
+      "prefix": "{\"segments\":[{\"text\":\"Issue\",\"actions\":[],\"after\":[{\"kind\":\"show\",\"panel\":{\"id\":\"issue\",\"title\":\"Issue\",\"category\":\"GitHub\",\"summary\":\"Observed issue\",\"detail\":{\"surface\":\"github-issue\",\"payload\":",
+      "suffix": "}}}]}]}"
+    }
+  ]
+}

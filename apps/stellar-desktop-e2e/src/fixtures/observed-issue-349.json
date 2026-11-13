@@ -1,0 +1,24 @@
+{
+  "title": "Add source-backed GitHub issue presentation cards",
+  "repository": "DanielssonThomas/Stellar",
+  "issue_number": 349,
+  "source": "https://github.com/DanielssonThomas/Stellar/issues/349",
+  "observed_at_ms": "1794554596018",
+  "status": "ready",
+  "issue": {
+    "state": "open",
+    "description": "Add source-backed GitHub issue presentation cards.",
+    "workflow_status": "status:in-progress",
+    "labels": [
+      "priority:medium",
+      "target:develop",
+      "type:feature",
+      "status:in-progress",
+      "review:standard",
+      "worker:foreman-cloud"
+    ],
+    "owner": "worker:foreman-cloud",
+    "blockers": [],
+    "pull_requests": null
+  }
+}
