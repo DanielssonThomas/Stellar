@@ -332,3 +332,36 @@ is implemented by that document. Ivy must relay the exact file/interface partiti
 cooperative TCB boundary remains proposed and unaccepted, the external release-policy root and
 OS closure remain unqualified, and the current runtime still withholds capability. No prompt,
 managed application, launch replacement, restart or delivery follows from design acceptance.
+
+The agreed inactive v3 slice now has a bounded [packet reader](../../tools/native/consent-broker/src/packet.rs),
+[closed control codecs](../../tools/native/consent-broker/src/control.rs) and
+[in-memory lanes](../../tools/native/consent-broker/src/lanes.rs). Prefix parsing consumes one
+packet at a time; invalid length or partial EOF seals it. Correlation uses consecutive safe
+integer requests, method-specific replies and duplicate-rejecting original-byte decoding.
+Client reservations precede any caller-controlled write; unknown/malformed/replayed replies
+seal the lane and retain outstanding identities. Server queues reserve cancellation capacity
+and select cancel even while complete remains outstanding. Completing a correlation slot
+does not retire native consent or effect custody. These components perform no I/O and a fresh
+lane supplies no authenticated attachment, new grant or resend authority.
+
+All public wire decoder functions run a streaming object-shape gate before typed decoding of
+the original bytes. Struct/enum-object aliases and sequence-form DTOs refuse; only declared
+artifact/effect/flag vectors are accepted. There is no permissive map intermediary that could
+erase duplicate keys. Serde traits on data types alone are not that runtime boundary; use the
+exported codecs. `ServerLane::receive` owns decoding and sticky refusal, matching the client
+receiver. The typed scheduling helper is crate-private. A byte-prefix failure or any actual
+EOF must also close the owning correlation lane; a clean packet boundary is not a settled
+request. Future transport composition must preserve unconsumed packet suffixes and pending
+identities, rather than rebuilding an empty lane to infer absence or retry authority.
+
+The [window flow model](../../tools/native/consent-broker/src/window.rs) requires an existing
+private Attachment. Its per-attachment atomic one-claim fence survives flow drop; in-process
+Arc lineage rejects a replacement with identical serializable fields. That lineage is not OS
+identity or launch attestation. Private callback intent and private known host-consume evidence
+are required to advance to intentional retirement. Premature destruction, changed original
+scope/policy/lifetime/generation, cancellation and monotonic expiry deny; a reserved external
+host effect stays flagged. Closed phase is model state, never a native cleanup/ticket receipt.
+Production constructors for those trust capabilities remain unavailable. No actual window,
+listener, verifier, launch, host ticket, journal/schema or consumer UI/client composition is
+introduced; canonical schema work still requires its prior critical review. All existing
+artifact pins, original journals and proposed-but-unaccepted TCB boundary remain intact.

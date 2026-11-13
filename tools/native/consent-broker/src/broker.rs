@@ -1,43 +1,8 @@
+use crate::capabilities::{Attachment, GrantIntent, Verification};
 use crate::{Error, Prepared};
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-
-/// Only a future private OS/code-custody adapter may construct this capability.
-/// Safe external callers cannot construct, deserialize or clone it.
-/// ```compile_fail
-/// let attachment: stellar_consent_broker::Attachment = serde_json::from_str("{}").unwrap();
-/// ```
-/// ```compile_fail
-/// fn copy(a: stellar_consent_broker::Attachment) { let _ = a.clone(); }
-/// ```
-pub struct Attachment {
-    identity: [u8; 32],
-    policy: [u8; 32],
-    generation: u64,
-    scope: Prepared,
-    alive: bool,
-}
-
-/// Owned callback association, not a serializable OS verification result.
-/// ```compile_fail
-/// let callback = stellar_consent_broker::Verification { attachment: [0;32], generation: 1, digest: [0;32] };
-/// ```
-pub struct Verification {
-    attachment: [u8; 32],
-    generation: u64,
-    digest: [u8; 32],
-}
-
-/// Internal effect intent, never a host consent ticket or wire response.
-/// ```compile_fail
-/// fn twice(i: stellar_consent_broker::GrantIntent) { let _ = i.clone(); }
-/// ```
-pub struct GrantIntent {
-    attachment: [u8; 32],
-    generation: u64,
-    digest: [u8; 32],
-    challenge: String,
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -50,6 +15,7 @@ enum State {
 }
 
 struct Entry {
+    token: Arc<()>,
     attachment: [u8; 32],
     policy: [u8; 32],
     generation: u64,
@@ -64,7 +30,7 @@ pub struct Broker {
     entries: Vec<Entry>,
 }
 
-fn now() -> Result<(u64, Instant), Error> {
+pub(crate) fn now() -> Result<(u64, Instant), Error> {
     let wall = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| Error::Uncertain)?;
@@ -72,7 +38,11 @@ fn now() -> Result<(u64, Instant), Error> {
     Ok((millis, Instant::now()))
 }
 
-fn digest(scope: &Prepared, policy: &[u8; 32], generation: u64) -> Result<[u8; 32], Error> {
+pub(crate) fn digest(
+    scope: &Prepared,
+    policy: &[u8; 32],
+    generation: u64,
+) -> Result<[u8; 32], Error> {
     let mut hash = Sha256::new();
     hash.update(b"stellar.native-consent.v2\0");
     hash.update(crate::protocol::SEMANTICS);
@@ -133,6 +103,7 @@ impl Broker {
             return Err(Error::Busy);
         }
         self.entries.push(Entry {
+            token: Arc::clone(&attachment.token),
             attachment: attachment.identity,
             policy: attachment.policy,
             generation: attachment.generation,
@@ -173,12 +144,14 @@ impl Broker {
         if verification.attachment != entry.attachment
             || verification.generation != entry.generation
             || verification.digest != entry.digest
+            || !Arc::ptr_eq(&verification.token, &entry.token)
         {
             entry.state = State::Uncertain;
             return Err(Error::Uncertain);
         }
         entry.state = State::Consumed;
         Ok(GrantIntent {
+            token: Arc::clone(&entry.token),
             attachment: entry.attachment,
             generation: entry.generation,
             digest: entry.digest,
@@ -199,6 +172,7 @@ impl Broker {
         if intent.attachment != entry.attachment
             || intent.generation != entry.generation
             || intent.digest != entry.digest
+            || !Arc::ptr_eq(&intent.token, &entry.token)
         {
             return Err(Error::Uncertain);
         }
@@ -227,6 +201,7 @@ impl Broker {
         if !attachment.alive
             || entry.attachment != attachment.identity
             || entry.generation != attachment.generation
+            || !Arc::ptr_eq(&attachment.token, &entry.token)
         {
             return Err(Error::TransportChanged);
         }

@@ -29,6 +29,7 @@ pub fn decode_launch_manifest(bytes: &[u8], code_set: &[u8]) -> Result<LaunchMan
     if bytes.is_empty() || bytes.len() > 65_536 {
         return Err(Error::InvalidRequest);
     }
+    crate::object_json::check(bytes)?;
     let manifest: LaunchManifest =
         serde_json::from_slice(bytes).map_err(|_| Error::InvalidRequest)?;
     manifest.validate(code_set)?;

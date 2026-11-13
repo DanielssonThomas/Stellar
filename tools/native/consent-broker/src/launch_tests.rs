@@ -2,7 +2,7 @@ use crate::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-fn records() -> (Value, Vec<u8>) {
+pub(crate) fn records() -> (Value, Vec<u8>) {
     let code = serde_json::to_vec(&crate::tests::manifest()).unwrap();
     let hash: String = Sha256::digest(&code)
         .iter()

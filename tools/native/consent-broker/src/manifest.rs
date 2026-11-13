@@ -41,6 +41,7 @@ pub fn decode_manifest(bytes: &[u8]) -> Result<CodeManifest, Error> {
     if bytes.is_empty() || bytes.len() > 65_536 {
         return Err(Error::InvalidRequest);
     }
+    crate::object_json::check(bytes)?;
     let manifest: CodeManifest =
         serde_json::from_slice(bytes).map_err(|_| Error::InvalidRequest)?;
     manifest.validate()?;

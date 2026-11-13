@@ -12,6 +12,8 @@ fn attachment(id: u8) -> Attachment {
         generation: 1,
         scope: scope(id as usize, id as usize),
         alive: true,
+        token: Arc::new(()),
+        flow_claimed: std::sync::atomic::AtomicBool::new(false),
     }
 }
 
@@ -22,6 +24,7 @@ fn fixture_callback(broker: &Broker) -> Verification {
         attachment: entry.attachment,
         generation: entry.generation,
         digest: entry.digest,
+        token: Arc::clone(&entry.token),
     }
 }
 
@@ -256,6 +259,29 @@ fn wrong_peer_generation_and_callback_refuse() {
     assert_eq!(
         broker.cancel(&a, &"f".repeat(64)),
         Err(Error::ChallengeUnknown)
+    );
+}
+
+#[test]
+fn copied_attachment_fields_and_wrong_callback_lineage_are_not_authority() {
+    let (mut broker, a) = fixture(1);
+    broker.prepare(&a).unwrap();
+    let mut copied = attachment(1);
+    copied.scope = a.scope.clone();
+    assert_eq!(
+        broker.begin(&copied, &a.scope.challenge_id),
+        Err(Error::TransportChanged)
+    );
+    broker.begin(&a, &a.scope.challenge_id).unwrap();
+    let mut callback = fixture_callback(&broker);
+    callback.token = Arc::new(());
+    assert_eq!(
+        broker.verified(&a, &a.scope.challenge_id, callback).err(),
+        Some(Error::Uncertain)
+    );
+    assert_eq!(
+        broker.begin(&a, &a.scope.challenge_id),
+        Err(Error::Uncertain)
     );
 }
 

@@ -51,7 +51,7 @@ pub fn encode_error(code: Error) -> Vec<u8> {
     .expect("fixed error envelope")
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "method", content = "params", deny_unknown_fields)]
 pub enum Request {
     #[serde(rename = "prepareConsent")]
@@ -62,13 +62,13 @@ pub enum Request {
     Cancel(ChallengeRequest),
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrepareRequest {
     pub session_id: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ChallengeRequest {
     pub challenge_id: String,
@@ -83,14 +83,21 @@ pub fn hex(value: &str, length: usize) -> bool {
 
 pub fn decode_request(bytes: &[u8]) -> Result<Request, Error> {
     let request: Request = decode(bytes)?;
-    let valid = match &request {
-        Request::Prepare(p) => identifier(&p.session_id, 512),
-        Request::Complete(p) | Request::Cancel(p) => hex(&p.challenge_id, 64),
-    };
-    if valid {
-        Ok(request)
-    } else {
-        Err(Error::InvalidRequest)
+    request.validate()?;
+    Ok(request)
+}
+
+impl Request {
+    pub(crate) fn validate(&self) -> Result<(), Error> {
+        let valid = match self {
+            Self::Prepare(p) => identifier(&p.session_id, 512),
+            Self::Complete(p) | Self::Cancel(p) => hex(&p.challenge_id, 64),
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(Error::InvalidRequest)
+        }
     }
 }
 
@@ -98,6 +105,7 @@ pub(crate) fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, 
     if bytes.is_empty() || bytes.len() > MAX_FRAME {
         return Err(Error::InvalidRequest);
     }
+    crate::object_json::check(bytes)?;
     // Direct typed deserialization preserves duplicate-field rejection. No Value/map hop.
     serde_json::from_slice(bytes).map_err(|_| Error::InvalidRequest)
 }
