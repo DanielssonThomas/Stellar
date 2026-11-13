@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, relative } from 'node:path';
 
 // Disposable compatibility verification only. Never builds/runs Desktop or an OS verifier.
-const revision = 'a6864dfc306518c0f945c194b9c069357585a9c2';
+const revision = '160cba946e5ef5f7d32855ebb8f48d710f20b15b';
 const expectedTree = 'bdadecbb921df6fee570235b0cd896ffcc33aa50';
 const root = resolve(import.meta.dirname, '../..');
 const producer = resolve(process.argv[2] ?? '../stellar-issue-339');
@@ -135,13 +135,9 @@ try {
   mkdirSync(join(scratch, 'producer'));
   command('tar', ['-xf', archive, '-C', join(scratch, 'producer')]);
   copyTree(join(root, 'tools/native/consent-ui'), join(scratch, 'ui'));
-  // Consumer UI is a standalone unregistered crate in299; only the disposable
-  // harness joins it to this exact producer crate. Shared Cargo files stay untouched.
+  // This smaller harness joins the consumer packages without requiring the
+  // separately owned root composition. It never registers operational code.
   const manifest = join(scratch, 'ui/Cargo.toml');
-  writeFileSync(
-    manifest,
-    readFileSync(manifest, 'utf8').replace('[workspace]', ''),
-  );
   report.uiHarnessManifestSha256 = sha(readFileSync(manifest));
   mkdirSync(join(scratch, 'consumer/src'), { recursive: true });
   for (const file of [

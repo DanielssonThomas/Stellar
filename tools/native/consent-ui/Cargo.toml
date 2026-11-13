@@ -3,6 +3,3 @@ name = "stellar-consent-ui"
 version = "0.1.0"
 edition = "2024"
 publish = false
-
-# Independently testable inactive UI boundary; shared workspace wiring is #339-owned.
-[workspace]

@@ -50,5 +50,5 @@ fn destruction_requests_cancellation_without_claiming_host_rollback() {
     assert_eq!(ui.view().max_admissions(), 3);
     assert_eq!(ui.request(Action::Destroyed), Ok(UiRequest::Cancel));
     assert_eq!(ui.request(Action::Cancel), Err(UiError::Closed));
-    assert_eq!(present_native(view()), Err(UiError::Unavailable));
+    assert!(matches!(present_native(view()), Err(UiError::Unavailable)));
 }

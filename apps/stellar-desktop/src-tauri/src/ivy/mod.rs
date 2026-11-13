@@ -41,6 +41,8 @@ mod lifecycle_store;
 mod lifecycle_tests;
 #[cfg(test)]
 mod lifecycle_wire_tests;
+#[cfg(test)]
+mod native_consent_client;
 mod observation;
 pub mod presentation;
 mod presentation_decode;

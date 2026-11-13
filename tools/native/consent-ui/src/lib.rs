@@ -7,7 +7,12 @@ pub enum UiError {
     InvalidScope,
     Unavailable,
     Closed,
+    ClosePending,
+    MismatchedWindow,
 }
+
+mod window;
+pub use window::{ClosedObservation, NativeParent, OwnedScopeWindow, WindowStamp, WindowUpdate};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GrantView {
@@ -104,7 +109,7 @@ impl Presentation {
 }
 
 /// No Win32 surface is available until the separate native lifetime review.
-pub fn present_native(_view: GrantView) -> Result<(), UiError> {
+pub fn present_native(_view: GrantView) -> Result<OwnedScopeWindow, UiError> {
     Err(UiError::Unavailable)
 }
 
