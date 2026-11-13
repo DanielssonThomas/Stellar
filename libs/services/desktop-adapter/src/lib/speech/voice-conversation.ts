@@ -239,7 +239,8 @@ export class VoiceConversation {
         },
       speak: ports.speak,
       waitForSlot: ports.waitForSpeechSlot,
-      stop: ports.stop,
+      failed: () => this.interruptResponse(),
+      stop: () => this.stopSpeech(),
       acknowledged: (snapshot) => {
         if (
           this.phase === 'speaking' &&
@@ -2008,15 +2009,8 @@ export class VoiceConversation {
         !this.responseSuppressed,
     )
       .catch(() => {
-        if (
-          this.current(generation) &&
-          this.voiceTurn === turn &&
-          !this.responseSuppressed
-        ) {
-          this.responseSuppressed = true;
-          this.controlNotice =
-            'Local speech unavailable. The reply remains available as text.';
-        }
+        if (this.current(generation) && this.voiceTurn === turn)
+          this.interruptResponse();
       })
       .finally(() => {
         if (!this.current(generation) || this.voiceTurn !== turn) return;
@@ -2024,6 +2018,15 @@ export class VoiceConversation {
         this.finishResponse();
         this.publish();
       });
+  }
+
+  private interruptResponse() {
+    if (!this.voiceTurn || !this.responsePending || this.responseSuppressed)
+      return;
+    this.responseSuppressed = true;
+    this.latency.finish('interrupted');
+    this.controlNotice =
+      'Ivy’s spoken reply stopped. The full reply is available as text.';
   }
 
   private finishResponse() {
@@ -2128,23 +2131,24 @@ export class VoiceConversation {
     this.voiceTurn = null;
     this.playbackAcknowledged = false;
     this.assembler.reset();
-    if (active && !this.stopping) {
-      this.unconfirmedStop = true;
-      this.stopping = true;
-      void (draftStop ?? this.ports.stop())
-        .then(() => {
-          this.unconfirmedStop = false;
-          this.awaitingQuiet = true;
-        })
-        .catch(() => {
-          this.blocked = true;
-          this.failure =
-            'Local speech could not stop. Retry voice before resuming.';
-        })
-        .finally(() => {
-          this.stopping = false;
-          if (!this.disposed) this.publish();
-        });
+    if (active) void this.stopSpeech(draftStop);
+  }
+
+  private async stopSpeech(pending?: Promise<unknown>) {
+    if (this.stopping) return;
+    this.unconfirmedStop = true;
+    this.stopping = true;
+    try {
+      await (pending ?? this.ports.stop());
+      this.unconfirmedStop = false;
+      this.awaitingQuiet = true;
+    } catch {
+      this.blocked = true;
+      this.failure =
+        'Local speech could not stop. Retry voice before resuming.';
+    } finally {
+      this.stopping = false;
+      if (!this.disposed) this.publish();
     }
   }
 
