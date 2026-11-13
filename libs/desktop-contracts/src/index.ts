@@ -1,4 +1,6 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
+export type { IvyLifecycleKind, IvyLifecycleLease } from './generated';
+export { decodeIvyLifecycleLease } from './lib/lifecycle-codec';
 export type { IvyResponseSegment, IvyResponseSegmentKind } from './generated';
 export type {
   WorkspaceChartType,
@@ -108,6 +110,8 @@ export type {
   IvyComponent,
   IvyPresentation,
   IvySnapshot,
+  IvyBackgroundUpdate,
+  IvyClaimUpdateRequest,
   IvyQuestion,
   IvyQuestionAction,
   IvyQuestionReplyRequest,
@@ -137,6 +141,7 @@ export {
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
   ivyQuestionReplyCommand,
+  ivyClaimUpdateCommand,
   ivyEvent,
   workspaceToolEvent,
   workspaceToolReplyCommand,
@@ -148,6 +153,7 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
   decodeIvyQuestionReply,
+  decodeIvyClaimUpdate,
   isSealedIvyProseLine,
 } from './lib/ivy-codec';
 export {

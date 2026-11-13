@@ -3,6 +3,8 @@
 
 mod app_info;
 mod awareness;
+#[cfg(feature = "native-smoke")]
+mod background_smoke;
 mod cleanup;
 mod commands;
 mod contracts;
@@ -20,10 +22,17 @@ mod speech;
 mod telemetry;
 mod volume_ducking;
 
+// Native composition boundary only; these candidates have no WebView commands,
+// transport attestation provider or gesture adapter registered in this build.
+pub use ivy::lifecycle_custody::LifecycleCustody;
+pub use ivy::lifecycle_ports::{IvyLifecycleKind, IvyLifecycleLease, LifecyclePorts};
+pub use ivy::lifecycle_speech::LifecycleSpeechResources;
+pub use speech::{OwnedSpeech, SpeechCompletion};
+
 fn main() {
     use tauri::{Emitter, Manager};
     debug_assert_eq!(awareness::contracts::AWARENESS_COMMANDS.len(), 3);
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 11);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 12);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
         "workspace_tool_reply"
@@ -175,6 +184,7 @@ fn main() {
         ivy::ivy_new_session,
         ivy::ivy_reload_mcp,
         ivy::ivy_question_reply,
+        ivy::ivy_claim_update,
         ivy::workspace_tool_reply,
         speech::speech_transcribe,
         speech::speech_collect,

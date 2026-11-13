@@ -1,5 +1,5 @@
 [workspace]
-members = ["apps/stellar-desktop/src-tauri", "tools/native/rust-size", "tools/native/consent-broker"]
+members = ["apps/stellar-desktop/src-tauri", "tools/native/rust-size", "tools/native/consent-broker", "tools/native/consent-ui"]
 resolver = "3"
 
 # Model integrity checks scan gigabytes even in the interactive debug launcher.

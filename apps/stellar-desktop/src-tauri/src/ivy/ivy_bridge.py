@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
 
 sys.dont_write_bytecode = True
 PROFILE = Path('D:/Hermes/profiles/ivy')
@@ -20,9 +21,15 @@ METHODS = {
     'session.create': {'request_id': str, 'model': str},
     'session.resume': {'session_id': str},
     'session.info': {'session_id': str},
+    'session.events.since': {'session_id': str, 'replay_epoch': str, 'last_sequence': int},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
                       'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
+    'stellar.background.bind': {'session_id': str, 'consentTicket': str},
+    'stellar.background.inspect': {'session_id': str, 'bindingId': str, 'eventId': str, 'digest': str},
+    'stellar.background.revoke': {'session_id': str, 'bindingId': str},
+    'stellar.background.effect.begin': {'session_id': str, 'bindingId': str, 'eventId': str, 'digest': str, 'operation': str, 'kind': str},
+    'stellar.background.effect.finish': {'session_id': str, 'bindingId': str, 'eventId': str, 'operation': str, 'kind': str},
     'session.interrupt': {'session_id': str, 'execution_generation': int},
     'clarify.respond': {'session_id': str, 'execution_generation': int, 'prompt_id': str, 'answer': str},
     'session.new': {'session_id': str, 'request_id': str, 'revision': int, 'generation': int},
@@ -121,7 +128,7 @@ def validate(request):
             raise ValueError()
         if key == 'text' and not value.strip():
             raise ValueError()
-        if key in {'execution_generation', 'generation', 'revision'} and value < 0:
+        if key in {'execution_generation', 'generation', 'revision', 'last_sequence'} and value < 0:
             raise ValueError()
     if method == 'integrations.reload' and params['session_id'] is not None and not string(params['session_id']):
         raise ValueError()
@@ -178,6 +185,10 @@ async def pump_events(conn, workspace, approvals):
         if type(params) is not dict:
             continue
         kind = params.get('type')
+        known = getattr(conn, 'lifecycle_admissions', {}).get((params.get('session_id'), params.get('admission_id')))
+        if known is not None and kind not in {'message.start', 'message.complete'}:
+            # No lifecycle interim/tool/question content gains foreground authority.
+            continue
         if kind == 'approval.settled' and approvals is not None:
             await approvals.settle(params)
             continue
@@ -200,7 +211,7 @@ async def pump_events(conn, workspace, approvals):
         if kind in {'tool.start', 'tool.complete'}:
             activity.offer(params)
             continue
-        if kind not in {'message.interim', 'message.complete', 'session.replay_gap',
+        if kind not in {'message.start', 'message.interim', 'message.complete', 'session.replay_gap',
                         'approval.request', 'clarify.request', 'clarify.settled'}:
             continue
         # Terminal/control events retain ordering ahead of the next activity batch.
@@ -212,7 +223,12 @@ async def pump_events(conn, workspace, approvals):
             raise Closed()
         clean = project(params)
         clean['type'] = kind
-        if kind == 'message.interim':
+        lifecycle = lifecycle_payload(conn, payload, params.get('session_id'), params.get('admission_id'), kind) if kind in {'message.start', 'message.complete'} else None
+        if lifecycle is not None:
+            clean['payload'] = lifecycle
+        elif kind == 'message.start':
+            clean['payload'] = {'autonomous': autonomous_start(payload)}
+        elif kind == 'message.interim':
             text, streamed = payload.get('text'), payload.get('already_streamed')
             if not string(text, 4096) or type(streamed) is not bool:
                 continue
@@ -247,11 +263,11 @@ async def pump_events(conn, workspace, approvals):
                     execution_generation=generation, prompt_id=prompt, choice='deny'), DEADLINE)
         else:
             clean['payload'] = text_fields(payload) if kind.startswith('message.') else project(payload)
-            if kind == 'message.complete' and type(payload.get('response_reused')) is bool:
-                clean['payload']['response_reused'] = payload['response_reused']
+            if kind == 'message.complete':
+                clean['payload'] = completion_payload(payload)
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
-        if kind == 'message.complete':
+        if kind == 'message.complete' and lifecycle is None:
             if approvals is not None:
                 await approvals.cancel(params.get('session_id'))
             admission = params.get('admission_id') or payload.get('admission_id')
@@ -276,6 +292,90 @@ async def pump_events(conn, workspace, approvals):
                     raise Closed()
                 envelope[key] = event[key]
         emit({'event': 'gateway', 'data': envelope})
+
+
+def completion_payload(payload):
+    clean = text_fields(payload)
+    if type(payload.get('response_reused')) is bool:
+        clean['response_reused'] = payload['response_reused']
+    return clean
+
+
+def lifecycle_private_text(result, workspace):
+    if workspace is None:
+        return
+    receipt = result.get('receipt', result)
+    final = receipt.get('result', {}).get('final_response') if type(receipt) is dict else None
+    # Preserve exact canonical comparisons without exposing native MCP tokens.
+    # A modified canonical answer is not equivalent proof: refuse it entirely.
+    if type(final) is str and workspace.redact(final) != final:
+        raise Closed()
+
+
+def autonomous_start(payload):
+    if payload.get('display_kind') == 'lifecycle_update':
+        # Do not discard a future version's consent/receipt proof or advance past it.
+        # Delivery remains disabled until end-to-end revocation is implemented.
+        raise Closed()
+    return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
+            and payload.get('notification_category') != 'diagnostic')
+
+
+def lifecycle_payload(conn, payload, session, admission=None, kind=None):
+    known = getattr(conn, 'lifecycle_admissions', {}).get((session, admission))
+    if known is not None and 'background_v1' not in payload and kind == 'message.complete':
+        if not getattr(conn, 'background_v1', False) or session != getattr(conn, 'selected_session', None):
+            raise Closed()
+        # A terminal trigger only: native re-inspects its retained canonical tuple.
+        return {'background_v1': known}
+    if payload.get('display_kind') != 'lifecycle_update' and 'background_v1' not in payload:
+        return None
+    from stellar_ivy_lifecycle import descriptor
+    if (not getattr(conn, 'background_v1', False) or session != getattr(conn, 'selected_session', None)
+            or not string(session) or payload.get('display_kind') != 'lifecycle_update'
+            or payload.get('notification_category') == 'diagnostic'):
+        raise Closed()
+    card = descriptor(payload.get('background_v1'), str(PROFILE), session)
+    if admission is not None:
+        if not string(admission) or (known is not None and known != card):
+            raise Closed()
+        retained = getattr(conn, 'lifecycle_admissions', None)
+        if retained is None:
+            retained = conn.lifecycle_admissions = {}
+        if len(retained) >= 16 and (session, admission) not in retained:
+            raise Closed()
+        retained[(session, admission)] = card
+    return {'background_v1': card}
+
+
+async def replay_events(conn, params, workspace):
+    if params['session_id'] != getattr(conn, 'selected_session', None):
+        raise Closed()
+    result = await asyncio.wait_for(conn.client.rpc('session.events.since', **params), DEADLINE)
+    if (type(result) is not dict or type(result.get('events')) is not list
+            or len(result['events']) > 1024 or type(result.get('truncated')) is not bool
+            or result.get('replay_epoch') != params['replay_epoch']
+            or type(result.get('last_sequence')) is not int or result['last_sequence'] < params['last_sequence']):
+        raise Closed()
+    events = []
+    for event in result['events']:
+        if type(event) is not dict or event.get('session_id') != params['session_id']:
+            raise Closed()
+        kind, payload = event.get('type'), event.get('payload')
+        if kind not in {'message.start', 'message.complete'}:
+            continue
+        if type(payload) is not dict:
+            raise Closed()
+        clean = project(event)
+        clean['type'] = kind
+        lifecycle = lifecycle_payload(conn, payload, params['session_id'], event.get('admission_id'), kind)
+        clean['payload'] = (lifecycle if lifecycle is not None else
+            {'autonomous': autonomous_start(payload)} if kind == 'message.start' else completion_payload(payload))
+        if workspace is not None and type(clean['payload'].get('text')) is str:
+            clean['payload']['text'] = workspace.redact(clean['payload']['text'])
+        events.append(clean)
+    return {'events': events, 'replay_epoch': result['replay_epoch'],
+            'last_sequence': result['last_sequence'], 'truncated': result['truncated']}
 
 
 async def requests(conn):
@@ -364,6 +464,57 @@ async def settle_receipt(conn, workspace, params, receipt, approvals=None):
         await approvals.cancel(params['session_id'])
 
 
+async def profile_toolsets():
+    """One daemon per create; cancellation closes the bridge, never retries loading.
+
+    Python cannot cancel a synchronous import. The native broker owns the bridge
+    process and kills/reaps it on failure; the daemon must not hold interpreter
+    shutdown or the asyncio default executor open. Late results are discarded.
+    """
+    loop = asyncio.get_running_loop()
+    result = loop.create_future()
+
+    def publish(value, error):
+        if not result.done():
+            if error is None:
+                result.set_result(value)
+            else:
+                result.set_exception(Closed())
+
+    def load():
+        try:
+            from stellar_ivy_profile_tools import load_toolsets
+            value, error = load_toolsets(), None
+        except BaseException:
+            value, error = None, True
+        try:
+            loop.call_soon_threadsafe(publish, value, error)
+        except RuntimeError:
+            pass  # The owning bridge already closed its event loop.
+
+    threading.Thread(target=load, name='ivy-profile-tools', daemon=True).start()
+    return await result
+
+
+def failure_diagnostic(conn, error):
+    # These labels never establish rejection: an RPC error can follow admission.
+    if isinstance(error, getattr(conn, 'rpc_error_type', ())):
+        return {
+            'permission_denied': 'owner_permission', 'invalid_params': 'owner_parameters',
+            'busy': 'owner_busy', 'storage_unavailable': 'owner_storage',
+            'admission_conflict': 'owner_conflict', 'not_found': 'owner_missing',
+            'runtime_draining': 'owner_draining',
+        }.get(str(error), 'owner_other')
+    if isinstance(error, ValueError):
+        return {
+            'Ivy has an active client operation; resume it or wait.': 'client_writer_busy',
+            'Previous operation is unsettled; resume/cancel it before submitting new work': 'client_pending',
+            'Previous submission outcome unknown; inspect its session before clearing runtime/ivy-client/active.json': 'client_unknown',
+            'Unsupported method or parameter': 'client_parameters',
+        }.get(str(error), 'bridge_local')
+    return 'bridge_local'
+
+
 async def request_worker(conn, workspace, queue, approvals=None):
     from stellar_ivy_controls import control, Refused
     from stellar_ivy_edit_policy import synchronize
@@ -376,12 +527,18 @@ async def request_worker(conn, workspace, queue, approvals=None):
         if isinstance(request, Exception):
             raise Closed() from None
         rid, method, params = request
+        if method == 'runtime.describe':
+            conn.background_v1 = False
         resuming = method == 'session.resume' and approvals is not None
         if resuming:
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'inspector.inspect':
+            if method.startswith('stellar.background.'):
+                from stellar_ivy_lifecycle import call
+                result = await call(conn, method, params, str(PROFILE), DEADLINE)
+                lifecycle_private_text(result, workspace)
+            elif method == 'inspector.inspect':
                 from stellar_ivy_inspector import Inspector
                 inspector = getattr(conn, 'inspector', None)
                 if inspector is None:
@@ -398,6 +555,8 @@ async def request_worker(conn, workspace, queue, approvals=None):
                     workspace.redact if workspace is not None else lambda value: value)
             elif method in {'session.new', 'integrations.reload'}:
                 result = await asyncio.wait_for(control(conn, method, params), DEADLINE)
+            elif method == 'session.events.since':
+                result = await replay_events(conn, params, workspace)
             elif method == 'workspace.setup':
                 if workspace is None:
                     raise Closed()
@@ -409,43 +568,43 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 await workspace.stop()
                 result = {}
             elif method == 'session.create':
-                # The installed IvyConnection excludes launch routing; keep its session registry
-                # while invoking the gateway's explicitly advertised fixed-model contract.
-                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
-                fields = description.get('session_create', {}).get('parameters', [])
-                if not {'model', 'provider'} <= set(fields):
-                    raise Closed()
-                options = {}
-                if workspace is not None and workspace.task is not None:
-                    from stellar_ivy_profile_tools import load_toolsets
-                    if ('acp' not in description.get('session_create', {}).get('sources', []) or
-                            'toolsets' not in fields or
-                            not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
+                async with asyncio.timeout(DEADLINE):
+                    # The installed IvyConnection excludes launch routing; keep its session registry
+                    # while invoking the gateway's explicitly advertised fixed-model contract.
+                    description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                    fields = description.get('session_create', {}).get('parameters', [])
+                    if not {'model', 'provider'} <= set(fields):
                         raise Closed()
-                    options = {'editor': workspace.editor(), 'toolsets': load_toolsets()}
-                result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
-                    request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
-                sid = result.get('session_id')
-                if not string(sid):
-                    raise Closed()
-                conn.sessions.add(sid)
-                if options:
-                    workspace.bind_session(sid)
-                info = result.get('info', {})
-                launch = info.get('launch_request', {})
-                if (type(launch) is not dict or launch.get('model') != params['model'] or
-                        launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
-                    raise Closed()
-                if options and not workspace.verifies(info):
-                    raise Closed()
-                if options and launch.get('toolsets') != options['toolsets']:
-                    raise Closed()
-                if options:
-                    result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                    options = {}
+                    if workspace is not None and workspace.task is not None:
+                        if ('acp' not in description.get('session_create', {}).get('sources', []) or
+                                'toolsets' not in fields or
+                                not {'acp-editor-policy-v1', 'acp-session-mcp-v1'} <= set(description.get('capabilities', []))):
+                            raise Closed()
+                        options = {'editor': workspace.editor(), 'toolsets': await profile_toolsets()}
+                    result = await asyncio.wait_for(conn.client.rpc(method, source='acp' if options else 'cli', cwd='D:/',
+                        request_id=params['request_id'], model=params['model'], provider='openai-codex', **options), DEADLINE)
+                    sid = result.get('session_id')
+                    if not string(sid):
+                        raise Closed()
+                    conn.sessions.add(sid)
+                    if options:
+                        workspace.bind_session(sid)
                     info = result.get('info', {})
-                    if info.get('model') != params['model'] or not workspace.verifies(info):
+                    launch = info.get('launch_request', {})
+                    if (type(launch) is not dict or launch.get('model') != params['model'] or
+                            launch.get('provider') != 'openai-codex' or info.get('model') != params['model']):
                         raise Closed()
-                result = {'session_id': sid, 'model': info['model']}
+                    if options and not workspace.verifies(info):
+                        raise Closed()
+                    if options and launch.get('toolsets') != options['toolsets']:
+                        raise Closed()
+                    if options:
+                        result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                        info = result.get('info', {})
+                        if info.get('model') != params['model'] or not workspace.verifies(info):
+                            raise Closed()
+                    result = {'session_id': sid, 'model': info['model']}
             elif method == 'session.resume' and workspace is not None and workspace.task is not None:
                 description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
                 if 'acp-session-mcp-v1' not in description.get('capabilities', []):
@@ -478,15 +637,34 @@ async def request_worker(conn, workspace, queue, approvals=None):
             if method == 'prompt.submit' and getattr(conn, 'active', None) is not None:
                 conn.active['execution_generation'] = result.get('execution_generation')
             if method == 'prompt.receipt':
-                await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'inspector.inspect'}:
+                if type(result) is dict and ('background_v1' in result or 'background_delivery_authorized' in result):
+                    from stellar_ivy_lifecycle import canonical_receipt
+                    if (not getattr(conn, 'background_v1', False)
+                            or params['session_id'] != getattr(conn, 'selected_session', None)):
+                        raise Closed()
+                    result = canonical_receipt(result, str(PROFILE), params['session_id'])
+                    lifecycle_private_text(result, workspace)
+                else:
+                    await settle_receipt(conn, workspace, params, result, approvals)
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect',
+                          *[m for m in METHODS if m.startswith('stellar.background.')]} or (
+                          method == 'prompt.receipt' and 'background_v1' in result):
                 pass
             elif method == 'runtime.describe':
                 if (type(result) is not dict or
                         os.path.normcase(result.get('profile_id', '')) != os.path.normcase(str(PROFILE)) or
                         not set(CAPABILITIES) <= set(result.get('capabilities', []))):
                     raise Closed()
-                result = {'profile': 'ivy', 'protocol': 1, 'capabilities': CAPABILITIES}
+                from stellar_ivy_lifecycle import CONTRACT_SHA256, INTERFACE_SHA256
+                advertised = 'stellar.background.v1' in result.get('capabilities', [])
+                if advertised and (result.get('background_v1_contract_sha256') != CONTRACT_SHA256
+                        or result.get('background_v1_interface_sha256') != INTERFACE_SHA256):
+                    raise Closed()
+                conn.background_v1 = advertised
+                result = {'profile': 'ivy', 'protocol': 1,
+                          'capabilities': [*CAPABILITIES, *(['stellar.background.v1'] if conn.background_v1 else [])],
+                          **({'background_v1_contract_sha256': CONTRACT_SHA256,
+                              'background_v1_interface_sha256': INTERFACE_SHA256} if conn.background_v1 else {})}
             elif method == 'ping':
                 if type(result) is not dict or result.get('pong') is not True:
                     raise Closed()
@@ -519,7 +697,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
         except asyncio.TimeoutError:
             if workspace is not None:
                 workspace.gate.disarm()
-            emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
+            emit({'id': rid, 'error': {'code': 'outcome_uncertain', 'diagnostic': 'deadline'}})
             raise Closed() from None
         except Refused as error:
             emit({'id': rid, 'error': {'code': error.code}})
@@ -527,11 +705,12 @@ async def request_worker(conn, workspace, queue, approvals=None):
             if workspace is not None:
                 workspace.gate.disarm()
             raise
-        except Exception:
+        except Exception as error:
             if workspace is not None:
                 workspace.gate.disarm()
             # Never retry: even a transport exception may follow admission.
-            emit({'id': rid, 'error': {'code': 'outcome_uncertain'}})
+            emit({'id': rid, 'error': {'code': 'outcome_uncertain',
+                                       'diagnostic': failure_diagnostic(conn, error)}})
             raise Closed() from None
         finally:
             if resuming:
@@ -571,6 +750,7 @@ async def serve():
         # Discovery validates home and loopback; explicit endpoint forbids autostart.
         async with connect(found.endpoint) as client:
             conn = IvyConnection(client, approvals=bool(access))
+            conn.rpc_error_type = GatewayRPCError
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)

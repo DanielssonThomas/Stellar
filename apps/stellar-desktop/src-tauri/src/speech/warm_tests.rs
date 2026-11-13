@@ -12,6 +12,7 @@ fn operation(voice: &WarmVoice) -> Operation {
         scratch: None,
         recognition_epoch: 0,
         expression_epoch: None,
+        completion: Mutex::new(None),
     }
 }
 

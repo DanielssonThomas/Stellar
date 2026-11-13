@@ -14,6 +14,7 @@ pub(super) struct Operation {
     pub(super) scratch: Option<Scratch>,
     pub(super) recognition_epoch: u64,
     pub(super) expression_epoch: Option<u64>,
+    pub(super) completion: Mutex<Option<super::owned::SpeechCompletion>>,
 }
 pub(super) struct View {
     pub(super) snapshot: SpeechSnapshot,
@@ -23,6 +24,7 @@ pub(super) struct View {
     pub(super) epoch: u64,
 }
 pub(super) struct Inner {
+    pub(super) resource_registry_claimed: AtomicBool,
     pub(super) voice: super::warm::WarmVoice,
     pub(super) view: Mutex<View>,
     pub(super) publish: Publisher,

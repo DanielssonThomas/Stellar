@@ -3,6 +3,16 @@ use serde_json::{Value, json};
 
 impl Session {
     pub fn event(&mut self, frame: Value) -> Result<(), IvyErrorCode> {
+        self.apply_event(&frame)?;
+        if frame.get("event").and_then(Value::as_str) == Some("gateway")
+            && let Some(params) = frame.pointer("/data/params")
+            && params.get("session_id").and_then(Value::as_str) == self.record.session_id.as_deref()
+        {
+            self.checkpoint_updates(params)?;
+        }
+        Ok(())
+    }
+    fn apply_event(&mut self, frame: &Value) -> Result<(), IvyErrorCode> {
         if frame.get("event").and_then(Value::as_str) != Some("gateway") {
             return Ok(());
         }
@@ -14,6 +24,14 @@ impl Session {
         }
         if params.get("type").and_then(Value::as_str) == Some("session.replay_gap") {
             return Err(IvyErrorCode::Uncertain);
+        }
+        self.validate_update_event(params)?;
+        self.lifecycle_fence(params)?;
+        if self.lifecycle_event(params)? {
+            return Ok(());
+        }
+        if self.background_event(params)? {
+            return Ok(());
         }
         let admission = params
             .get("admission_id")

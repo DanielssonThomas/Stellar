@@ -1,6 +1,15 @@
 mod activity;
 #[cfg(test)]
 mod activity_tests;
+#[cfg(test)]
+mod background_integrity_tests;
+#[cfg(feature = "native-smoke")]
+mod background_probe;
+#[cfg(test)]
+mod background_replay_tests;
+mod background_updates;
+#[cfg(test)]
+mod background_updates_tests;
 pub mod chart_contracts;
 #[cfg(test)]
 mod chart_tests;
@@ -14,12 +23,32 @@ pub(crate) mod inspector;
 pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
+mod lifecycle_consent;
+mod lifecycle_consumer;
+mod lifecycle_contract;
+pub mod lifecycle_custody;
+#[cfg(test)]
+mod lifecycle_custody_tests;
+pub mod lifecycle_effect_contracts;
+mod lifecycle_effects;
+#[cfg(test)]
+mod lifecycle_integration_tests;
+pub mod lifecycle_ports;
+mod lifecycle_receipt;
+pub mod lifecycle_speech;
+mod lifecycle_store;
 #[cfg(test)]
 mod lifecycle_tests;
+#[cfg(test)]
+mod lifecycle_wire_tests;
+#[cfg(test)]
+mod native_consent_client;
 mod observation;
 pub mod presentation;
 mod presentation_decode;
 mod process;
+#[cfg(any(feature = "native-smoke", test))]
+mod process_diagnostics;
 mod question_contracts;
 mod questions;
 #[cfg(test)]
@@ -35,6 +64,9 @@ mod session_receipts;
 #[cfg(test)]
 mod session_tests;
 mod state;
+mod update_store;
+#[cfg(test)]
+mod update_store_tests;
 mod workspace_capture;
 mod workspace_context;
 pub mod workspace_contracts;
@@ -90,10 +122,31 @@ pub fn ivy_question_reply(
 }
 
 #[tauri::command]
+pub async fn ivy_claim_update(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: contracts::IvyClaimUpdateRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    let reply = host.claim_background(request)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        reply
+            .recv_timeout(std::time::Duration::from_secs(15))
+            .map_err(|_| IvyErrorCode::Timeout)?
+    })
+    .await
+    .map_err(|_| IvyErrorCode::Unavailable)?
+}
+
+#[tauri::command]
 pub fn ivy_connect(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Connect)
 }
@@ -104,6 +157,9 @@ pub fn ivy_submit(
     speech: tauri::State<'_, crate::speech::SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     let request: IvySubmitRequest =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
@@ -120,6 +176,9 @@ pub fn ivy_cancel(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Cancel)
 }
@@ -129,6 +188,9 @@ pub fn ivy_reconcile(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Reconcile)
 }
@@ -197,6 +259,9 @@ pub fn workspace_tool_reply(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<(), IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     let reply: workspace_contracts::WorkspaceToolReply =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;

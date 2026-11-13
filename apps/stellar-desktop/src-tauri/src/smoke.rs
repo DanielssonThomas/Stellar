@@ -68,7 +68,16 @@ async fn smoke_capture_window(app: tauri::AppHandle, detailed: Option<bool>) -> 
     let captured =
         tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
             .await
+            .inspect_err(|_| println!("STELLAR_SMOKE_STAGE capture-join-failure class=1"))
             .is_ok_and(|result| {
+                if let Err(error) = &result {
+                    let class = match error {
+                        crate::ivy::contracts::IvyErrorCode::Unavailable => 1,
+                        crate::ivy::contracts::IvyErrorCode::Timeout => 2,
+                        _ => 3,
+                    };
+                    println!("STELLAR_SMOKE_STAGE capture-result-failure class={class}");
+                }
                 result.is_ok_and(|image| {
                     if detailed == Some(true) {
                         let Ok(decoded) = ::image::load_from_memory(&image) else {
@@ -329,12 +338,25 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::app_info::app_info,
             crate::telemetry::telemetry_snapshot,
             crate::ivy::ivy_select_session,
+            crate::ivy::ivy_connect,
+            crate::ivy::ivy_submit,
+            crate::ivy::ivy_cancel,
+            crate::ivy::ivy_reconcile,
+            crate::ivy::workspace_tool_reply,
             crate::ivy::ivy_clear_conversation,
             crate::ivy::ivy_new_session,
             crate::ivy::ivy_reload_mcp,
             crate::ivy::ivy_question_reply,
+            crate::ivy::ivy_claim_update,
             crate::ivy::ivy_disconnect,
             crate::ivy::ivy_snapshot,
+            crate::speech::speech_speak,
+            crate::speech::speech_keywords,
+            crate::speech::speech_transcribe,
+            crate::speech::speech_collect,
+            crate::speech::speech_stop,
+            crate::speech::speech_snapshot,
+            crate::background_smoke::background_smoke_start,
             crate::ivy::inspector::ivy_inspect,
             smoke_hold_ivy,
             smoke_capture_window,
@@ -350,7 +372,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
                         .window()
                         .set_size(tauri::LogicalSize::new(1920., 1080.));
                 }
-                check_page(window.clone());
+                if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+                    crate::background_smoke::check(window.clone());
+                } else {
+                    check_page(window.clone());
+                }
             }
         })
 }

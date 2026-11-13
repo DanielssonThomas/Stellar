@@ -103,6 +103,8 @@ export { createNativeMediaWorkspace } from './lib/media/media-workspace';
 export type { MediaNativeApi } from './lib/media/browser-pane';
 export type { RequestTrace, RequestStep } from './lib/reflex/request-timeline';
 export { QuestionVoiceCue } from './lib/speech/question-voice-cue';
+export { UpdateVoiceCue } from './lib/speech/update-voice-cue';
+export { LifecycleEffects } from './lib/ivy/lifecycle-effects';
 export { VoicePreferences } from './lib/speech/voice-preferences';
 export type {
   WakeSensitivity,

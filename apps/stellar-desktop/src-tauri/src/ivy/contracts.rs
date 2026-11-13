@@ -178,6 +178,22 @@ pub struct IvyResponseSegment {
     pub reused: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyBackgroundUpdate {
+    pub id: String,
+    pub text: String,
+    pub speech_claim: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct IvyClaimUpdateRequest {
+    pub version: u16,
+    pub update_id: String,
+    pub request_id: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
 pub struct IvySnapshot {
@@ -204,6 +220,9 @@ pub struct IvySnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub questions: Option<Vec<IvyQuestion>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub background_updates: Option<Vec<IvyBackgroundUpdate>>,
 }
 
 impl Default for IvySnapshot {
@@ -225,6 +244,7 @@ impl Default for IvySnapshot {
             error: None,
             first_text_observed: None,
             questions: None,
+            background_updates: None,
         }
     }
 }

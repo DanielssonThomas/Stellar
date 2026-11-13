@@ -62,6 +62,7 @@
     (dismissFaults)="faults.dismiss()"
     (showFaults)="faults.show()"
     [assistantReply]="reflex.reply() || assistant.reply()"
+    [backgroundUpdate]="assistant.backgroundUpdate()"
     [showResponseCaptions]="voice.showResponseCaptions()"
     (showResponseCaptionsChange)="voice.setShowResponseCaptions($event)"
     [responseCaptionText]="assistant.caption().text"

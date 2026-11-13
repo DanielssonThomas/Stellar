@@ -12,16 +12,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
 import { DesktopVoice } from './desktop-voice';
+import { DesktopSpatial } from './desktop-spatial';
 
-function fixture(snapshot: ReturnType<typeof vi.fn>) {
+function fixture(snapshot: ReturnType<typeof vi.fn>, slot?: Promise<void>) {
   const ivy = {
     snapshot,
+    claimUpdate: vi.fn(async () => true),
     selectSession: vi.fn(async () => true),
     clearConversation: vi.fn(async () => true),
   };
   TestBed.configureTestingModule({
     providers: [
       DesktopVoice,
+      ...(slot
+        ? [
+            {
+              provide: DesktopSpatial,
+              useValue: {
+                whenQuiet: () => slot,
+                ownsSpeech: () => false,
+                setMuted: vi.fn(),
+                interrupt: vi.fn(),
+              },
+            },
+          ]
+        : []),
       {
         provide: PromptCleanupService,
         useValue: {
@@ -67,6 +82,95 @@ function fixture(snapshot: ReturnType<typeof vi.fn>) {
 }
 
 describe('desktop voice session composition', () => {
+  it('cancels an update queued behind spatial speech without stopping the other speaker', async () => {
+    let release!: () => void;
+    const slot = new Promise<void>((done) => (release = done));
+    const { voice, ivy } = fixture(
+      vi.fn(async () => initialIvySnapshot()),
+      slot,
+    );
+    const speech = TestBed.inject(SpeechAdapterService);
+    const speak = vi.fn(async () => initialSpeechSnapshot());
+    Object.assign(speech, { speak });
+    const state = TestBed.inject(DesktopAssistant).state as WritableSignal<
+      ReturnType<typeof initialIvySnapshot>
+    >;
+    await voice.refreshSession();
+    state.set({
+      ...initialIvySnapshot(),
+      connection: 'ready',
+      background_updates: [
+        { id: 'update', text: 'Ready.', speech_claim: null },
+      ],
+    });
+    TestBed.tick();
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    expect(ivy.claimUpdate).toHaveBeenCalledOnce();
+    const speechState = speech.state as WritableSignal<
+      ReturnType<typeof initialSpeechSnapshot>
+    >;
+    speechState.set({
+      ...initialSpeechSnapshot(),
+      revision: '1',
+      state: 'speaking',
+      operation_id: 'spatial-owner',
+    });
+    state.set({ ...state(), background_updates: [] });
+    TestBed.tick();
+    expect(speech.stop).not.toHaveBeenCalled();
+    release();
+    speechState.set({ ...initialSpeechSnapshot(), revision: '2' });
+    TestBed.tick();
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    expect(speak).not.toHaveBeenCalled();
+    TestBed.resetTestingModule();
+  });
+
+  it('stops its own background speech when reset precedes dispatch acknowledgement', async () => {
+    const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
+    const speech = TestBed.inject(SpeechAdapterService);
+    const speechState = speech.state as WritableSignal<
+      ReturnType<typeof initialSpeechSnapshot>
+    >;
+    let acknowledge!: () => void;
+    const speak = vi.fn((_text: string, operation_id: string) => {
+      const started = {
+        ...initialSpeechSnapshot(),
+        revision: '1',
+        operation_id,
+        state: 'synthesizing' as const,
+      };
+      speechState.set(started);
+      return new Promise<ReturnType<typeof initialSpeechSnapshot>>(
+        (done) => (acknowledge = () => done(started)),
+      );
+    });
+    Object.assign(speech, { speak });
+    const state = TestBed.inject(DesktopAssistant).state as WritableSignal<
+      ReturnType<typeof initialIvySnapshot>
+    >;
+    await voice.refreshSession();
+    state.set({
+      ...initialIvySnapshot(),
+      connection: 'ready',
+      background_updates: [
+        { id: 'update', text: 'Ready.', speech_claim: null },
+      ],
+    });
+    TestBed.tick();
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    expect(speak).toHaveBeenCalledOnce();
+    state.set({ ...state(), background_updates: [] });
+    TestBed.tick();
+    expect(speech.stop).toHaveBeenCalledOnce();
+    speechState.set({ ...speechState(), revision: '2', state: 'idle' });
+    TestBed.tick();
+    acknowledge();
+    for (let n = 0; n < 20; n++) await Promise.resolve();
+    expect(speak).toHaveBeenCalledOnce();
+    TestBed.resetTestingModule();
+  });
+
   it('fences a committed response queued behind a question before final narration', async () => {
     const { voice } = fixture(vi.fn(async () => initialIvySnapshot()));
     const speech = TestBed.inject(SpeechAdapterService);

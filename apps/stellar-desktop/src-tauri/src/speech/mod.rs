@@ -4,6 +4,7 @@ mod expression;
 mod frames;
 mod host;
 mod keywords;
+mod owned;
 use crate::owned_child;
 mod process;
 mod scratch;
@@ -14,6 +15,7 @@ mod warm_worker;
 use contracts::*;
 pub(crate) use expression::Pending as VoiceExpressionPending;
 pub use host::SpeechHost;
+pub use owned::{OwnedSpeech, SpeechCompletion};
 
 #[tauri::command]
 pub fn speech_set_ducking(
@@ -31,6 +33,12 @@ pub async fn speech_keywords(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<KeywordReply, SpeechError> {
+    if cfg!(all(
+        feature = "native-smoke",
+        not(feature = "recognition-smoke")
+    )) {
+        return Err(SpeechError::Unavailable);
+    }
     let request: KeywordRequest = validation::decode(request)?;
     let host = host.inner().clone();
     tauri::async_runtime::spawn_blocking(move || host.keywords(request))
@@ -53,6 +61,12 @@ pub async fn speech_transcribe(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<SpeechTranscript, SpeechError> {
+    if cfg!(all(
+        feature = "native-smoke",
+        not(feature = "recognition-smoke")
+    )) {
+        return Err(SpeechError::Unavailable);
+    }
     let request: SpeechTranscribeRequest = validation::decode(request)?;
     validation::transcribe(&request)?;
     let completion = host.transcribe(request)?;
@@ -68,6 +82,12 @@ pub async fn speech_collect(
     host: tauri::State<'_, SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<SpeechTranscript, SpeechError> {
+    if cfg!(all(
+        feature = "native-smoke",
+        not(feature = "recognition-smoke")
+    )) {
+        return Err(SpeechError::Unavailable);
+    }
     let request: SpeechTranscribeRequest = validation::decode(request)?;
     validation::transcribe(&request)?;
     let completion = host.collect(request)?;

@@ -1,4 +1,11 @@
-use super::{contracts::*, process, scratch::Scratch, state::*, validation};
+use super::{
+    contracts::*,
+    owned::{OwnedSpeech, SpeechCompletion},
+    process,
+    scratch::Scratch,
+    state::*,
+    validation,
+};
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -22,6 +29,7 @@ impl SpeechHost {
     pub fn new(scratch: PathBuf, publish: Publisher) -> Self {
         Self {
             inner: Arc::new(Inner {
+                resource_registry_claimed: AtomicBool::new(false),
                 voice: super::warm::WarmVoice::default(),
                 view: Mutex::new(View {
                     snapshot: SpeechSnapshot::default(),
@@ -105,6 +113,7 @@ impl SpeechHost {
                 } else {
                     None
                 },
+                completion: Mutex::new(None),
             });
             view.active = Some(operation.clone());
             view.snapshot.operation_id = Some(id);
@@ -174,18 +183,28 @@ impl SpeechHost {
         self.inner.expression.take(id)
     }
     pub fn speak(&self, request: SpeechSpeakRequest) -> Result<SpeechSnapshot, SpeechError> {
+        self.speak_owned(request)?;
+        self.snapshot()
+    }
+
+    pub fn speak_owned(&self, request: SpeechSpeakRequest) -> Result<OwnedSpeech, SpeechError> {
         validation::speak(&request)?;
         let operation = self.reserve(
             request.utterance_id,
             &request.epoch,
             SpeechState::Synthesizing,
         )?;
-        let output = operation
+        let payload = operation
             .scratch
             .as_ref()
-            .ok_or(SpeechError::Unavailable)?
-            .output();
-        let payload = process::payload(super::acknowledgment::payload(request.text, &output));
+            .ok_or(SpeechError::Unavailable)
+            .and_then(|scratch| {
+                process::payload(super::acknowledgment::payload(
+                    request.text,
+                    &scratch.output(),
+                ))
+            });
+        let owned = OwnedSpeech::new(self.clone(), operation.clone());
         let host = self.clone();
         std::thread::spawn(move || {
             let result = payload.and_then(|bytes| {
@@ -193,7 +212,7 @@ impl SpeechHost {
             });
             let _ = host.settle(&operation, result);
         });
-        self.snapshot()
+        Ok(owned)
     }
     fn execute(
         &self,
@@ -297,7 +316,7 @@ impl SpeechHost {
         (self.inner.publish)(snapshot);
         Ok(())
     }
-    fn settle(
+    pub(super) fn settle(
         &self,
         operation: &Operation,
         mut result: Result<String, SpeechError>,
@@ -327,7 +346,9 @@ impl SpeechHost {
             result = Err(error.clone());
         }
         #[cfg(test)]
-        if let Some(gate) = self.inner.settlement_gate.lock().unwrap().take() {
+        let settlement_gate = self.inner.settlement_gate.lock().unwrap().take();
+        #[cfg(test)]
+        if let Some(gate) = settlement_gate {
             gate();
         }
         let snapshot = {
@@ -343,6 +364,15 @@ impl SpeechHost {
                 result = Err(SpeechError::Cancelled);
             }
             if cleanup.is_ok() {
+                let completion = match &result {
+                    Ok(_) => SpeechCompletion::Completed,
+                    Err(SpeechError::Cancelled) => SpeechCompletion::Cancelled,
+                    Err(error) => SpeechCompletion::Failed(error.clone()),
+                };
+                *operation
+                    .completion
+                    .lock()
+                    .map_err(|_| SpeechError::Unavailable)? = Some(completion);
                 view.active = None;
             }
             view.snapshot.state = if result.is_ok() || matches!(result, Err(SpeechError::Cancelled))
@@ -419,6 +449,10 @@ mod tests;
 #[cfg(test)]
 #[path = "epoch_tests.rs"]
 mod epoch_tests;
+
+#[cfg(test)]
+#[path = "owned_tests.rs"]
+mod owned_tests;
 
 #[cfg(all(test, windows))]
 #[path = "installed_tests.rs"]
