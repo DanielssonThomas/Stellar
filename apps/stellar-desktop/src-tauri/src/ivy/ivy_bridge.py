@@ -26,6 +26,7 @@ METHODS = {
                       'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
     'stellar.notification.inspect': {'session_id': str, 'admission_id': str, 'descriptor': dict},
+    'stellar.notification.reconcile': {'session_id': str},
     'stellar.background.bind': {'session_id': str, 'consentTicket': str},
     'stellar.background.inspect': {'session_id': str, 'bindingId': str, 'eventId': str, 'digest': str},
     'stellar.background.revoke': {'session_id': str, 'bindingId': str},
@@ -164,6 +165,8 @@ async def pump(conn, workspace=None, approvals=None):
     try:
         await pump_events(conn, workspace, approvals)
     finally:
+        if getattr(conn, 'notification_reconciler', None) is not None:
+            await conn.notification_reconciler.close()
         if approvals is not None:
             await approvals.cancel()
 
@@ -194,6 +197,8 @@ async def pump_events(conn, workspace, approvals):
                 revoked = revocation(params.get('payload'), str(PROFILE), params['session_id'], 'stellar-herdr')
             except ValueError:
                 raise Closed() from None
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                conn.notification_reconciler.invalidate()
             clean = project(params)
             clean.update(type=kind, payload=revoked)
             emit({'event': 'gateway', 'data': {'params': clean}})
@@ -418,6 +423,8 @@ async def replay_events(conn, params, workspace):
                 revoked = revocation(payload, str(PROFILE), params['session_id'], 'stellar-herdr')
             except ValueError:
                 raise Closed() from None
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                conn.notification_reconciler.invalidate()
             clean = project(event)
             clean.update(type=kind, payload=revoked)
             events.append(clean)
@@ -490,6 +497,8 @@ async def requests_with_workspace(conn, workspace, approvals=None):
     try:
         await request_worker(conn, workspace, queue, approvals)
     finally:
+        if getattr(conn, 'notification_reconciler', None) is not None:
+            await conn.notification_reconciler.close()
         reader.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await reader
@@ -586,6 +595,10 @@ async def request_worker(conn, workspace, queue, approvals=None):
         if isinstance(request, Exception):
             raise Closed() from None
         rid, method, params = request
+        reconciler = getattr(conn, 'notification_reconciler', None)
+        if method in {'session.create', 'session.resume', 'session.new', 'workspace.stop'}:
+            if reconciler is not None:
+                reconciler.pause()
         if method == 'runtime.describe':
             conn.background_v1 = False
         resuming = method == 'session.resume' and approvals is not None
@@ -593,7 +606,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'stellar.notification.inspect':
+            if method == 'stellar.notification.reconcile':
+                if reconciler is None:
+                    raise Refused('unavailable')
+                result = await reconciler.forward(params)
+            elif method == 'stellar.notification.inspect':
                 from stellar_ivy_notifications import inspect_forward
                 result = await inspect_forward(conn, params, str(PROFILE), DEADLINE)
                 final = (((result.get('host') or {}).get('result') or {}).get('result') or {}).get('final_response')
@@ -711,7 +728,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                     lifecycle_private_text(result, workspace)
                 else:
                     await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect', 'stellar.notification.inspect',
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect', 'stellar.notification.inspect', 'stellar.notification.reconcile',
                           *[m for m in METHODS if m.startswith('stellar.background.')]} or (
                           method == 'prompt.receipt' and 'background_v1' in result):
                 pass
@@ -756,6 +773,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 result = projected
             if method in {'session.create', 'session.resume'}:
                 conn.selected_session = result.get('session_id')
+                if reconciler is not None:
+                    if (not string(conn.selected_session) or
+                            (method == 'session.resume' and conn.selected_session != params['session_id'])):
+                        raise Closed()
+                    reconciler.select(conn.selected_session)
             if resuming:
                 approvals.finish_resume(True)
             emit({'id': rid, 'result': result})
@@ -796,6 +818,7 @@ async def serve():
         from stellar_workspace_service import WorkspaceService
         from stellar_ivy_approvals import Approvals, load_access
         from stellar_ivy_conversation import ConversationClient
+        from stellar_ivy_reconcile import Reconciler
         from stellar_ivy_voice_expression import installed, native_codex_transport
         from hermes_cli.gateway_client import GatewayRPCError
         try:
@@ -819,11 +842,13 @@ async def serve():
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)
+            conn.notification_reconciler = Reconciler(conn, DEADLINE, lambda error: failure_diagnostic(conn, error))
             if installed(PROFILE):
                 prime_config = asyncio.create_task(asyncio.to_thread(native_codex_transport))
             approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
-            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals))]
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals)),
+                     asyncio.create_task(conn.notification_reconciler.run())]
+            done, _ = await asyncio.wait(tasks[:2], return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
             return 0
@@ -842,6 +867,8 @@ async def serve():
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
         if conn is not None:
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                await conn.notification_reconciler.close()
             conn.lease.release()
             if getattr(conn, 'inspector', None) is not None:
                 await conn.inspector.close()

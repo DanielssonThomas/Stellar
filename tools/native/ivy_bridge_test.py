@@ -18,6 +18,7 @@ spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
+                       ('stellar_ivy_reconcile', 'ivy_reconcile.py'),
                        ('stellar_ivy_lifecycle', 'ivy_lifecycle.py'),
                        ('stellar_ivy_notifications', 'ivy_notifications.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
