@@ -17,7 +17,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(
-    "D:/Hermes/profiles/ivy/cache/scratch/stellar-339-recovery-qualification-20261113"
+    "D:/Hermes/profiles/ivy/cache/scratch/stellar-339-recovery-a88ccbd-20261114"
 )
 PIN = Path("D:/Hermes/profiles/ivy/cache/scratch/stellar-339-application-prep-20261113")
 SESSION = "01a1d110-be3a-7601-8966-985df380586a"
@@ -25,9 +25,9 @@ CANDIDATE = "6ebd6d755f607fc839f032109c5afc65ee9ab681"
 BASE = "3b421578588243f920886e6fe79a6faa87ea026e"
 BINARY = (
     ROOT
-    / "artifacts/issue-339/timer-e35a746-20261113/portable/stellar-desktop-a0eea43-e35a746.exe"
+    / "artifacts/issue-339/recovery-a88ccbd-20261114/portable/stellar-desktop-a0eea43-a88ccbd.exe"
 )
-EXE_SHA = "8b19d57277bf4dbfbb838b2672af05767d913b4a5c455649161cf63da455b63a"
+EXE_SHA = "619f72a5104b3d6a8e561ca8345cb7d709cc840a6d29e45aa0d9270827be304b"
 PROFILES = sorted(
     [
         "default",

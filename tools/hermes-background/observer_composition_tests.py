@@ -169,15 +169,30 @@ async def test_observed_exit_canonical_frames_receipt_dedupe_optout(composed):
                       if frame['params']['type'] == 'plugin.stellar-herdr.notification.revoked')
 
     consumer = Path(CONFIG['consumer_source']) / 'apps/stellar-desktop/src-tauri/src/ivy/ivy_bridge.py'
-    spec = importlib.util.spec_from_file_location('immutable_b619_bridge', consumer)
+    spec = importlib.util.spec_from_file_location('immutable_consumer_bridge', consumer)
     bridge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(bridge)
-    assert bridge.autonomous_start(start['params']['payload']) is False
+    # Marked notifications must retain their closed projection, never ordinary custody.
+    with pytest.raises(bridge.Closed):
+        bridge.autonomous_start(start['params']['payload'])
+    notice_spec = importlib.util.spec_from_file_location('stellar_ivy_notifications', consumer.with_name('ivy_notifications.py'))
+    notices = importlib.util.module_from_spec(notice_spec)
+    sys.modules[notice_spec.name] = notices
+    notice_spec.loader.exec_module(notices)
+    bridge.PROFILE = Path(enabled['binding']['profile_id'])
+    peer = SimpleNamespace(selected_session=enabled['binding']['owner_session_id'])
+    projected = []
+    for frame in (start, terminal):
+        params = frame['params']
+        projected.append(bridge.notification_payload(peer, params['payload'],
+            params['session_id'], params['admission_id'], params['type']))
+    assert projected == [{'plugin_notification': host['descriptor']}] * 2
     proof = {'fixture': True, 'inference': 'fake; no provider call', 'composition': CONFIG,
         'binding': enabled['binding'], 'event_id': event_id, 'raw_start': start,
         'raw_terminal': terminal, 'raw_revoke': revocation, 'raw_events': c.state.frames,
         'canonical_receipt_rpc': raw_receipt, 'producer_inspection_rpc': inspected,
-        'consumer_b619_accepts_internal_notification': False}
+        'consumer_notification_projection': projected,
+        'ordinary_notification_reclassification': False}
     (COMPOSITION / 'captured-host-frames.json').write_text(json.dumps(proof, indent=2) + '\n', encoding='utf-8')
 
 

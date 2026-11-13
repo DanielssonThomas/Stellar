@@ -180,7 +180,7 @@ native receipt checks, and rebuilds the native host with the unchanged verified 
 It verifies that the new executable contains the exact timer/bridge source; the retained older
 binary remains valid evidence for its older pair. No installed runtime or live delivery follows.
 
-The retained-record recovery qualification uses `prepare_recovery_qualification.py` to export
+The earlier retained-record recovery qualification uses `prepare_recovery_qualification.py` to export
 that exact pair with a test-only native module. A real disposable authority restart retains
 canonical receipts but changes the replay epoch. Consumer e35a746 rejects the resulting gap,
 including after authenticated notice revocation; original-host inspection is also unavailable
@@ -189,10 +189,21 @@ intact, but this is a verified refusal, not working recovery. Consumer same-sess
 recovery must be qualified before activation; clearing journals or merely replacing the cursor
 does not establish that missed events were recovered.
 
+The follow-up `prepare_recovery_composition.py` imports only sealed consumer a88ccbd over
+that retained pair, verifies all nineteen pre/postimages and unchanged source, and reuses
+Hermes candidate 6ebd6d7 and the same 534 renderer assets. `run_recovery_composition.py`
+executes actual source-runner authority/store fixtures and native recovery against their
+fresh captures. These cover retained notices, wholly missed completion, ordered revocation,
+speech claims and byte-identical fixture UNKNOWN state. Unsupported inspection is a transport
+fixture proving suppression, not a full live original-host recovery. The rebuilt client embeds
+both recovery modules; `seal_recovery_composition.py` checks all 2,381 production files and
+the exact embedded Python sources. No real uncertain submission or journal is retried or cleared.
+
 `tools/hermes-background/external_operator.py plan` records task-scoped metadata only. Its
 cutover/recovery entry requires a GREEN qualification and a separate explicit maintenance
 handoff after Ivy has informed the user and completed its response. It never infers completion
-from a timer or silence. The current qualification is BLOCKED. Planned effects include graceful
+from a timer or silence. Live cutover remains disabled pending that separate handoff and
+fresh quiescence/admission checks. Planned effects include graceful
 Desktop close, the eleven-profile host lifecycle, pinned maintained source application and the
 documented Ivy producer-code installation; settings/history are not restored over new records.
 Five minutes was an earlier interruption estimate, not an issue acceptance limit or hard cutoff.
