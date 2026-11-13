@@ -22,6 +22,11 @@ mod speech;
 mod telemetry;
 mod volume_ducking;
 
+// Native composition boundary only; these candidates have no WebView commands,
+// transport attestation provider or gesture adapter registered in this build.
+pub use ivy::lifecycle_custody::LifecycleCustody;
+pub use ivy::lifecycle_ports::{IvyLifecycleKind, IvyLifecycleLease, LifecyclePorts};
+
 fn main() {
     use tauri::{Emitter, Manager};
     debug_assert_eq!(awareness::contracts::AWARENESS_COMMANDS.len(), 3);

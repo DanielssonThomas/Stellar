@@ -20,6 +20,8 @@ static IDENTIFIERS: LazyLock<Option<IdentifierPolicy>> = LazyLock::new(|| {
 pub(super) const CAPABILITY: &str = "stellar.background.v1";
 pub(super) const CONTRACT_SHA256: &str =
     "008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724";
+pub(super) const INTERFACE_SHA256: &str =
+    "392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e";
 pub(super) const SAFE: u64 = 9_007_199_254_740_991;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

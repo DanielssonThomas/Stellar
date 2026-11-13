@@ -1,4 +1,6 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
+export type { IvyLifecycleKind, IvyLifecycleLease } from './generated';
+export { decodeIvyLifecycleLease } from './lib/lifecycle-codec';
 export type { IvyResponseSegment, IvyResponseSegmentKind } from './generated';
 export type {
   WorkspaceChartType,

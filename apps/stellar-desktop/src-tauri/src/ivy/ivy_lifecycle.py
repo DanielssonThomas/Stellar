@@ -6,6 +6,7 @@ from __future__ import annotations
 
 CAPABILITY = 'stellar.background.v1'
 CONTRACT_SHA256 = '008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724'
+INTERFACE_SHA256 = '392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e'
 SAFE = 2**53 - 1
 ORIGIN = {'profileId', 'sessionId', 'physicalTarget', 'route', 'producerId', 'workerIncarnation'}
 DESCRIPTOR = {'schemaVersion', 'capability', 'kind', 'bindingId', 'eventId', 'digest', 'origin',
@@ -90,7 +91,7 @@ def inspection(value, profile, session, request):
         raise ValueError('invalid background status')
     if 'descriptor' in value:
         card = descriptor(value['descriptor'], profile, session)
-        if any(card[k] != request[p] for k, p in [('bindingId', 'binding_id'), ('eventId', 'event_id'), ('digest', 'digest')]):
+        if any(card[k] != request[k] for k in ('bindingId', 'eventId', 'digest')):
             raise ValueError('background identity conflict')
         if type(value['deliveryAuthorized']) is not bool:
             raise ValueError('invalid background authority')
@@ -131,3 +132,51 @@ def inspection(value, profile, session, request):
                 or any(receipt[k] is None for k in ('authority_epoch', 'execution_generation'))):
             raise ValueError('invalid delivery authority')
     return value
+
+
+async def call(conn, method, params, profile, deadline):
+    import asyncio
+    if (not getattr(conn, 'background_v1', False)
+            or params['session_id'] != getattr(conn, 'selected_session', None)):
+        raise ValueError('background transport unavailable')
+    if method == 'stellar.background.bind':
+        hexadecimal(params['consentTicket'], 64)
+    else:
+        hexadecimal(params['bindingId'], 32)
+        if 'eventId' in params:
+            identifier(params['eventId'], 256)
+        if 'digest' in params:
+            hexadecimal(params['digest'], 64)
+        if 'operation' in params:
+            hexadecimal(params['operation'], 32)
+            if params['kind'] not in ('render', 'speech'):
+                raise ValueError('invalid background effect kind')
+    result = await asyncio.wait_for(conn.client.rpc(method, **params), deadline)
+    if method.endswith('.bind'):
+        bindings({'bindings': [result]}, profile, params['session_id'])
+    elif method.endswith('.inspect'):
+        inspection(result, profile, params['session_id'], params)
+    elif method.endswith('.begin'):
+        closed(result, {'status', 'execute'})
+        if type(result['execute']) is not bool or (result['status'], result['execute']) not in (
+                ('claimed', True), ('unknown', False), ('finished', False)):
+            raise ValueError('invalid background effect claim')
+    else:
+        closed(result, {'status', 'revocationCommitted', 'effectsStopped'})
+        if (type(result['revocationCommitted']) is not bool or type(result['effectsStopped']) is not bool
+                or (result['status'], result['revocationCommitted'], result['effectsStopped']) not in (
+                    ('active', False, False), ('revoking', True, False), ('revoked', True, True))):
+            raise ValueError('invalid background stop acknowledgement')
+    return result
+
+
+def canonical_receipt(value, profile, session):
+    if type(value) is not dict or 'background_v1' not in value or type(value.get('background_delivery_authorized')) is not bool:
+        raise ValueError('background receipt proof unavailable')
+    card = descriptor(value['background_v1'], profile, session)
+    fields = {'admission_id', 'ref', 'status', 'outcome', 'sequence', 'authority_epoch', 'execution_generation', 'result'}
+    receipt = {k: v for k, v in value.items() if k in fields}
+    inspection({'schemaVersion': 1, 'status': 'terminal' if value.get('status') == 'terminal' else 'admitted',
+        'retryAuthorized': False, 'descriptor': card, 'deliveryAuthorized': value['background_delivery_authorized'],
+        'receipt': receipt}, profile, session, card)
+    return {**receipt, 'background_v1': card, 'background_delivery_authorized': value['background_delivery_authorized']}

@@ -884,6 +884,110 @@ class ControlTests(unittest.IsolatedAsyncioTestCase):
 
 
 class LifecycleContractTests(unittest.IsolatedAsyncioTestCase):
+    def test_exact_pinned_producer_host_examples_and_parameter_names(self):
+        data=json.loads((SOURCE.parents[5]/'tools/native/fixtures/lifecycle-host-v1.json').read_text(encoding='utf-8'))
+        module=sys.modules['stellar_ivy_lifecycle']; examples=data['examples']
+        self.assertTrue(data['syntheticContext']); self.assertFalse(data['installedCapability'])
+        self.assertEqual(data['interfaceSha256'],module.INTERFACE_SHA256)
+        for method, fields in data['rpcMethods'].items():
+            self.assertEqual(set(bridge.METHODS[method]),set(fields))
+        card=examples['live']['params']['payload']['background_v1']; origin=card['origin']
+        self.assertEqual(module.descriptor(card,origin['profileId'],origin['sessionId']),card)
+        self.assertEqual(module.inspection(examples['inspect'],origin['profileId'],origin['sessionId'],card),examples['inspect'])
+        receipt=module.canonical_receipt(examples['promptReceipt'],origin['profileId'],origin['sessionId'])
+        self.assertEqual(receipt['background_v1'],card)
+        self.assertEqual({k:v for k,v in receipt.items() if not k.startswith('background_')},examples['inspect']['receipt'])
+        self.assertEqual(examples['replay']['events'][0]['payload']['background_v1'],card)
+
+    async def test_native_workspace_token_never_crosses_inspection_or_canonical_receipt(self):
+        data=self.fixture(); data['inspection']['receipt']['result']['final_response']='Answer contains NATIVE-TURN-TOKEN'
+        card=data['inspection']['descriptor']
+        class Workspace:
+            class Gate:
+                def disarm(self): pass
+            gate=Gate()
+            def redact(self, text): return text.replace('NATIVE-TURN-TOKEN','[redacted]')
+        for method in ('stellar.background.inspect','prompt.receipt'):
+            conn=Connection(); conn.selected_session='session'; conn.background_v1=True
+            result=data['inspection'] if method.endswith('.inspect') else {
+                **data['inspection']['receipt'],'background_v1':card,'background_delivery_authorized':True}
+            async def rpc(m, **params): return result
+            async def call(m, params): return result
+            conn.rpc=rpc; conn.call=call
+            params={'session_id':'session','bindingId':card['bindingId'],'eventId':card['eventId'],'digest':card['digest']} if method.endswith('.inspect') else {
+                'session_id':'session','admission_id':data['inspection']['receipt']['admission_id'],'include_result':True}
+            queue=asyncio.Queue(); await queue.put((1,method,params)); output=Pipe()
+            with patch.object(sys,'stdout',output), self.assertRaises(bridge.Closed):
+                await bridge.request_worker(conn,Workspace(),queue)
+            self.assertEqual(output.buffer.getvalue(),b'')
+
+    async def test_cold_host_denial_marker_alone_never_settles_foreground_or_legacy_receipt(self):
+        for flag in (False, None):
+            conn = Connection(); conn.active = {'session_id':'session','admission_id':'a'}
+            async def call(method, params):
+                return {'ref':{'session_id':'session'},'admission_id':'a','execution_generation':7,
+                    'status':'terminal','outcome':'completed','background_delivery_authorized':flag,
+                    'result':{'final_response':'Must not fall through'}}
+            conn.call = call
+            queue=asyncio.Queue(); await queue.put((1,'prompt.receipt',{'session_id':'session','admission_id':'a'}))
+            output=Pipe()
+            with patch.object(sys,'stdout',output), self.assertRaises((bridge.Closed, ValueError)):
+                await bridge.request_worker(conn,None,queue)
+            self.assertEqual(conn.lease.released,[]); self.assertIsNotNone(conn.active)
+            self.assertEqual(output.buffer.getvalue(),b'')
+
+    async def test_exact_canonical_lifecycle_receipt_is_projected_without_foreground_settlement(self):
+        data=self.fixture(); i=data['inspection']
+        conn=Connection(); conn.selected_session='session'; conn.background_v1=True
+        conn.active={'session_id':'session','admission_id':'foreground'}
+        async def call(method, params):
+            return {**i['receipt'],'usage':{},'background_v1':i['descriptor'],
+                    'background_delivery_authorized':True}
+        conn.call=call
+        queue=asyncio.Queue(); await queue.put((1,'prompt.receipt',{'session_id':'session','admission_id':i['receipt']['admission_id']})); await queue.put(None)
+        output=Pipe()
+        with patch.object(sys,'stdout',output): await bridge.request_worker(conn,None,queue)
+        result=json.loads(output.buffer.getvalue())['result']
+        self.assertEqual(result,{**i['receipt'],'background_v1':i['descriptor'],'background_delivery_authorized':True})
+        self.assertEqual(conn.lease.released,[]); self.assertIsNotNone(conn.active)
+
+    async def test_start_retains_tuple_and_unmarked_completion_is_only_an_inspection_trigger(self):
+        card=self.fixture()['inspection']['descriptor']
+        conn=Connection(); conn.selected_session='session'; conn.background_v1=True
+        base={'session_id':'session','admission_id':'a','authority_epoch':2,'execution_generation':7,'seq':1,'replay_epoch':'e'}
+        await conn.events.put({'params':{**base,'type':'message.start','payload':{'display_kind':'lifecycle_update','background_v1':card}}})
+        await conn.events.put({'params':{**base,'seq':2,'type':'message.interim','payload':{'text':'UNTRUSTED INTERIM','already_streamed':False}}})
+        await conn.events.put({'params':{**base,'seq':3,'type':'message.complete','payload':{'text':'UNTRUSTED TERMINAL','outcome':'completed'}}})
+        await conn.events.put(RuntimeError('stop')); output=Pipe()
+        with patch.object(sys,'stdout',output), self.assertRaises(bridge.Closed): await bridge.pump(conn)
+        frames=[json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
+        self.assertEqual([f['type'] for f in frames],['message.start','message.complete'])
+        self.assertTrue(all(f['payload']=={'background_v1':card} for f in frames))
+        self.assertNotIn(b'UNTRUSTED',output.buffer.getvalue()); self.assertEqual(conn.lease.released,[])
+
+    async def test_new_methods_are_closed_native_only_without_approve_submit_or_caller_client(self):
+        valid={'id':1,'method':'stellar.background.effect.begin','params':{'session_id':'session',
+            'bindingId':'1'*32,'eventId':'event','digest':'d'*64,'operation':'a'*32,'kind':'render'}}
+        bridge.validate(valid)
+        for patch in ({'client':'model'}, {'origin':{}}, {'profileId':'foreign'}, {'consent':True}):
+            with self.assertRaises(ValueError): bridge.validate({**valid,'params':{**valid['params'],**patch}})
+        for method in ('stellar.background.approve','stellar.background.submit','session.background.bindings'):
+            with self.assertRaises(ValueError): bridge.validate({**valid,'method':method})
+
+    async def test_effect_and_revoke_shapes_preserve_unknown_and_aggregate_stop_semantics(self):
+        module=sys.modules['stellar_ivy_lifecycle']; conn=Connection()
+        conn.selected_session='session'; conn.background_v1=True
+        params={'session_id':'session','bindingId':'1'*32,'eventId':'event','digest':'d'*64,'operation':'a'*32,'kind':'speech'}
+        for result in ({'status':'unknown','execute':False},{'status':'finished','execute':False},{'status':'claimed','execute':True}):
+            async def rpc(method, **p): return result
+            conn.rpc=rpc
+            self.assertEqual(await module.call(conn,'stellar.background.effect.begin',params,str(bridge.PROFILE),1),result)
+        for result in ({'status':'claimed','execute':1},{'status':'unknown','execute':True},{'status':'active','revocationCommitted':False,'effectsStopped':True}):
+            async def rpc(method, **p): return result
+            conn.rpc=rpc
+            method='stellar.background.effect.begin' if 'execute' in result else 'stellar.background.revoke'
+            with self.assertRaises(ValueError): await module.call(conn,method,params,str(bridge.PROFILE),1)
+
     async def test_lifecycle_canonical_receipt_cannot_fall_back_through_legacy_projection(self):
         conn = Connection(); conn.active = {'session_id':'session','admission_id':'a'}
         async def call(method, params):
@@ -929,7 +1033,8 @@ class LifecycleContractTests(unittest.IsolatedAsyncioTestCase):
             async def call(method, params):
                 return {'profile_id': str(bridge.PROFILE),
                         'capabilities': [*bridge.CAPABILITIES, module.CAPABILITY],
-                        'background_v1_contract_sha256': digest}
+                        'background_v1_contract_sha256': digest,
+                        'background_v1_interface_sha256': module.INTERFACE_SHA256}
             conn.call = call
             queue = asyncio.Queue(); await queue.put((1, 'runtime.describe', {})); await queue.put(None)
             output = Pipe()
@@ -999,17 +1104,17 @@ class LifecycleContractTests(unittest.IsolatedAsyncioTestCase):
         conn = Connection(); conn.selected_session = 'session'; conn.background_v1 = True
         card = data['inspection']['descriptor']
         async def rpc(method, **params):
-            return {'bindings': [data['binding']]} if method.endswith('.bindings') else data['inspection']
+            return data['binding'] if method.endswith('.bind') else data['inspection']
         conn.rpc = rpc
         queue = asyncio.Queue()
-        await queue.put((1, 'session.background.bindings', {'session_id': 'session'}))
-        await queue.put((2, 'session.background.inspect', {'session_id': 'session', 'binding_id': card['bindingId'],
-                        'event_id': card['eventId'], 'digest': card['digest']}))
+        await queue.put((1, 'stellar.background.bind', {'session_id': 'session', 'consentTicket': 'f' * 64}))
+        await queue.put((2, 'stellar.background.inspect', {'session_id': 'session', 'bindingId': card['bindingId'],
+                        'eventId': card['eventId'], 'digest': card['digest']}))
         await queue.put(None)
         output = Pipe()
         with patch.object(sys, 'stdout', output): await bridge.request_worker(conn, None, queue)
         rows = [json.loads(line) for line in output.buffer.getvalue().splitlines()]
-        self.assertEqual(rows[0]['result'], {'bindings': [data['binding']]})
+        self.assertEqual(rows[0]['result'], data['binding'])
         self.assertEqual(rows[1]['result'], data['inspection'])
         self.assertEqual(conn.active, None); self.assertEqual(conn.lease.released, [])
 
@@ -1017,7 +1122,7 @@ class LifecycleContractTests(unittest.IsolatedAsyncioTestCase):
         import copy
         module = sys.modules['stellar_ivy_lifecycle']
         data = self.fixture(); card = data['inspection']['descriptor']
-        request = {'binding_id': card['bindingId'], 'event_id': card['eventId'], 'digest': card['digest']}
+        request = {'bindingId': card['bindingId'], 'eventId': card['eventId'], 'digest': card['digest']}
         unknown = {'schemaVersion': 1, 'status': 'unknown', 'retryAuthorized': False}
         self.assertEqual(module.inspection(unknown, str(bridge.PROFILE), 'session', request), unknown)
         for mode in ('retry', 'profile', 'blank', 'oversized', 'extra', 'unknown_delivery', 'float'):

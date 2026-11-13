@@ -17,11 +17,9 @@ fn golden() -> Value {
 #[test]
 fn native_stages_exact_inspection_without_legacy_output_or_prompt_submission() {
     let g = golden();
-    let bindings = json!({"bindings":[g["binding"].clone()]})
-        .to_string()
-        .replace('\'', "''");
     let inspection = g["inspection"].to_string().replace('\'', "''");
     let contract_hash = super::lifecycle_contract::CONTRACT_SHA256;
+    let interface_hash = super::lifecycle_contract::INTERFACE_SHA256;
     let script = format!(
         r#"
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -29,9 +27,9 @@ fn native_stages_exact_inspection_without_legacy_output_or_prompt_submission() {
 while ($line=[Console]::ReadLine()) {{
  $r=$line|ConvertFrom-Json
  $value=switch($r.method) {{
-  'runtime.describe' {{ @{{profile='ivy';protocol=1;capabilities=@('stellar.background.v1');background_v1_contract_sha256='{contract_hash}'}} }}
-  'session.background.bindings' {{ '{bindings}'|ConvertFrom-Json }}
-  'session.background.inspect' {{ '{inspection}'|ConvertFrom-Json }}
+  'runtime.describe' {{ @{{profile='ivy';protocol=1;capabilities=@('stellar.background.v1');background_v1_contract_sha256='{contract_hash}';background_v1_interface_sha256='{interface_hash}'}} }}
+  'stellar.background.inspect' {{ '{inspection}'|ConvertFrom-Json }}
+  'prompt.receipt' {{ $i='{inspection}'|ConvertFrom-Json; $i.receipt|Add-Member background_v1 $i.descriptor; $i.receipt|Add-Member background_delivery_authorized $i.deliveryAuthorized; $i.receipt }}
   default {{ exit 17 }}
  }}
  [Console]::WriteLine((@{{id=$r.id;result=$value}}|ConvertTo-Json -Depth 20 -Compress))
@@ -46,6 +44,18 @@ while ($line=[Console]::ReadLine()) {{
         .stderr(Stdio::null())
         .creation_flags(0x08000000);
     let (mut session, directory) = fixture();
+    let mut custody = super::lifecycle_custody::LifecycleCustody::open(
+        session.lifecycle_custody_path("session"),
+        "session",
+        &"a".repeat(32),
+    )
+    .unwrap();
+    custody
+        .state
+        .bindings
+        .push(serde_json::from_value(g["binding"].clone()).unwrap());
+    custody.save().unwrap();
+    drop(custody);
     session.broker = Some(Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap());
     let card = g["inspection"]["descriptor"].clone();
     let event = json!({"event":"gateway","data":{"params":{
@@ -64,6 +74,7 @@ while ($line=[Console]::ReadLine()) {{
                 .unwrap()
                 .to_string_lossy()
                 .starts_with("ivy-lifecycle-")
+                && !p.to_string_lossy().contains("custody")
         })
         .collect::<Vec<_>>();
     assert_eq!(files.len(), 1);
@@ -82,7 +93,7 @@ while ($line=[Console]::ReadLine()) {{
     assert_eq!(session.event(downgrade), Err(IvyErrorCode::Protocol));
     assert_eq!(std::fs::read(&legacy_path).unwrap(), legacy_before);
     assert_eq!(std::fs::read(&files[0]).unwrap(), stored);
-    // The inert broker would exit on any legacy prompt.receipt fallback.
+    // The only receipt path above returns the exact descriptor and canonical flag.
     session.call("runtime.describe", json!({})).unwrap();
     let mut legacy = super::update_store::Updates::load(&legacy_path, "session").unwrap();
     legacy
@@ -100,6 +111,21 @@ while ($line=[Console]::ReadLine()) {{
     }}});
     assert_eq!(session.event(mixed), Err(IvyErrorCode::Protocol));
     assert_eq!(std::fs::read(&files[0]).unwrap(), stored);
+    // Producer guarantees the descriptor on start, not on every completion.
+    std::fs::write(&legacy_path, &legacy_before).unwrap();
+    let complete = json!({"event":"gateway","data":{"params":{
+        "session_id":"session","admission_id":"lifecycle-admission","authority_epoch":2,
+        "execution_generation":7,"seq":3,"replay_epoch":"epoch","type":"message.complete",
+        "payload":{"text":"Untrusted raw completion","outcome":"completed"}
+    }}});
+    session.event(complete).unwrap();
+    let resumed = super::lifecycle_store::Staging::load(&files[0], "session").unwrap();
+    assert_eq!(resumed.cursor, Some(("epoch".into(), 3)));
+    assert!(
+        !std::fs::read_to_string(&files[0])
+            .unwrap()
+            .contains("Untrusted raw")
+    );
     let state: Value = serde_json::from_slice(&stored).unwrap();
     assert_eq!(state["entries"][0]["descriptor"], card);
     assert_eq!(state["entries"][0]["withheld"], true); // golden grant is deliberately expired in real time
@@ -115,6 +141,33 @@ while ($line=[Console]::ReadLine()) {{
             .is_none()
     );
     assert!(session.record.unsettled);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn either_canonical_lifecycle_marker_cannot_settle_the_uncertain_foreground_record() {
+    let (mut session, directory) = fixture();
+    let previous = std::fs::read(directory.join("ivy-session.json")).unwrap();
+    for marker in [
+        json!({"background_delivery_authorized":false}),
+        json!({"background_v1":null}),
+    ] {
+        let mut receipt = json!({"ref":{"session_id":"session"},"admission_id":"admission","execution_generation":7});
+        receipt
+            .as_object_mut()
+            .unwrap()
+            .extend(marker.as_object().unwrap().clone());
+        assert_eq!(
+            session.accept_receipt(&receipt),
+            Err(IvyErrorCode::Protocol)
+        );
+        assert_eq!(
+            std::fs::read(directory.join("ivy-session.json")).unwrap(),
+            previous
+        );
+        assert!(session.record.unsettled);
+    }
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
 }
@@ -152,9 +205,6 @@ fn reconnect_persists_known_revocation_before_unknown_or_a_later_failed_read() {
         stage.observe(&b2, i2, "epoch", 2, now).unwrap();
         let mut revoked = b1;
         revoked.revoked = true;
-        let bindings = json!({"bindings":[revoked,b2]})
-            .to_string()
-            .replace('\'', "''");
         let unknown = json!({"schemaVersion":1,"status":"unknown","retryAuthorized":false});
         let mut denied = i1.clone();
         denied.delivery_authorized = Some(false);
@@ -162,6 +212,7 @@ fn reconnect_persists_known_revocation_before_unknown_or_a_later_failed_read() {
             if all_unknown {unknown.clone()} else {serde_json::to_value(denied).unwrap()},"other":unknown})
             .to_string().replace('\'',"''");
         let pin = super::lifecycle_contract::CONTRACT_SHA256;
+        let interface = super::lifecycle_contract::INTERFACE_SHA256;
         let script = format!(
             r#"
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -170,9 +221,9 @@ $answers='{responses}'|ConvertFrom-Json
 while($line=[Console]::ReadLine()) {{
  $r=$line|ConvertFrom-Json
  $v=switch($r.method) {{
-  'runtime.describe' {{ @{{profile='ivy';protocol=1;capabilities=@('stellar.background.v1');background_v1_contract_sha256='{pin}'}} }}
-  'session.background.bindings' {{ '{bindings}'|ConvertFrom-Json }}
-  'session.background.inspect' {{ $answers.PSObject.Properties[$r.params.event_id].Value }}
+  'runtime.describe' {{ @{{profile='ivy';protocol=1;capabilities=@('stellar.background.v1');background_v1_contract_sha256='{pin}';background_v1_interface_sha256='{interface}'}} }}
+  'stellar.background.inspect' {{ $answers.PSObject.Properties[$r.params.eventId].Value }}
+  'prompt.receipt' {{ $i=$answers.PSObject.Properties['event-é'].Value; $i.receipt|Add-Member background_v1 $i.descriptor; $i.receipt|Add-Member background_delivery_authorized $i.deliveryAuthorized; $i.receipt }}
   default {{ exit 17 }}
  }}
  [Console]::WriteLine((@{{id=$r.id;result=$v}}|ConvertTo-Json -Depth 20 -Compress))
@@ -187,6 +238,15 @@ while($line=[Console]::ReadLine()) {{
             .stderr(Stdio::null())
             .creation_flags(0x08000000);
         let (mut session, directory) = fixture();
+        let mut custody = super::lifecycle_custody::LifecycleCustody::open(
+            session.lifecycle_custody_path("session"),
+            "session",
+            &"a".repeat(32),
+        )
+        .unwrap();
+        custody.state.bindings = vec![revoked, b2];
+        custody.save().unwrap();
+        drop(custody);
         session.broker = Some(Broker::spawn(command, Arc::new(Mutex::new(None))).unwrap());
         session.call("runtime.describe", json!({})).unwrap();
         let hash = format!("{:x}", Sha256::digest(b"session"));

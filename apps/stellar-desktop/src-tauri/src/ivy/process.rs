@@ -290,6 +290,10 @@ impl Broker {
                             .and_then(Value::as_str)
                             == Some(super::lifecycle_contract::CONTRACT_SHA256)
                         && result
+                            .get("background_v1_interface_sha256")
+                            .and_then(Value::as_str)
+                            == Some(super::lifecycle_contract::INTERFACE_SHA256)
+                        && result
                             .get("capabilities")
                             .and_then(Value::as_array)
                             .is_some_and(|caps| {

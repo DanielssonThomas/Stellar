@@ -43,6 +43,7 @@ use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::chart_contracts::*;
 use ivy::contracts::*;
 use ivy::inspector_contracts::*;
+use ivy::lifecycle_effect_contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
 use ivy::workspace_contracts::*;
 use speech::*;
@@ -118,6 +119,8 @@ fn main() {
         IvyResponseSegment::decl(&config),
         IvySnapshot::decl(&config),
         IvyBackgroundUpdate::decl(&config),
+        IvyLifecycleKind::decl(&config),
+        IvyLifecycleLease::decl(&config),
         IvyClaimUpdateRequest::decl(&config),
         IvyInspectorRequest::decl(&config),
         IvySessionSummary::decl(&config),

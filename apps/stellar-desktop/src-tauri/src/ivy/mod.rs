@@ -23,10 +23,17 @@ pub(crate) mod inspector;
 pub mod inspector_contracts;
 mod journal;
 mod lifecycle;
+mod lifecycle_consent;
 mod lifecycle_consumer;
 mod lifecycle_contract;
+pub mod lifecycle_custody;
+#[cfg(test)]
+mod lifecycle_custody_tests;
+pub mod lifecycle_effect_contracts;
+mod lifecycle_effects;
 #[cfg(test)]
 mod lifecycle_integration_tests;
+pub mod lifecycle_ports;
 mod lifecycle_receipt;
 mod lifecycle_store;
 #[cfg(test)]
