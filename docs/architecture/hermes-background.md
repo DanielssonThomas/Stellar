@@ -322,3 +322,13 @@ The [stdlib-only exporter](../../tools/hermes-background/export_consent_unicode.
 code point and refuses a Unicode version change; `--check` verifies the committed bytes. The
 challenge digest uses sorted compact UTF-8 JSON and a fixed cross-language vector. Neither
 classification data nor test callback/digest fixtures attest a user or produce a real receipt.
+
+The additive [v3 integration design](../../config/hermes-compat/native-consent/operational-integration-v3.md)
+and [compact reviewed record](../../config/hermes-compat/native-consent/operational-integration-v3.json)
+propose guardian-owned native window/OS callback custody with a consumer-owned UI crate,
+explicit final-process pipe roles and canonical consent/ticket transaction fences. Critical
+technical review accepted the amended design for inactive development; no operational adapter
+is implemented by that document. Ivy must relay the exact file/interface partition. The
+cooperative TCB boundary remains proposed and unaccepted, the external release-policy root and
+OS closure remain unqualified, and the current runtime still withholds capability. No prompt,
+managed application, launch replacement, restart or delivery follows from design acceptance.
