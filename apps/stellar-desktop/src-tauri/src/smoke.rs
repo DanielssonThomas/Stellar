@@ -68,7 +68,16 @@ async fn smoke_capture_window(app: tauri::AppHandle, detailed: Option<bool>) -> 
     let captured =
         tauri::async_runtime::spawn_blocking(move || crate::ivy::capture_workspace_window(&app))
             .await
+            .inspect_err(|_| println!("STELLAR_SMOKE_STAGE capture-join-failure class=1"))
             .is_ok_and(|result| {
+                if let Err(error) = &result {
+                    let class = match error {
+                        crate::ivy::contracts::IvyErrorCode::Unavailable => 1,
+                        crate::ivy::contracts::IvyErrorCode::Timeout => 2,
+                        _ => 3,
+                    };
+                    println!("STELLAR_SMOKE_STAGE capture-result-failure class={class}");
+                }
                 result.is_ok_and(|image| {
                     if detailed == Some(true) {
                         let Ok(decoded) = ::image::load_from_memory(&image) else {
