@@ -172,6 +172,14 @@ mock reply. These checks use fake inference and mocked effect IPC;
 they do not qualify a live gateway, notification, voice playback or installation. Disposable Git
 metadata permits the unchanged native source-size check without touching an owning checkout.
 
+Consumer e35a746 adds the connection-owned reconciliation timer and private forwarding to the
+existing producer RPC. `compose_timer.py` verifies and applies only its sealed six-file delta to
+an immutable export of the qualified 5de9a09 pair. `verify_timer.py` checks the assembled timer
+against the real candidate admission store with a fake clock/inference, runs focused timing and
+native receipt checks, and rebuilds the native host with the unchanged verified renderer assets.
+It verifies that the new executable contains the exact timer/bridge source; the retained older
+binary remains valid evidence for its older pair. No installed runtime or live delivery follows.
+
 ## Identity templates and Hermes profiles
 
 ### Optional subscription-backed cloud profiles (30 October 2026)
