@@ -157,8 +157,20 @@ Inspection preserves the raw canonical host result and separately combines host 
 fresh local tracking/event evidence. Local opt-out closes eligibility before awaiting host
 revocation. A started/unknown host operation is not a successful physical-stop receipt. The host
 truthfully stamps `internal_notification` and a bound producer descriptor. Consumer checkpoint
-b61907d rejects that named marker; its owner must explicitly implement and review classification,
-receipt and cancellation handling. Do not strip the marker or manufacture process completion.
+5de9a09 implements the explicit named-notification classification, canonical inspection and
+binding-scoped revocation path. Earlier b61907d rejects it. Do not strip the marker or manufacture
+process completion. Installed-runtime and live Desktop acceptance remain separate gates.
+
+For disconnected final-pair qualification, `tools/hermes-background/compose_final.py` exports
+producer a0eea43 and applies the exact consumer e216f69-to-5de9a09 delta once after checking every
+preimage. It verifies consumer postimages and the uninstalled runtime patch, and compares the
+earlier and final captured frame schemas and source differences. It does not claim byte equality.
+`verify_final.py` consumes fresh canonical host frames through offline bridge projection and native tests,
+builds native code against the current production renderer, and runs that renderer's existing
+notification/speech-dispatch fixture. The native fixture replays captured inspection through an inert
+mock reply. These checks use fake inference and mocked effect IPC;
+they do not qualify a live gateway, notification, voice playback or installation. Disposable Git
+metadata permits the unchanged native source-size check without touching an owning checkout.
 
 ## Identity templates and Hermes profiles
 
