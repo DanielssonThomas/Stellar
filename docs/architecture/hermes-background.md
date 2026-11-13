@@ -414,7 +414,7 @@ replace them. Native positive constructors and operational attachment remain una
 The [shared test-graph verifier](../../tools/native/verify-shared-consent.mjs) combines pinned
 producer/consumer Git exports in a new Temp fixture. Only that fixture receives the paired
 root workspace, consumer crate manifest and test-only Desktop module edits. The root patch
-is retained as an unapplied artifact. Offline lock verification accepts only the local UI
+is retained as an applicability artifact. Offline lock verification accepts only the local UI
 package and Desktop test-dependency edges. An existing qualified interpreter must be named
 by `STELLAR_FIXTURE_PYTHON`; `STELLAR_FIXTURE_TARGET` may select an isolated build cache.
 The verifier builds frontend assets before compiling the complete Windows Cargo workspace,
@@ -422,3 +422,21 @@ then checks bindings and size. It installs no dependencies and launches no appli
 OS verifier. Reports retain immutable inputs, resolved tool/interpreter identities and
 actual check logs. Fixture tickets/objects never attest authentication, user input or
 TCB acceptance. Consumer source remains exclusively #299-owned.
+
+The single #339 integration writer subsequently imported frozen consumer e216f69 through
+a Git-generated aggregate snapshot with exact pre/postimage and file-mode checks, then
+applied the matching root-only patch once in its normally admitted checkout. The #299
+active checkout and claim were not changed. Imported consumer source includes runtime
+code; the new consent Cargo dependencies and client module remain test-only. The actual
+composition, rather than only its disposable precursor, received affected frontend/native
+checks and independent critical review. Neither application startup nor activation follows.
+
+The [guardian registry design](../../config/hermes-compat/native-consent/guardian-registry-v4-design.md)
+specifies retained process-object authentication on all three pipe pairs, original host
+connection ownership, explicit owned-window affirmative action and one-use OS callback
+custody. Critical review accepted the amended technical development design. Its positive
+factories are still absent: external policy custody/loaded-code closure, an exact versioned
+launch recipe, real native window/OS wrappers and host connection gate require separate
+review and genuine inputs. Private wire codecs need exact wire review before implementation.
+The cooperative TCB remains proposed and user-unaccepted; no OS, managed or runtime gate
+was opened by source composition or design acceptance.
