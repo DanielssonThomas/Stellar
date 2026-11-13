@@ -113,6 +113,24 @@ The [background compatibility architecture](../architecture/hermes-background.md
 `stellar.background.v1` candidate, executable process qualification, transaction tests and remaining
 host/consumer integration gates. It does not authorize installation or enable notification delivery.
 
+The trusted-local scope of [#339](https://github.com/DanielssonThomas/Stellar/issues/339)
+does not require adversarial same-user isolation, a guardian, biometric consent or an external
+policy root. Those inactive development candidates remain preserved and deferred. Explicit
+tracking, source verification, destination binding, durable deduplication, uncertain-outcome
+reconciliation and effective opt-out still apply, alongside existing approvals and repository
+governance. Notification evidence supplies no assignment, review, merge or deployment authority.
+
+On the qualified Hermes `3b421578588243f920886e6fe79a6faa87ea026e` sources,
+`PluginContext.inject_message` returns scheduling success, generates a new admission identity
+on dispatch and exposes no exact-event inspect or withdrawal operation. `post_message` provides
+real session-bound notices, but its process-local handle does not provide restart-safe event
+recovery. The existing native automation queue is reusable; these public APIs do not yet expose
+the supported stable-event admission, inspection and opt-out operations needed by the observer.
+Genuine `terminal(background=true, notify_on_complete=true)` completion remains a separate
+supported lifecycle path where the calling session supports asynchronous delivery. It must not
+be fabricated to represent an arbitrary GitHub observation. No runtime activation follows from
+this source qualification; named-Ivy Desktop delivery remains unverified.
+
 ## Identity templates and Hermes profiles
 
 ### Optional subscription-backed cloud profiles (30 October 2026)
