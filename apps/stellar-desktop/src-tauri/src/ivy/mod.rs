@@ -142,6 +142,9 @@ pub fn ivy_connect(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Connect)
 }
@@ -152,6 +155,9 @@ pub fn ivy_submit(
     speech: tauri::State<'_, crate::speech::SpeechHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     let request: IvySubmitRequest =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
@@ -168,6 +174,9 @@ pub fn ivy_cancel(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Cancel)
 }
@@ -177,6 +186,9 @@ pub fn ivy_reconcile(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<IvySnapshot, IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     validate(request)?;
     host.request(Action::Reconcile)
 }
@@ -245,6 +257,9 @@ pub fn workspace_tool_reply(
     host: tauri::State<'_, IvyHost>,
     request: Option<serde_json::Value>,
 ) -> Result<(), IvyErrorCode> {
+    if cfg!(feature = "native-smoke") {
+        return Err(IvyErrorCode::Unavailable);
+    }
     let reply: workspace_contracts::WorkspaceToolReply =
         serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
             .map_err(|_| IvyErrorCode::MalformedRequest)?;
