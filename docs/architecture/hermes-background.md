@@ -365,3 +365,36 @@ Production constructors for those trust capabilities remain unavailable. No actu
 listener, verifier, launch, host ticket, journal/schema or consumer UI/client composition is
 introduced; canonical schema work still requires its prior critical review. All existing
 artifact pins, original journals and proposed-but-unaccepted TCB boundary remain intact.
+
+The separately [reviewed consent-journal proposal](../../config/hermes-compat/native-consent/consent-journal-v3-proposal.md)
+now has an [uninstalled DB-domain implementation](../../config/hermes-compat/native-consent/journal_v3/__init__.py).
+It opens no database, registers no RPC and returns no consent/receipt. Explicit migration and
+all mutations run on the caller's canonical transaction connection. Two STRICT tables retain
+scope/context digests, monotonic attempt state and a conservative permanent Ivy profile latch;
+no retry, retirement, reset, re-enrollment or journal-removal operation is provided. Even known
+pre-issue cancellation keeps this initial latch. This stricter refusal is not a new grant path.
+
+Verification checks byte-exact table/trigger/index identities, bounded row integrity, canonical
+JSON and case-insensitive reserved namespace/reference classification. TEMP objects, attached
+databases, prerequisite views and incompatible connection settings refuse. WAL, FULL/EXTRA
+synchronous mode and recursive triggers are checked without changing them. Compatibility of
+those settings with managed operation remains unqualified; only disposable fixtures configure
+them. Local schema hashes do not authenticate a replaced database or an approved launch root.
+
+The actual pinned writer retries some BUSY/LOCKED/no-more-rows errors after callback entry.
+`once`, `write_once` and the data-only `OneShotWriter` delegation fence callback re-entry before
+work, including the legacy Ledger binding INSERT. Unknown commit outcomes propagate with no
+success reconstruction. A fresh binding hook checks current transaction time, inserts its
+owner and consumes journal state atomically. Sticky cancellation shares that transaction
+domain. The existing revocation SQL was extracted unchanged to `_revoke_on` for composition;
+snapshot postconditions preserve binding identity, owner, events, effects and nonqueued
+admissions while cancelling only exact queued work and retaining obligations. No physical
+cleanup, native confirmation or current-lease validity is inferred from those DB facts.
+
+[Isolated tests](../../tools/hermes-background/test_consent_journal.py) use fresh temporary
+canonical databases and actual pinned SessionDB/ledger transaction code, with synthetic
+context and runtime/network/process dispatch blocked. Schema design review preceded code;
+independent critical code review and fault/race/clock tests followed. The current host is not
+wired to the journal and no managed migration/package update occurred. Actual host ticket,
+authenticated attachment, native/OS/launch integration, power-loss behavior and operational
+TCB acceptance remain separate gates. Existing immutable v3 contract/design files are intact.

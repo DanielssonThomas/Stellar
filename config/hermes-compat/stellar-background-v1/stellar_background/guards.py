@@ -117,14 +117,15 @@ class GuardMixin:
                 'revocationCommitted': bool(revoked), 'effectsStopped': bool(revoked) and active == 0}
 
     def revoke(self, binding_id):
-        def write(conn):
-            binding = self._get(conn, binding_id)
-            from .cancellations import reserve
-            reserve(conn, binding_id)
-            conn.execute('UPDATE stellar_bg_bindings_v1 SET revoked=1 WHERE binding_id=?', (binding_id,))
-            conn.execute("UPDATE session_admissions SET status='terminal',outcome='cancelled' "
-                "WHERE status='queued' AND principal_id=? AND target_session_id=? AND request_id IN "
-                '(SELECT request_id FROM stellar_bg_events_v1 WHERE binding_id=?)',
-                ('automation:' + binding['origin']['route'], binding['origin']['sessionId'], binding_id))
-            return self._revocation(conn, binding_id)
-        return self.db._execute_write(write)
+        return self.db._execute_write(lambda conn: self._revoke_on(conn, binding_id))
+
+    def _revoke_on(self, conn, binding_id):
+        binding = self._get(conn, binding_id)
+        from .cancellations import reserve
+        reserve(conn, binding_id)
+        conn.execute('UPDATE stellar_bg_bindings_v1 SET revoked=1 WHERE binding_id=?', (binding_id,))
+        conn.execute("UPDATE session_admissions SET status='terminal',outcome='cancelled' "
+            "WHERE status='queued' AND principal_id=? AND target_session_id=? AND request_id IN "
+            '(SELECT request_id FROM stellar_bg_events_v1 WHERE binding_id=?)',
+            ('automation:' + binding['origin']['route'], binding['origin']['sessionId'], binding_id))
+        return self._revocation(conn, binding_id)
