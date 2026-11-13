@@ -24,6 +24,45 @@ function show(surface: string, payload: unknown) {
 }
 
 describe(decodeSpatialScore.name, () => {
+  it('validates issue details in prepare, segment actions and after while preserving other surfaces', () => {
+    const payload = {
+      title: 'Issue',
+      repository: 'example/repo',
+      issue_number: 12,
+      source: 'https://github.com/example/repo/issues/12',
+      observed_at_ms: null,
+      status: 'loading',
+      issue: null,
+    };
+    const catalogue = TestBed.inject(STAGE_CATALOGUE);
+    const score = (value: unknown) => ({
+      prepare: [show('github-issue', value)],
+      segments: [
+        {
+          text: 'An observed issue.',
+          actions: [show('github-issue', value)],
+          after: [show('github-issue', value)],
+        },
+      ],
+    });
+    expect(decodeSpatialScore(score(payload), catalogue)).not.toBeNull();
+    expect(
+      decodeSpatialScore(
+        score({ ...payload, source: 'https://evil.example/' }),
+        catalogue,
+      ),
+    ).toBeNull();
+    expect(
+      decodeSpatialScore(score({ ...payload, status: 'ready' }), catalogue),
+    ).toBeNull();
+    expect(catalogue['chart'].decode({ title: 'Chart', chart })).not.toBeNull();
+    expect(
+      catalogue['github-issue'].decode({
+        ...payload,
+        issue: { state: 'open' },
+      }),
+    ).toBeNull();
+  });
   it('admits a standalone chart in the preparation actions', () => {
     const payload = { title: 'Volume', chart };
     const score = decodeSpatialScore(

@@ -1,5 +1,115 @@
 import { expect, test, type Page } from '@playwright/test';
 import { controlPane } from './stage-driver';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+for (const width of [1600, 520]) {
+  test(`observed GitHub issue supports ${width}px layout, keyboard, states and reduced motion`, async ({
+    page,
+  }, info) => {
+    const payload = JSON.parse(
+      readFileSync(
+        resolve(
+          'apps/stellar-desktop-e2e/src/fixtures/observed-issue-349.json',
+        ),
+        'utf8',
+      ),
+    );
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await expect(page.locator('stellar-root')).toHaveAttribute(
+      'data-desktop-ready',
+      'true',
+    );
+    const shared = { instanceId: 'observed-issue', surface: 'github-issue' };
+    expect(
+      await present(page, {
+        ...shared,
+        commandId: 1,
+        action: 'open',
+        prominence: 'primary',
+        payload,
+      }),
+    ).toBe('applied');
+    const pane = page.locator('[data-instance-id="observed-issue"]');
+    const issue = pane.getByRole('article', { name: 'GitHub issue card' });
+    await expect(
+      issue.getByRole('heading', { name: payload.title }),
+    ).toBeVisible();
+    await expect(issue).toContainText('DanielssonThomas/Stellar #349');
+    await expect(issue.locator('dd')).toHaveText([
+      'open',
+      'status:in-progress',
+      'worker:foreman-cloud',
+    ]);
+    await expect(issue.locator('time')).toHaveAttribute(
+      'datetime',
+      new Date(Number(payload.observed_at_ms)).toISOString(),
+    );
+    await expect(
+      issue.getByRole('region', { name: 'Issue blockers' }),
+    ).toContainText('None observed');
+    await expect(
+      issue.getByRole('region', { name: 'Linked pull requests' }),
+    ).toContainText('Not observed');
+    const columns = await issue
+      .locator('dl')
+      .evaluate(
+        (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
+      );
+    expect(columns).toBe(width === 1600 ? 3 : 1);
+    const source = issue.getByRole('link', { name: /View source/ });
+    await pane.getByRole('group').focus();
+    await page.keyboard.press('Tab');
+    await expect(source).toBeFocused();
+    await expect(source).toHaveAttribute('href', payload.source);
+    await expect(source).toHaveCSS('outline-style', 'solid');
+    await expect
+      .poll(() => issue.evaluate((el) => el.scrollWidth <= el.clientWidth))
+      .toBe(true);
+    await pane.screenshot({
+      path: info.outputPath(`observed-issue-349-${width}.png`),
+      animations: 'disabled',
+    });
+    expect(
+      await present(page, {
+        ...shared,
+        commandId: 2,
+        action: 'update',
+        payload: { ...payload, status: 'stale' },
+      }),
+    ).toBe('applied');
+    await expect(issue.getByText(/Stale observation/)).toBeVisible();
+    for (const [index, status] of [
+      'loading',
+      'unavailable',
+      'error',
+    ].entries()) {
+      expect(
+        await present(page, {
+          ...shared,
+          commandId: index + 3,
+          action: 'update',
+          payload: { ...payload, status, issue: null, observed_at_ms: null },
+        }),
+      ).toBe('applied');
+      await expect(
+        pane.locator('stellar-presentation-issue-molecule'),
+      ).toHaveAttribute('data-render-state', status);
+      await expect(issue.locator('dd')).toHaveCount(0);
+    }
+    expect(
+      await present(page, {
+        ...shared,
+        commandId: 6,
+        action: 'update',
+        payload: { ...payload, source: 'javascript:alert(1)' },
+      }),
+    ).toBe('rejected');
+    await expect(issue.getByText('Issue retrieval failed')).toBeVisible();
+  });
+}
 
 const present = (page: Page, command: Record<string, unknown>) =>
   page.evaluate((command) => {

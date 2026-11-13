@@ -50,3 +50,4 @@ export * from './lib/molecules/ivy-question-molecule.component';
 export * from './lib/molecules/ivy-session-inspector-molecule.component';
 export * from './lib/molecules/presentation-chart-molecule.component';
 export * from './lib/molecules/response-caption-molecule.component';
+export * from './lib/molecules/presentation-issue-molecule.component';

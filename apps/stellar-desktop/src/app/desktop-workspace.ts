@@ -25,6 +25,7 @@ const surfaces: readonly string[] = [
   'browser',
   'diagram',
   'chart',
+  'github-issue',
   'workflow',
   'session',
   'assistant-message',

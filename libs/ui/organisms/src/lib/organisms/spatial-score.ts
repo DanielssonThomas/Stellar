@@ -10,7 +10,7 @@ import { boundedJson, plainRecord } from './stage-json';
 import { isBundledBriefingArtwork } from '@stellar/ui-molecules';
 import { presentationText as text, publicHttps } from './presentation-decoders';
 
-const surfaces = ['rich-text', 'chart', 'image', 'diagram'];
+const surfaces = ['rich-text', 'chart', 'image', 'diagram', 'github-issue'];
 const keys = (value: Record<string, unknown>, allowed: string) =>
   Object.keys(value).every((key) => allowed.split(' ').includes(key));
 const id = (value: unknown): value is string =>

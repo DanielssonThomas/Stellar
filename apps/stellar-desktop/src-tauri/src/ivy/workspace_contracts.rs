@@ -12,6 +12,7 @@ pub enum WorkspaceSurface {
     Browser,
     Diagram,
     Chart,
+    GithubIssue,
     Workflow,
     Session,
     AssistantMessage,

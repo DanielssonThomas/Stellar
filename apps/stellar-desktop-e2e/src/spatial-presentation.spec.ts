@@ -478,6 +478,102 @@ test('shows historical engineering evidence and unavailable measurements on the 
   expect(await pagePort(page)).toBe(0);
 });
 
+test('presents the observed GitHub issue through an admitted spatial score', async ({
+  page,
+}, info) => {
+  const payload = JSON.parse(
+    readFileSync(
+      resolve('apps/stellar-desktop-e2e/src/fixtures/observed-issue-349.json'),
+      'utf8',
+    ),
+  );
+  await mockNative(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.locator('stellar-root')).toHaveAttribute(
+    'data-desktop-ready',
+    'true',
+  );
+  const panel = {
+    id: 'github-349',
+    title: 'Stellar #349',
+    category: 'GitHub issue',
+    summary: payload.title,
+    source: payload.source,
+    detail: { surface: 'github-issue', payload },
+  };
+  await submitSpatial(page, {
+    begin: { title: 'Observed engineering issue', label: 'GitHub observation' },
+    prepare: [
+      { kind: 'show', panel },
+      { kind: 'focus', id: panel.id },
+      { kind: 'expand', id: panel.id },
+    ],
+  });
+  const issue = card(page, panel.id).getByRole('article', {
+    name: 'GitHub issue card',
+  });
+  await expect(
+    issue.getByRole('heading', { name: payload.title }),
+  ).toBeVisible();
+  await expect(issue.locator('dd')).toHaveText([
+    'open',
+    'status:in-progress',
+    'worker:foreman-cloud',
+  ]);
+  await expect(
+    issue.getByRole('link', { name: /View source/ }),
+  ).toHaveAttribute('href', payload.source);
+  await card(page, panel.id).screenshot({
+    path: info.outputPath('observed-issue-349-spatial.png'),
+    animations: 'disabled',
+  });
+  const replies = () =>
+    page.evaluate(() =>
+      (window as unknown as { spatial: ScorePort }).spatial.replies.map(
+        (reply) => reply.outcome.kind,
+      ),
+    );
+  await expect.poll(replies).toEqual(['applied']);
+  await submitSpatial(page, {
+    prepare: [
+      {
+        kind: 'show',
+        panel: {
+          ...panel,
+          detail: {
+            surface: 'github-issue',
+            payload: { ...payload, issue: null },
+          },
+        },
+      },
+    ],
+  });
+  // Malformed native frames are refused before the handler or reply correlation is admitted.
+  expect(await replies()).toEqual(['applied']);
+  await expect(
+    issue.getByRole('heading', { name: payload.title }),
+  ).toBeVisible();
+  await submitSpatial(page, {
+    prepare: [
+      {
+        kind: 'show',
+        panel: {
+          ...panel,
+          detail: {
+            surface: 'github-issue',
+            payload: { ...payload, title: 'Revalidated issue' },
+          },
+        },
+      },
+    ],
+  });
+  await expect.poll(replies).toEqual(['applied', 'applied']);
+  await expect(
+    issue.getByRole('heading', { name: 'Revalidated issue' }),
+  ).toBeVisible();
+});
+
 test('accepts an admitted score and a later workspace tool update', async ({
   page,
 }) => {

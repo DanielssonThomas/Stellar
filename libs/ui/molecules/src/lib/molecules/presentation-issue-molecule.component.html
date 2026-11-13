@@ -1,0 +1,134 @@
+<article
+  class="space-y-4 p-4 text-stellar-foreground"
+  aria-label="GitHub issue card"
+>
+  @if (value(); as card) {
+    <header>
+      <p class="text-sm text-stellar-muted">
+        {{ card.repository }} #{{ card.issue_number }}
+      </p>
+      <h2 class="text-lg font-semibold break-words">{{ card.title }}</h2>
+    </header>
+    @if (busy()) {
+      <div role="status" aria-label="Loading issue">
+        <stellar-skeleton-atom shape="text" />
+      </div>
+    } @else if (card.issue; as issue) {
+      @if (stale()) {
+        <p role="status">
+          Stale observation — refresh from GitHub before relying on it.
+        </p>
+      }
+      <dl class="issue-facts grid gap-3">
+        <div>
+          <dt class="text-sm text-stellar-muted">GitHub state</dt>
+          <dd>{{ issue.state }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-stellar-muted">Workflow status</dt>
+          <dd>{{ issue.workflow_status ?? 'Not observed' }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm text-stellar-muted">Owner</dt>
+          <dd>{{ issue.owner ?? 'Not observed' }}</dd>
+        </div>
+      </dl>
+      <p class="whitespace-pre-wrap break-words">
+        {{ issue.description ?? 'Description not observed' }}
+      </p>
+      <section aria-label="Issue labels">
+        <h3 class="font-semibold">Labels</h3>
+        @if (issue.labels === null) {
+          <p>Not observed</p>
+        } @else if (!issue.labels.length) {
+          <p>None observed</p>
+        } @else {
+          <ul class="flex flex-wrap gap-2">
+            @for (label of issue.labels; track label) {
+              <li
+                class="rounded border border-stellar-line px-2 py-1 text-sm break-words"
+              >
+                {{ label }}
+              </li>
+            }
+          </ul>
+        }
+      </section>
+      <section aria-label="Issue blockers">
+        <h3 class="font-semibold">Blockers</h3>
+        @if (issue.blockers === null) {
+          <p>Not observed</p>
+        } @else if (!issue.blockers.length) {
+          <p>None observed</p>
+        } @else {
+          <ul>
+            @for (
+              ref of issue.blockers;
+              track ref.repository + '#' + ref.number
+            ) {
+              <li>
+                <a
+                  [href]="referenceUrl(ref, 'issues')"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >{{ ref.repository }} #{{ ref.number }} — {{ ref.title }}</a
+                >
+              </li>
+            }
+          </ul>
+        }
+      </section>
+      <section aria-label="Linked pull requests">
+        <h3 class="font-semibold">Linked pull requests</h3>
+        @if (issue.pull_requests === null) {
+          <p>Not observed</p>
+        } @else if (!issue.pull_requests.length) {
+          <p>None observed</p>
+        } @else {
+          <ul>
+            @for (
+              ref of issue.pull_requests;
+              track ref.repository + '#' + ref.number
+            ) {
+              <li>
+                <a
+                  [href]="referenceUrl(ref, 'pull')"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >{{ ref.repository }} #{{ ref.number }} — {{ ref.title }}</a
+                >
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    } @else {
+      <p role="status">
+        {{
+          card.status === 'error'
+            ? 'Issue retrieval failed'
+            : 'Issue metadata unavailable'
+        }}
+      </p>
+    }
+    <footer class="space-y-2 text-sm text-stellar-muted">
+      <a [href]="card.source" target="_blank" rel="noopener noreferrer"
+        >View source on GitHub (opens a new tab)</a
+      >
+      @if (observed(); as time) {
+        <p>
+          Observed <time [attr.datetime]="time">{{ time }}</time> · Snapshot,
+          not live
+        </p>
+      } @else {
+        <p>Observation time unavailable</p>
+      }
+    </footer>
+  } @else if (busy()) {
+    <div role="status" aria-label="Loading issue">
+      <stellar-skeleton-atom shape="text" />
+    </div>
+  } @else {
+    <p role="status">Issue card unavailable: missing or invalid payload</p>
+  }
+</article>

@@ -73,6 +73,7 @@ function workspace(value: unknown): AwarenessWorkspace | null {
           'browser',
           'diagram',
           'chart',
+          'github-issue',
           'workflow',
           'session',
           'assistant-message',

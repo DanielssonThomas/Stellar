@@ -12,6 +12,10 @@ pub mod contracts;
 mod host;
 pub(crate) mod inspector;
 pub mod inspector_contracts;
+pub mod issue_contracts;
+#[cfg(test)]
+mod issue_tests;
+mod issue_validate;
 mod journal;
 mod lifecycle;
 #[cfg(test)]
