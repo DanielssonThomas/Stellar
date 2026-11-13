@@ -35,6 +35,7 @@ mod lifecycle_effects;
 mod lifecycle_integration_tests;
 pub mod lifecycle_ports;
 mod lifecycle_receipt;
+pub mod lifecycle_speech;
 mod lifecycle_store;
 #[cfg(test)]
 mod lifecycle_tests;

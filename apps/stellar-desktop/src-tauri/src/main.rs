@@ -26,6 +26,8 @@ mod volume_ducking;
 // transport attestation provider or gesture adapter registered in this build.
 pub use ivy::lifecycle_custody::LifecycleCustody;
 pub use ivy::lifecycle_ports::{IvyLifecycleKind, IvyLifecycleLease, LifecyclePorts};
+pub use ivy::lifecycle_speech::LifecycleSpeechResources;
+pub use speech::{OwnedSpeech, SpeechCompletion};
 
 fn main() {
     use tauri::{Emitter, Manager};

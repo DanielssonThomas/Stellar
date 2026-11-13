@@ -4,6 +4,7 @@ mod expression;
 mod frames;
 mod host;
 mod keywords;
+mod owned;
 use crate::owned_child;
 mod process;
 mod scratch;
@@ -14,6 +15,7 @@ mod warm_worker;
 use contracts::*;
 pub(crate) use expression::Pending as VoiceExpressionPending;
 pub use host::SpeechHost;
+pub use owned::{OwnedSpeech, SpeechCompletion};
 
 #[tauri::command]
 pub fn speech_set_ducking(
