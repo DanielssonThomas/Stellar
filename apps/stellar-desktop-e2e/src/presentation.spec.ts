@@ -9,9 +9,7 @@ for (const width of [1600, 520]) {
   }, info) => {
     const payload = JSON.parse(
       readFileSync(
-        resolve(
-          'apps/stellar-desktop-e2e/src/fixtures/observed-issue-349.json',
-        ),
+        resolve(__dirname, 'fixtures/observed-issue-349.json'),
         'utf8',
       ),
     );

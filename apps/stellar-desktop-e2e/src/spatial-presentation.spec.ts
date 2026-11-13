@@ -483,7 +483,7 @@ test('presents the observed GitHub issue through an admitted spatial score', asy
 }, info) => {
   const payload = JSON.parse(
     readFileSync(
-      resolve('apps/stellar-desktop-e2e/src/fixtures/observed-issue-349.json'),
+      resolve(__dirname, 'fixtures/observed-issue-349.json'),
       'utf8',
     ),
   );
