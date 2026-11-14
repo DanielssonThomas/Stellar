@@ -1,8 +1,10 @@
+import type { UpdateVoiceFailure } from '@stellar/service-desktop-adapter';
 import { computed, Injectable, signal, untracked } from '@angular/core';
 
 export type FaultSource =
   | 'assistant'
   | 'voice'
+  | 'update_voice'
   | 'artwork'
   | 'microphone'
   | 'desktop';
@@ -15,6 +17,7 @@ export interface DesktopFaultEntry {
   readonly message: string;
   readonly status: FaultStatus;
   readonly count: number;
+  readonly diagnostic?: string;
 }
 
 type StoredFault = DesktopFaultEntry & {
@@ -63,6 +66,21 @@ const definitions: Record<
       failure: 'Local voice could not complete the request. Retry voice.',
     },
   },
+  update_voice: {
+    category: 'Voice update',
+    messages: {
+      claim:
+        'The update is available as text. Its speech claim acknowledgement is uncertain; speech will not be retried automatically.',
+      speech_ready:
+        'The update is available as text. Local speech is unavailable.',
+      speech_dispatch:
+        'The update is available as text. Local speech did not complete.',
+      speech_completion:
+        'The update is available as text. Speech completion could not be confirmed.',
+      speech_stop:
+        'Stopping update speech could not be confirmed. The update remains available as text.',
+    },
+  },
   artwork: {
     category: 'Artwork',
     messages: {
@@ -101,8 +119,17 @@ export class DesktopFaults {
   private nextId = 0;
 
   readonly entries = computed<readonly DesktopFaultEntry[]>(() =>
-    this.history().map(({ id, time, category, message, status, count }) =>
-      Object.freeze({ id, time, category, message, status, count }),
+    this.history().map(
+      ({ id, time, category, message, status, count, diagnostic }) =>
+        Object.freeze({
+          id,
+          time,
+          category,
+          message,
+          status,
+          count,
+          ...(diagnostic ? { diagnostic } : {}),
+        }),
     ),
   );
   readonly active = computed(() =>
@@ -114,7 +141,44 @@ export class DesktopFaults {
     untracked(() => this.record(source, code));
   }
 
-  private record(source: FaultSource, code: string | null): void {
+  observeUpdate(failure: UpdateVoiceFailure | null): void {
+    if (!failure) {
+      this.observe('update_voice', null);
+      return;
+    }
+    const id = (value: string | null) =>
+      value && /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? value : 'unavailable';
+    const stage = Object.hasOwn(
+      definitions.update_voice.messages,
+      failure.stage,
+    )
+      ? failure.stage
+      : 'unknown';
+    const code = ['failed', 'timeout', 'unavailable'].includes(failure.code)
+      ? failure.code
+      : 'unknown';
+    const diagnostic =
+      'Stage: ' +
+      stage +
+      '; code: ' +
+      code +
+      '; admission: ' +
+      id(failure.admissionId) +
+      '; claim: ' +
+      id(failure.claimId) +
+      '; operation: ' +
+      id(failure.operationId);
+    untracked(() =>
+      this.record('update_voice', stage, diagnostic, failure.time),
+    );
+  }
+
+  private record(
+    source: FaultSource,
+    code: string | null,
+    diagnostic?: string,
+    observedAt?: string,
+  ): void {
     if (!Object.hasOwn(definitions, source)) return;
     const definition = definitions[source];
     const known =
@@ -125,7 +189,12 @@ export class DesktopFaults {
       (entry) => entry.source === source && entry.status !== 'resolved',
     );
     if (code === null && !current) return;
-    if (code !== null && current?.code === known) return;
+    if (
+      code !== null &&
+      current?.code === known &&
+      current?.diagnostic === diagnostic
+    )
+      return;
     let entries = this.history().map((entry) =>
       entry.source === source && entry.status !== 'resolved'
         ? { ...entry, status: 'resolved' as const }
@@ -134,9 +203,15 @@ export class DesktopFaults {
     if (code !== null) {
       this.opened.set(true);
       const previous = entries.find(
-        (entry) => entry.source === source && entry.code === known,
+        (entry) =>
+          entry.source === source &&
+          entry.code === known &&
+          entry.diagnostic === diagnostic,
       );
-      const now = new Date().toISOString();
+      const now =
+        observedAt && Number.isFinite(Date.parse(observedAt))
+          ? new Date(observedAt).toISOString()
+          : new Date().toISOString();
       const next: StoredFault = previous
         ? {
             ...previous,
@@ -155,6 +230,7 @@ export class DesktopFaults {
               `${definition.category} reported an unexpected fault.`,
             status: 'active',
             count: 1,
+            ...(diagnostic ? { diagnostic } : {}),
           };
       entries = [next, ...entries.filter((entry) => entry.id !== next.id)];
       if (entries.length > 8) {

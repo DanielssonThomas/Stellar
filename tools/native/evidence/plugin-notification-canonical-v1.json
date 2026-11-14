@@ -1,0 +1,579 @@
+{
+  "fixture_only": true,
+  "inference": "poisoned; canonical result settled explicitly by test",
+  "expected_profile": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+  "expected_plugin": "fixture-notifier",
+  "binding": {
+    "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+    "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+    "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+    "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+    "plugin_id": "fixture-notifier",
+    "tracking_id": "worker-incarnation",
+    "revision": 1,
+    "expires_at": 1794587148.6835802,
+    "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+  },
+  "event_id": "consumer-canonical-fixture",
+  "content": "{\"milestone\":\"fixture_completed\",\"authority\":\"none\"}",
+  "frames": [
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "type": "session.info",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "stored_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+          "pending": [
+            {
+              "admission_id": "f7b68ed14696442cb681715ccb483857",
+              "ref": {
+                "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+                "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+              },
+              "sequence": 1,
+              "status": "queued",
+              "outcome": null,
+              "authority_epoch": 1,
+              "execution_generation": null,
+              "input_id": "[\"plugin-notification\",\"9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8\",1,\"consumer-canonical-fixture\"]",
+              "text": "Background observation (evidence only; no action authority):\n{\"milestone\":\"fixture_completed\",\"authority\":\"none\"}",
+              "controls": [],
+              "steering": false
+            }
+          ],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": false,
+          "execution_generation": 0,
+          "revision": 0
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 1
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "message.start",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "display_kind": "internal_notification",
+          "display_text": "Background observation",
+          "text": "Background observation (evidence only; no action authority):\n{\"milestone\":\"fixture_completed\",\"authority\":\"none\"}",
+          "plugin_notification": {
+            "binding": {
+              "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+              "expires_at": 1794587148.6835802,
+              "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+              "plugin_id": "fixture-notifier",
+              "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+              "revision": 1,
+              "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+              "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+              "tracking_id": "worker-incarnation"
+            },
+            "event_id": "consumer-canonical-fixture",
+            "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+            "schema_version": 1
+          }
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 2
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "session.info",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "stored_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+          "pending": [
+            {
+              "admission_id": "f7b68ed14696442cb681715ccb483857",
+              "ref": {
+                "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+                "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+              },
+              "sequence": 1,
+              "status": "started",
+              "outcome": null,
+              "authority_epoch": 1,
+              "execution_generation": 1,
+              "input_id": "[\"plugin-notification\",\"9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8\",1,\"consumer-canonical-fixture\"]",
+              "text": "Background observation (evidence only; no action authority):\n{\"milestone\":\"fixture_completed\",\"authority\":\"none\"}",
+              "controls": [],
+              "steering": false
+            }
+          ],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": true,
+          "execution_generation": 1,
+          "revision": 0
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 3
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "plugin.fixture-notifier.notification.revoked",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "plugin_id": "fixture-notifier",
+          "binding": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+            "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "plugin_id": "fixture-notifier",
+            "tracking_id": "worker-incarnation",
+            "revision": 1,
+            "expires_at": 1794587148.6835802,
+            "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+          },
+          "in_flight": []
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 4
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "session.info",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "stored_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+          "pending": [
+            {
+              "admission_id": "76a1ede051d345d886e22e3140867393",
+              "ref": {
+                "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+                "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+              },
+              "sequence": 2,
+              "status": "queued",
+              "outcome": null,
+              "authority_epoch": 1,
+              "execution_generation": null,
+              "input_id": "[\"plugin-notification\",\"9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8\",2,\"cancel-before-claim\"]",
+              "text": "Background observation (evidence only; no action authority):\n{\"milestone\":\"fixture_completed\",\"authority\":\"none\"}",
+              "controls": [],
+              "steering": false
+            }
+          ],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": false,
+          "execution_generation": 1,
+          "revision": 1
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 5
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "session.info",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "stored_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+          "pending": [],
+          "authority_epoch": 1,
+          "desktop_protocol": "hermes-gateway-v1",
+          "running": false,
+          "execution_generation": 1,
+          "revision": 1
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 6
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "admission_id": "76a1ede051d345d886e22e3140867393",
+        "type": "message.complete",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "text": "",
+          "content": "",
+          "admission_id": "76a1ede051d345d886e22e3140867393",
+          "outcome": "cancelled"
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 7
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "f7b68ed14696442cb681715ccb483857",
+        "type": "plugin.fixture-notifier.notification.revoked",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "payload": {
+          "plugin_id": "fixture-notifier",
+          "binding": {
+            "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+            "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+            "plugin_id": "fixture-notifier",
+            "tracking_id": "worker-incarnation",
+            "revision": 2,
+            "expires_at": 1794587148.8250718,
+            "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+          },
+          "in_flight": []
+        },
+        "replay_epoch": "ddb50e6e394548c183c1a8f6ee9e7254",
+        "seq": 8
+      }
+    }
+  ],
+  "queued": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "consumer-canonical-fixture",
+    "descriptor": {
+      "binding": {
+        "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+        "expires_at": 1794587148.6835802,
+        "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "plugin_id": "fixture-notifier",
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "revision": 1,
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "tracking_id": "worker-incarnation"
+      },
+      "event_id": "consumer-canonical-fixture",
+      "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+      "schema_version": 1
+    },
+    "receipt": {
+      "admission_id": "f7b68ed14696442cb681715ccb483857",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 1,
+      "status": "queued",
+      "outcome": null,
+      "authority_epoch": 1,
+      "execution_generation": null
+    },
+    "result": null,
+    "delivery_allowed": false
+  },
+  "started": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "consumer-canonical-fixture",
+    "descriptor": {
+      "binding": {
+        "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+        "expires_at": 1794587148.6835802,
+        "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "plugin_id": "fixture-notifier",
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "revision": 1,
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "tracking_id": "worker-incarnation"
+      },
+      "event_id": "consumer-canonical-fixture",
+      "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+      "schema_version": 1
+    },
+    "receipt": {
+      "admission_id": "f7b68ed14696442cb681715ccb483857",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 1,
+      "status": "started",
+      "outcome": null,
+      "authority_epoch": 1,
+      "execution_generation": 1
+    },
+    "result": null,
+    "delivery_allowed": false
+  },
+  "terminal": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "consumer-canonical-fixture",
+    "descriptor": {
+      "binding": {
+        "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+        "expires_at": 1794587148.6835802,
+        "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "plugin_id": "fixture-notifier",
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "revision": 1,
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "tracking_id": "worker-incarnation"
+      },
+      "event_id": "consumer-canonical-fixture",
+      "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+      "schema_version": 1
+    },
+    "receipt": {
+      "admission_id": "f7b68ed14696442cb681715ccb483857",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 1,
+      "status": "terminal",
+      "outcome": "completed",
+      "authority_epoch": 1,
+      "execution_generation": 1
+    },
+    "result": {
+      "result": {
+        "final_response": "{\"stellar_presentation\":{\"action\":\"close_activity\"},\"text\":\"Canonical candidate answer; no action taken.\"}"
+      }
+    },
+    "delivery_allowed": true
+  },
+  "unknown": {
+    "status": "unknown",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "never-admitted",
+    "delivery_allowed": false
+  },
+  "revoked": {
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "revoked": true,
+    "in_flight": []
+  },
+  "denied": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "consumer-canonical-fixture",
+    "descriptor": {
+      "binding": {
+        "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+        "expires_at": 1794587148.6835802,
+        "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "plugin_id": "fixture-notifier",
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "revision": 1,
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "tracking_id": "worker-incarnation"
+      },
+      "event_id": "consumer-canonical-fixture",
+      "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+      "schema_version": 1
+    },
+    "receipt": {
+      "admission_id": "f7b68ed14696442cb681715ccb483857",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 1,
+      "status": "terminal",
+      "outcome": "completed",
+      "authority_epoch": 1,
+      "execution_generation": 1
+    },
+    "result": {
+      "result": {
+        "final_response": "{\"stellar_presentation\":{\"action\":\"close_activity\"},\"text\":\"Canonical candidate answer; no action taken.\"}"
+      }
+    },
+    "delivery_allowed": false
+  },
+  "cancelled": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 2,
+      "expires_at": 1794587148.8250718,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "cancel-before-claim",
+    "descriptor": {
+      "binding": {
+        "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8",
+        "expires_at": 1794587148.8250718,
+        "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "plugin_id": "fixture-notifier",
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "revision": 2,
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+        "tracking_id": "worker-incarnation"
+      },
+      "event_id": "cancel-before-claim",
+      "payload_digest": "50f5bdf2633cf2b942e3c07873b01f0495ac6ca55628cba0a5e63605869edb1d",
+      "schema_version": 1
+    },
+    "receipt": {
+      "admission_id": "76a1ede051d345d886e22e3140867393",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 2,
+      "status": "terminal",
+      "outcome": "cancelled",
+      "authority_epoch": 1,
+      "execution_generation": null
+    },
+    "result": null,
+    "delivery_allowed": false
+  },
+  "newer_revoke": {
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 2,
+      "expires_at": 1794587148.8250718,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "revoked": true,
+    "in_flight": []
+  },
+  "tombstone": {
+    "status": "known",
+    "binding": {
+      "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+      "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "owner_session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "session_key": "agent:main:local:dm:local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2",
+      "plugin_id": "fixture-notifier",
+      "tracking_id": "worker-incarnation",
+      "revision": 1,
+      "expires_at": 1794587148.6835802,
+      "binding_id": "9c053cedb92f8ae329e1221067fb6f0e5aeaaab857ee1a04d5025adf01ac2ff8"
+    },
+    "event_id": "consumer-canonical-fixture",
+    "descriptor": null,
+    "receipt": {
+      "admission_id": "f7b68ed14696442cb681715ccb483857",
+      "ref": {
+        "profile_id": "C:\\Users\\thoma\\AppData\\Local\\Temp\\hermes-pytest\\r-y04h5slf\\pytest-of-unknown\\pytest-0\\test_capture_consumer_frames0",
+        "session_id": "local-7e6c5ba84ec64e0a3e9f3823dbe807908b16686e9030ae3989f9a151fef09ea2"
+      },
+      "sequence": 1,
+      "status": "terminal",
+      "outcome": "completed",
+      "authority_epoch": 1,
+      "execution_generation": 1
+    },
+    "result": {
+      "result": {
+        "final_response": "{\"stellar_presentation\":{\"action\":\"close_activity\"},\"text\":\"Canonical candidate answer; no action taken.\"}",
+        "messages": []
+      }
+    },
+    "delivery_allowed": false
+  }
+}

@@ -6,6 +6,7 @@ use std::{
 
 fn operation(voice: &WarmVoice) -> Operation {
     Operation {
+        admitted: crate::speech::contracts::SpeechSnapshot::default(),
         serial: 1,
         child: voice.child.clone(),
         cancelled: AtomicBool::new(false),

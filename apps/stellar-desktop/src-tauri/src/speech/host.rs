@@ -93,13 +93,23 @@ impl SpeechHost {
                 return Err(SpeechError::Busy);
             }
             view.serial = view.serial.checked_add(1).ok_or(SpeechError::Unavailable)?;
+            let mut instance = [0u8; 16];
+            getrandom::fill(&mut instance).map_err(|_| SpeechError::Unavailable)?;
             let scratch = if state == SpeechState::Synthesizing {
                 Some(Scratch::new(&self.inner.scratch, view.serial)?)
             } else {
                 None
             };
+            view.snapshot.operation_id = Some(id);
+            view.snapshot.operation_instance =
+                Some(format!("{:032x}", u128::from_le_bytes(instance)));
+            view.snapshot.state = state;
+            view.snapshot.error = None;
+            view.snapshot.timings = None;
+            let admitted = advance(&mut view);
             let operation = Arc::new(Operation {
                 serial: view.serial,
+                admitted: admitted.clone(),
                 child: if scratch.is_some() {
                     self.inner.voice.child.clone()
                 } else {
@@ -116,11 +126,7 @@ impl SpeechHost {
                 completion: Mutex::new(None),
             });
             view.active = Some(operation.clone());
-            view.snapshot.operation_id = Some(id);
-            view.snapshot.state = state;
-            view.snapshot.error = None;
-            view.snapshot.timings = None;
-            (operation, advance(&mut view))
+            (operation, admitted)
         };
         (self.inner.publish)(snapshot);
         Ok(operation)
@@ -183,8 +189,7 @@ impl SpeechHost {
         self.inner.expression.take(id)
     }
     pub fn speak(&self, request: SpeechSpeakRequest) -> Result<SpeechSnapshot, SpeechError> {
-        self.speak_owned(request)?;
-        self.snapshot()
+        Ok(self.speak_owned(request)?.admitted())
     }
 
     pub fn speak_owned(&self, request: SpeechSpeakRequest) -> Result<OwnedSpeech, SpeechError> {
@@ -453,6 +458,10 @@ mod epoch_tests;
 #[cfg(test)]
 #[path = "owned_tests.rs"]
 mod owned_tests;
+
+#[cfg(test)]
+#[path = "targeted_tests.rs"]
+mod targeted_tests;
 
 #[cfg(all(test, windows))]
 #[path = "installed_tests.rs"]

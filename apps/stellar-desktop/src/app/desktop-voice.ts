@@ -23,6 +23,7 @@ import {
   type PromptPresentation,
   type VoiceModel,
   type VoiceView,
+  type UpdateVoiceFailure,
 } from '@stellar/service-desktop-adapter';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
@@ -56,6 +57,10 @@ export class DesktopVoice {
   private disposed = false;
   private readonly updateRevision = signal(0);
   private readonly updateFailure = signal(false);
+  private readonly lastUpdateFault = signal<UpdateVoiceFailure | null>(null);
+  readonly updateFault = computed(() =>
+    this.updateFailure() ? this.lastUpdateFault() : null,
+  );
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
@@ -78,19 +83,25 @@ export class DesktopVoice {
       this.updateFailure.set(false);
       return this.conversation.say(text, id, current);
     },
-    stop: (id) =>
-      this.conversation.narrationOwner()?.id === id ||
-      this.speech.state().operation_id === id
-        ? this.speech.stop()
-        : Promise.resolve(),
+    stop: (id) => {
+      this.conversation.cancelNarration(id);
+      return this.speech.stopOperation(id);
+    },
     waitForQuestion: () => this.questionCue.wait(),
     id: () => crypto.randomUUID(),
     changed: () =>
       this.zone.run(() => this.updateRevision.update((value) => value + 1)),
-    failed: () => this.zone.run(() => this.updateFailure.set(true)),
+    failed: (failure) =>
+      this.zone.run(() => {
+        this.lastUpdateFault.set(failure);
+        this.updateFailure.set(true);
+      }),
   });
   private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
+  readonly ordinaryFailure = computed(
+    () => this.sessionError() || this.current().error,
+  );
   readonly state = computed(() =>
     this.sessionError()
       ? {
@@ -164,7 +175,7 @@ export class DesktopVoice {
       };
       this.reflex.timeline.speech(id, 'synthesis');
       return this.speech
-        .speak(text, id)
+        .speak(text, id, current)
         .then((snapshot) => {
           if (this.narration?.id === id) {
             const observed = this.speech.state();

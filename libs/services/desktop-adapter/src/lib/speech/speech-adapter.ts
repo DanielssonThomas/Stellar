@@ -20,6 +20,7 @@ import {
   type SpeechCommands,
   type SpeechError,
   type SpeechSnapshot,
+  type SpeechStopTarget,
   type SpeechSpeakRequest,
   type SpeechTranscribeRequest,
   type SpeechTranscript,
@@ -93,10 +94,16 @@ export class SpeechAdapter {
     );
   }
 
-  stop(epoch: string): Promise<SpeechSnapshot> {
+  stop(epoch: string, target?: SpeechStopTarget): Promise<SpeechSnapshot> {
     return this.invoke(
       speechStopCommand,
-      this.validate(() => decodeSpeechStopRequest({ version: 1, epoch })),
+      this.validate(() =>
+        decodeSpeechStopRequest({
+          version: 1,
+          epoch,
+          ...(target ? { target } : {}),
+        }),
+      ),
       decodeSpeechSnapshot,
     );
   }

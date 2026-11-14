@@ -8,6 +8,7 @@ export interface FaultLogEntry {
   readonly message: string;
   readonly status: 'active' | 'recovering' | 'resolved';
   readonly count: number;
+  readonly diagnostic?: string;
 }
 
 @Component({

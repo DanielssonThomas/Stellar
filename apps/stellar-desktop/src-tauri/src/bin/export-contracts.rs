@@ -167,6 +167,7 @@ fn main() {
         SpeechRequest::decl(&config),
         SpeechDuckingRequest::decl(&config),
         SpeechStopRequest::decl(&config),
+        SpeechStopTarget::decl(&config),
         SpeechTranscribeRequest::decl(&config),
         SpeechTranscript::decl(&config),
         SpeechSpeakRequest::decl(&config),

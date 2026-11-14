@@ -169,9 +169,11 @@ export class AppComponent {
                 ? 'unavailable'
                 : null),
       );
+      const updateFault = this.voice.updateFault();
+      this.faults.observeUpdate(browserPreview ? null : updateFault);
       this.faults.observe(
         'voice',
-        this.voice.state().error && !browserPreview
+        this.voice.ordinaryFailure() && !browserPreview
           ? this.voice.sessionUnavailable()
             ? 'session'
             : 'failure'

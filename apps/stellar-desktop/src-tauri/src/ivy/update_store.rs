@@ -1,6 +1,8 @@
 use super::contracts::{IvyBackgroundUpdate, IvyErrorCode};
+use super::plugin_notifications::Notice;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     fs::{self, OpenOptions},
     io::Write,
     path::Path,
@@ -18,15 +20,19 @@ pub(super) struct Admission {
     pub sequence: u64,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Updates {
     pub session: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovery_pending: bool,
     pub floor_generation: u64,
     pub settled_sequence: u64,
     pub cursor: Option<(String, u64)>,
     pub pending: Vec<Admission>,
     pub completed: Vec<IvyBackgroundUpdate>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub notices: BTreeMap<String, Notice>,
 }
 
 impl Updates {
@@ -109,6 +115,12 @@ impl Updates {
     fn valid(&self) -> bool {
         self.pending.len() <= 16
             && self.completed.len() <= 8
+            && self.notices.len() <= 24
+            && self.notices.iter().all(|(id, n)| {
+                n.valid(&self.session, id)
+                    && (self.pending.iter().any(|a| a == &n.admission)
+                        || self.completed.iter().any(|u| &u.id == id))
+            })
             && self
                 .cursor
                 .as_ref()

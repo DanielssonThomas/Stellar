@@ -18,7 +18,11 @@ spec = importlib.util.spec_from_file_location('bridge', SOURCE)
 bridge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge)
 for name, filename in [('stellar_ivy_activity', 'ivy_activity.py'), ('stellar_ivy_controls', 'ivy_controls.py'),
+                       ('stellar_ivy_reconcile', 'ivy_reconcile.py'),
                        ('stellar_ivy_lifecycle', 'ivy_lifecycle.py'),
+                       ('stellar_ivy_notifications', 'ivy_notifications.py'),
+                       ('stellar_ivy_recovery_store', 'ivy_recovery_store.py'),
+                       ('stellar_ivy_recovery', 'ivy_recovery.py'),
                        ('stellar_ivy_edit_policy', 'ivy_edit_policy.py'),
                        ('stellar_ivy_conversation', 'ivy_conversation.py'),
                        ('stellar_ivy_voice_expression', 'ivy_voice_expression.py')]:
@@ -224,7 +228,7 @@ asyncio.run(run())
 
 
 
-    async def test_background_starts_forward_only_verified_metadata_marker(self):
+    async def test_background_candidates_project_metadata_without_input_authority(self):
         conn = Connection()
         for index, payload in enumerate([
                 {'display_kind': 'async_delegation_complete', 'text': 'private raw tool output'},
@@ -240,7 +244,7 @@ asyncio.run(run())
             await bridge.pump(conn)
         events = [json.loads(line)['data']['params'] for line in output.buffer.getvalue().splitlines()]
         self.assertEqual([event['payload'] for event in events],
-                         [{'autonomous': True}, {'autonomous': True}, {'autonomous': False}, {'autonomous': False}])
+                         [{'autonomous': True}, {'autonomous': True}, {'autonomous': False}, {'autonomous': True}])
         self.assertEqual(events[0]['authority_epoch'], 2)
 
     async def test_replay_is_selected_session_only_and_projects_bounded_metadata(self):
@@ -547,6 +551,7 @@ asyncio.run(run())
     async def test_host_handled_approval_never_sets_renderer_approval_fault(self):
         conn = Connection()
         offered, cancelled = [], []
+        conn.active = {'session_id': 'session', 'admission_id': 'admission'}
 
         class Handler:
             def offer(self, params):

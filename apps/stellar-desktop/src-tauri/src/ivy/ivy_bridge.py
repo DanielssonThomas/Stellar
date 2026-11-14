@@ -25,6 +25,9 @@ METHODS = {
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
                       'observation': dict, 'voice_expression': dict},
     'prompt.receipt': {'session_id': str, 'admission_id': str, 'include_result': bool},
+    'stellar.notification.inspect': {'session_id': str, 'admission_id': str, 'descriptor': dict},
+    'stellar.notification.reconcile': {'session_id': str},
+    'stellar.session.recover': {'session_id': str, 'after_sequence': int, 'retained': list},
     'stellar.background.bind': {'session_id': str, 'consentTicket': str},
     'stellar.background.inspect': {'session_id': str, 'bindingId': str, 'eventId': str, 'digest': str},
     'stellar.background.revoke': {'session_id': str, 'bindingId': str},
@@ -163,6 +166,8 @@ async def pump(conn, workspace=None, approvals=None):
     try:
         await pump_events(conn, workspace, approvals)
     finally:
+        if getattr(conn, 'notification_reconciler', None) is not None:
+            await conn.notification_reconciler.close()
         if approvals is not None:
             await approvals.cancel()
 
@@ -185,7 +190,24 @@ async def pump_events(conn, workspace, approvals):
         if type(params) is not dict:
             continue
         kind = params.get('type')
+        if kind == 'plugin.stellar-herdr.notification.revoked':
+            if params.get('session_id') != getattr(conn, 'selected_session', None):
+                continue
+            from stellar_ivy_notifications import revocation
+            try:
+                revoked = revocation(params.get('payload'), str(PROFILE), params['session_id'], 'stellar-herdr')
+            except ValueError:
+                raise Closed() from None
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                conn.notification_reconciler.invalidate()
+            clean = project(params)
+            clean.update(type=kind, payload=revoked)
+            emit({'event': 'gateway', 'data': {'params': clean}})
+            continue
         known = getattr(conn, 'lifecycle_admissions', {}).get((params.get('session_id'), params.get('admission_id')))
+        notification_known = getattr(conn, 'notification_admissions', {}).get((params.get('session_id'), params.get('admission_id')))
+        if notification_known is not None and kind not in {'message.start', 'message.complete'}:
+            continue
         if known is not None and kind not in {'message.start', 'message.complete'}:
             # No lifecycle interim/tool/question content gains foreground authority.
             continue
@@ -221,10 +243,18 @@ async def pump_events(conn, workspace, approvals):
         payload = params.get('payload', {})
         if type(payload) is not dict:
             raise Closed()
+        if ('plugin_notification' in payload and getattr(conn, 'selected_session', None) is not None
+                and params.get('session_id') != conn.selected_session):
+            continue
+        notification = notification_payload(conn, payload, params.get('session_id'), params.get('admission_id'), kind)
+        if notification is None:
+            guard_plugin_notification(payload)
         clean = project(params)
         clean['type'] = kind
-        lifecycle = lifecycle_payload(conn, payload, params.get('session_id'), params.get('admission_id'), kind) if kind in {'message.start', 'message.complete'} else None
-        if lifecycle is not None:
+        lifecycle = lifecycle_payload(conn, payload, params.get('session_id'), params.get('admission_id'), kind) if notification is None and kind in {'message.start', 'message.complete'} else None
+        if notification is not None:
+            clean['payload'] = notification
+        elif lifecycle is not None:
             clean['payload'] = lifecycle
         elif kind == 'message.start':
             clean['payload'] = {'autonomous': autonomous_start(payload)}
@@ -267,17 +297,21 @@ async def pump_events(conn, workspace, approvals):
                 clean['payload'] = completion_payload(payload)
             if workspace is not None and type(clean['payload'].get('text')) is str:
                 clean['payload']['text'] = workspace.redact(clean['payload']['text'])
-        if kind == 'message.complete' and lifecycle is None:
-            if approvals is not None:
+        if kind == 'message.complete' and lifecycle is None and notification is None:
+            if (approvals is not None and conn.active
+                    and params.get('session_id') == conn.active.get('session_id')
+                    and params.get('admission_id') == conn.active.get('admission_id')):
                 await approvals.cancel(params.get('session_id'))
             admission = params.get('admission_id') or payload.get('admission_id')
             if not string(admission):
                 raise Closed()
             # IvyConnection needs this for completion-before-submit-response races.
             # Bound its reconciliation set rather than accumulate notifications forever.
-            if len(conn.completed) >= 256 and admission not in conn.completed:
-                raise Closed()
-            conn.completed.add(admission)
+            if (conn.active and params.get('session_id') == conn.active.get('session_id')
+                    and conn.active.get('admission_id') in {None, admission}):
+                if len(conn.completed) >= 256 and admission not in conn.completed:
+                    raise Closed()
+                conn.completed.add(admission)
             if (conn.active and params.get('session_id') == conn.active['session_id']
                     and admission == conn.active.get('admission_id')):
                 conn.active = None
@@ -312,12 +346,30 @@ def lifecycle_private_text(result, workspace):
         raise Closed()
 
 
+def guard_plugin_notification(payload):
+    if 'plugin_notification' in payload:
+        # A host marker must use the closed notification projection.
+        # Never erase a host marker and checkpoint it as an ordinary answer.
+        raise Closed()
+
+
+def notification_payload(conn, payload, session, admission, kind):
+    from stellar_ivy_notifications import event_payload
+    try:
+        return event_payload(conn, payload, session, admission, kind, str(PROFILE))
+    except ValueError:
+        raise Closed() from None
+
+
 def autonomous_start(payload):
+    guard_plugin_notification(payload)
     if payload.get('display_kind') == 'lifecycle_update':
         # Do not discard a future version's consent/receipt proof or advance past it.
         # Delivery remains disabled until end-to-end revocation is implemented.
         raise Closed()
-    return (payload.get('display_kind') in {'async_delegation_complete', 'process_complete'}
+    # Ordinary admitted turns have no display card. This is only a receipt candidate:
+    # native excludes the foreground admission and verifies the canonical answer.
+    return (payload.get('display_kind') in {None, 'async_delegation_complete', 'process_complete'}
             and payload.get('notification_category') != 'diagnostic')
 
 
@@ -352,6 +404,12 @@ async def replay_events(conn, params, workspace):
     if params['session_id'] != getattr(conn, 'selected_session', None):
         raise Closed()
     result = await asyncio.wait_for(conn.client.rpc('session.events.since', **params), DEADLINE)
+    if (type(result) is dict and result.get('truncated') is True
+            and result.get('snapshot_required') is True and result.get('events') == []
+            and string(result.get('replay_epoch')) and type(result.get('last_sequence')) is int
+            and result['last_sequence'] >= 0):
+        return {'events':[], 'truncated':True, 'snapshot_required':True,
+                'replay_epoch':result['replay_epoch'], 'last_sequence':result['last_sequence']}
     if (type(result) is not dict or type(result.get('events')) is not list
             or len(result['events']) > 1024 or type(result.get('truncated')) is not bool
             or result.get('replay_epoch') != params['replay_epoch']
@@ -362,14 +420,29 @@ async def replay_events(conn, params, workspace):
         if type(event) is not dict or event.get('session_id') != params['session_id']:
             raise Closed()
         kind, payload = event.get('type'), event.get('payload')
-        if kind not in {'message.start', 'message.complete'}:
+        if kind not in {'message.start', 'message.complete', 'plugin.stellar-herdr.notification.revoked'}:
             continue
         if type(payload) is not dict:
             raise Closed()
+        if kind == 'plugin.stellar-herdr.notification.revoked':
+            from stellar_ivy_notifications import revocation
+            try:
+                revoked = revocation(payload, str(PROFILE), params['session_id'], 'stellar-herdr')
+            except ValueError:
+                raise Closed() from None
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                conn.notification_reconciler.invalidate()
+            clean = project(event)
+            clean.update(type=kind, payload=revoked)
+            events.append(clean)
+            continue
+        notification = notification_payload(conn, payload, params['session_id'], event.get('admission_id'), kind)
+        if notification is None:
+            guard_plugin_notification(payload)
         clean = project(event)
         clean['type'] = kind
-        lifecycle = lifecycle_payload(conn, payload, params['session_id'], event.get('admission_id'), kind)
-        clean['payload'] = (lifecycle if lifecycle is not None else
+        lifecycle = lifecycle_payload(conn, payload, params['session_id'], event.get('admission_id'), kind) if notification is None else None
+        clean['payload'] = (notification if notification is not None else lifecycle if lifecycle is not None else
             {'autonomous': autonomous_start(payload)} if kind == 'message.start' else completion_payload(payload))
         if workspace is not None and type(clean['payload'].get('text')) is str:
             clean['payload']['text'] = workspace.redact(clean['payload']['text'])
@@ -431,6 +504,8 @@ async def requests_with_workspace(conn, workspace, approvals=None):
     try:
         await request_worker(conn, workspace, queue, approvals)
     finally:
+        if getattr(conn, 'notification_reconciler', None) is not None:
+            await conn.notification_reconciler.close()
         reader.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await reader
@@ -527,6 +602,10 @@ async def request_worker(conn, workspace, queue, approvals=None):
         if isinstance(request, Exception):
             raise Closed() from None
         rid, method, params = request
+        reconciler = getattr(conn, 'notification_reconciler', None)
+        if method in {'session.create', 'session.resume', 'session.new', 'workspace.stop'}:
+            if reconciler is not None:
+                reconciler.pause()
         if method == 'runtime.describe':
             conn.background_v1 = False
         resuming = method == 'session.resume' and approvals is not None
@@ -534,7 +613,21 @@ async def request_worker(conn, workspace, queue, approvals=None):
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method.startswith('stellar.background.'):
+            if method == 'stellar.session.recover':
+                from stellar_ivy_recovery import recover
+                result = await recover(conn, params, PROFILE, DEADLINE,
+                    lambda peer, cursor: replay_events(peer, cursor, workspace))
+            elif method == 'stellar.notification.reconcile':
+                if reconciler is None:
+                    raise Refused('unavailable')
+                result = await reconciler.forward(params)
+            elif method == 'stellar.notification.inspect':
+                from stellar_ivy_notifications import inspect_forward
+                result = await inspect_forward(conn, params, str(PROFILE), DEADLINE)
+                final = (((result.get('host') or {}).get('result') or {}).get('result') or {}).get('final_response')
+                if workspace is not None and type(final) is str and workspace.redact(final) != final:
+                    raise Closed()
+            elif method.startswith('stellar.background.'):
                 from stellar_ivy_lifecycle import call
                 result = await call(conn, method, params, str(PROFILE), DEADLINE)
                 lifecycle_private_text(result, workspace)
@@ -646,7 +739,7 @@ async def request_worker(conn, workspace, queue, approvals=None):
                     lifecycle_private_text(result, workspace)
                 else:
                     await settle_receipt(conn, workspace, params, result, approvals)
-            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect',
+            if method in {'workspace.setup', 'session.events.since', 'inspector.inspect', 'stellar.notification.inspect', 'stellar.notification.reconcile', 'stellar.session.recover',
                           *[m for m in METHODS if m.startswith('stellar.background.')]} or (
                           method == 'prompt.receipt' and 'background_v1' in result):
                 pass
@@ -691,6 +784,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 result = projected
             if method in {'session.create', 'session.resume'}:
                 conn.selected_session = result.get('session_id')
+                if reconciler is not None:
+                    if (not string(conn.selected_session) or
+                            (method == 'session.resume' and conn.selected_session != params['session_id'])):
+                        raise Closed()
+                    reconciler.select(conn.selected_session)
             if resuming:
                 approvals.finish_resume(True)
             emit({'id': rid, 'result': result})
@@ -731,6 +829,7 @@ async def serve():
         from stellar_workspace_service import WorkspaceService
         from stellar_ivy_approvals import Approvals, load_access
         from stellar_ivy_conversation import ConversationClient
+        from stellar_ivy_reconcile import Reconciler
         from stellar_ivy_voice_expression import installed, native_codex_transport
         from hermes_cli.gateway_client import GatewayRPCError
         try:
@@ -754,11 +853,13 @@ async def serve():
             if workspace is not None:
                 conn.client = workspace.wrap_client(conn.client)
             conn.client = ConversationClient(conn.client, GatewayRPCError, is_voice_stop_phrase)
+            conn.notification_reconciler = Reconciler(conn, DEADLINE, lambda error: failure_diagnostic(conn, error))
             if installed(PROFILE):
                 prime_config = asyncio.create_task(asyncio.to_thread(native_codex_transport))
             approvals = Approvals(conn.client, lambda: getattr(conn, 'selected_session', None), access) if access else None
-            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals))]
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            tasks = [asyncio.create_task(pump(conn, workspace, approvals)), asyncio.create_task(requests_with_workspace(conn, workspace, approvals)),
+                     asyncio.create_task(conn.notification_reconciler.run())]
+            done, _ = await asyncio.wait(tasks[:2], return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
             return 0
@@ -777,6 +878,8 @@ async def serve():
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
         if conn is not None:
+            if getattr(conn, 'notification_reconciler', None) is not None:
+                await conn.notification_reconciler.close()
             conn.lease.release()
             if getattr(conn, 'inspector', None) is not None:
                 await conn.inspector.close()

@@ -1890,6 +1890,10 @@ export class VoiceConversation {
     );
   }
 
+  cancelNarration(id: string) {
+    this.playback.cancel(id);
+  }
+
   narrationOwner() {
     return this.playback.owner();
   }

@@ -44,6 +44,11 @@ mod lifecycle_wire_tests;
 #[cfg(test)]
 mod native_consent_client;
 mod observation;
+#[cfg(test)]
+mod ordinary_completion_tests;
+#[cfg(test)]
+mod plugin_notification_tests;
+mod plugin_notifications;
 pub mod presentation;
 mod presentation_decode;
 mod process;
@@ -53,6 +58,9 @@ mod question_contracts;
 mod questions;
 #[cfg(test)]
 mod recovery_tests;
+mod replay_recovery;
+#[cfg(test)]
+mod replay_recovery_tests;
 mod response_segments;
 #[cfg(test)]
 mod response_segments_tests;
@@ -270,3 +278,6 @@ pub fn workspace_tool_reply(
 
 #[cfg(test)]
 mod question_tests;
+
+#[cfg(test)]
+mod replay_recovery_barrier_tests;

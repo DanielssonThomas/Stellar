@@ -48,6 +48,7 @@ impl Session {
             .iter()
             .find(|e| e.receipt.admission_id == admission)
         {
+            require(params.pointer("/payload/plugin_notification").is_none())?;
             if let Some(raw) = params.pointer("/payload/background_v1") {
                 let descriptor: Descriptor =
                     serde_json::from_value(raw.clone()).map_err(|_| IvyErrorCode::Protocol)?;

@@ -35,6 +35,9 @@ impl SpeechHost {
 }
 
 impl OwnedSpeech {
+    pub(super) fn admitted(&self) -> super::contracts::SpeechSnapshot {
+        self.operation.admitted.clone()
+    }
     pub(super) fn new(host: SpeechHost, operation: Arc<Operation>) -> Self {
         Self { host, operation }
     }

@@ -9,6 +9,7 @@ use crate::owned_child;
 mod process;
 mod scratch;
 mod state;
+mod targeted;
 mod validation;
 mod warm;
 mod warm_worker;
@@ -113,5 +114,5 @@ pub fn speech_stop(
 ) -> Result<SpeechSnapshot, SpeechError> {
     let request: SpeechStopRequest = validation::decode(request)?;
     validation::version(request.version)?;
-    host.stop_epoch(&request.epoch)
+    host.stop_request(request)
 }
