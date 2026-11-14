@@ -16,10 +16,9 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = Path(
-    "D:/Hermes/profiles/ivy/cache/scratch/stellar-339-recovery-a88ccbd-20261114"
-)
+OUT = Path("D:/Hermes/profiles/ivy/cache/scratch/stellar-339-recovery-a88ccbd-20261114")
 PIN = Path("D:/Hermes/profiles/ivy/cache/scratch/stellar-339-application-prep-20261113")
+REPORT = OUT / "RESULT-utc-guard.json"
 SESSION = "01a1d110-be3a-7601-8966-985df380586a"
 CANDIDATE = "6ebd6d755f607fc839f032109c5afc65ee9ab681"
 BASE = "3b421578588243f920886e6fe79a6faa87ea026e"
@@ -79,6 +78,14 @@ def desktop_identity(name, executable):
         "exe": str(path),
         "expectedSha256": expected,
     }
+
+
+def process_incarnation_guard(pid, created):
+    return (
+        f"$p=Get-Process -Id {pid}; "
+        "$birth=([DateTimeOffset]$p.StartTime).ToUnixTimeMilliseconds()/1000.0; "
+        f"if([math]::Abs($birth-{created}) -gt 0.01){{throw 'Process incarnation changed'}}; "
+    )
 
 
 def save(path, value):
@@ -224,9 +231,7 @@ def admit(report, handoff, metadata, mode="cutover"):
         raise RuntimeError(
             "BLOCKED: " + "; ".join(report.get("blockers", ["Unqualified recovery"]))
         )
-    required = (
-        "IVY_MAINTENANCE_HANDOFF_COMPLETE_339_" + digest(OUT / "RESULT.json")[:16]
-    )
+    required = "IVY_MAINTENANCE_HANDOFF_COMPLETE_339_" + digest(REPORT)[:16]
     if handoff != required:
         raise RuntimeError(
             "Separate explicit maintenance handoff missing; no live action"
@@ -393,7 +398,10 @@ class Maintained:
                     abs(psutil.Process(app["pid"]).create_time() - app["created"])
                     < 0.01
                 )
-                script = f"$p=Get-Process -Id {app['pid']}; $birth=($p.StartTime.ToUniversalTime()-[datetime]'1970-01-01Z').TotalSeconds; if([math]::Abs($birth-{app['created']}) -gt 0.01){{throw 'Process incarnation changed'}}; if(-not $p.CloseMainWindow()){{throw 'Graceful close refused'}}; if(-not $p.WaitForExit(15000)){{throw 'Desktop still live'}}"
+                script = (
+                    process_incarnation_guard(app["pid"], app["created"])
+                    + "if(-not $p.CloseMainWindow()){throw 'Graceful close refused'}; if(-not $p.WaitForExit(15000)){throw 'Desktop still live'}"
+                )
                 self.command(
                     [
                         "powershell.exe",
@@ -579,12 +587,10 @@ def main():
         save(OUT / "operator-metadata.json", metadata)
         print(json.dumps(metadata, indent=2))
         return
-    report = json.loads((OUT / "RESULT.json").read_text())
+    report = json.loads(REPORT.read_text())
     # Read the supported live-work metadata ONLY after the later explicit handoff.
     # Plan/current-turn verification uses files/process metadata and makes no gateway request.
-    acknowledgement = (
-        "IVY_MAINTENANCE_HANDOFF_COMPLETE_339_" + digest(OUT / "RESULT.json")[:16]
-    )
+    acknowledgement = "IVY_MAINTENANCE_HANDOFF_COMPLETE_339_" + digest(REPORT)[:16]
     if (
         report.get("status") == "GREEN"
         and args.handoff == acknowledgement

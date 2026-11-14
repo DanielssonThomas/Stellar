@@ -1,9 +1,11 @@
-"""Only pure guards/recording backends; never live process or maintenance calls."""
+"""Pure guards/recording backends and read-only self-process identity; no maintenance calls."""
 
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -17,6 +19,41 @@ spec.loader.exec_module(op)
 
 
 class OperatorTests(unittest.TestCase):
+    def test_powershell_unix_birth_matches_self_without_timezone_offset(self):
+        import psutil
+
+        born = psutil.Process().create_time()
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                op.process_incarnation_guard(os.getpid(), born),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_powershell_incarnation_guard_still_rejects_wrong_birth(self):
+        import psutil
+
+        born = psutil.Process().create_time()
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                op.process_incarnation_guard(os.getpid(), born + 2),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Process incarnation changed", result.stderr)
+
     def metadata(self):
         return {
             "independent": True,
