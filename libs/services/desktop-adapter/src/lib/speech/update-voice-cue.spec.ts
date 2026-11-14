@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { IvyBackgroundUpdate } from '@stellar/desktop-contracts';
 import { initialSpeechSnapshot } from './speech-transport';
 import { UpdateVoiceCue } from './update-voice-cue';
+import { SpeechAdapterError } from './speech-adapter';
 
 const update: IvyBackgroundUpdate = {
   id: 'admission',
@@ -19,8 +20,13 @@ function fixture() {
     busy: () => busy,
     enabled: () => enabled,
     state: () => state,
-    claim: vi.fn(async () => true),
-    speak: vi.fn(async () => ({ ...state, revision: '1' })),
+    claim: vi.fn(async (_id: string, _request: string) => true),
+    speak: vi.fn(
+      async (_text: string, _id: string, _current: () => boolean) => ({
+        ...state,
+        revision: '1',
+      }),
+    ),
     stop: vi.fn(async () => undefined),
     waitForQuestion: vi.fn(async (): Promise<void> => undefined),
     id: () => crypto.randomUUID(),
@@ -220,5 +226,125 @@ describe('background update speech', () => {
     await f.cue.wait();
     f.cue.dispose();
     expect(f.ports.stop).not.toHaveBeenCalled();
+  });
+  it.each(['claim', 'unavailable', 'timeout'] as const)(
+    'retains a completed answer and correlates %s failure without replaying a consumed claim',
+    async (mode) => {
+      const f = fixture();
+      let retained: IvyBackgroundUpdate = { ...update };
+      f.ports.claim.mockImplementation(async (_id: string, request: string) => {
+        retained = { ...retained, speech_claim: request };
+        if (mode === 'claim') throw Error('PRIVATE raw claim error');
+        return true;
+      });
+      if (mode === 'unavailable')
+        f.state({
+          ...initialSpeechSnapshot(),
+          state: 'unavailable',
+          error: 'unavailable',
+        });
+      if (mode === 'timeout')
+        f.ports.speak.mockRejectedValue(
+          new SpeechAdapterError('native', 'timeout'),
+        );
+      f.cue.observe([retained]);
+      await vi.waitFor(() => expect(f.ports.failed).toHaveBeenCalledOnce());
+      expect(f.ports.failed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          admissionId: update.id,
+          claimId: retained.speech_claim,
+          stage:
+            mode === 'claim'
+              ? 'claim'
+              : mode === 'unavailable'
+                ? 'speech_ready'
+                : 'speech_dispatch',
+          code:
+            mode === 'claim'
+              ? 'failed'
+              : mode === 'timeout'
+                ? 'timeout'
+                : 'unavailable',
+          time: expect.stringMatching(/^\d{4}-/),
+        }),
+      );
+      expect(retained.text).toBe(update.text);
+      f.cue.observe([retained]);
+      f.cue.observe([update]);
+      await Promise.resolve();
+      expect(f.ports.claim).toHaveBeenCalledOnce();
+      expect(f.ports.speak).toHaveBeenCalledTimes(mode === 'timeout' ? 1 : 0);
+      f.cue.dispose();
+      const reopened = fixture();
+      reopened.cue.observe([retained]);
+      expect(reopened.ports.claim).not.toHaveBeenCalled();
+      expect(reopened.ports.speak).not.toHaveBeenCalled();
+      reopened.cue.dispose();
+    },
+  );
+  it('keeps the stopped attempt IDs after a later attempt starts before stop rejects', async () => {
+    const f = fixture();
+    let finish!: () => void, rejectStop!: (reason: unknown) => void;
+    f.ports.speak.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          finish = () => done(initialSpeechSnapshot());
+        }),
+    );
+    f.ports.stop.mockImplementationOnce(
+      () =>
+        new Promise((_done, reject) => {
+          rejectStop = reject;
+        }),
+    );
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.speak).toHaveBeenCalledOnce());
+    const oldClaim = f.ports.claim.mock.calls[0][1];
+    const oldOperation = f.ports.speak.mock.calls[0][1];
+    f.cue.cancel();
+    finish();
+    await vi.waitFor(() => expect(f.ports.changed).toHaveBeenCalled());
+    f.cue.observe([{ ...update, id: 'later-admission' }]);
+    await vi.waitFor(() => expect(f.ports.speak).toHaveBeenCalledTimes(2));
+    rejectStop(Error('PRIVATE late stop failure'));
+    await vi.waitFor(() => expect(f.ports.failed).toHaveBeenCalledOnce());
+    expect(f.ports.failed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        admissionId: update.id,
+        claimId: oldClaim,
+        operationId: oldOperation,
+        stage: 'speech_stop',
+        code: 'failed',
+      }),
+    );
+    f.cue.dispose();
+  });
+
+  it('correlates an unavailable terminal speech observation without claiming audibility', async () => {
+    const f = fixture();
+    f.ports.speak.mockResolvedValue({
+      ...initialSpeechSnapshot(),
+      state: 'speaking',
+      revision: '1',
+    });
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.speak).toHaveBeenCalledOnce());
+    f.state({
+      ...initialSpeechSnapshot(),
+      state: 'unavailable',
+      revision: '2',
+      error: 'unavailable',
+    });
+    f.cue.observe([update]);
+    await vi.waitFor(() => expect(f.ports.failed).toHaveBeenCalledOnce());
+    expect(f.ports.failed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        admissionId: update.id,
+        operationId: f.ports.speak.mock.calls[0][1],
+        stage: 'speech_completion',
+        code: 'unavailable',
+      }),
+    );
+    f.cue.dispose();
   });
 });

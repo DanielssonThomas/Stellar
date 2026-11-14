@@ -3,6 +3,24 @@ import type {
   SpeechSnapshot,
 } from '@stellar/desktop-contracts';
 
+import { IvyAdapterError } from '../ivy/ivy-adapter';
+import { SpeechAdapterError } from './speech-adapter';
+
+export interface UpdateVoiceFailure {
+  readonly admissionId: string;
+  readonly claimId: string | null;
+  readonly operationId: string | null;
+  readonly stage:
+    | 'claim'
+    | 'speech_ready'
+    | 'speech_dispatch'
+    | 'speech_completion'
+    | 'speech_stop';
+  readonly code: 'failed' | 'timeout' | 'unavailable';
+  readonly time: string;
+}
+type Attempt = Omit<UpdateVoiceFailure, 'code' | 'time'>;
+
 interface Ports {
   available(): boolean;
   busy(): boolean;
@@ -19,7 +37,7 @@ interface Ports {
   waitForQuestion(): Promise<void>;
   id(): string;
   changed(): void;
-  failed(): void;
+  failed(failure: UpdateVoiceFailure): void;
 }
 
 /** Speech claims are persisted before dispatch; uncertain playback is never retried. */
@@ -34,6 +52,7 @@ export class UpdateVoiceCue {
   private update?: string;
   private offered = new Set<string>();
   private waiting?: () => void;
+  private attempt?: Attempt;
 
   constructor(private readonly ports: Ports) {}
 
@@ -59,7 +78,11 @@ export class UpdateVoiceCue {
     ) {
       const done = this.playing.done;
       this.playing = undefined;
-      if (state.state === 'unavailable') this.ports.failed();
+      if (state.state === 'unavailable' && this.attempt)
+        this.fail(
+          { ...this.attempt, stage: 'speech_completion' },
+          'unavailable',
+        );
       done();
     }
     if (
@@ -102,24 +125,41 @@ export class UpdateVoiceCue {
   }
 
   private async run(update: IvyBackgroundUpdate, generation: number) {
+    const attempt: Attempt = {
+      admissionId: update.id,
+      claimId: null,
+      operationId: null,
+      stage: 'speech_ready',
+    };
+    this.attempt = attempt;
     try {
       await this.ports.waitForQuestion();
       if (!this.current(generation) || this.ports.busy()) {
         this.attempted.delete(update.id);
         return;
       }
-      const claimed = await this.ports.claim(update.id, this.ports.id());
+      const claimId = this.ports.id();
+      const claim = { ...attempt, claimId, stage: 'claim' as const };
+      this.attempt = claim;
+      let claimed: boolean;
+      try {
+        claimed = await this.ports.claim(update.id, claimId);
+      } catch (error) {
+        if (this.current(generation)) this.fail(claim, error);
+        return;
+      }
+      this.attempt = { ...claim, stage: 'speech_ready' };
       if (!claimed || !this.current(generation) || !this.ports.enabled())
         return;
       if (this.ports.state().state === 'unavailable') {
-        this.ports.failed();
+        this.fail(this.attempt ?? attempt, 'unavailable');
         return;
       }
       while (this.current(generation) && this.ports.enabled()) {
         await this.ports.waitForQuestion();
         if (!this.current(generation) || !this.ports.enabled()) return;
         if (this.ports.state().state === 'unavailable') {
-          this.ports.failed();
+          this.fail(this.attempt ?? attempt, 'unavailable');
           return;
         }
         if (!this.ports.busy() && this.ports.state().state === 'idle') break;
@@ -134,6 +174,11 @@ export class UpdateVoiceCue {
           : "I have an update for you. It's available in the conversation.";
       this.dispatching = true;
       this.operation = this.ports.id();
+      this.attempt = {
+        ...(this.attempt ?? attempt),
+        operationId: this.operation,
+        stage: 'speech_dispatch',
+      };
       const snapshot = await this.ports.speak(
         text,
         this.operation,
@@ -144,7 +189,7 @@ export class UpdateVoiceCue {
       );
       if (!this.current(generation)) return;
       if (snapshot.state === 'unavailable') {
-        this.ports.failed();
+        this.fail(this.attempt ?? attempt, 'unavailable');
         return;
       }
       const observed = this.ports.state();
@@ -161,12 +206,26 @@ export class UpdateVoiceCue {
           done,
         };
       });
-    } catch {
-      if (this.current(generation)) this.ports.failed();
+    } catch (error) {
+      if (this.current(generation)) this.fail(this.attempt ?? attempt, error);
     } finally {
       this.dispatching = false;
       this.operation = undefined;
     }
+  }
+
+  private fail(attempt: Attempt, error: unknown) {
+    const typed =
+      error instanceof SpeechAdapterError || error instanceof IvyAdapterError;
+    const code =
+      error === 'unavailable'
+        ? 'unavailable'
+        : typed && (error.code === 'timeout' || error.code === 'unavailable')
+          ? error.code
+          : 'failed';
+    this.ports.failed(
+      Object.freeze({ ...attempt, code, time: new Date().toISOString() }),
+    );
   }
 
   cancel() {
@@ -178,7 +237,13 @@ export class UpdateVoiceCue {
     waiting?.();
     playing?.done();
     if (this.dispatching && this.operation) {
-      void this.ports.stop(this.operation).catch(() => this.ports.failed());
+      const attempt = this.attempt && {
+        ...this.attempt,
+        stage: 'speech_stop' as const,
+      };
+      void this.ports.stop(this.operation).catch((error) => {
+        if (attempt) this.fail(attempt, error);
+      });
     }
   }
 

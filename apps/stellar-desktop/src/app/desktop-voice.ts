@@ -23,6 +23,7 @@ import {
   type PromptPresentation,
   type VoiceModel,
   type VoiceView,
+  type UpdateVoiceFailure,
 } from '@stellar/service-desktop-adapter';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
@@ -56,6 +57,10 @@ export class DesktopVoice {
   private disposed = false;
   private readonly updateRevision = signal(0);
   private readonly updateFailure = signal(false);
+  private readonly lastUpdateFault = signal<UpdateVoiceFailure | null>(null);
+  readonly updateFault = computed(() =>
+    this.updateFailure() ? this.lastUpdateFault() : null,
+  );
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
@@ -86,10 +91,17 @@ export class DesktopVoice {
     id: () => crypto.randomUUID(),
     changed: () =>
       this.zone.run(() => this.updateRevision.update((value) => value + 1)),
-    failed: () => this.zone.run(() => this.updateFailure.set(true)),
+    failed: (failure) =>
+      this.zone.run(() => {
+        this.lastUpdateFault.set(failure);
+        this.updateFailure.set(true);
+      }),
   });
   private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
+  readonly ordinaryFailure = computed(
+    () => this.sessionError() || this.current().error,
+  );
   readonly state = computed(() =>
     this.sessionError()
       ? {
