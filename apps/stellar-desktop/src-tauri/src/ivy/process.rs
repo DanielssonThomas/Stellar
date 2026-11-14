@@ -42,11 +42,13 @@ pub fn request_line(sequence: u64, method: &str, params: &Value) -> Result<Vec<u
     Ok(line)
 }
 pub struct Broker {
+    pub(super) recovery_hold: bool,
     input: SharedInput,
     frames: Receiver<Result<Value, IvyErrorCode>>,
     child: OwnedChild,
     sequence: u64,
     deadline: Duration,
+    lifecycle_capable: bool,
     workspace: Option<WorkspaceCallback>,
     image_endpoint: Option<super::workspace_data::SharedImageEndpoint>,
 }
@@ -69,7 +71,18 @@ impl Broker {
             ),
             ("stellar_ivy_inspector", include_str!("ivy_inspector.py")),
             ("stellar_ivy_activity", include_str!("ivy_activity.py")),
+            ("stellar_ivy_lifecycle", include_str!("ivy_lifecycle.py")),
+            (
+                "stellar_ivy_notifications",
+                include_str!("ivy_notifications.py"),
+            ),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
+            (
+                "stellar_ivy_recovery_store",
+                include_str!("ivy_recovery_store.py"),
+            ),
+            ("stellar_ivy_recovery", include_str!("ivy_recovery.py")),
+            ("stellar_ivy_reconcile", include_str!("ivy_reconcile.py")),
             (
                 "stellar_ivy_conversation",
                 include_str!("ivy_conversation.py"),
@@ -166,11 +179,13 @@ impl Broker {
             }
         });
         Ok(Self {
+            recovery_hold: false,
             input: Arc::new(Mutex::new(input)),
             frames,
             child,
             sequence: 0,
             deadline: Duration::from_secs(18),
+            lifecycle_capable: false,
             workspace: None,
             image_endpoint: None,
         })
@@ -199,6 +214,10 @@ impl Broker {
 
     pub fn input(&self) -> SharedInput {
         self.input.clone()
+    }
+
+    pub(super) fn lifecycle_capable(&self) -> bool {
+        self.lifecycle_capable
     }
 
     fn workspace_event(&self, frame: &Value) -> Result<bool, IvyErrorCode> {
@@ -230,6 +249,13 @@ impl Broker {
         params: Value,
         events: &mut Vec<Value>,
     ) -> Result<Value, IvyErrorCode> {
+        if method == "runtime.describe" {
+            self.lifecycle_capable = false;
+        }
+        #[cfg(feature = "native-smoke")]
+        if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+            println!("STELLAR_SMOKE_STAGE bg-rpc-{}", method.replace('.', "-"));
+        }
         self.sequence = self.sequence.checked_add(1).ok_or(IvyErrorCode::Protocol)?;
         let line = request_line(self.sequence, method, &params)?;
         {
@@ -254,13 +280,41 @@ impl Broker {
             }
             if frame.get("id").and_then(Value::as_u64) == Some(self.sequence) {
                 if let Some(error) = frame.get("error") {
+                    #[cfg(feature = "native-smoke")]
+                    if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+                        println!("STELLAR_SMOKE_STAGE bg-rpc-refused");
+                        let diagnostic = super::process_diagnostics::label(error);
+                        println!("STELLAR_SMOKE_STAGE bg-failure-{diagnostic}");
+                    }
                     return Err(match error.get("code").and_then(Value::as_str) {
                         Some("busy") => IvyErrorCode::Busy,
                         Some("unavailable") => IvyErrorCode::Unavailable,
                         _ => IvyErrorCode::Uncertain,
                     });
                 }
-                return frame.get("result").cloned().ok_or(IvyErrorCode::Protocol);
+                let result = frame.get("result").cloned().ok_or(IvyErrorCode::Protocol)?;
+                if method == "runtime.describe" {
+                    self.lifecycle_capable = result.get("profile").and_then(Value::as_str)
+                        == Some("ivy")
+                        && result.get("protocol").and_then(Value::as_u64) == Some(1)
+                        && result
+                            .get("background_v1_contract_sha256")
+                            .and_then(Value::as_str)
+                            == Some(super::lifecycle_contract::CONTRACT_SHA256)
+                        && result
+                            .get("background_v1_interface_sha256")
+                            .and_then(Value::as_str)
+                            == Some(super::lifecycle_contract::INTERFACE_SHA256)
+                        && result
+                            .get("capabilities")
+                            .and_then(Value::as_array)
+                            .is_some_and(|caps| {
+                                caps.iter().any(|c| {
+                                    c.as_str() == Some(super::lifecycle_contract::CAPABILITY)
+                                })
+                            });
+                }
+                return Ok(result);
             }
             if frame.get("id").is_some() || events.len() >= 32 {
                 return Err(IvyErrorCode::Protocol);

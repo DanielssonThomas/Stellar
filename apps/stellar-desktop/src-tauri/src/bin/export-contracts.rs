@@ -44,6 +44,7 @@ use ivy::chart_contracts::*;
 use ivy::contracts::*;
 use ivy::inspector_contracts::*;
 use ivy::issue_contracts::*;
+use ivy::lifecycle_effect_contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
 use ivy::workspace_contracts::*;
 use speech::*;
@@ -118,6 +119,10 @@ fn main() {
         IvyResponseSegmentKind::decl(&config),
         IvyResponseSegment::decl(&config),
         IvySnapshot::decl(&config),
+        IvyBackgroundUpdate::decl(&config),
+        IvyLifecycleKind::decl(&config),
+        IvyLifecycleLease::decl(&config),
+        IvyClaimUpdateRequest::decl(&config),
         IvyInspectorRequest::decl(&config),
         IvySessionSummary::decl(&config),
         IvySessionRole::decl(&config),
@@ -168,6 +173,7 @@ fn main() {
         SpeechRequest::decl(&config),
         SpeechDuckingRequest::decl(&config),
         SpeechStopRequest::decl(&config),
+        SpeechStopTarget::decl(&config),
         SpeechTranscribeRequest::decl(&config),
         SpeechTranscript::decl(&config),
         SpeechSpeakRequest::decl(&config),
@@ -241,6 +247,7 @@ fn main() {
         "ivyNewSessionCommand",
         "ivyReloadMcpCommand",
         "ivyQuestionReplyCommand",
+        "ivyClaimUpdateCommand",
     ]
     .iter()
     .zip(IVY_COMMANDS)
@@ -266,7 +273,7 @@ fn main() {
         serde_json::to_string(WORKSPACE_REPLY_COMMAND).unwrap()
     );
     println!(
-        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest }};"
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest; [ivyClaimUpdateCommand]: IvyClaimUpdateRequest }};"
     );
     for (name, command) in [
         "speechTranscribeCommand",

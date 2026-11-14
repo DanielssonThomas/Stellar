@@ -6,12 +6,14 @@ use std::{
 
 fn operation(voice: &WarmVoice) -> Operation {
     Operation {
+        admitted: crate::speech::contracts::SpeechSnapshot::default(),
         serial: 1,
         child: voice.child.clone(),
         cancelled: AtomicBool::new(false),
         scratch: None,
         recognition_epoch: 0,
         expression_epoch: None,
+        completion: Mutex::new(None),
     }
 }
 

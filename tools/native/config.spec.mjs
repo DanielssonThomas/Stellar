@@ -2,6 +2,84 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
+const rejectedSmokeCommands = [
+  ['ivy/mod.rs', 'ivy_connect', 'IvyErrorCode', false],
+  ['ivy/mod.rs', 'ivy_submit', 'IvyErrorCode', false],
+  ['ivy/mod.rs', 'ivy_cancel', 'IvyErrorCode', false],
+  ['ivy/mod.rs', 'ivy_reconcile', 'IvyErrorCode', false],
+  ['ivy/mod.rs', 'workspace_tool_reply', 'IvyErrorCode', false],
+  ['speech/mod.rs', 'speech_keywords', 'SpeechError', true],
+  ['speech/mod.rs', 'speech_transcribe', 'SpeechError', true],
+  ['speech/mod.rs', 'speech_collect', 'SpeechError', true],
+];
+
+function requireSmokeGuard(source, command, error, recognitionAllowed) {
+  const signature = new RegExp(
+    `pub (?:async )?fn ${command}\\([\\s\\S]*?\\) -> [^{]+\\{([\\s\\S]*?)\\n\\}`,
+  );
+  const body = signature.exec(source)?.[1].replace(/\s+/g, '');
+  const condition = recognitionAllowed
+    ? 'all(feature = "native-smoke", not(feature = "recognition-smoke"))'
+    : 'feature = "native-smoke"';
+  assert.ok(
+    body?.startsWith(
+      `if cfg!(${condition}) { return Err(${error}::Unavailable); }`.replace(
+        /\s+/g,
+        '',
+      ),
+    ),
+    `${command} must reject ordinary smoke BEFORE host access or effects`,
+  );
+}
+
+test('smoke-only operational rejection is independent of capabilities and preserves recognition mode', () => {
+  const smoke = readFileSync(
+    new URL(
+      '../../apps/stellar-desktop/src-tauri/src/smoke.rs',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const runner = readFileSync(new URL('./cargo.mjs', import.meta.url), 'utf8');
+  const recognition = readFileSync(
+    new URL(
+      '../../apps/stellar-desktop/src-tauri/src/recognition_smoke.rs',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  for (const [
+    file,
+    command,
+    error,
+    recognitionAllowed,
+  ] of rejectedSmokeCommands) {
+    const source = readFileSync(
+      new URL(
+        `../../apps/stellar-desktop/src-tauri/src/${file}`,
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    requireSmokeGuard(source, command, error, recognitionAllowed);
+    assert.throws(() =>
+      requireSmokeGuard(
+        source.replaceAll(
+          `return Err(${error}::Unavailable);`,
+          '/* missing denial */',
+        ),
+        command,
+        error,
+        recognitionAllowed,
+      ),
+    );
+    assert.ok(smoke.includes(`::${command},`));
+    assert.ok(!runner.includes(`'allow-${command.replaceAll('_', '-')}'`));
+  }
+  for (const command of ['speech_keywords', 'speech_transcribe'])
+    assert.ok(recognition.includes(`::${command},`));
+});
+
 const project = JSON.parse(
   readFileSync(
     new URL('../../apps/stellar-desktop/project.json', import.meta.url),
@@ -139,6 +217,7 @@ test('normal host keeps decorations and only its explicit local commands', () =>
     'allow-ivy-new-session',
     'allow-ivy-reload-mcp',
     'allow-ivy-question-reply',
+    'allow-ivy-claim-update',
     'allow-workspace-tool-reply',
     'allow-speech-transcribe',
     'allow-speech-collect',

@@ -223,11 +223,11 @@ test(
         childHost(t, f, { boundary: 'reserved', faults: { dispatch: 'hang' } }),
       ),
     );
-    hosts.forEach((host) => host.start());
-    const winner = await Promise.race(
-      hosts.map((host, index) => host.event('paused').then(() => index)),
-    );
-    const loser = 1 - winner;
+    const winner = 0;
+    const loser = 1;
+    hosts[winner].start();
+    await hosts[winner].event('paused');
+    hosts[loser].start();
     const queued = await hosts[loser].event('result');
     assert.equal(queued.status, 'queued');
     const winnerNames = await readdir(fixtures[winner].hostOptions.storeRoot);
@@ -278,11 +278,11 @@ test(
         }),
       ),
     );
-    hosts.forEach((host) => host.start());
-    const winner = await Promise.race(
-      hosts.map((host, index) => host.event('paused').then(() => index)),
-    );
-    const loser = 1 - winner;
+    const winner = 0;
+    const loser = 1;
+    hosts[winner].start();
+    await hosts[winner].event('paused');
+    hosts[loser].start();
     assert.equal((await hosts[loser].event('result')).status, 'queued');
     await noAttempt(fixtures[loser], grants[loser].id);
     const pool = await openHostStore(fixtures[winner].hostOptions.poolRoot);

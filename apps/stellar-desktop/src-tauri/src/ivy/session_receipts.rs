@@ -3,6 +3,11 @@ use serde_json::{Value, json};
 
 impl Session {
     pub(super) fn accept_receipt(&mut self, value: &Value) -> Result<(), IvyErrorCode> {
+        if value.get("background_v1").is_some()
+            || value.get("background_delivery_authorized").is_some()
+        {
+            return Err(IvyErrorCode::Protocol);
+        }
         if value.pointer("/ref/session_id").and_then(Value::as_str)
             != self.record.session_id.as_deref()
         {

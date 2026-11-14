@@ -98,6 +98,10 @@ export class DesktopAssistant {
     command: StageCommand<ProductionPayloadMap>,
   ) => StageResult;
   private highestRevision = -1n;
+  private latestBackground?: string;
+  readonly backgroundUpdate = computed(
+    () => this.state().background_updates?.at(-1) ?? null,
+  );
   private available: () => boolean = () => true;
   private readonly presentedTurns = new Set<string>();
   private readonly submittedTurns = new Set<string>();
@@ -124,9 +128,12 @@ export class DesktopAssistant {
   );
   readonly reply = computed(() =>
     conversationDisplayText(
-      this.state()
-        .items.flatMap((item) => (item.kind === 'text' ? [item.text] : []))
-        .join('\n\n'),
+      [
+        ...this.state().items.flatMap((item) =>
+          item.kind === 'text' ? [item.text] : [],
+        ),
+        ...(this.state().background_updates ?? []).map((update) => update.text),
+      ].join('\n\n'),
     ),
   );
   readonly caption = computed(() => {
@@ -360,6 +367,10 @@ export class DesktopAssistant {
     const revision = BigInt(snapshot.revision);
     if (revision <= this.highestRevision) return;
     this.highestRevision = revision;
+    const background = snapshot.background_updates?.at(-1)?.id;
+    if (background && background !== this.latestBackground)
+      this.reflex.reply.set('');
+    this.latestBackground = background;
     this.recordProgress(snapshot);
     if (
       snapshot.turn !== 'completed' ||

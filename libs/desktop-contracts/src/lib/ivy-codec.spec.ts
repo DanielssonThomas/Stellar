@@ -1,10 +1,50 @@
 import { describe, it, expect } from 'vitest';
 import {
+  decodeIvyClaimUpdate,
   decodeIvySnapshot,
   decodeIvySubmitRequest,
   decodeIvyQuestionReply,
 } from './ivy-codec';
 const id = '00000000-0000-4000-8000-000000000001';
+
+describe('background update contract', () => {
+  it('retains bounded text and a native speech claim while rejecting duplicates and executable fields', () => {
+    const update = {
+      id: 'background',
+      text: 'Completed update',
+      speech_claim: null,
+    };
+    expect(
+      decodeIvySnapshot({ ...snapshot(), background_updates: [update] })
+        .background_updates,
+    ).toEqual([update]);
+    for (const updates of [
+      [update, update],
+      [{ ...update, action: 'close_activity' }],
+      [{ ...update, speech_claim: 'bad' }],
+      [{ ...update, text: 'x'.repeat(262145) }],
+    ]) {
+      expect(() =>
+        decodeIvySnapshot({ ...snapshot(), background_updates: updates }),
+      ).toThrow();
+    }
+    expect(
+      decodeIvyClaimUpdate({
+        version: 1,
+        update_id: 'background',
+        request_id: id,
+      }),
+    ).toMatchObject({ update_id: 'background' });
+    expect(() =>
+      decodeIvyClaimUpdate({
+        version: 1,
+        update_id: 'background',
+        request_id: id,
+        permission: 'allow',
+      }),
+    ).toThrow();
+  });
+});
 const snapshot = () => ({
   version: 1,
   revision: '18446744073709551615',

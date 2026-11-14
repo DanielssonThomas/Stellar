@@ -55,6 +55,23 @@ impl WarmVoice {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn run_fixture(
+        &self,
+        operation: &Operation,
+        command: Command,
+        on_speaking: impl FnMut() -> Result<(), SpeechError>,
+    ) -> Result<String, SpeechError> {
+        self.run_using(
+            operation,
+            b"{}\n".to_vec(),
+            Instant::now() + std::time::Duration::from_secs(10),
+            on_speaking,
+            |_| Ok(()),
+            || Ok(command),
+        )
+    }
+
     fn run_using(
         &self,
         operation: &Operation,

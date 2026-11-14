@@ -348,6 +348,14 @@ export class VoiceConversation {
   update(context: VoiceContext) {
     if (this.disposed) return;
     if (
+      ['synthesizing', 'speaking'].includes(this.context?.speech.state ?? '') &&
+      context.speech.state === 'idle' &&
+      !this.phase
+    ) {
+      this.awaitingQuiet = true;
+      this.assembler.reset();
+    }
+    if (
       this.phase === 'speaking' &&
       context.speech.operation_id === this.settledTurn
     )
@@ -1883,6 +1891,10 @@ export class VoiceConversation {
     );
   }
 
+  cancelNarration(id: string) {
+    this.playback.cancel(id);
+  }
+
   narrationOwner() {
     return this.playback.owner();
   }
@@ -2185,6 +2197,7 @@ export class VoiceConversation {
   private publish() {
     const paused =
       Boolean(this.typedLease) ||
+      ['synthesizing', 'speaking'].includes(this.context?.speech.state ?? '') ||
       this.phase !== null ||
       this.stopping ||
       this.unconfirmedStop ||

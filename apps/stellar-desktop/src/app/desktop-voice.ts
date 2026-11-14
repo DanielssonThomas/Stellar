@@ -15,6 +15,7 @@ import {
   IvyReflexService,
   VoiceConversation,
   QuestionVoiceCue,
+  UpdateVoiceCue,
   VoicePreferences,
   type WakeSensitivity,
   type RecognitionObservation,
@@ -22,6 +23,7 @@ import {
   type PromptPresentation,
   type VoiceModel,
   type VoiceView,
+  type UpdateVoiceFailure,
 } from '@stellar/service-desktop-adapter';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
@@ -53,14 +55,53 @@ export class DesktopVoice {
   });
   private readonly sessionError = signal(false);
   private disposed = false;
+  private readonly updateRevision = signal(0);
+  private readonly updateFailure = signal(false);
+  private readonly lastUpdateFault = signal<UpdateVoiceFailure | null>(null);
+  readonly updateFault = computed(() =>
+    this.updateFailure() ? this.lastUpdateFault() : null,
+  );
   private readonly questionCue = new QuestionVoiceCue({
     enabled: () => !this.current().muted && !this.current().error,
     state: () => this.speech.state(),
     speak: (text, id) => this.conversation.say(text, id),
     stop: () => this.speech.stop(),
   });
+  private readonly updateCue = new UpdateVoiceCue({
+    available: () =>
+      !this.disposed &&
+      this.sessionKnown() &&
+      !this.sessionError() &&
+      this.assistant.state().connection === 'ready' &&
+      !['suspended', 'shutdown'].includes(this.experience.state().phase),
+    busy: () => this.current().busy || this.foregroundBusy(),
+    eligible: () => !this.foregroundBusy(),
+    enabled: () => !this.current().muted && !this.current().error,
+    state: () => this.speech.state(),
+    claim: (id, request) => this.ivy.claimUpdate(id, request),
+    speak: (text, id, current) => {
+      this.updateFailure.set(false);
+      return this.conversation.say(text, id, current);
+    },
+    stop: (id) => {
+      this.conversation.cancelNarration(id);
+      return this.speech.stopOperation(id);
+    },
+    waitForQuestion: () => this.questionCue.wait(),
+    id: () => crypto.randomUUID(),
+    changed: () =>
+      this.zone.run(() => this.updateRevision.update((value) => value + 1)),
+    failed: (failure) =>
+      this.zone.run(() => {
+        this.lastUpdateFault.set(failure);
+        this.updateFailure.set(true);
+      }),
+  });
   private narration?: { id: string; revision: bigint; epoch: string };
   readonly sessionUnavailable = computed(() => this.sessionError());
+  readonly ordinaryFailure = computed(
+    () => this.sessionError() || this.current().error,
+  );
   readonly state = computed(() =>
     this.sessionError()
       ? {
@@ -69,7 +110,13 @@ export class DesktopVoice {
           status:
             'Conversation state unavailable. Refresh before voice resumes.',
         }
-      : this.current(),
+      : this.updateFailure() && !this.current().busy
+        ? {
+            ...this.current(),
+            error: true,
+            status: 'Update available as text; local speech did not complete.',
+          }
+        : this.current(),
   );
   private readonly compositionState = signal<VoiceComposition>({
     raw: '',
@@ -128,7 +175,7 @@ export class DesktopVoice {
       };
       this.reflex.timeline.speech(id, 'synthesis');
       return this.speech
-        .speak(text, id)
+        .speak(text, id, current)
         .then((snapshot) => {
           if (this.narration?.id === id) {
             const observed = this.speech.state();
@@ -152,6 +199,7 @@ export class DesktopVoice {
     },
     stop: () => {
       this.questionCue.dispose();
+      this.updateCue.cancel();
       this.finishNarration('cancelled');
       const snapshot = this.speech.state();
       return this.spatial?.ownsSpeech(snapshot)
@@ -215,8 +263,19 @@ export class DesktopVoice {
       this.conversation.dispose();
       this.speech.setDucking(false);
       this.questionCue.cancel();
+      this.updateCue.dispose();
       this.foregroundCleared = undefined;
     });
+  }
+
+  private foregroundBusy() {
+    return (
+      ['submitting', 'admitted', 'uncertain'].includes(
+        this.assistant.state().turn,
+      ) ||
+      this.compositionState().status !== 'idle' ||
+      !!(this.current().foregroundActive && this.audio.state().activity?.active)
+    );
   }
 
   setWakeSensitivity(value: WakeSensitivity) {
@@ -241,6 +300,7 @@ export class DesktopVoice {
   }
 
   setMuted(muted: boolean) {
+    if (muted) this.updateCue.cancel();
     this.spatial?.setMuted(muted);
     this.conversation.setMuted(muted);
     if (muted) {
@@ -287,6 +347,7 @@ export class DesktopVoice {
   }
 
   private updateContext() {
+    this.updateRevision();
     const speech = this.speech.state();
     this.questionCue.observe(speech);
     const narration = this.narration;
@@ -315,6 +376,7 @@ export class DesktopVoice {
         !this.sessionError() &&
         !['suspended', 'shutdown'].includes(this.experience.state().phase),
     });
+    this.updateCue.observe(this.assistant.state().background_updates ?? []);
   }
   private finishNarration(stage: 'completed' | 'failed' | 'cancelled') {
     if (!this.narration) return;
@@ -324,6 +386,7 @@ export class DesktopVoice {
   stop() {
     this.spatial?.interrupt();
     this.questionCue.cancel();
+    this.updateCue.cancel();
     this.conversation.stopVoice();
   }
   narrationOwner() {

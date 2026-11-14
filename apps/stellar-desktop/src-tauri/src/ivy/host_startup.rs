@@ -51,9 +51,15 @@ pub(super) fn acquire(
 }
 
 fn reject_rotation(action: Action, rotations: &Pending, error: IvyErrorCode) {
-    if let Action::Rotate(_, _, ticket, reply) | Action::Lifecycle(_, ticket, reply) = action {
-        rotation::finish(rotations, &ticket);
-        let _ = reply.send(Err(error));
+    match action {
+        Action::Rotate(_, _, ticket, reply) | Action::Lifecycle(_, ticket, reply) => {
+            rotation::finish(rotations, &ticket);
+            let _ = reply.send(Err(error));
+        }
+        Action::ClaimUpdate(_, reply) => {
+            let _ = reply.send(Err(error));
+        }
+        _ => {}
     }
 }
 #[cfg(test)]

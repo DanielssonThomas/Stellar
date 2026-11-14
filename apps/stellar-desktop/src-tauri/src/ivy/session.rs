@@ -39,11 +39,12 @@ impl Session {
         if !self.shared.current(self.epoch) {
             return Err(IvyErrorCode::Unavailable);
         }
-        self.broker.as_mut().ok_or(IvyErrorCode::Unavailable)?.call(
-            method,
-            params,
-            &mut self.buffered,
-        )
+        let result = self
+            .broker
+            .as_mut()
+            .ok_or(IvyErrorCode::Unavailable)?
+            .call(method, params, &mut self.buffered)?;
+        super::lifecycle_consumer::checked_response(method, result)
     }
 
     #[cfg(test)]
@@ -185,6 +186,10 @@ impl Session {
             let sid = bounded_id(created.get("session_id"))?;
             if created.get("model").and_then(Value::as_str) != Some(model_route(self.record.model))
             {
+                #[cfg(feature = "native-smoke")]
+                if std::env::var_os("STELLAR_BACKGROUND_SMOKE").is_some() {
+                    println!("STELLAR_SMOKE_STAGE bg-create-model-mismatch");
+                }
                 return Err(IvyErrorCode::Unavailable);
             }
             sid
@@ -213,6 +218,7 @@ impl Session {
         self.replay = None;
         self.shared.update_current(|view| {
             view.model = model;
+            view.background_updates = None;
             view.reset_id = None;
             view.verified_model = None;
             view.workspace_tools = WorkspaceToolsState::Unavailable;
@@ -245,8 +251,14 @@ impl Session {
     }
 
     pub fn drain(&mut self) -> Result<(), IvyErrorCode> {
-        for event in std::mem::take(&mut self.buffered) {
-            self.event(event)?;
+        let mut remaining = 1024usize;
+        while !self.buffered.is_empty() {
+            remaining = remaining
+                .checked_sub(self.buffered.len())
+                .ok_or(IvyErrorCode::Uncertain)?;
+            for event in std::mem::take(&mut self.buffered) {
+                self.event(event)?;
+            }
         }
         Ok(())
     }

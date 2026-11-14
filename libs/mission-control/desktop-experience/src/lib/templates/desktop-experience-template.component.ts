@@ -120,6 +120,30 @@ export class DesktopExperienceTemplate {
   readonly passiveListening = input(false);
   readonly assistantStatus = input('Ivy disconnected');
   readonly assistantReply = input('');
+  readonly backgroundUpdate = input<{
+    readonly id: string;
+    readonly text: string;
+  } | null>(null);
+  readonly dismissedUpdate = signal<string | null>(null);
+  readonly backgroundPreview = computed(() => {
+    const update = this.backgroundUpdate();
+    return update &&
+      update.id !== this.dismissedUpdate() &&
+      !['suspended', 'shutdown'].includes(this.state().phase)
+      ? {
+          id: update.id,
+          text:
+            update.text.length > 280
+              ? update.text.slice(0, 280) + '…'
+              : update.text,
+        }
+      : null;
+  });
+
+  readBackgroundUpdate() {
+    if (!this.menu.open()) this.menu.toggle();
+    this.dismissedUpdate.set(this.backgroundUpdate()?.id ?? null);
+  }
   readonly showResponseCaptions = input(false);
   readonly showResponseCaptionsChange = output<boolean>();
   readonly responseCaptionText = input('');

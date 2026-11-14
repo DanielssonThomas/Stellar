@@ -97,3 +97,20 @@ fn installed_gateway_silent_health() {
     assert_eq!(description["protocol"], 1);
     assert_eq!(broker.sequence, 2);
 }
+
+#[test]
+fn classified_submission_failure_retains_uncertainty_without_another_request() {
+    let mut broker = fixture(
+        "$null=[Console]::ReadLine(); [Console]::WriteLine('{\"id\":1,\"error\":{\"code\":\"outcome_uncertain\",\"diagnostic\":\"owner_permission\"}}'); Start-Sleep 5",
+    );
+    let child = broker.child.clone();
+    let mut events = vec![];
+    assert_eq!(
+        broker.call("prompt.submit", json!({}), &mut events),
+        Err(IvyErrorCode::Uncertain)
+    );
+    assert_eq!(broker.sequence, 1);
+    assert!(events.is_empty());
+    drop(broker);
+    assert!(child.lock().unwrap().is_none());
+}

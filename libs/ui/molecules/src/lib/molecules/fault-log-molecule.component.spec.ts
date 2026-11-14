@@ -13,6 +13,27 @@ describe('FaultLogMolecule', () => {
     await fixture.whenStable();
   });
 
+  it('shows bounded delivery correlation in a collapsed text-only diagnostic detail', async () => {
+    fixture.componentRef.setInput('entries', [
+      {
+        id: 1,
+        time: '2026-11-14T16:00:00Z',
+        category: 'Voice update',
+        message: 'The update remains available as text.',
+        status: 'active',
+        count: 1,
+        diagnostic:
+          'Stage: claim; code: timeout; admission: abc; claim: def; operation: unavailable',
+      },
+    ]);
+    await fixture.whenStable();
+    const detail = fixture.nativeElement.querySelector(
+      'details',
+    ) as HTMLDetailsElement;
+    expect(detail.open).toBe(false);
+    expect(detail.textContent).toContain('admission: abc');
+    expect(fixture.nativeElement.textContent).not.toContain('Try recovery');
+  });
   it('keeps unresolved faults visible and exposes an explicit recovery action', async () => {
     fixture.componentRef.setInput('entries', [
       {

@@ -30,6 +30,8 @@ mod questions;
 mod requests;
 #[path = "host_startup.rs"]
 mod startup;
+#[path = "host_updates.rs"]
+mod updates;
 
 #[cfg(test)]
 #[path = "route_tests.rs"]
@@ -45,6 +47,10 @@ pub enum Action {
     Cancel,
     Reconcile,
     Question(IvyQuestionReplyRequest),
+    ClaimUpdate(
+        IvyClaimUpdateRequest,
+        mpsc::SyncSender<Result<IvySnapshot, IvyErrorCode>>,
+    ),
     Lifecycle(
         super::lifecycle::Control,
         Ticket,
@@ -164,11 +170,16 @@ impl IvyHost {
                 match incoming {
                     Ok(work) => {
                         if !state.current(work.epoch) {
-                            if let Action::Rotate(_, _, ticket, reply)
-                            | Action::Lifecycle(_, ticket, reply) = work.action
-                            {
-                                rotation::finish(&rotations, &ticket);
-                                let _ = reply.send(Err(IvyErrorCode::Unavailable));
+                            match work.action {
+                                Action::Rotate(_, _, ticket, reply)
+                                | Action::Lifecycle(_, ticket, reply) => {
+                                    rotation::finish(&rotations, &ticket);
+                                    let _ = reply.send(Err(IvyErrorCode::Unavailable));
+                                }
+                                Action::ClaimUpdate(_, reply) => {
+                                    let _ = reply.send(Err(IvyErrorCode::Unavailable));
+                                }
+                                _ => {}
                             }
                             continue;
                         }
@@ -185,6 +196,11 @@ impl IvyHost {
                             Action::Cancel => session.cancel(),
                             Action::Reconcile => session.reconcile(),
                             Action::Question(request) => session.answer_question(request),
+                            Action::ClaimUpdate(request, reply) => {
+                                let result = session.claim_update(request);
+                                let _ = reply.send(result);
+                                Ok(())
+                            }
                             #[cfg(feature = "native-smoke")]
                             Action::SmokeHold(ack) => {
                                 let _ = ack.send(());
@@ -232,7 +248,8 @@ impl IvyHost {
                 if let Some(broker) = &session.broker {
                     match broker.poll() {
                         Ok(Some(frame)) => {
-                            if let Err(error) = session.event(frame) {
+                            if let Err(error) = session.event(frame).and_then(|()| session.drain())
+                            {
                                 tools.disarm();
                                 tools.set_input(None);
                                 fail(&mut session, error);

@@ -73,6 +73,12 @@ class WorkersTest(unittest.TestCase):
         core.launch.assert_called_once()
         issue, role, cwd, argv = core.launch.call_args.args
         self.assertEqual((issue, role, cwd), (23, 'peon-cloud', self.cwd.resolve()))
+        incarnation = core.launch.call_args.kwargs['incarnation']
+        self.assertRegex(incarnation, r'^[0-9a-f]{32}$')
+        receipt = json.loads(next((self.root / 'attempts').glob('*/terminal.json')).read_text())
+        self.assertEqual(receipt['incarnation'], incarnation)
+        self.assertEqual(receipt['claim_session'], 'job-23')
+        self.assertEqual(receipt['branch'], 'issue/23-fix')
         self.assertEqual(argv[:4], ['fixture', '-p', 'peon-cloud', 'chat'])
         task_file = argv[argv.index('--query-file') + 1]
         self.assertIn('Check affected lint.', task_file.read_text(encoding='utf-8'))

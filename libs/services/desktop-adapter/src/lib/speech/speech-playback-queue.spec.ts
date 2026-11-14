@@ -40,6 +40,165 @@ function fixture(waitForSlot?: () => Promise<void>) {
   return { queue, speak, observe, state: () => state };
 }
 describe('owned sequential speech playback', () => {
+  it.each(['timeout', 'unavailable'] as const)(
+    'does not globally stop a cancelled owner after %s',
+    async (failure) => {
+      vi.useFakeTimers();
+      try {
+        const initial = initialSpeechSnapshot();
+        const stop = vi.fn(async () => undefined);
+        const queue = new SpeechPlaybackQueue({
+          state: () => initial,
+          stop,
+          speak: async () => ({
+            ...initial,
+            operation_id: 'cancelled',
+            revision: '1',
+            state: 'speaking',
+          }),
+        });
+        const result = expect(
+          queue.play('Old answer', 'cancelled'),
+        ).rejects.toThrow();
+        await settle();
+        queue.cancel('cancelled');
+        if (failure === 'timeout') await vi.advanceTimersByTimeAsync(125000);
+        else
+          queue.observe({
+            ...initial,
+            operation_id: 'cancelled',
+            revision: '2',
+            state: 'unavailable',
+          });
+        await result;
+        expect(stop).not.toHaveBeenCalled();
+        expect(queue.busy()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it('ignores stale dispatch rejection after a replacement owner starts', async () => {
+    const initial = initialSpeechSnapshot();
+    let rejectOld!: (reason: Error) => void;
+    const stop = vi.fn(async () => undefined);
+    const speak = vi.fn(async (_text: string, operation_id: string) => ({
+      ...initial,
+      operation_id,
+      revision: '1',
+      state: 'speaking' as const,
+    }));
+    speak.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectOld = reject;
+        }),
+    );
+    const queue = new SpeechPlaybackQueue({
+      state: () => initial,
+      speak,
+      stop,
+    });
+    const old = expect(queue.play('Old answer', 'old')).rejects.toThrow(
+      'cancelled',
+    );
+    queue.clear();
+    await old;
+    const current = queue.play('Current answer', 'current');
+    await settle();
+    rejectOld(new Error('Late failure'));
+    await settle();
+    expect(queue.owner()?.id).toBe('current');
+    expect(stop).not.toHaveBeenCalled();
+    queue.observe({ ...initial, operation_id: 'current', revision: '2' });
+    await expect(current).resolves.toMatchObject({ operation_id: 'current' });
+  });
+
+  it('recovers an unavailable non-cancelled speech dispatch', async () => {
+    let state = initialSpeechSnapshot();
+    const stop = vi.fn(async () => undefined);
+    const queue = new SpeechPlaybackQueue({
+      state: () => state,
+      stop,
+      speak: async () => {
+        state = { ...state, state: 'unavailable' };
+        throw new Error('Worker unavailable');
+      },
+    });
+    await expect(queue.play('Answer', 'answer')).rejects.toThrow(
+      'dispatch failed',
+    );
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('does not settle from another instance using the same utterance ID before ACK', async () => {
+    let acknowledge!: (snapshot: SpeechSnapshot) => void;
+    const initial = initialSpeechSnapshot();
+    const queue = new SpeechPlaybackQueue({
+      state: () => initial,
+      speak: () =>
+        new Promise((done) => {
+          acknowledge = done;
+        }),
+    });
+    let finished = false;
+    const result = queue.play('Original', 'same-id').then(() => {
+      finished = true;
+    });
+    queue.observe({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'b'.repeat(32),
+      revision: '3',
+    });
+    acknowledge({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'a'.repeat(32),
+      revision: '1',
+      state: 'synthesizing',
+    });
+    await settle();
+    expect(finished).toBe(false);
+    queue.observe({
+      ...initial,
+      operation_id: 'same-id',
+      operation_instance: 'a'.repeat(32),
+      revision: '4',
+    });
+    await result;
+    expect(finished).toBe(true);
+  });
+  it('holds a canceled in-flight owner until late dispatch and cleanup settle', async () => {
+    let finish!: () => void;
+    const state = initialSpeechSnapshot();
+    const speak = vi.fn(
+      async (_text: string, id: string): Promise<SpeechSnapshot> => {
+        if (id === 'revoked') {
+          await new Promise<void>((done) => {
+            finish = done;
+          });
+          throw new Error('Exact native cleanup completed');
+        }
+        return { ...state, revision: '2', operation_id: id };
+      },
+    );
+    const queue = new SpeechPlaybackQueue({ state: () => state, speak });
+    const revoked = expect(queue.play('Original', 'revoked')).rejects.toThrow(
+      'cancelled',
+    );
+    queue.cancel('revoked');
+    const foreground = queue.play('Unrelated', 'foreground');
+    expect(speak).toHaveBeenCalledOnce();
+    expect(queue.busy()).toBe(true);
+    finish();
+    await revoked;
+    await expect(foreground).resolves.toMatchObject({
+      operation_id: 'foreground',
+    });
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
   it('waits for a long spatial briefing before starting the native deadline', async () => {
     vi.useFakeTimers();
     try {

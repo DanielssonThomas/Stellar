@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   ivyConnectCommand,
+  ivyClaimUpdateCommand,
   type IvySnapshot,
 } from '@stellar/desktop-contracts';
 import { initialIvySnapshot, type IvyTransport } from '../ivy/ivy-transport';
@@ -258,5 +259,73 @@ describe('Ivy service startup and revision ownership', () => {
     const service = TestBed.inject(IvyAdapterService);
     await expect(service.snapshot()).rejects.toMatchObject({ code: 'busy' });
     expect((await service.snapshot()).model).toBe('sol');
+  });
+  it('keeps canonical completed text and committed speech claim when the claim ACK is lost', async () => {
+    const request = '00000000-0000-4000-8000-000000000001';
+    const ready: IvySnapshot = {
+      ...initialIvySnapshot(),
+      revision: '1',
+      connection: 'ready',
+      background_updates: [
+        {
+          id: 'admission',
+          text: 'Retained completed answer.',
+          speech_claim: null,
+        },
+      ],
+    };
+    let receive!: (value: unknown) => void;
+    const invoke = vi.fn(async (command: string) => {
+      if (command === ivyClaimUpdateCommand) {
+        receive({
+          ...ready,
+          revision: '2',
+          background_updates: [
+            { ...ready.background_updates![0], speech_claim: request },
+          ],
+        });
+        throw 'timeout';
+      }
+      return ready;
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: IVY_TRANSPORT,
+          useValue: {
+            invoke,
+            listen: async (
+              _event: string,
+              handler: (value: unknown) => void,
+            ) => {
+              receive = handler;
+              return vi.fn();
+            },
+          },
+        },
+      ],
+    });
+    const service = TestBed.inject(IvyAdapterService);
+    await service.connect();
+    await expect(
+      service.claimUpdate('admission', request),
+    ).rejects.toMatchObject({ code: 'timeout' });
+    expect(service.state()).toMatchObject({
+      connection: 'ready',
+      turn: 'idle',
+      error: null,
+      background_updates: [
+        {
+          id: 'admission',
+          text: 'Retained completed answer.',
+          speech_claim: request,
+        },
+      ],
+    });
+    expect(
+      invoke.mock.calls.filter(
+        ([command]) => command === ivyClaimUpdateCommand,
+      ),
+    ).toHaveLength(1);
   });
 });
