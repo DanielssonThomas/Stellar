@@ -180,7 +180,7 @@ class NotificationProducer:
         if known:
             store.remember(saved['event_id'], response)
         now = self.clock()  # AFTER host await; local opt-out wins.
-        expired = store.expired(saved, now)
+        expired = store.expired(saved, now) if params.get('include_expiry') is True else False
         local = store.eligible(saved['event_id'], now)
         final = ((response.get('result') or {}).get('result') or {}).get('final_response')
         meaningful = type(final) is str and bool(final.strip()) and len(final.encode('utf-8')) <= 262144

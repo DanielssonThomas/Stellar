@@ -286,6 +286,10 @@ if (action === 'smoke' || action === 'background-smoke') {
   if (action === 'test') {
     for (const script of [
       'ivy_bridge_test.py',
+      'ivy_ordinary_completion_test.py',
+      'ivy_plugin_notification_test.py',
+      'ivy_reconcile_test.py',
+      'ivy_recovery_test.py',
       'ivy_approvals_test.py',
       'ivy_workspace_bridge_test.py',
       'engineering_intelligence_test.py',
@@ -296,7 +300,8 @@ if (action === 'smoke' || action === 'background-smoke') {
       'speech_pipeline_test.py',
       'cleanup_worker_test.py',
     ]) {
-      const bridge = spawnSync('python', ['-I', `tools/native/${script}`], {
+      const entry = `import runpy,sys;sys.path.insert(0,${JSON.stringify(root)});runpy.run_path(${JSON.stringify(resolve(root, 'tools/native', script))},run_name="__main__")`;
+      const bridge = spawnSync('python', ['-I', '-c', entry], {
         cwd: root,
         env,
         windowsHide: true,
