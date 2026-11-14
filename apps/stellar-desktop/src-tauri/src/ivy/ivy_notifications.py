@@ -150,10 +150,15 @@ def revocation(value, profile, session, plugin):
 
 
 def forwarded(value, expected, admission):
-    closed(value, {'host', 'local_eligible', 'delivery_allowed'})
+    fields = {'host', 'local_eligible', 'delivery_allowed'}
+    if type(value) is dict and 'local_expired' in value:
+        fields.add('local_expired')
+    closed(value, fields)
     host = inspection(value['host'], expected, admission)
     local, allowed = value['local_eligible'], value['delivery_allowed']
-    if type(local) is not bool or type(allowed) is not bool:
+    expired = value.get('local_expired', False)
+    if (type(local) is not bool or type(allowed) is not bool or type(expired) is not bool
+            or (expired and (local or allowed))):
         raise ValueError('notification_eligibility')
     inner = (host.get('result') or {}).get('result')
     final = inner.get('final_response') if type(inner) is dict else None
@@ -164,7 +169,10 @@ def forwarded(value, expected, admission):
         inner = (host['result'] or {}).get('result')
         final = inner.get('final_response') if type(inner) is dict else None
         host['result'] = {'result': {'final_response': final}} if type(final) is str else None
-    return {'host': host, 'local_eligible': local, 'delivery_allowed': allowed}
+    result = {'host': host, 'local_eligible': local, 'delivery_allowed': allowed}
+    if 'local_expired' in value:
+        result['local_expired'] = expired
+    return result
 
 
 async def inspect_forward(conn, params, profile, deadline):
@@ -175,8 +183,15 @@ async def inspect_forward(conn, params, profile, deadline):
     digest(notice['event_id'])
     text(params['admission_id'], 512)
     try:
-        response = await asyncio.wait_for(conn.client.rpc('plugin.stellar-herdr.observations.inspect',
-            session_id=params['session_id'], event_id=notice['event_id']), deadline)
+        async with asyncio.timeout(deadline):
+            try:
+                response = await conn.client.rpc('plugin.stellar-herdr.observations.inspect',
+                    session_id=params['session_id'], event_id=notice['event_id'], include_expiry=True)
+            except Exception as error:
+                if not isinstance(error, getattr(conn, 'rpc_error_type', ())):
+                    raise
+                response = await conn.client.rpc('plugin.stellar-herdr.observations.inspect',
+                    session_id=params['session_id'], event_id=notice['event_id'])
     except Exception as error:
         if isinstance(error, getattr(conn, 'rpc_error_type', ())):
             from stellar_ivy_controls import Refused

@@ -194,12 +194,25 @@ export class SpeechAdapterService {
       this.updateDucking();
       try {
         dispatched = true;
-        const snapshot = await this.adapter.speak({
-          version: 1,
-          epoch: this.current().epoch,
-          utterance_id: utteranceId,
-          text,
-        });
+        let snapshot: SpeechSnapshot;
+        try {
+          snapshot = await this.adapter.speak({
+            version: 1,
+            epoch: this.current().epoch,
+            utterance_id: utteranceId,
+            text,
+          });
+        } catch (error) {
+          if (
+            error instanceof SpeechAdapterError &&
+            error.kind === 'native' &&
+            ['busy', 'malformed_request', 'unsupported_version'].includes(
+              error.code ?? '',
+            )
+          )
+            operation.retired = true;
+          throw error;
+        }
         operation.snapshot = snapshot;
         this.accept(snapshot, true);
         this.retireSpeech(this.current());

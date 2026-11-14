@@ -27,6 +27,169 @@ fn mock_reply(reply: &Value) -> String {
 }
 
 #[test]
+fn expired_terminal_head_retires_without_starving_fresh_notice_or_replaying_after_restart() {
+    let data = captured();
+    let original = &data["producer_inspection_rpc"]["result"];
+    let first = original["host"]["receipt"]["admission_id"]
+        .as_str()
+        .unwrap();
+    let owner = data["binding"]["owner_session_id"].as_str().unwrap();
+    let signal = std::env::temp_dir().join(format!(
+        "stellar-expiry-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    assert!(!signal.exists());
+    let mut paused = original.clone();
+    paused["local_eligible"] = json!(false);
+    paused["delivery_allowed"] = json!(false);
+    let mut expired = paused.clone();
+    expired["local_expired"] = json!(true);
+    let mut fresh = original.clone();
+    fresh["host"]["event_id"] = json!("e".repeat(64));
+    fresh["host"]["descriptor"]["event_id"] = fresh["host"]["event_id"].clone();
+    fresh["host"]["receipt"]["admission_id"] = json!("fresh-admission");
+    let sequence = fresh["host"]["receipt"]["sequence"].as_u64().unwrap() + 1;
+    let generation = fresh["host"]["receipt"]["execution_generation"]
+        .as_u64()
+        .unwrap()
+        + 1;
+    fresh["host"]["receipt"]["sequence"] = json!(sequence);
+    fresh["host"]["receipt"]["execution_generation"] = json!(generation);
+    fresh["host"]["result"] = json!({"result":{"final_response":"Fresh notification"}});
+    let script = format!(
+        "if (Test-Path '{}') {{ if ($request.params.admission_id -eq 'fresh-admission') {{ {} }} else {{ {} }} }} else {{ {} }}",
+        signal.to_string_lossy().replace('\'', "''"),
+        mock_reply(&fresh),
+        mock_reply(&expired),
+        mock_reply(&paused)
+    );
+    let (mut session, directory) = fixture(&script);
+    session.record.session_id = Some(owner.into());
+    session.event(start(&data)).unwrap();
+    let path = session.journal.updates_path();
+    let mut updates = Updates::load(&path, owner).unwrap();
+    assert_eq!(updates.pending.len(), 1); // Legacy/general ineligibility stays conservative.
+    let mut next = updates.notices[first].clone();
+    next.admission.id = "fresh-admission".into();
+    next.admission.sequence = sequence;
+    next.admission.generation = generation;
+    next.descriptor = fresh["host"]["descriptor"].clone();
+    updates.admit(next.admission.clone()).unwrap();
+    updates.notices.insert(next.admission.id.clone(), next);
+    updates.save(&path).unwrap();
+    std::fs::write(&signal, b"expired").unwrap();
+    session.poll_updates().unwrap();
+    let updates = Updates::load(&path, owner).unwrap();
+    assert!(updates.pending.is_empty());
+    assert_eq!(updates.settled_sequence, sequence);
+    assert_eq!(updates.completed.len(), 1);
+    assert_eq!(updates.completed[0].text, "Fresh notification");
+    assert!(updates.completed[0].speech_claim.is_none());
+    assert!(!updates.notices.contains_key(first));
+    assert_eq!(expired["host"], original["host"]);
+    let durable = std::fs::read(&path).unwrap();
+    drop(session);
+    let (mut restarted, restart_directory) = fixture(&script);
+    restarted.record.session_id = Some(owner.into());
+    std::fs::write(restarted.journal.updates_path(), &durable).unwrap();
+    restarted.event(start(&data)).unwrap();
+    assert_eq!(
+        std::fs::read(restarted.journal.updates_path()).unwrap(),
+        durable
+    );
+    drop(restarted);
+    std::fs::remove_file(signal).unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    std::fs::remove_dir_all(restart_directory).unwrap();
+}
+
+#[test]
+fn temporary_ineligibility_recovers_and_expiry_cannot_settle_unknown_or_running_work() {
+    let data = captured();
+    let original = &data["producer_inspection_rpc"]["result"];
+    let owner = data["binding"]["owner_session_id"].as_str().unwrap();
+    let body = format!(
+        "$script:reads += 1; $v = {}; $v | Add-Member -NotePropertyName local_expired -NotePropertyValue $false; if ($script:reads -le 2) {{ $v.local_eligible=$false; $v.delivery_allowed=$false }}; $v",
+        mock_reply(original)
+    );
+    let (mut session, directory) = fixture(&body);
+    session.record.session_id = Some(owner.into());
+    session.event(start(&data)).unwrap();
+    assert_eq!(
+        Updates::load(&session.journal.updates_path(), owner)
+            .unwrap()
+            .pending
+            .len(),
+        1
+    );
+    session.poll_updates().unwrap();
+    assert_eq!(
+        Updates::load(&session.journal.updates_path(), owner)
+            .unwrap()
+            .completed
+            .len(),
+        1
+    );
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+    for status in ["unknown", "queued", "started"] {
+        let mut response = original.clone();
+        response["local_eligible"] = json!(false);
+        response["delivery_allowed"] = json!(false);
+        response["local_expired"] = json!(true);
+        response["host"]["delivery_allowed"] = json!(false);
+        if status == "unknown" {
+            response["host"]["status"] = json!("unknown");
+        } else {
+            response["host"]["receipt"]["status"] = json!(status);
+            response["host"]["receipt"]["outcome"] = Value::Null;
+            response["host"]["result"] = Value::Null;
+            if status == "queued" {
+                response["host"]["receipt"]["execution_generation"] = Value::Null;
+            }
+        }
+        let (mut session, directory) = fixture(&mock_reply(&response));
+        session.record.session_id = Some(owner.into());
+        let result = session.event(start(&data));
+        if status == "unknown" {
+            assert_eq!(result, Err(IvyErrorCode::Uncertain));
+        } else {
+            result.unwrap();
+        }
+        let updates = Updates::load(&session.journal.updates_path(), owner).unwrap();
+        assert_eq!(updates.settled_sequence, 0);
+        assert!(updates.completed.is_empty());
+        if status != "unknown" {
+            assert_eq!(updates.pending.len(), 1);
+        }
+        drop(session);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
+fn expiry_type_or_eligibility_contradiction_cannot_publish_or_advance() {
+    let data = captured();
+    let owner = data["binding"]["owner_session_id"].as_str().unwrap();
+    for value in [json!(1), Value::Null, json!("true"), json!(true)] {
+        let mut response = data["producer_inspection_rpc"]["result"].clone();
+        response["local_expired"] = value;
+        let (mut session, directory) = fixture(&mock_reply(&response));
+        session.record.session_id = Some(owner.into());
+        assert_eq!(session.event(start(&data)), Err(IvyErrorCode::Protocol));
+        let updates = Updates::load(&session.journal.updates_path(), owner).unwrap();
+        assert_eq!(updates.settled_sequence, 0);
+        assert!(updates.completed.is_empty());
+        drop(session);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[test]
 fn canonical_plugin_answer_is_text_only_durable_and_exact_binding_revoke_is_sticky() {
     let data = captured();
     let (mut session, directory) = fixture(&mock_reply(&data["producer_inspection_rpc"]["result"]));

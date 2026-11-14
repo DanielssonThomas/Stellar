@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import math
 import sqlite3
 
 from .core import Unavailable
@@ -107,6 +108,24 @@ class NotificationStore(ObservationStore):
         self.sync(now)
         with self.transaction() as db:
             return self._eligible(db, event_id, now) is not None
+
+    @staticmethod
+    def expired(saved, now):
+        try:
+            content = json.loads(saved['content'])
+            binding = json.loads(saved['binding'])
+        except (ValueError, TypeError, KeyError):
+            raise Unavailable('The retained event expiry is unavailable.') from None
+        if type(content) is not dict or type(binding) is not dict:
+            raise Unavailable('The retained event expiry is unavailable.')
+        observed, valid, expires = content.get('observedAt'), content.get('validUntil'), binding.get('expires_at')
+        if any(type(value) not in (int, float) or not math.isfinite(value) or value < 0
+               for value in (now, observed, valid, expires)):
+            raise Unavailable('The retained event expiry is unavailable.')
+        horizon = observed + FRESHNESS
+        if valid != min(horizon, expires) or expires <= observed:
+            raise Unavailable('The retained event expiry conflicts with its binding.')
+        return now > horizon or now >= expires
 
     def reserve_event(self, event_id, now):
         with self.transaction() as db:

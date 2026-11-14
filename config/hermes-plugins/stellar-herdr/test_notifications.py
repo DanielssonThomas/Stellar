@@ -1,18 +1,95 @@
 """Local producer bookkeeping invariants; composed host execution has separate integration tests."""
 from copy import deepcopy
+import asyncio
 import json
 from pathlib import Path
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 
 from .core import Unavailable
 from .notification_store import NotificationStore
+from .notification_producer import NotificationProducer
 from .observation_store import ObservationStore
 from .test_observation import receipt, facts
 
 
 class NotificationStoreTests(unittest.TestCase):
+    def test_expiry_negotiation_keeps_legacy_shape_and_original_session_authorization(self):
+        self.store.reserve_event(self.ident, self.now)
+        saved = self.store.lookup(self.ident)
+        clock, calls, reads = [self.now], [], []
+        async def call(action, **params):
+            calls.append(action)
+            clock[0] = json.loads(saved['content'])['observedAt'] + 300.01
+            return {'status': 'unknown', 'binding': self.binding,
+                    'event_id': self.ident, 'delivery_allowed': False}
+        def read_clock():
+            reads.append(clock[0])
+            return clock[0]
+        producer = NotificationProducer(self.root, SimpleNamespace(notification=call), clock=read_clock)
+        producer.store = lambda: (self.store, {})
+        args = {'event_id': self.ident}
+        legacy = asyncio.run(producer.rpc_inspect(args, session_id='fixture-original'))
+        self.assertEqual(set(legacy), {'host', 'local_eligible', 'delivery_allowed'})
+        result = asyncio.run(producer.rpc_inspect({**args, 'include_expiry': True}, session_id='fixture-original'))
+        self.assertTrue(result['local_expired'])
+        self.assertFalse(result['local_eligible'])
+        self.assertFalse(result['delivery_allowed'])
+        self.assertEqual(result['host'], legacy['host'])
+        for invalid in (False, 1, 'true', None):
+            with self.assertRaises(Unavailable):
+                asyncio.run(producer.rpc_inspect({**args, 'include_expiry': invalid}, session_id='fixture-original'))
+        with self.assertRaises(Unavailable):
+            asyncio.run(producer.rpc_inspect({**args, 'include_expiry': True}, session_id='foreign'))
+        with self.assertRaises(Unavailable):
+            asyncio.run(producer.rpc_revoke({**args, 'include_expiry': True}, session_id='fixture-original'))
+        self.assertEqual(calls, ['inspect', 'inspect'])
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(self.store.lookup(self.ident)['content'], saved['content'])
+        self.assertEqual(self.store.lookup(self.ident)['phase'], 'unknown')
+
+    def test_immutable_expiry_survives_healthy_polls_and_transition_pruning(self):
+        self.store.reserve_event(self.ident, self.now)
+        saved = self.store.lookup(self.ident)
+        content = json.loads(saved['content'])
+        horizon = content['observedAt'] + 300
+        self.assertFalse(self.store.expired(saved, horizon))
+        self.assertTrue(self.store.expired(saved, horizon + .001))
+        with self.observer.transaction() as db:
+            db.execute("UPDATE tracking SET health='current',observed=?", (horizon + 1,))
+            db.execute('DELETE FROM transitions WHERE identity=?', (self.ident,))
+        self.assertTrue(self.store.expired(self.store.lookup(self.ident), horizon + 1))
+        retained = self.store.lookup(self.ident)
+        self.assertFalse(self.store.expired(retained, horizon - .001))
+        self.assertEqual(retained['phase'], 'unknown')
+        self.assertEqual(retained['content'], saved['content'])
+        self.assertEqual(retained['binding'], saved['binding'])
+
+    def test_expiry_uses_strict_binding_deadline_and_rejects_corrupt_timestamps(self):
+        self.store.reserve_event(self.ident, self.now)
+        original = self.store.lookup(self.ident)
+        saved = dict(original)
+        content, binding = json.loads(saved['content']), json.loads(saved['binding'])
+        binding['expires_at'] = content['observedAt'] + 100
+        content['validUntil'] = binding['expires_at']
+        saved.update(content=json.dumps(content), binding=json.dumps(binding))
+        self.assertFalse(self.store.expired(saved, binding['expires_at'] - .001))
+        self.assertTrue(self.store.expired(saved, binding['expires_at']))
+        for field in ('observedAt', 'validUntil'):
+            for invalid in (True, None, float('nan'), float('inf'), -1, '300'):
+                bad = dict(saved)
+                bad['content'] = json.dumps({**content, field: invalid})
+                with self.assertRaises(Unavailable):
+                    self.store.expired(bad, self.now)
+        bad = dict(saved, content=json.dumps({**content, 'validUntil': content['validUntil'] + 1}))
+        with self.assertRaises(Unavailable):
+            self.store.expired(bad, self.now)
+        for clock in (True, float('nan'), float('inf')):
+            with self.assertRaises(Unavailable):
+                self.store.expired(saved, clock)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

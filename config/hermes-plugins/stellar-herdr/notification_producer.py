@@ -158,8 +158,10 @@ class NotificationProducer:
                 return {**result, 'tracking': False, 'delivery': 'tracking_changed_binding_unknown'}
             return {**result, 'delivery': 'binding_unknown_or_unsupported_no_notification_sent'}
 
-    def authorized_event(self, params, server_session_id):
-        if (type(params) is not dict or set(params) - {'session_id', 'event_id'}
+    def authorized_event(self, params, server_session_id, *, expiry=False):
+        fields = {'session_id', 'event_id'} | ({'include_expiry'} if expiry else set())
+        if (type(params) is not dict or set(params) - fields
+                or ('include_expiry' in params and params['include_expiry'] is not True)
                 or type(server_session_id) is not str or not server_session_id
                 or ('session_id' in params and params['session_id'] != server_session_id)
                 or type(params.get('event_id')) is not str or len(params['event_id']) != 64
@@ -172,16 +174,21 @@ class NotificationProducer:
         return store, saved
 
     async def rpc_inspect(self, params, *, session_id=None, **_kwargs):
-        store, saved = self.authorized_event(params, session_id)
+        store, saved = self.authorized_event(params, session_id, expiry=True)
         response = await self.call('inspect', binding=json.loads(saved['binding']), event_id=saved['event_id'])
         known = self.validate(saved, response)
         if known:
             store.remember(saved['event_id'], response)
-        local = store.eligible(saved['event_id'], self.clock())  # AFTER host await; local opt-out wins
+        now = self.clock()  # AFTER host await; local opt-out wins.
+        expired = store.expired(saved, now)
+        local = store.eligible(saved['event_id'], now)
         final = ((response.get('result') or {}).get('result') or {}).get('final_response')
         meaningful = type(final) is str and bool(final.strip()) and len(final.encode('utf-8')) <= 262144
-        return {'host': response, 'local_eligible': local,
-                'delivery_allowed': known and local and response.get('delivery_allowed') is True and meaningful}
+        result = {'host': response, 'local_eligible': local,
+                  'delivery_allowed': known and local and response.get('delivery_allowed') is True and meaningful}
+        if params.get('include_expiry') is True:
+            result['local_expired'] = expired
+        return result
 
     async def rpc_revoke(self, params, *, session_id=None, **_kwargs):
         store, saved = self.authorized_event(params, session_id)

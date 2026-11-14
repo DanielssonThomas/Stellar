@@ -68,6 +68,37 @@ trusted-local observation route or accepted operational TCB. Their positive trus
 constructors remain unavailable. No further installation, restart, live test, state
 clearing, merge or deployment is authorized by this closeout.
 
+## Expired notices and definitive speech refusals
+
+The source integration additionally negotiates `include_expiry: true` on the existing
+authenticated inspection RPC. Only literal `true` is accepted, and revoke requests
+still reject that key. Default requests retain the exact legacy three-field response.
+Negotiated responses add `local_expired`, derived after the host await from the frozen
+attempt's original event horizon and binding expiry. The existing 300-second event
+freshness boundary is inclusive; binding expiry is exclusive. This is an event
+freshness policy, not a worker or task duration limit. A healthy later poll, changed
+tracking revision, missing transition or temporary outage cannot replace that horizon.
+
+The bridge accepts both response shapes and makes at most one legacy inspection
+fallback after a definite decoded server RPC error, within the original total deadline
+and unchanged session authorization. It never falls back after timeout, transport
+failure, malformed success or an unknown result. Inspection may remember receipts and
+sync local bookkeeping; it does not admit, resubmit or explicitly revoke work. Old
+producer responses remain conservative: expiry retirement requires the new producer
+fact. No capability is advertised or installed by this source change.
+
+Only a fully correlated canonical terminal receipt may use expiry to retire a pending
+notice through the existing settled-sequence/deduplication path. The host descriptor,
+receipt and producer attempt remain intact; unknown, queued and started outcomes cannot
+advance merely because the observation expired. Temporary ineligibility stays pending
+for revalidation. This prevents a permanently suppressed head from blocking fresh work.
+
+Speech operation bookkeeping retires a direct native `speech_speak` refusal only for
+`busy`, `malformed_request` or `unsupported_version`, which the native host returns
+before admission. Used IDs remain retained. Transport, malformed replies, timeout,
+unavailable and cancellation remain uncertain; neither global recovery nor a later
+stop failure is treated as proof that an unacknowledged operation never existed.
+
 ## Historical candidate investigation
 
 The following sections record earlier inactive designs and their then-current gates.
