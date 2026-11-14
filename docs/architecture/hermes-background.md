@@ -22,10 +22,22 @@ The final tested Desktop composition combines that producer with consumer
 `3b623f6ec67fc6640944d5dcc254a5a6e02bc3f6`, tree
 `919853e2894195664189fa38aff818342adc52fc`; its executable SHA-256 is
 `65c1974773f924c6da76065ffa44426a06594d5c7ff71a9d58361d92b7c70c50`.
-The current #339 branch retains the earlier imported consumer `e216f69`; final
-consumer source is separately proposed in PR #358. Neither branch alone is the
-qualified final composition. Their source integration and current-head checks remain
-required before either is represented as ready to merge.
+The #339 integration branch imports the exact 68-file consumer delta from `e216f69`
+to `3333b18` and incorporates current `develop`, retaining its issue-card contracts and
+speech recovery. The producer/root Cargo workspace and inactive crates remain intact.
+Bindings are regenerated from Rust; source import records verify every pre/postimage.
+The speech queue combines operation-scoped cancellation with foreground recovery:
+cancelled owners never invoke a global recovery stop, and stale rejection callbacks
+cannot recover or settle a replacement owner. The workspace bridge test loader includes
+the notification module, matching the production embedded-module set.
+
+PR #359 is the paired source integration vehicle. It closes only #339. Repository
+preflight requires every commit in its range to link #339, so the immutable consumer
+snapshot is imported without rewriting or merging #299's original commits. After
+reviewed, current-head CI passes and Ivy merges #359, PR #358 can be checked against
+the updated `develop` and merged separately to retain #299's original history and close
+#299 normally. Neither PR may skip its applicable CI/review gates; common content is
+not a second live qualification. No runtime update follows source integration.
 
 A normally admitted worker `t23` exited successfully. Automatic observation event
 `022c94492f3ff8be38cae95eac5e622743489ea5dc080968b6cbfabd376730ee`

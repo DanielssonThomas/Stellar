@@ -14,6 +14,11 @@ import {
   workspaceBatchMaxPayloadBytes,
 } from '../generated';
 import { validateWorkspaceChartContent } from './chart-codec';
+import { decodeWorkspaceIssuePayload } from './issue-codec';
+import {
+  parseWorkspaceIssueJson,
+  validateWorkspaceIssueScoreJson,
+} from './issue-json';
 import {
   boundedString,
   DesktopContractError,
@@ -28,6 +33,7 @@ const surfaces: Record<WorkspaceSurface, true> = {
   browser: true,
   diagram: true,
   chart: true,
+  'github-issue': true,
   workflow: true,
   session: true,
   'assistant-message': true,
@@ -50,6 +56,7 @@ const payloadLimits: Record<WorkspaceSurface, number> = {
   'assistant-message': 65536,
   diagram: 16384,
   chart: 16384,
+  'github-issue': 16384,
   browser: 4096,
   workflow: 2048,
   session: 2048,
@@ -90,6 +97,7 @@ function operation(value: unknown): WorkspaceToolOperation {
     const score = boundedString(data['score_json'], 32768);
     if (new TextEncoder().encode(score).byteLength > 32768)
       throw new DesktopContractError('malformed');
+    validateWorkspaceIssueScoreJson(score);
     return { kind, score_json: score };
   }
   if (kind === 'batch') {
@@ -209,8 +217,12 @@ function operation(value: unknown): WorkspaceToolOperation {
     throw new DesktopContractError('unknown-variant');
   const payload = boundedString(data['payload_json'], payloadLimits[surface]);
   try {
-    const parsed: unknown = JSON.parse(payload);
+    const parsed: unknown =
+      surface === 'github-issue'
+        ? parseWorkspaceIssueJson(payload)
+        : JSON.parse(payload);
     validateWorkspaceChartContent(surface, parsed);
+    if (surface === 'github-issue') decodeWorkspaceIssuePayload(parsed);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
       throw new Error();
     const remaining: unknown[] = [parsed];
@@ -326,9 +338,18 @@ export function decodeWorkspaceToolOutcome(
     if (surface === 'activity-summary')
       throw new DesktopContractError('malformed');
     const payload = boundedString(data['payload_json'], payloadLimits[surface]);
-    if (surface === 'chart' || surface === 'rich-text') {
+    if (
+      surface === 'chart' ||
+      surface === 'rich-text' ||
+      surface === 'github-issue'
+    ) {
       try {
-        validateWorkspaceChartContent(surface, JSON.parse(payload));
+        const parsed: unknown =
+          surface === 'github-issue'
+            ? parseWorkspaceIssueJson(payload)
+            : JSON.parse(payload);
+        validateWorkspaceChartContent(surface, parsed);
+        if (surface === 'github-issue') decodeWorkspaceIssuePayload(parsed);
       } catch {
         throw new DesktopContractError('malformed');
       }

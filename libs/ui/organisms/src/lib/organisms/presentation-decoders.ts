@@ -9,6 +9,7 @@ import { plainRecord } from './stage-json';
 import {
   decodeWorkspaceChart,
   decodeWorkspaceChartPayload,
+  decodeWorkspaceIssuePayload,
 } from '@stellar/desktop-contracts';
 
 const exact = (
@@ -145,6 +146,14 @@ export function decodePresentationText(
 export function decodePresentationChart(value: unknown) {
   try {
     return decodeWorkspaceChartPayload(value);
+  } catch {
+    return null;
+  }
+}
+
+export function decodePresentationIssue(value: unknown) {
+  try {
+    return decodeWorkspaceIssuePayload(value);
   } catch {
     return null;
   }
