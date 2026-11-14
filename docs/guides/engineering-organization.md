@@ -72,6 +72,142 @@ After validation and the issue worktree claim, Ivy uses `stellar_herdr` to start
 
 Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manual or automatic. Manual is the default. Automatic opens and focuses the view when a worker starts. Hiding the window leaves workers running in Core. Disabling the plugin stops Ivy's integration. Existing workers can still be inspected through the Herdr CLI.
 
+### Local lifecycle observations and the background delivery boundary
+
+The repository plugin records opted-in lifecycle observations and implements forwarding to the reviewed, **uninstalled** Hermes notification candidate. Installed-runtime and Desktop acceptance remain incomplete. The installed public injection API cannot provide the original-session pin, stable producer identity, trusted descriptor and durable admission receipt required by [#339](https://github.com/DanielssonThomas/Stellar/issues/339) and the [#299](https://github.com/DanielssonThomas/Stellar/issues/299) consumer. A scheduling boolean is not a receipt. Do not substitute private authority calls, loosen consumer checks or change injection permissions to work around an unavailable API.
+
+Tracking defaults off and is separate from the manual/automatic window preference. Enable it only when the user explicitly requests observation of an exact launch, using `stellar_herdr` or the plugin CLI:
+
+```json
+{
+  "action": "tracking",
+  "issue": 23,
+  "role": "peon-cloud",
+  "session_id": "exact-launch-claim",
+  "enabled": true,
+  "kinds": [
+    "worker_exited",
+    "worker_blocked",
+    "waiting_review",
+    "checks_failed",
+    "checks_passed",
+    "merged",
+    "workflow_verified"
+  ]
+}
+```
+
+New launches retain a versioned receipt with a random incarnation also attached to Core's worker labels, exact issue/worker/claim/branch/target and baseline SHA. Older receipts lack this provenance and cannot be opted into observation. They remain available through ordinary status/progress; do not relabel an old terminal or invent a receipt. Enabling tracking verifies current structured sources and establishes a silent baseline. Re-enabling starts a new tracking revision with a fresh baseline. `{"action":"tracking","issue":23,"enabled":false}` disables local observation, removes displayed transitions and invalidates in-flight reconciliation. Notification attempts and unknown outcomes remain retained; host revocation can remain pending. A concurrent tracking change also invalidates a slow enable request.
+
+`{"action":"reconcile"}` performs one bounded observation tick. `{"action":"observations"}` reads tracking health and recent local transitions. SQLite transactions in `integration/stellar-herdr/observations.sqlite3` preserve tracking revisions, snapshots and deterministic transition identities across restarts. A transition alone is **not a wake admission**. Optional notification bookkeeping retains the host-captured profile/session/route binding, immutable event evidence and canonical receipt metadata; it does not capture conversation transcripts. The observer reads only claim metadata, structured Core metadata and GitHub issue/PR/check metadata. It does not read terminal output, start Core, assign work, approve reviews, merge or deploy.
+
+Each successful observation requires the same claim and GitHub owner/target, plus Core's exact incarnation. An unexpired active claim or its unchanged released record is accepted; reassignment, expiry, missing retained worker data, ambiguous PR links or unavailable sources suppress transitions. A PR must close the exact repository issue, use the claimed branch and target in the same repository, and expose a full head SHA. Worker exit records only the process exit code; `worker_blocked` reflects structured Core status. Waiting for review requires a non-draft open PR and GitHub `status:review`. Check results are scoped to the returned PR head; empty, truncated, unknown, skipped or pending checks never establish success. Merge is distinct from `workflow_verified`, which additionally requires a closed `status:done` issue, checked issue criteria and successful head checks. This last observation reports workflow metadata, not an independent verification of the artifacts.
+
+Limits: at most 20 retained launches, four launches per tick, one attempt per source per launch, a 60-second minimum polling interval and a 120-second reconciliation lease. A source bundle must complete within 60 seconds. Outages preserve the previous baseline, hide its transitions and back off for 60, 120, 240, 480 and 960 seconds; the sixth failed attempt pauses tracking until explicit re-enablement. Fresh observations are shown for five minutes. Tracking expires after seven days, retained rows are removed 30 days after expiry, and a launch pauses at 100 journal entries instead of deleting deduplication evidence. Recovering an abandoned lease re-observes sources without duplicating committed transitions. These limits bound observation work, not the worker's implementation time.
+
+For an explicitly configured observation-only schedule, `observer_tick.py` is a one-shot entry point for Hermes' [supported no-agent cron mode](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron#no-agent-mode-script-only-jobs). Supply the installed file as the job's script in the owning profile, at a cadence of at least one minute. It never starts a daemon or model call and always emits the silent `wakeAgent:false` sentinel; even errors are recorded only on stderr. No job is created by plugin registration. Disabling the plugin does not remove a separately configured cron job: pause/remove that job and opt out of tracked work explicitly. No installed plugin, live schedule or Desktop restart is implied by repository changes.
+
+The [Hermes plugin API](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins) documents the supported extension surfaces. Completing delivery requires a host-supported producer with atomic original-session authorization, stable event admission/reconciliation, a validated trusted descriptor and dispatch-time opt-out enforcement. Session reset/compression policy must be explicit. Until that interface is qualified, the journal and silent scheduler entry point are independent groundwork; idle/concurrent Desktop presentation, cancellation and speech-once end-to-end acceptance remain unverified.
+
+The [background compatibility architecture](../architecture/hermes-background.md) records the inactive
+`stellar.background.v1` candidate, executable process qualification, transaction tests and remaining
+host/consumer integration gates. It does not authorize installation or enable notification delivery.
+
+The trusted-local scope of [#339](https://github.com/DanielssonThomas/Stellar/issues/339)
+does not require adversarial same-user isolation, a guardian, biometric consent or an external
+policy root. Those inactive development candidates remain preserved and deferred. Explicit
+tracking, source verification, destination binding, durable deduplication, uncertain-outcome
+reconciliation and effective opt-out still apply, alongside existing approvals and repository
+governance. Notification evidence supplies no assignment, review, merge or deployment authority.
+
+On the qualified Hermes `3b421578588243f920886e6fe79a6faa87ea026e` sources,
+`PluginContext.inject_message` returns scheduling success, generates a new admission identity
+on dispatch and exposes no exact-event inspect or withdrawal operation. `post_message` provides
+real session-bound notices, but its process-local handle does not provide restart-safe event
+recovery. The existing native automation queue is reusable; these public APIs do not yet expose
+the supported stable-event admission, inspection and opt-out operations needed by the observer.
+Genuine `terminal(background=true, notify_on_complete=true)` completion remains a separate
+supported lifecycle path where the calling session supports asynchronous delivery. It must not
+be fabricated to represent an arbitrary GitHub observation. No runtime activation follows from
+this source qualification; named-Ivy Desktop delivery remains unverified.
+
+Plugin1.2 forwards through `ctx.notification` only. Its required runtime proposal is pinned to
+Hermes3b421578 plus patch SHA256c0a21ab5118d6f7ab23b617e7ea2d2f81d072fa1d9fcd63ba0ba857d8d7356ce.
+The async `stellar_herdr` tracking tool binds in the original real turn context. The CLI and
+standalone silent cron script remain observation-only: they cannot create a conversation binding.
+No schedule, daemon, permission grant or notification is installed by registration.
+
+Three registered RPCs reuse Hermes's existing authenticated session dispatch:
+`plugin.stellar-herdr.observations.reconcile` accepts the selected `session_id`;
+`observations.inspect` and `observations.revoke` also require the exact retained `event_id`.
+The server-authorized session must match the original binding owner. A worker's launch-claim
+`session_id` in a tracking tool request is a separate identity. RPCs accept no caller-selected
+binding, destination or observation payload. Reconciliation reserves exact incarnation/revision
+pairs and processes only the authorized session's notifications.
+
+`notification_bindings` and `notification_attempts` add local bookkeeping to the existing observer
+database. Before its first possible host submission, one transaction freezes the evidence and
+records UNKNOWN. Only that inserting caller may first-send; a crash before sending can therefore
+miss an alert. Later ticks inspect the same identity and never take over or blindly resend.
+Known receipts cannot regress or become another admission. Up to four due attempts rotate per
+tick; 100 retained bindings/1000 attempts bound storage without deleting UNKNOWN evidence.
+Expiry, supersession, retry exhaustion and journal-full disable paths also reconcile revocation.
+
+Inspection preserves the raw canonical host result and separately combines host eligibility with
+fresh local tracking/event evidence. Local opt-out closes eligibility before awaiting host
+revocation. A started/unknown host operation is not a successful physical-stop receipt. The host
+truthfully stamps `internal_notification` and a bound producer descriptor. Consumer checkpoint
+5de9a09 implements the explicit named-notification classification, canonical inspection and
+binding-scoped revocation path. Earlier b61907d rejects it. Do not strip the marker or manufacture
+process completion. Installed-runtime and live Desktop acceptance remain separate gates.
+
+For disconnected final-pair qualification, `tools/hermes-background/compose_final.py` exports
+producer a0eea43 and applies the exact consumer e216f69-to-5de9a09 delta once after checking every
+preimage. It verifies consumer postimages and the uninstalled runtime patch, and compares the
+earlier and final captured frame schemas and source differences. It does not claim byte equality.
+`verify_final.py` consumes fresh canonical host frames through offline bridge projection and native tests,
+builds native code against the current production renderer, and runs that renderer's existing
+notification/speech-dispatch fixture. The native fixture replays captured inspection through an inert
+mock reply. These checks use fake inference and mocked effect IPC;
+they do not qualify a live gateway, notification, voice playback or installation. Disposable Git
+metadata permits the unchanged native source-size check without touching an owning checkout.
+
+Consumer e35a746 adds the connection-owned reconciliation timer and private forwarding to the
+existing producer RPC. `compose_timer.py` verifies and applies only its sealed six-file delta to
+an immutable export of the qualified 5de9a09 pair. `verify_timer.py` checks the assembled timer
+against the real candidate admission store with a fake clock/inference, runs focused timing and
+native receipt checks, and rebuilds the native host with the unchanged verified renderer assets.
+It verifies that the new executable contains the exact timer/bridge source; the retained older
+binary remains valid evidence for its older pair. No installed runtime or live delivery follows.
+
+The earlier retained-record recovery qualification uses `prepare_recovery_qualification.py` to export
+that exact pair with a test-only native module. A real disposable authority restart retains
+canonical receipts but changes the replay epoch. Consumer e35a746 rejects the resulting gap,
+including after authenticated notice revocation; original-host inspection is also unavailable
+for unrevoked retained notices. The copied UNKNOWN record, notices and speech claim remain
+intact, but this is a verified refusal, not working recovery. Consumer same-session checkpoint
+recovery must be qualified before activation; clearing journals or merely replacing the cursor
+does not establish that missed events were recovered.
+
+The follow-up `prepare_recovery_composition.py` imports only sealed consumer a88ccbd over
+that retained pair, verifies all nineteen pre/postimages and unchanged source, and reuses
+Hermes candidate 6ebd6d7 and the same 534 renderer assets. `run_recovery_composition.py`
+executes actual source-runner authority/store fixtures and native recovery against their
+fresh captures. These cover retained notices, wholly missed completion, ordered revocation,
+speech claims and byte-identical fixture UNKNOWN state. Unsupported inspection is a transport
+fixture proving suppression, not a full live original-host recovery. The rebuilt client embeds
+both recovery modules; `seal_recovery_composition.py` checks all 2,381 production files and
+the exact embedded Python sources. No real uncertain submission or journal is retried or cleared.
+
+`tools/hermes-background/external_operator.py plan` records task-scoped metadata only. Its
+cutover/recovery entry requires a GREEN qualification and a separate explicit maintenance
+handoff after Ivy has informed the user and completed its response. It never infers completion
+from a timer or silence. Live cutover remains disabled pending that separate handoff and
+fresh quiescence/admission checks. Planned effects include graceful
+Desktop close, the eleven-profile host lifecycle, pinned maintained source application and the
+documented Ivy producer-code installation; settings/history are not restored over new records.
+Five minutes was an earlier interruption estimate, not an issue acceptance limit or hard cutoff.
+
 ## Identity templates and Hermes profiles
 
 ### Optional subscription-backed cloud profiles (30 October 2026)

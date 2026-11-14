@@ -5,6 +5,40 @@ fn identity() -> String {
 }
 
 #[test]
+fn definitive_speak_refusals_preserve_the_existing_reservation() {
+    let host = SpeechHost::new(
+        std::env::temp_dir().join("stellar-speech-refusal"),
+        Arc::new(|_| {}),
+    );
+    let active = host
+        .reserve(identity(), "0", SpeechState::Collecting)
+        .unwrap();
+    let before = serde_json::to_value(host.snapshot().unwrap()).unwrap();
+    for (version, text, expected) in [
+        (1, "No dispatch", SpeechError::Busy),
+        (2, "No dispatch", SpeechError::UnsupportedVersion),
+        (1, "", SpeechError::MalformedRequest),
+    ] {
+        assert_eq!(
+            host.speak(SpeechSpeakRequest {
+                version,
+                epoch: "0".into(),
+                utterance_id: "00000000-0000-0000-0000-000000000002".into(),
+                text: text.into(),
+            })
+            .unwrap_err(),
+            expected
+        );
+        assert_eq!(
+            serde_json::to_value(host.snapshot().unwrap()).unwrap(),
+            before
+        );
+        assert!(current(&host.inner.view.lock().unwrap(), &active));
+    }
+    host.stop_epoch("0").unwrap();
+}
+
+#[test]
 fn invalid_pcm_and_identity_never_reserve_work() {
     let host = SpeechHost::new(
         std::env::temp_dir().join("stellar-speech-invalid"),

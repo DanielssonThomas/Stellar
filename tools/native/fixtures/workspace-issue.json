@@ -1,0 +1,71 @@
+{
+  "valid": {
+    "title": "Example issue (synthetic validation fixture)",
+    "repository": "example/repository",
+    "issue_number": 12,
+    "source": "https://github.com/example/repository/issues/12",
+    "observed_at_ms": "1794554249258",
+    "status": "ready",
+    "issue": {
+      "state": "open",
+      "description": "Plain text <script> stays literal.",
+      "workflow_status": "status:in-progress",
+      "labels": ["type:feature"],
+      "owner": "worker:foreman-cloud",
+      "blockers": [
+        {
+          "repository": "example/repository",
+          "number": 10,
+          "title": "Dependency"
+        }
+      ],
+      "pull_requests": [
+        {
+          "repository": "example/repository",
+          "number": 13,
+          "title": "Implementation"
+        }
+      ]
+    }
+  },
+  "invalid": [
+    { "path": ["source"], "value": "javascript:alert(1)" },
+    {
+      "path": ["source"],
+      "value": "https://github.com/example/repository/issues/13"
+    },
+    { "path": ["repository"], "value": "../repository" },
+    { "path": ["issue_number"], "value": true },
+    { "path": ["issue_number"], "value": 0 },
+    { "path": ["issue_number"], "value": 4294967296 },
+    { "path": ["observed_at_ms"], "value": "01794554249258" },
+    { "path": ["observed_at_ms"], "value": "8640000000000001" },
+    { "path": ["observed_at_ms"], "value": null },
+    { "path": ["status"], "value": "unknown" },
+    { "path": ["status"], "value": "loading" },
+    { "path": ["issue"], "value": null },
+    { "path": ["issue", "state"], "value": "in-progress" },
+    { "path": ["issue", "labels"], "value": ["duplicate", "duplicate"] },
+    { "path": ["issue", "owner"], "value": "line\nbreak" },
+    {
+      "path": ["issue", "blockers"],
+      "value": [
+        { "repository": "example/repository", "number": 10, "title": "A" },
+        { "repository": "EXAMPLE/repository", "number": 10, "title": "B" }
+      ]
+    },
+    {
+      "path": ["issue", "pull_requests"],
+      "value": [
+        {
+          "repository": "example/repository",
+          "number": 13,
+          "title": "A",
+          "url": "https://evil.example/"
+        }
+      ]
+    },
+    { "path": ["html"], "value": "<script>" },
+    { "path": ["title"], "value": "\u0085" }
+  ]
+}

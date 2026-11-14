@@ -400,16 +400,21 @@ describe('committed response narration', () => {
     }
     const rejected = `Update 20. ${'word '.repeat(700)}`.trim();
     expect(Reflect.get(f.controller, 'responseTexts')).not.toContain(rejected);
-    for (let i = 0; i < 12; ++i) {
-      f.update({
-        speech: {
-          ...initialSpeechSnapshot(),
-          operation_id: id,
-          revision: String(++revision),
-        },
-      });
-      await settle();
-    }
+    const drainNarration = async () => {
+      for (let i = 0; i < 65; ++i) {
+        const owner = f.controller.narrationOwner();
+        if (!owner) return;
+        f.update({
+          speech: {
+            ...initialSpeechSnapshot(),
+            operation_id: owner.id,
+            revision: String(++revision),
+          },
+        });
+        await settle();
+      }
+    };
+    await drainNarration();
     const before = f.ports.speak.mock.calls.length;
     f.update({
       assistant: {
@@ -418,9 +423,13 @@ describe('committed response narration', () => {
         response_segments: [segment('2', rejected, 'final', true)],
       },
     });
-    await settle();
-    expect(f.ports.speak).toHaveBeenCalledTimes(before + 1);
-    expect(f.ports.speak.mock.calls.at(-1)?.[0]).toBe(rejected);
+    await drainNarration();
+    expect(
+      f.ports.speak.mock.calls
+        .slice(before)
+        .map(([text]) => text)
+        .join(' '),
+    ).toBe(rejected);
     f.controller.dispose();
   });
 
@@ -862,11 +871,15 @@ describe('dedicated command recognition integration', () => {
 });
 function deferred<T>() {
   let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return {
-    promise: new Promise<T>((done) => {
-      resolve = done;
-    }),
+    promise,
     resolve,
+    reject,
   };
 }
 async function flush() {
@@ -2492,6 +2505,68 @@ describe('voice conversation ownership', () => {
       vi.useRealTimers();
     }
   });
+
+  it.each([false, true])(
+    'recovers listening after narration times out, including when the first stop fails (%s)',
+    async (stopFails) => {
+      const f = fixture();
+      const stop = deferred<void>();
+      f.ports.stop.mockReturnValueOnce(stop.promise);
+      f.utterance();
+      await flush();
+      f.completed();
+      await flush();
+      expect(f.ports.speak).toHaveBeenCalledOnce();
+      f.update({
+        speech: {
+          ...f.context().speech,
+          operation_id: id,
+          revision: '2',
+          state: 'unavailable',
+          error: 'timeout',
+        },
+      });
+      await flush();
+      expect(f.ports.stop).toHaveBeenCalledOnce();
+      expect(f.view().notice).toContain('spoken reply stopped');
+      expect(
+        (
+          performance.getEntriesByName('stellar.voice.latency').at(-1) as
+            | PerformanceMeasure
+            | undefined
+        )?.detail.outcome,
+      ).toBe('interrupted');
+      f.utterance();
+      expect(f.ports.transcribe).toHaveBeenCalledOnce();
+      if (stopFails) {
+        stop.reject(new Error('Native stop failed'));
+        await flush();
+        expect(f.view().status).toContain('Retry voice');
+        f.utterance();
+        expect(f.ports.transcribe).toHaveBeenCalledOnce();
+        f.controller.retry();
+        expect(f.ports.stop).toHaveBeenCalledTimes(2);
+      } else {
+        stop.resolve();
+      }
+      f.update({
+        speech: {
+          ...initialSpeechSnapshot(),
+          epoch: '1',
+          revision: '3',
+        },
+      });
+      await flush();
+      // Residual speaker audio must stay out of the next utterance.
+      f.feed(true, 20);
+      f.feed(false, 1);
+      expect(f.ports.transcribe).toHaveBeenCalledOnce();
+      f.utterance();
+      await flush();
+      expect(f.ports.transcribe).toHaveBeenCalledTimes(2);
+      f.controller.dispose();
+    },
+  );
 
   it('keeps a muted or reset waiting turn quiet without replaying its request', async () => {
     vi.useFakeTimers();

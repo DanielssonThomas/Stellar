@@ -206,7 +206,7 @@ def make_server(gate, bearer, port):
         {kind:"overview"}; {kind:"clear"}. Up to eight visible panels. Reuse IDs for updates.
         Emphasis is lead or supporting. Source is a public HTTPS attribution URL. Thumbnail is
         {src,alt}, with a public HTTPS image URL and alt text of up to 240 characters. Detail is
-        {surface,payload}, using the rich-text, chart, image or diagram schemas in open_pane.
+        {surface,payload}, using the rich-text, chart, github-issue, image or diagram schemas in open_pane.
         Use sample:true and a clear label for fictional information. The user can take over focus
         or stop narration at any point.
         """
@@ -276,6 +276,13 @@ def make_server(gate, bearer, port):
         instance_id must match [A-Za-z0-9_-]{1,64}; prominence is primary or secondary.
         payload_json is a JSON object encoded as a string, without duplicate or extra keys.
         At most four panes exist. Surface payload examples and limits:
+        github-issue: {"title":"Observed issue title","repository":"owner/repo","issue_number":123,"source":"https://github.com/owner/repo/issues/123","observed_at_ms":"1790000000000","status":"ready","issue":{"state":"open","description":null,"workflow_status":null,"labels":null,"owner":null,"blockers":null,"pull_requests":null}}.
+        Retrieve actual GitHub data first; never infer metadata from an issue number or claim a live subscription.
+        observed_at_ms is the retrieval time as canonical positive Unix milliseconds (maximum 8640000000000000).
+        ready/stale require an observation time and issue. loading/unavailable/error require both fields null.
+        GitHub state is open/closed, separate from workflow_status (e.g. an observed status label).
+        Null means not observed, [] means observed empty. Title 240 UTF-8 bytes, description 1200, workflow/labels 80, owner 100; no control characters.
+        At most 24 unique labels and 8 unique references per list; references are {repository,number,title} with positive u32 numbers. Source must exactly match the identity. Payload max 16 KiB. No extra fields.
         rich-text: {"title":"Plan","blocks":[{"kind":"heading","text":"Steps"},{"kind":"paragraph","text":"Summary"},{"kind":"code","text":"print(1)","language":"python"},{"kind":"list","items":["One"]},{"kind":"checklist","items":[{"text":"Done","checked":true}]},{"kind":"table","columns":["Name","Status"],"rows":[["A","Ready"]]}]}. One to 32 blocks; headings and title up to 240 characters; paragraph/code up to 32768; language up to 32; lists up to 64, checklists up to 48 items; tables up to 8 columns and 24 matching-width rows, cells up to 4096.
         chart: {"title":"Weekly visits","chart":{"type":"line","labels":["Mon","Tue"],"datasets":[{"label":"Visits","values":[12,18]}],"x_label":"Day","y_label":"Visits"}}. Types: line, bar, pie, doughnut. 1-64 labels and 1-8 datasets; each values array must match labels, finite numbers with absolute value <=1e12. Pie/doughnut require one nonnegative dataset with at least one positive value. Labels, dataset names and optional axis labels are at most 120 UTF-8 bytes. Chart payload max 16 KiB. No extra fields, callbacks, arbitrary colors/options/plugins or HTML. For an inline chart, add {"kind":"chart","chart":{...same chart data...}} among rich-text blocks. Text before/after can explain the data; use a dedicated chart pane when the user asks for only the chart. All charts expose an accessible data table.
         Complete inline example, surface rich-text: {"title":"Report","blocks":[{"kind":"paragraph","text":"Illustrative visits."},{"kind":"chart","chart":{"type":"bar","labels":["Mon","Tue"],"datasets":[{"label":"Visits","values":[12,18]}]}}]}. The field is values, never data, and the type is inside chart, never a root-level Chart.js configuration.

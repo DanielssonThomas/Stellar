@@ -124,9 +124,22 @@ impl Session {
             "session_id":session,"admission_id":notice.admission.id,"descriptor":notice.descriptor
         }))?;
         let host = &value["host"];
-        if !closed(&value, &["host", "local_eligible", "delivery_allowed"])
+        let fields: &[&str] = if value.get("local_expired").is_some() {
+            &[
+                "host",
+                "local_eligible",
+                "delivery_allowed",
+                "local_expired",
+            ]
+        } else {
+            &["host", "local_eligible", "delivery_allowed"]
+        };
+        let expired = value["local_expired"].as_bool().unwrap_or(false);
+        if !closed(&value, fields)
             || value["local_eligible"].as_bool().is_none()
             || value["delivery_allowed"].as_bool().is_none()
+            || (value.get("local_expired").is_some() && value["local_expired"].as_bool().is_none())
+            || (expired && (value["local_eligible"] == true || value["delivery_allowed"] == true))
             || host["binding"] != notice.descriptor["binding"]
             || host["event_id"] != notice.descriptor["event_id"]
         {
@@ -212,7 +225,8 @@ impl Session {
             receipt: receipt.clone(),
             text,
             allowed: allowed && !notice.revoked,
-            retired: host["descriptor"].is_null()
+            retired: expired
+                || host["descriptor"].is_null()
                 || (receipt["status"] == "terminal" && !meaningful),
         })
     }

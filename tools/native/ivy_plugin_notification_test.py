@@ -1,5 +1,6 @@
 """Consumer checks against unmodified canonical frames captured in disposable Hermes source."""
 import copy
+import asyncio
 import importlib.util
 import json
 import os
@@ -21,6 +22,76 @@ FORWARD = json.loads((Path(__file__).parent / 'evidence/stellar-herdr-notificati
 
 
 class ForwardingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_negotiated_expiry_and_definite_legacy_error_fallback(self):
+        conn = self.connection()
+        descriptor = FORWARD['raw_start']['params']['payload']['plugin_notification']
+        admission = FORWARD['raw_start']['params']['admission_id']
+        params = {'session_id': conn.selected_session, 'admission_id': admission, 'descriptor': descriptor}
+        class RpcError(Exception):
+            pass
+        conn.rpc_error_type = RpcError
+        async def rpc(method, **args):
+            conn.calls.append((method, args))
+            if args.get('include_expiry') is True:
+                raise RpcError('Unsupported parameter')
+            return copy.deepcopy(FORWARD['producer_inspection_rpc']['result'])
+        conn.rpc = rpc
+        result = await inspect_forward(conn, params, FORWARD['binding']['profile_id'], 1)
+        self.assertEqual(len(conn.calls), 2)
+        self.assertIs(conn.calls[0][1]['include_expiry'], True)
+        self.assertNotIn('include_expiry', conn.calls[1][1])
+        self.assertEqual({row[1]['session_id'] for row in conn.calls}, {conn.selected_session})
+        self.assertNotIn('local_expired', result)
+        expired = copy.deepcopy(FORWARD['producer_inspection_rpc']['result'])
+        expired.update(local_expired=True, local_eligible=False, delivery_allowed=False)
+        projected = forwarded(expired, descriptor, admission)
+        self.assertTrue(projected['local_expired'])
+        self.assertEqual(projected['host']['receipt'], expired['host']['receipt'])
+        self.assertEqual(projected['host']['descriptor'], expired['host']['descriptor'])
+        for change in ({'local_expired': 1}, {'local_expired': None}, {'local_eligible': True},
+                       {'delivery_allowed': True}, {'other_expiry': True}):
+            with self.assertRaises(ValueError):
+                forwarded({**expired, **change}, descriptor, admission)
+
+    async def test_expiry_negotiation_never_retries_timeout_transport_or_unknown(self):
+        descriptor = FORWARD['raw_start']['params']['payload']['plugin_notification']
+        admission = FORWARD['raw_start']['params']['admission_id']
+        for error in (TimeoutError(), ConnectionError(), ValueError()):
+            conn = self.connection()
+            async def rpc(method, **args):
+                conn.calls.append((method, args))
+                raise error
+            conn.rpc = rpc
+            with self.assertRaises(type(error)):
+                await inspect_forward(conn, {'session_id': conn.selected_session,
+                    'admission_id': admission, 'descriptor': descriptor}, FORWARD['binding']['profile_id'], 1)
+            self.assertEqual(len(conn.calls), 1)
+        conn = self.connection()
+        async def unknown(method, **args):
+            conn.calls.append((method, args))
+            return {'host': {'status': 'unknown', 'binding': descriptor['binding'],
+                'event_id': descriptor['event_id'], 'delivery_allowed': False},
+                'local_eligible': False, 'delivery_allowed': False, 'local_expired': True}
+        conn.rpc = unknown
+        result = await inspect_forward(conn, {'session_id': conn.selected_session,
+            'admission_id': admission, 'descriptor': descriptor}, FORWARD['binding']['profile_id'], 1)
+        self.assertEqual(result['host']['status'], 'unknown')
+        self.assertEqual(len(conn.calls), 1)
+        conn = self.connection()
+        class RpcError(Exception):
+            pass
+        conn.rpc_error_type = RpcError
+        async def rpc(method, **args):
+            conn.calls.append((method, args))
+            if args.get('include_expiry'):
+                raise RpcError('Unsupported')
+            await asyncio.Event().wait()
+        conn.rpc = rpc
+        with self.assertRaises(TimeoutError):
+            await inspect_forward(conn, {'session_id': conn.selected_session,
+                'admission_id': admission, 'descriptor': descriptor}, FORWARD['binding']['profile_id'], .01)
+        self.assertEqual(len(conn.calls), 2)
+
     def connection(self):
         conn = Connection()
         conn.selected_session = FORWARD['binding']['owner_session_id']
@@ -60,7 +131,7 @@ class ForwardingTests(unittest.IsolatedAsyncioTestCase):
         descriptor = FORWARD['raw_start']['params']['payload']['plugin_notification']
         params = {'session_id': conn.selected_session, 'admission_id': FORWARD['raw_start']['params']['admission_id'], 'descriptor': descriptor}
         result = await inspect_forward(conn, params, FORWARD['binding']['profile_id'], 1)
-        self.assertEqual(conn.calls, [('plugin.stellar-herdr.observations.inspect', {'session_id':conn.selected_session, 'event_id':descriptor['event_id']})])
+        self.assertEqual(conn.calls, [('plugin.stellar-herdr.observations.inspect', {'session_id':conn.selected_session, 'event_id':descriptor['event_id'], 'include_expiry': True})])
         self.assertEqual(set(result['host']['result']['result']), {'final_response'})
         await conn.events.put(FORWARD['raw_terminal'])
         await conn.events.put(RuntimeError('fixture end'))

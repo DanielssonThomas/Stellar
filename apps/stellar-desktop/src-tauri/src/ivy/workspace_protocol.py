@@ -19,12 +19,12 @@ MUTATIONS = frozenset({'open', 'update', 'remove', 'focus', 'minimize', 'restore
 CAPTURE_FAILURES = frozenset({'capture_unavailable', 'capture_timeout', 'image_transfer_failed', 'stale_request'})
 IMAGE_OPERATIONS = {'capture_window', 'capture_display', 'capture_foreground'}
 ID = re.compile(r'^[A-Za-z0-9_-]{1,64}$', re.ASCII)
-SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'chart', 'workflow',
+SURFACES = frozenset({'rich-text', 'image', 'browser', 'diagram', 'chart', 'github-issue', 'workflow',
                       'session', 'assistant-message'})
 METADATA_SURFACES = SURFACES | {'activity-summary'}
 PROMINENCE = frozenset({'primary', 'secondary'})
 PAYLOAD_LIMITS = {'rich-text': 65536, 'image': 65536, 'assistant-message': 65536,
-                  'diagram': 16384, 'chart': 16384, 'browser': 4096, 'workflow': 2048, 'session': 2048}
+                  'diagram': 16384, 'chart': 16384, 'github-issue': 16384, 'browser': 4096, 'workflow': 2048, 'session': 2048}
 
 
 class WorkspaceRefused(Exception):
@@ -82,6 +82,61 @@ def _chart(value):
             raise WorkspaceRefused()
 
 
+def _issue_repository(value):
+    return (type(value) is str and len(value.split('/')) == 2 and
+            all(re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', part) and part not in ('.', '..')
+                for part in value.split('/')))
+
+
+def _issue_number(value):
+    return type(value) is int and 1 <= value <= 4294967295
+
+
+def _issue_refs(value):
+    if value is None:
+        return True
+    if type(value) is not list or len(value) > 8:
+        return False
+    seen = set()
+    for ref in value:
+        if (type(ref) is not dict or set(ref) != {'repository', 'number', 'title'} or
+                not _issue_repository(ref['repository']) or not _issue_number(ref['number']) or
+                not _chart_text(ref['title'], 240)):
+            return False
+        key = (ref['repository'].lower(), ref['number'])
+        if key in seen:
+            return False
+        seen.add(key)
+    return True
+
+
+def _issue(value):
+    if (set(value) != {'title', 'repository', 'issue_number', 'source', 'observed_at_ms', 'status', 'issue'} or
+            not _chart_text(value['title'], 240) or not _issue_repository(value['repository']) or
+            not _issue_number(value['issue_number']) or
+            value['source'] != f"https://github.com/{value['repository']}/issues/{value['issue_number']}"):
+        raise WorkspaceRefused()
+    status, observed, issue = value['status'], value['observed_at_ms'], value['issue']
+    if status in ('loading', 'unavailable', 'error'):
+        if observed is not None or issue is not None:
+            raise WorkspaceRefused()
+        return
+    if (status not in ('ready', 'stale') or type(observed) is not str or
+            not re.fullmatch(r'[1-9][0-9]{0,15}', observed) or int(observed) > 8640000000000000 or
+            type(issue) is not dict or set(issue) != {'state', 'description', 'workflow_status', 'labels', 'owner', 'blockers', 'pull_requests'} or
+            issue['state'] not in ('open', 'closed')):
+        raise WorkspaceRefused()
+    for key, limit in [('description', 1200), ('workflow_status', 80), ('owner', 100)]:
+        if issue[key] is not None and not _chart_text(issue[key], limit):
+            raise WorkspaceRefused()
+    labels = issue['labels']
+    if labels is not None and (type(labels) is not list or len(labels) > 24 or
+            not all(_chart_text(label, 80) for label in labels) or len(set(labels)) != len(labels)):
+        raise WorkspaceRefused()
+    if not _issue_refs(issue['blockers']) or not _issue_refs(issue['pull_requests']):
+        raise WorkspaceRefused()
+
+
 def _payload(value, limit, surface=None):
     if type(value) is not str:
         raise WorkspaceRefused()
@@ -100,6 +155,28 @@ def _payload(value, limit, surface=None):
         raise WorkspaceRefused() from None
     if type(parsed) is not dict:
         raise WorkspaceRefused()
+    if surface == 'github-issue':
+        _issue(parsed)
+    if surface == 'spatial':
+        groups = [parsed.get('prepare')]
+        segments = parsed.get('segments')
+        if type(segments) is list:
+            for segment in segments:
+                if type(segment) is dict:
+                    groups.extend([segment.get('actions'), segment.get('after')])
+        for actions in groups:
+            if type(actions) is not list:
+                continue
+            for action in actions:
+                if type(action) is not dict or action.get('kind') != 'show':
+                    continue
+                panel = action.get('panel')
+                detail = panel.get('detail') if type(panel) is dict else None
+                if type(detail) is dict and detail.get('surface') == 'github-issue':
+                    content = detail.get('payload')
+                    if type(content) is not dict:
+                        raise WorkspaceRefused()
+                    _payload(json.dumps(content, ensure_ascii=False), 16384, 'github-issue')
     if surface == 'chart':
         title = parsed.get('title')
         if set(parsed) != {'title','chart'} or not _chart_text(title,240):
@@ -179,7 +256,7 @@ def validate_operation(operation):
     if 'payload_json' in operation:
         _payload(operation['payload_json'], PAYLOAD_LIMITS[operation['surface']], operation['surface'])
     if kind == 'present':
-        _payload(operation['score_json'], 32768)
+        _payload(operation['score_json'], 32768, 'spatial')
     return dict(operation)
 
 

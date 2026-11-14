@@ -1,0 +1,10 @@
+{
+  "unicodeVersion": "16.0.0",
+  "source": "Pinned CPython 3.14 str.isprintable over all Unicode code points",
+  "format": "sorted inclusive u32 little-endian start/end pairs",
+  "ranges": 736,
+  "bytes": 5888,
+  "sha256": "467840eb56bc5e657a8eae9dc6e511ddbd9ffc8036850e5b67bf02b33db1068e",
+  "identifierScalarSha256": "bea9e7587ca373b3e3618c0a900c995be2f69f0ddb4fd6df9e4fa37910a463d6",
+  "authority": "Character classification data only; no consent or launch authority"
+}

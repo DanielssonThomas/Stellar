@@ -43,6 +43,7 @@ use contracts::{ShellError, ShellReply, ShellRequest};
 use ivy::chart_contracts::*;
 use ivy::contracts::*;
 use ivy::inspector_contracts::*;
+use ivy::issue_contracts::*;
 use ivy::lifecycle_effect_contracts::*;
 use ivy::presentation::{IvyComponent, IvyPresentation};
 use ivy::workspace_contracts::*;
@@ -139,6 +140,11 @@ fn main() {
         WorkspaceChartDataset::decl(&config),
         WorkspaceChart::decl(&config),
         WorkspaceChartPayload::decl(&config),
+        WorkspaceIssueStatus::decl(&config),
+        WorkspaceIssueState::decl(&config),
+        WorkspaceIssueReference::decl(&config),
+        WorkspaceIssueData::decl(&config),
+        WorkspaceIssuePayload::decl(&config),
         WorkspaceProminence::decl(&config),
         WorkspaceToolOperation::decl(&config),
         WorkspaceDisplay::decl(&config),

@@ -60,6 +60,50 @@ function fixture() {
 }
 
 describe('workspace tool adapter', () => {
+  it('admits typed issue commands and fences old epochs and malformed issue payloads', async () => {
+    const f = fixture();
+    await vi.waitFor(() => expect(f.service.ready()).toBe(true));
+    const handler = vi.fn(() => ({ kind: 'applied' as const }));
+    f.service.bind(handler);
+    const operation = {
+      kind: 'open',
+      instance_id: 'issue',
+      surface: 'github-issue',
+      prominence: 'primary',
+      payload_json: JSON.stringify({
+        title: 'Issue',
+        repository: 'example/repo',
+        issue_number: 12,
+        source: 'https://github.com/example/repo/issues/12',
+        observed_at_ms: null,
+        status: 'loading',
+        issue: null,
+      }),
+    };
+    const current = {
+      ...request,
+      expires_at_ms: String(Date.now() + 15000),
+      operation,
+    };
+    f.deliver(current);
+    await vi.waitFor(() => expect(f.reply).toHaveBeenCalledOnce());
+    expect(handler).toHaveBeenCalledOnce();
+    f.deliver({
+      ...current,
+      request_id: '2234567890abcdef1234567890abcdef',
+      epoch: '1',
+    });
+    await vi.waitFor(() => expect(f.reply).toHaveBeenCalledTimes(2));
+    expect(f.reply.mock.calls[1][0].outcome).toEqual({ kind: 'rejected' });
+    f.deliver({
+      ...current,
+      request_id: '3234567890abcdef1234567890abcdef',
+      operation: { ...operation, payload_json: '{}' },
+    });
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledOnce();
+    TestBed.resetTestingModule();
+  });
   it('waits for renderer observation and rejects it if its turn retires before settlement', async () => {
     const f = fixture();
     await vi.waitFor(() => expect(f.service.ready()).toBe(true));

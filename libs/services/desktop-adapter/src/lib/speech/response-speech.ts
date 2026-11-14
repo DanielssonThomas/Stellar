@@ -1,5 +1,11 @@
-/** Chunk completed prose only; never split a Unicode character or manufacture a partial word. */
-export function responseSpeech(text: string, maxBytes = 4000): string[] {
+// Leave time for synthesis and playback within the native 120-second deadline.
+const MAX_REPLY_CHUNK_BYTES = 1200;
+
+/** Chunk completed prose at sentence or word boundaries. */
+export function responseSpeech(
+  text: string,
+  maxBytes = MAX_REPLY_CHUNK_BYTES,
+): string[] {
   const encoder = new TextEncoder();
   const sentences = [
     ...new Intl.Segmenter(undefined, { granularity: 'sentence' }).segment(text),

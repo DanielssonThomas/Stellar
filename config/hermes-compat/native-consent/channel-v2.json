@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 2,
+  "state": "passive_native_development_candidate",
+  "operationalVerifier": false,
+  "listenerImplemented": false,
+  "hostTicketAdapterImplemented": false,
+  "capabilityAdvertised": false,
+  "baselinePins": {
+    "contractSha256": "008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724",
+    "hostInterfaceSha256": "392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e",
+    "semanticProposalSha256": "75d0f72f9dee1a892aef87a70e4069cad063509e8b2cd26d7bf12f4527a12f77"
+  },
+  "authority": "Rust-owned types/codecs in tools/native/consent-broker. This record documents their candidate surface; decoded DTOs, manifests and hashes are data, never trust evidence or launch authority.",
+  "partition": {
+    "339": "Native broker domain, code/launch recipe prerequisites, future private OS custody/verifier and canonical host ticket adapter. No Desktop application wiring.",
+    "299": "Native client/UI, selected original-session checks, same actual Broker connection, renderer and speech exact-operation resource custody. No producer or managed source writes.",
+    "relay": "Ivy only; no direct peer message loop"
+  },
+  "codeManifest": {
+    "schemaVersion": 2,
+    "purpose": "code_set_identity_only",
+    "fields": [
+      "schemaVersion",
+      "purpose",
+      "semanticProposalSha256",
+      "contractSha256",
+      "hostInterfaceSha256",
+      "releaseId",
+      "threatPolicy",
+      "artifacts"
+    ],
+    "artifacts": "5..64; exactly one broker/desktop/guardian/interpreter/host role, remaining dependency. Each closed role/path/length/sha256; relative normalized ASCII path<=240bytes, unique case-insensitive paths with no ancestor-file/device/ADS/traversal alias; sha256=64lowerhex; root files1byte..4GiB, dependencies0..4GiB, total<=16GiB. Manifest<=64KiB. No actual loaded-file check or complete-closure proof.",
+    "releaseIdMaxUtf8Bytes": 128,
+    "threatPolicy": "cooperative-tcb-v1"
+  },
+  "launchManifest": {
+    "schemaVersion": 2,
+    "purpose": "launch_recipe_only",
+    "codeSetSha256": "SHA256 of exact validated CodeManifest bytes, not normalized reserialization",
+    "profile": "ivy",
+    "guardian": "manifest_guardian_role",
+    "hostInterpreter": "manifest_interpreter_role",
+    "hostBootstrap": "manifest_host_role",
+    "pythonFlags": ["-I", "-S", "-B"],
+    "moduleSearch": "manifest_closure_only",
+    "environment": "os_system_root_and_guardian_scratch_only",
+    "workingDirectory": "guardian_private_launch_root",
+    "dllSearch": "os_system32_and_pinned_closure_only",
+    "inheritedHandles": "explicit_private_canonical_channel_only",
+    "desktopPeer": "retained_verified_native_process",
+    "hostAuthority": "new_selected_profile_instance_only",
+    "existingGatewayAdoption": false,
+    "executionEnabled": false,
+    "validation": "Closed exact fields/values, direct duplicate rejection, <=64KiB; validate CodeManifest first then compare exact byte digest. All policy strings are requirements for a future executor, not evidence any OS property is enforced. No launch executor or runtime registration is provided. Current Hermes has not qualified this recipe/dependency/foreground MCP compatibility; no fallback is permitted."
+  },
+  "endpoint": {
+    "state": "proposed_only_not_created_or_callable",
+    "path": "\\\\.\\pipe\\Stellar.Ivy.NativeConsent.v1.<64-lowercase-hex-broker-instance-nonce>",
+    "requirements": [
+      "Reject remote clients",
+      "Explicit logon DACL",
+      "Retained OS peer lifetimes on both sides",
+      "Reviewed complete launch/code custody",
+      "Original canonical connection registration"
+    ],
+    "forbiddenAuthority": [
+      "JSON identity or proof",
+      "PID or path string",
+      "Local URL",
+      "Discovery file",
+      "Bearer nonce possession",
+      "Matching manifest alone"
+    ]
+  },
+  "wire": {
+    "envelope": { "exactKeys": ["method", "params"], "maxUtf8Bytes": 16384 },
+    "prepareConsent": {
+      "requestKeys": ["session_id"],
+      "resultKeys": [
+        "version",
+        "challengeId",
+        "connectionBinding",
+        "origin",
+        "displayScope",
+        "expiresAt",
+        "maxAdmissions",
+        "challengeExpiresAt"
+      ]
+    },
+    "completeConsent": {
+      "requestKeys": ["challengeId"],
+      "resultKeys": ["consentTicket"],
+      "amendment": "Remove gestureProof. Broker owns both affirmative displayed-scope confirmation and actual OS callback; calling complete alone grants nothing. No operational flow is implemented."
+    },
+    "cancelConsent": {
+      "requestKeys": ["challengeId"],
+      "result": { "cancelled": true }
+    },
+    "Origin": [
+      "profileId",
+      "sessionId",
+      "physicalTarget",
+      "route",
+      "producerId",
+      "workerIncarnation"
+    ],
+    "displayScope": [
+      "profileLabel",
+      "conversationLabel",
+      "producerLabel",
+      "effects"
+    ],
+    "errorKeys": ["code", "retryAuthorized"],
+    "errors": [
+      "InvalidRequest",
+      "ApprovalRequired",
+      "PeerUnverified",
+      "HostUnverified",
+      "VerificationUnavailable",
+      "VerificationDenied",
+      "ChallengeUnknown",
+      "ChallengeExpired",
+      "ChallengeConsumed",
+      "ChallengeCancelled",
+      "OriginChanged",
+      "PolicyChanged",
+      "TransportChanged",
+      "Busy",
+      "Uncertain"
+    ],
+    "retryAuthorized": false,
+    "closed": "All nested DTO objects reject extra/duplicate keys. Invalid UTF-8, lone surrogates, floats for integer fields, nonfinite/unsafe integers, wrong variants and oversized input refuse. No Unicode normalization. Direct typed decode, no permissive map intermediary.",
+    "bounds": {
+      "resultVersion": 1,
+      "identifierMaxUtf8Bytes": 512,
+      "identifierCharacters": "Pinned CPython Unicode16 printable and non-whitespace; all-scalar compatibility hash in crate data metadata",
+      "labelMaxUtf8Bytes": 256,
+      "labels": "Nonblank trusted literal plain text with no controls; no model/history/markup interpretation. Trusted label provenance remains a future private adapter obligation.",
+      "protocolId": "64 lowercase hex characters",
+      "workerIncarnation": "32 lowercase hex characters",
+      "epochMilliseconds": "Unsigned integer <=9007199254740991; trusted wall and monotonic deadlines additionally enforced",
+      "challengeAndTicketMaxMilliseconds": 60000,
+      "grantMaxMilliseconds": 604800000,
+      "maxAdmissions": [1, 100],
+      "effects": ["render", "speech"],
+      "pending": 16,
+      "retainedEntries": 64,
+      "pendingPerAttachment": 1
+    },
+    "responseValidation": "Decode by outstanding request. Decoder checks static shape/bounds; future trusted client/adapter must additionally enforce actual origin, current-time/monotonic lifetime and original connection. No ticket authenticity follows from decoding hex."
+  },
+  "lifecycle": {
+    "states": "pending -> confirming -> consumed -> uncertain-before-future-host-effect; pending/confirming may cancel/expire; invalidated attachments cannot issue tickets",
+    "prompt": "One begin per challenge; duplicate confirming returns Busy without creating or joining another prompt",
+    "callback": "Private move-only association. No Clone, Default, Deserialize, external verifier trait or positive public constructor. Unit-only constructors remain cfg(test). Privacy protects safe external callers, not malicious TCB code.",
+    "grantIntent": "Internal move-only intent, not a ticket. Reserve before future external effect; no retry or reset after failure. Existing Host.approve/bind remain unchanged and have no production adapter from this core.",
+    "cancellation": "Invalidate before ACK. Unknown/consumed/expired cannot return successful rollback. ACK does not prove UI dismissal, binding revocation or physical effects stopped.",
+    "retention": "No eviction/reset/reauthorization operation. Conservative refusal of any second challenge for same attachment, including terminal state. Capacity exhaustion refuses. Persistent restart/attachment retirement is unimplemented; production always unavailable. Downstream bind uncertainty must remain with its durable owner.",
+    "uncertainty": "Lost complete/bind ACK never permits automatic retry, new challenge/ticket, rebind/transfer or journal clearing. No recovery lookup added.",
+    "binding": "Original immutable scope/options/policy/generation and actual native canonical connection. No reset/compression/route/profile redirect. Ticket must eventually be issued and consumed on exactly the original actual transport, never caller transportId."
+  },
+  "challengeDigest": {
+    "algorithm": "SHA256(UTF8('stellar.native-consent.v2\\0' with trailing NUL byte) || ASCII(semanticProposalSha256) || raw32(policyIdentity) || u64be(attachmentGeneration) || UTF8(canonicalPrepared))",
+    "canonicalPrepared": "Baseline sorted object keys recursively, compact separators, ensure_ascii=false, no normalization; typed validated DTO only",
+    "syntheticVector": "broker_tests::digest_matches_pinned_python_canonical_utf8_vector; SHA256 dece1129da4399247ea32f19476124e0f86fbda48b704f032d2f0554d6242b86; no OS verification, consent or receipt"
+  },
+  "threatBoundary": {
+    "policy": "cooperative-tcb-v1",
+    "trusted": "Kernel and reviewed broker/guardian/Desktop/host code, complete dependencies and launch environment",
+    "covered": "Untrusted local/model/tool/plugin/renderer callers, automated RPCs, caller identity/proof text, replay/stale scope and attachment mismatches",
+    "unsupported": "Same-logon arbitrary code that modifies/injects/debugs trusted processes, substitutes TCB code/environment/launcher/manifest, or controls trusted UI/accessibility/UIAccess/input injection",
+    "limits": "IPC identity and Windows OS verification are not transaction signing, gateway code attestation or proof of physical human input. Current mutable shared gateway is unqualified.",
+    "activationGate": "Separate explicit acceptance of this limited boundary or reviewed stronger isolation, plus qualified launch/custody/verifier/host/consumer paths and separate application authorization"
+  },
+  "consumerDelta": [
+    "Accept or amend completeConsent request with challengeId only, no gestureProof; closed error envelope never authorizes retry.",
+    "Use Rust-owned candidate DTO/codecs for decoding if useful, but keep ApprovalRequired/HostUnverified until an authentic native channel exists. No assumption a JSON frame can be sent to the ordinary gateway.",
+    "A second challenge on the same attachment is conservatively refused; future explicit reauthorization/retirement/restart requires its own reviewed durable uncertainty protocol.",
+    "Continue exact-operation speech and renderer handles/custody; global stop_epoch is insufficient. Existing 1000ms freshness/stop policy remains a separate implementation/qualification gate.",
+    "Do not update either existing baseline pin, advertise capability, retry old #299 uncertain request or clear journals from this record."
+  ],
+  "remainingOperationalGates": [
+    "Trusted code and launch custody recipe implemented/qualified without arbitrary discovery or mutable dependency fallback",
+    "Two-sided private OS peer/connection registration; actual retained process lifetime checks",
+    "Native scoped affirmative UI plus owned OS verification callback; no prompt/enrollment authorized in this run",
+    "Atomic canonical host intent-to-approve ticket adapter and same original actual bind transport",
+    "299 client/UI/exact-operation effects and durable uncertainty integration",
+    "Critical review of operational adapters, foreground MCP regression resolution and real native/live acceptance",
+    "Separate Ivy-coordinated application/restart/activation authorization outside active Ivy turn"
+  ]
+}
