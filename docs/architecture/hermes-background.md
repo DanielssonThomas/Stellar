@@ -1,11 +1,67 @@
 # Hermes background producer compatibility
 
-This is an **inactive compatibility candidate**, not a supported installed API. Issue
-[#339](https://github.com/DanielssonThomas/Stellar/issues/339) owns the producer;
-[#299](https://github.com/DanielssonThomas/Stellar/issues/299) owns the consumer.
-The observation-only plugin at checkpoint `2756b29` remains unchanged. It sends no wakes.
+Issue [#339](https://github.com/DanielssonThomas/Stellar/issues/339) owns the
+producer; [#299](https://github.com/DanielssonThomas/Stellar/issues/299) owns the
+Desktop consumer. The current trusted-local route uses the existing Herdr observer,
+authenticated plugin session, and canonical Hermes admission/receipt machinery.
 
-## Current evidence and chosen boundary
+## Qualified trusted-local route, 14 November 2026
+
+The explicitly authorized private Hermes source `6ebd6d755f607fc839f032109c5afc65ee9ab681`
+adds `ctx.notification` over the existing automation FIFO. Producer
+`a0eea43eea9f3b9c33f0678ce9762b2c80000335` forwards original-session binding,
+stable event identity/digest, admission, inspection and ordered revocation. The host
+truthfully marks `internal_notification`; it never fabricates process completion.
+Stock Hermes `0.23.1` lacks this complete reliability surface. This is a pinned local
+extension, not an upstream-released public capability. Missing capability or the
+existing plugin injection permission fails closed. Ordinary foreground behavior and
+assignment, review, merge and deployment authority remain independent.
+
+The final tested Desktop composition combines that producer with consumer
+`3333b1804e1790a52d925605b082fc59c8390d93`. Private composition source is
+`3b623f6ec67fc6640944d5dcc254a5a6e02bc3f6`, tree
+`919853e2894195664189fa38aff818342adc52fc`; its executable SHA-256 is
+`65c1974773f924c6da76065ffa44426a06594d5c7ff71a9d58361d92b7c70c50`.
+The current #339 branch retains the earlier imported consumer `e216f69`; final
+consumer source is separately proposed in PR #358. Neither branch alone is the
+qualified final composition. Their source integration and current-head checks remain
+required before either is represented as ready to merge.
+
+A normally admitted worker `t23` exited successfully. Automatic observation event
+`022c94492f3ff8be38cae95eac5e622743489ea5dc080968b6cbfabd376730ee`
+produced canonical admission `77397b5017d141088ef3fd16a9ab4dfe`, sequence 1176,
+authority epoch 18, execution generation 16, terminal outcome `completed`.
+The native retained answer equals the canonical 270-character response byte for byte
+in UTF-8 (SHA-256 `3aa92ca35765c472c976d900925a031a3fcaa36e2809b9ca889cbc3d34d83d17`).
+One speech claim is retained. The recipient replied **"It worked."** in the original
+conversation. This establishes recipient-confirmed automatic delivery, not independent
+audio telemetry. Tracking was subsequently disabled at revision 6 and the original
+binding is revoked. Historical t22 presentation failure remains UNKNOWN; neither its
+speech claim nor the older uncertain #299 submission was retried or cleared.
+
+Verification combines distinct evidence rather than attributing everything to this
+single live event. The producer's 38 tests plus 15 subtests cover exact worker/claim/
+GitHub head provenance, distinct lifecycle states, outages/freshness/retry bounds,
+restart/deduplication and opt-out races. The sealed disposable runtime/composition
+checks additionally exercise real canonical storage/FIFO with fake inference, exact
+retry/conflict, lost ACK inspection, busy sessions, restart recovery, retained/missed
+results, old-host refusal and UNKNOWN preservation. Final UI delta qualification ran
+234 focused frontend tests, affected lint/builds, native custom-protocol build and
+actual embedded asset/source verification. These checks passed on their recorded
+source tuples; they are not current-head CI or a second live qualification.
+
+Guardian, biometric, external policy-root, native consent and isolation experiments
+below are retained **inactive historical development**, not prerequisites for the
+trusted-local observation route or accepted operational TCB. Their positive trust
+constructors remain unavailable. No further installation, restart, live test, state
+clearing, merge or deployment is authorized by this closeout.
+
+## Historical candidate investigation
+
+The following sections record earlier inactive designs and their then-current gates.
+They do not describe the deployed trusted-local route above.
+
+### Original evidence and chosen boundary
 
 The managed installation inspected is Hermes `0.23.1`, commit
 `3b421578588243f920886e6fe79a6faa87ea026e`. The current public plugin injection
