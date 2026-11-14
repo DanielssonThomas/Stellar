@@ -135,4 +135,3 @@ class TriggerTests(Fixture):
             with self.assertRaises(sqlite3.IntegrityError):
                 self.write(lambda conn: conn.execute(f'UPDATE main.{ATTEMPT} SET {change}'))
         self.assertEqual(self.inspect()['deny_requested'], 1)
-
