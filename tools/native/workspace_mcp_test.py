@@ -470,6 +470,36 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(sum(item.type == 'image' for item in result.content), 1)
                     self.assertEqual(self.frames, [])
 
+    async def test_create_layout_retains_partial_outcomes_after_turn_loss_without_replay(self):
+        token = self.gate.arm('1', 'turn-one')
+        leaf = lambda name: {'kind': 'pane', 'instance_id': name}
+        tree = {'kind': 'split', 'split_id': 'main', 'axis': 'vertical', 'percent': 50,
+                'first': leaf('a'), 'second': {'kind': 'split', 'split_id': 'rest',
+                'axis': 'horizontal', 'percent': 50, 'first': leaf('b'), 'second': leaf('c')}}
+        panes = [{'instance_id': name, 'surface': 'rich-text', 'payload_json': '{}',
+                  'prominence': 'secondary'} for name in ('a', 'b', 'c')]
+        async with httpx2.AsyncClient(headers={'Authorization': 'Bearer ' + self.bearer}, trust_env=False) as http:
+            async with streamable_http_client(self.url, http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    task = asyncio.create_task(session.call_tool('create_layout',
+                        {'turn_token': token, 'panes': panes, 'tree': tree}))
+                    first = await self.next_request()
+                    self.assertEqual(first['operation']['instance_id'], 'a')
+                    header = {key: first[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                    self.gate.reply({**header, 'outcome': {'kind': 'applied'}})
+                    second = await self.next_request()
+                    self.assertEqual(second['operation']['instance_id'], 'b')
+                    self.gate.disarm()
+                    result = await asyncio.wait_for(task, 5)
+                    self.assertFalse(result.is_error)
+                    report = json.loads(result.content[0].text)
+                    self.assertEqual(report['outcome'], {'panes': [{'kind': 'applied'},
+                        {'kind': 'uncertain'}, {'kind': 'not_attempted'}], 'layout': {'kind': 'not_attempted'}})
+                    self.assertEqual(report['workspace'], {'kind': 'unavailable'})
+                    self.assertEqual(report['snapshot'], 'unavailable')
+                    self.assertEqual(self.frames, [])
+
     async def test_all_registered_pane_tools_relay_validated_operations(self):
         token = self.gate.arm('1', 'turn-one')
         calls = [

@@ -10,42 +10,74 @@ const escape = (text: string) =>
   );
 
 /** Render only generated semantic elements. Source HTML is always escaped. */
-export function inlineMarkdown(text: string, depth = 0): string {
+export function inlineMarkdown(
+  text: string,
+  depth = 0,
+  budget = { remaining: text.length * 16 + 1 },
+): string {
   if (depth > 8) return escape(text);
-  const pattern =
-    /(`+)([^`\n]+?)\1|\[([^\]\n]+)\]\(([^\s)]+)\)|\*\*([^\n]+?)\*\*|__([^\n]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_|~~([^\n]+?)~~/g;
   let result = '',
-    position = 0;
-  for (const match of text.matchAll(pattern)) {
-    result += escape(text.slice(position, match.index));
-    const [
-      ,
-      ticks,
-      code,
-      label,
-      href,
-      bold,
-      boldAlt,
-      italic,
-      italicAlt,
-      strike,
-    ] = match;
-    if (ticks) result += `<code>${escape(code)}</code>`;
-    else if (label) {
+    position = 0,
+    index = 0;
+  const find = (delimiter: string, from: number) => {
+    if (budget.remaining <= 0) return -1;
+    const end = text.indexOf(delimiter, from);
+    budget.remaining -= (end < 0 ? text.length : end + delimiter.length) - from;
+    return budget.remaining < 0 ? -1 : end;
+  };
+  while (index < text.length && budget.remaining-- > 0) {
+    const start = index;
+    const char = text[index];
+    if (char === '`') {
+      while (text[index] === '`') index++;
+      const delimiter = text.slice(start, index);
+      const end = find(delimiter, index);
+      if (end > index && !text.slice(index, end).includes('\n')) {
+        result += escape(text.slice(position, start));
+        result += `<code>${escape(text.slice(index, end))}</code>`;
+        position = index = end + delimiter.length;
+      }
+      continue;
+    }
+    if (char === '[') {
+      const labelEnd = find('](', index + 1);
+      const end = labelEnd > index + 1 ? find(')', labelEnd + 2) : -1;
+      const href = text.slice(labelEnd + 2, end);
       let safe = false;
       try {
-        safe = ['https:', 'http:', 'mailto:'].includes(new URL(href).protocol);
+        safe =
+          end > labelEnd + 2 &&
+          !/\s/.test(href) &&
+          !text.slice(index + 1, labelEnd).includes('\n') &&
+          ['https:', 'http:', 'mailto:'].includes(new URL(href).protocol);
       } catch {
         /* Literal invalid link. */
       }
-      result += safe
-        ? `<a href="${escape(href)}" target="_blank" rel="noopener noreferrer">${inlineMarkdown(label, depth + 1)}</a>`
-        : escape(match[0]);
-    } else {
-      const tag = bold || boldAlt ? 'strong' : strike ? 'del' : 'em';
-      result += `<${tag}>${inlineMarkdown(bold || boldAlt || italic || italicAlt || strike, depth + 1)}</${tag}>`;
+      if (safe) {
+        result += escape(text.slice(position, index));
+        result += `<a href="${escape(href)}" target="_blank" rel="noopener noreferrer">${inlineMarkdown(text.slice(index + 1, labelEnd), depth + 1, budget)}</a>`;
+        position = index = end + 1;
+        continue;
+      }
     }
-    position = match.index + match[0].length;
+    if (char === '*' || char === '_' || text.startsWith('~~', index)) {
+      const delimiter = text[index + 1] === char ? char + char : char;
+      const end = find(delimiter, index + delimiter.length);
+      if (
+        end > index + delimiter.length &&
+        !text.slice(index, end).includes('\n')
+      ) {
+        const tag =
+          delimiter === '~~' ? 'del' : delimiter.length === 2 ? 'strong' : 'em';
+        result += escape(text.slice(position, index));
+        result += `<${tag}>${inlineMarkdown(text.slice(index + delimiter.length, end), depth + 1, budget)}</${tag}>`;
+        position = index = end + delimiter.length;
+        continue;
+      }
+      index += delimiter.length;
+      continue;
+    }
+    index++;
   }
   return result + escape(text.slice(position));
 }

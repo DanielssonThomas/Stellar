@@ -2,6 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { inlineMarkdown, presentationMarkdown } from './presentation-markdown';
 
 describe('safe presentation Markdown', () => {
+  it('preserves bounded adversarial delimiter runs as inert text', () => {
+    for (const text of [
+      '`'.repeat(32768),
+      '['.repeat(32768),
+      '*'.repeat(32768),
+    ])
+      expect(inlineMarkdown(text)).toBe(text);
+    const text = '`'.repeat(16000) + ' literal ' + '`'.repeat(16000);
+    expect(inlineMarkdown(text)).toBe('<code> literal </code>');
+    expect(inlineMarkdown('`'.repeat(32000) + ' **still bold**')).toContain(
+      '<strong>still bold</strong>',
+    );
+  });
   it('renders headings, code, emphasis, links, lists, quotes and tables', () => {
     const html = presentationMarkdown(
       '# Main\n\n## Subheading\n\n**Bold** and *italic* with `const x`\n\n```ts\nconst text = "<b>";\n```\n\n- First\n- Second\n\n> Quote\n\n| A | B |\n| --- | --- |\n| One | Two |',

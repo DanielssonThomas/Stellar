@@ -225,7 +225,7 @@ def make_server(gate, bearer, port):
         unavailable, explain confirmed display naturally and report capture limits only where relevant.
         Do not repeatedly request another screenshot of an unchanged scene or take per-pane screenshots.
 
-        1-8 operations, at most 128 KiB total UTF-8 payload_json, existing maximum 4 panes/2 browsers.
+        1-8 operations, at most 128 KiB total UTF-8 payload_json, maximum 12 panes/2 browsers.
         Every operation is an object with kind and the corresponding existing tool fields:
         open: instance_id,surface,payload_json,prominence; update: instance_id,surface,payload_json,expected_revision?;
         remove/focus/minimize/restore/maximize: instance_id; resize: instance_id,percent (10-90);
@@ -252,10 +252,21 @@ def make_server(gate, bearer, port):
         Use this for a new multi-pane layout; use set_layout or split_pane to reposition existing content.
         """
         operations = gate.validate_composition(panes, tree)
+        gate.authorize(turn_token)
         outcomes = []
-        for operation in operations:
-            outcomes.append(await gate.call(operation, turn_token))
-        layout = await gate.call({'kind': 'set_layout', 'tree': tree}, turn_token)
+        layout = {'kind': 'not_attempted'}
+        for index, operation in enumerate(operations):
+            try:
+                outcomes.append(await gate.call(operation, turn_token))
+            except Exception:
+                outcomes.append({'kind': 'uncertain'})
+                outcomes.extend({'kind': 'not_attempted'} for _ in operations[index + 1:])
+                break
+        else:
+            try:
+                layout = await gate.call({'kind': 'set_layout', 'tree': tree}, turn_token)
+            except Exception:
+                layout = {'kind': 'uncertain'}
         return await snapshot(turn_token, {'panes': outcomes, 'layout': layout})
 
     @server.tool(structured_output=False)
