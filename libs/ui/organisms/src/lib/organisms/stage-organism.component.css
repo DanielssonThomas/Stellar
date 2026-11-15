@@ -107,6 +107,7 @@
   z-index: 5;
   pointer-events: none;
 }
+:host(.spatial-active) .pane-scroll,
 :host(.spatial-active) .surface,
 :host(.spatial-active) .pane-divider,
 :host(.spatial-active) .minimized-panes {
