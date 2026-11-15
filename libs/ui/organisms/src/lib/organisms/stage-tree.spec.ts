@@ -6,6 +6,8 @@ import {
 } from './presentation-decoders';
 import { directStage } from './stage-director';
 import { decodeStageTree, type StageTree, treeIds } from './stage-tree';
+import { decodeStageCommand } from './stage-contract';
+import { boundedJson } from './stage-json';
 
 const pane = (instance_id: string): StageTree => ({
   kind: 'pane',
@@ -35,6 +37,36 @@ const six = split(
 );
 
 describe('targeted persistent layouts', () => {
+  it('admits a twelve-pane chain through the command guard without relaxing payload budgets', () => {
+    let tree = pane('p0');
+    for (let index = 1; index < 12; index++)
+      tree = split(`s${index}`, pane(`p${index}`), tree);
+    const command = {
+      contractVersion: 1,
+      commandId: 1,
+      action: 'set-layout',
+      tree,
+    };
+    expect(decodeStageTree(tree)).not.toBeNull();
+    expect(decodeStageCommand(command, {})).toEqual(command);
+    expect(
+      decodeStageCommand(
+        { ...command, tree: split('extra', pane('p12'), tree) },
+        {},
+      ),
+    ).toBeNull();
+    expect(boundedJson({ value: 'x'.repeat(8193) }, 8192, 14)).toBe(false);
+    expect(
+      boundedJson(
+        Array.from({ length: 128 }, () => [1, 2]),
+        8192,
+        14,
+      ),
+    ).toBe(false);
+    let deep: unknown = null;
+    for (let index = 0; index < 16; index++) deep = { deep };
+    expect(boundedJson(deep, 8192, 14)).toBe(false);
+  });
   function setup() {
     const registry = createStageRegistry({
       'rich-text': decodePresentationText,
@@ -151,6 +183,45 @@ describe('targeted persistent layouts', () => {
     );
     expect(registry.layout().tree).toEqual(before);
   });
+  it.each(['a', 'b'])(
+    'resizes the visible split for %s while preserving a collapsed sibling split',
+    (instanceId) => {
+      const { registry, command, layout } = setup();
+      for (const id of ['d', 'e', 'f'])
+        command({ action: 'close', instanceId: id });
+      command({
+        action: 'set-layout',
+        tree: split(
+          'outer',
+          pane('a'),
+          split('inner', pane('b'), pane('c'), 50, 'vertical'),
+          50,
+          'vertical',
+        ),
+      });
+      registry.interact('minimize', 'c');
+      expect(
+        command({ action: 'resize', instanceId, percent: 70 }).status,
+      ).toBe('applied');
+      expect(
+        layout().surfaces.find((p) => p.instanceId === instanceId)?.width,
+      ).toBe(840);
+      const tree = registry.layout().tree;
+      expect(tree?.kind === 'split' && tree.percent).toBe(
+        instanceId === 'a' ? 70 : 30,
+      );
+      expect(
+        tree?.kind === 'split' &&
+          tree.second.kind === 'split' &&
+          tree.second.percent,
+      ).toBe(50);
+      registry.interact('restore', 'c');
+      expect(layout().surfaces).toHaveLength(3);
+      expect(
+        registry.snapshot().find((p) => p.instanceId === 'b')?.payload,
+      ).toHaveProperty('blocks');
+    },
+  );
   it('rejects duplicate leaves, split IDs, unknown fields, invalid ratios and injected typography', () => {
     expect(decodeStageTree(split('bad', pane('a'), pane('a')))).toBeNull();
     expect(

@@ -12,10 +12,14 @@ export function plainRecord(value: unknown): value is Record<string, unknown> {
   );
 }
 
-export function boundedJson(value: unknown, maximumBytes: number): boolean {
+export function boundedJson(
+  value: unknown,
+  maximumBytes: number,
+  maximumDepth = 8,
+): boolean {
   let remaining = 256;
   function visit(entry: unknown, depth: number): boolean {
-    if (--remaining < 0 || depth > 8) return false;
+    if (--remaining < 0 || depth > maximumDepth) return false;
     if (entry === null || typeof entry === 'boolean') return true;
     if (typeof entry === 'number') return Number.isFinite(entry);
     if (typeof entry === 'string') return entry.length <= maximumBytes;

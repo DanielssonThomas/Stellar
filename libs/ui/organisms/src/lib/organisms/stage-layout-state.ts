@@ -88,16 +88,40 @@ export function createStageLayoutState() {
       if (!rest.length || !visible.some((p) => p.instanceId === id))
         return false;
       if (state.tree) {
+        let effective = state.tree;
+        for (const pane of panes)
+          if (pane.minimized) {
+            const remaining = removeTreePane(effective, pane.instanceId);
+            if (remaining) effective = remaining;
+          }
+        let splitId: string | undefined;
+        let first = false;
+        mapTree(effective, (node) => {
+          if (node.kind === 'split') {
+            if (node.first.kind === 'pane' && node.first.instance_id === id) {
+              splitId = node.split_id;
+              first = true;
+            } else if (
+              node.second.kind === 'pane' &&
+              node.second.instance_id === id
+            ) {
+              splitId = node.split_id;
+              first = false;
+            }
+          }
+          return node;
+        });
+        if (!splitId) return false;
         state = {
           ...state,
           tree: mapTree(state.tree, (node) =>
-            node.kind !== 'split'
-              ? node
-              : node.first.kind === 'pane' && node.first.instance_id === id
-                ? { ...node, percent, equal_panes: false }
-                : node.second.kind === 'pane' && node.second.instance_id === id
-                  ? { ...node, percent: 100 - percent, equal_panes: false }
-                  : node,
+            node.kind === 'split' && node.split_id === splitId
+              ? {
+                  ...node,
+                  percent: first ? percent : 100 - percent,
+                  equal_panes: false,
+                }
+              : node,
           ),
         };
         return true;

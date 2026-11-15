@@ -235,6 +235,7 @@ export function decodeStageCommand<P extends object>(
         input['action'] === 'set-layout'
           ? 8192
           : payloadLimit(input['surface']) + 1024,
+        input['action'] === 'set-layout' ? MAX_STAGE_PANES + 2 : 8,
       )
     )
       return null;
