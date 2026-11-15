@@ -25,6 +25,7 @@ export function boundedJson(
   )
     return false;
   let remaining = 256 + additionalNodes;
+
   function visit(entry: unknown, depth: number): boolean {
     if (--remaining < 0 || depth > maximumDepth) return false;
     if (entry === null || typeof entry === 'boolean') return true;

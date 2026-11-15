@@ -200,7 +200,6 @@ test('four responsive panes, unsafe sources and unavailable browser/telemetry re
 }) => {
   for (const id of ['plan', 'reference', 'third', 'fourth'])
     expect((await send(page, text(id))).status).toBe('applied');
-  expect((await send(page, text('excess'))).status).toBe('rejected');
   await page.setViewportSize({ width: 640, height: 600 });
   const rectangles = await page
     .locator('section[data-instance-id]')
@@ -212,6 +211,9 @@ test('four responsive panes, unsafe sources and unavailable browser/telemetry re
     );
   expect(rectangles).toHaveLength(4);
   expect(rectangles.every((r) => r.width >= 220 && r.height >= 140)).toBe(true);
+  for (let index = 5; index <= 12; index++)
+    expect((await send(page, text(`extra${index}`))).status).toBe('applied');
+  expect((await send(page, text('excess'))).status).toBe('rejected');
   await send(page, { action: 'clear' });
   for (const url of [
     'https://127.0.0.1/',

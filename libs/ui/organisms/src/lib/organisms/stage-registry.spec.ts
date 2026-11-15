@@ -157,12 +157,14 @@ describe('Stage command boundary and registry', () => {
 
   it('bounds instances and consumes valid failed attempts so they cannot execute later', () => {
     const registry = createStageRegistry(catalogue);
-    for (let id = 1; id <= 4; id++) registry.dispatch(open(id, `item${id}`));
-    expect(registry.dispatch(open(5, 'fifth')).reason).toBe('instance-limit');
-    registry.dispatch(control(6, 'close', 'item1'));
-    expect(registry.dispatch(open(5, 'fifth')).status).toBe('duplicate');
-    expect(registry.snapshot()).toHaveLength(3);
-    expect(registry.dispatch(open(7, 'item2')).reason).toBe('instance-exists');
+    for (let id = 1; id <= 12; id++) registry.dispatch(open(id, `item${id}`));
+    expect(registry.dispatch(open(13, 'thirteenth')).reason).toBe(
+      'instance-limit',
+    );
+    registry.dispatch(control(14, 'close', 'item1'));
+    expect(registry.dispatch(open(13, 'thirteenth')).status).toBe('duplicate');
+    expect(registry.snapshot()).toHaveLength(11);
+    expect(registry.dispatch(open(15, 'item2')).reason).toBe('instance-exists');
   });
 
   it('keeps local dismissal available at the sequence ceiling and makes disposal terminal', () => {
@@ -228,7 +230,7 @@ describe('Stage command boundary and registry', () => {
     for (const ids of [
       ['one', 'one'],
       ['one', 'bad/id'],
-      ['one', 'two', 'three', 'four', 'five'],
+      Array.from({ length: 13 }, (_, i) => `pane${i}`),
     ])
       expect(
         registry.dispatch({

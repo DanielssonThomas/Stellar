@@ -1,5 +1,5 @@
-@import './presentation-content.css';
-.presentation .checklist {
+@import './presentation-markdown.css';
+.stellar-markdown .checklist {
   padding-left: 0;
   list-style: none;
 }

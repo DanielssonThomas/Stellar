@@ -1,4 +1,11 @@
 import {
+  automaticTree,
+  treeIds,
+  splitTree,
+  resizeTree,
+  MAX_STAGE_PANES,
+} from './stage-tree';
+import {
   Decoders,
   decodeStageCommand,
   StageInstance,
@@ -99,6 +106,44 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
           layout.reconcile(instances.map((p) => p.instanceId));
           result = { status: 'applied', action: command.action };
         }
+      } else if (
+        command.action === 'set-layout' ||
+        command.action === 'split-pane' ||
+        command.action === 'resize-split'
+      ) {
+        const current =
+          layout.snapshot().tree ??
+          automaticTree(instances.map((p) => p.instanceId));
+        const next =
+          command.action === 'set-layout'
+            ? command.tree
+            : !current
+              ? null
+              : command.action === 'split-pane'
+                ? splitTree(
+                    current,
+                    command.instanceId,
+                    command.otherId,
+                    command.splitId,
+                    command.placement,
+                  )
+                : resizeTree(current, command.splitId, command.percent);
+        const ids = treeIds(next);
+        if (
+          !next ||
+          ids.length !== instances.length ||
+          instances.some((p) => !ids.includes(p.instanceId)) ||
+          layout.snapshot().maximizedId
+        )
+          result = { status: 'rejected', reason: 'invalid-layout' };
+        else {
+          layout.remember(instances);
+          layout.setTree(next);
+          instances.sort(
+            (a, b) => ids.indexOf(a.instanceId) - ids.indexOf(b.instanceId),
+          );
+          result = { status: 'applied', action: command.action };
+        }
       } else if (command.action === 'resize') {
         const panes = instances.filter((p) => !p.minimized);
         if (
@@ -109,6 +154,8 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
           result = { status: 'rejected', reason: 'not-resizable' };
         else {
           layout.remember(instances);
+          if (!layout.snapshot().tree && instances.length > 4)
+            layout.setTree(automaticTree(instances.map((p) => p.instanceId)));
           layout.resize(command.instanceId, command.percent, instances);
           result = {
             status: 'applied',
@@ -126,6 +173,7 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
         else {
           layout.remember(instances);
           [instances[a], instances[b]] = [instances[b], instances[a]];
+          layout.swapTree(command.instanceId, command.otherId);
           result = { status: 'applied', action: command.action };
         }
       } else if (command.action === 'arrange') {
@@ -144,13 +192,14 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
               command.instanceIds.indexOf(left.instanceId) -
               command.instanceIds.indexOf(right.instanceId),
           );
+          layout.setTree(null);
           result = { status: 'applied', action: 'arrange' };
         }
       } else if (command.action === 'open') {
         const existing = instances.findIndex(
           (instance) => instance.instanceId === command.instanceId,
         );
-        if (existing >= 0 || instances.length >= 4)
+        if (existing >= 0 || instances.length >= MAX_STAGE_PANES)
           result = {
             status: 'rejected',
             reason: existing >= 0 ? 'instance-exists' : 'instance-limit',
@@ -165,6 +214,20 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
             revision: 0,
             userEdited: false,
           } as StageInstance<P>);
+          const tree = layout.snapshot().tree;
+          if (tree) {
+            let splitId = 'auto_new';
+            while (JSON.stringify(tree).includes('"' + splitId + '"'))
+              splitId += '_';
+            layout.setTree({
+              kind: 'split',
+              split_id: splitId,
+              axis: 'vertical',
+              percent: 50,
+              first: tree,
+              second: { kind: 'pane', instance_id: command.instanceId },
+            });
+          }
           layout.focus(command.instanceId);
           result = {
             status: 'applied',
@@ -242,8 +305,35 @@ export function createStageRegistry<P extends object>(decoders: Decoders<P>) {
       first: readonly string[],
       second: readonly string[],
       ratio: number,
+      requestedSplitId?: string,
     ) {
       if (!Number.isFinite(ratio) || ratio < 0.1 || ratio > 0.9) return;
+      if (!layout.snapshot().tree && instances.length > 4)
+        layout.setTree(automaticTree(instances.map((p) => p.instanceId)));
+      const tree = layout.snapshot().tree;
+      if (tree) {
+        let splitId: string | null = requestedSplitId ?? null;
+        const seek = (node: typeof tree): void => {
+          if (node.kind !== 'split') return;
+          if (
+            JSON.stringify(treeIds(node.first)) === JSON.stringify(first) &&
+            JSON.stringify(treeIds(node.second)) === JSON.stringify(second)
+          )
+            splitId = node.split_id;
+          seek(node.first);
+          seek(node.second);
+        };
+        if (!splitId) seek(tree);
+        if (splitId) {
+          const next = resizeTree(
+            tree,
+            splitId,
+            Math.max(10, Math.min(90, Math.round(ratio * 100))),
+          );
+          if (next) layout.setTree(next);
+        }
+        return;
+      }
       const weights = layout.snapshot().weights;
       const all = [...first, ...second];
       const total = all.reduce((n, id) => n + paneWeight(weights, id), 0);

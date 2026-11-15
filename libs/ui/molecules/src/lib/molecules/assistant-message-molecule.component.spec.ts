@@ -13,14 +13,17 @@ describe('AssistantMessageMolecule', () => {
     await fixture.whenStable();
   });
 
-  it('renders requested content as plain text', async () => {
+  it('renders Markdown emphasis while leaving source HTML inert', async () => {
     fixture.componentRef.setInput('payload', {
       title: 'Hello',
       body: '<img src=x onerror=alert(1)> **plain**',
     });
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain(
-      '<img src=x onerror=alert(1)> **plain**',
+      '<img src=x onerror=alert(1)> plain',
+    );
+    expect(fixture.nativeElement.querySelector('strong').textContent).toBe(
+      'plain',
     );
     expect(fixture.nativeElement.querySelector('img')).toBeNull();
   });

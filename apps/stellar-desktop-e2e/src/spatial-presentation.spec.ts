@@ -50,6 +50,7 @@ async function openSample(page: Page) {
   await page.getByRole('button', { name: /Morning AI briefing/ }).click();
   await expect(briefing(page)).toBeVisible();
   await expect(briefing(page).getByRole('article')).toHaveCount(5);
+  await expect(page.locator('.pane-scroll')).toHaveCSS('visibility', 'hidden');
 }
 
 async function mockNative(page: Page) {

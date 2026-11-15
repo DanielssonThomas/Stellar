@@ -2,7 +2,11 @@ import type { WorkspaceChart } from '@stellar/desktop-contracts';
 
 export type PresentationTextBlock =
   | { readonly kind: 'chart'; readonly chart: WorkspaceChart }
-  | { readonly kind: 'paragraph' | 'heading'; readonly text: string }
+  | {
+      readonly kind: 'paragraph' | 'heading' | 'markdown';
+      readonly text: string;
+      readonly level?: 1 | 2 | 3 | 4 | 5 | 6;
+    }
   | { readonly kind: 'code'; readonly text: string; readonly language?: string }
   | { readonly kind: 'list'; readonly items: readonly string[] }
   | {
@@ -20,6 +24,12 @@ export type PresentationTextBlock =
 
 export interface PresentationTextPayload {
   readonly title: string;
+  readonly typography?: {
+    readonly family?: 'sans' | 'serif' | 'mono';
+    readonly fontSize?: number;
+    readonly bold?: boolean;
+    readonly italic?: boolean;
+  };
   readonly blocks: readonly PresentationTextBlock[];
 }
 export type PresentationMediaPayload =
@@ -37,6 +47,7 @@ export type PresentationMediaPayload =
   | {
       readonly kind: 'browser';
       readonly title: string;
+      readonly chrome?: boolean;
       readonly url: string;
       readonly refresh?: number;
     };

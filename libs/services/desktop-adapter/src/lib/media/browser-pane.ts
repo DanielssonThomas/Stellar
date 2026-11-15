@@ -57,6 +57,19 @@ export function createBrowserPane(
   };
   const geometry = (): BrowserBounds => {
     const rect = element.getBoundingClientRect();
+    const clip = element.closest('.pane-scroll')?.getBoundingClientRect();
+    const left = Math.max(0, rect.x, clip?.x ?? 0),
+      top = Math.max(0, rect.y, clip?.y ?? 0);
+    const right = Math.min(
+        window.innerWidth,
+        rect.x + rect.width,
+        clip ? clip.x + clip.width : window.innerWidth,
+      ),
+      bottom = Math.min(
+        window.innerHeight,
+        rect.y + rect.height,
+        clip ? clip.y + clip.height : window.innerHeight,
+      );
     const menu = element.ownerDocument.querySelector(
       '[aria-label="Experience menu"][aria-expanded="true"]',
     );
@@ -64,16 +77,16 @@ export function createBrowserPane(
       !disposed &&
       !blocked &&
       element.isConnected &&
-      rect.width > 0 &&
-      rect.height > 0 &&
+      right > left &&
+      bottom > top &&
       getComputedStyle(element).visibility !== 'hidden' &&
       !element.closest('[inert]') &&
       !menu;
     return {
-      x: Math.max(0, rect.x),
-      y: Math.max(0, rect.y),
-      width: Math.max(0, rect.width),
-      height: Math.max(0, rect.height),
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
       visible,
     };
   };
@@ -170,6 +183,7 @@ export function createBrowserPane(
       attributeFilter: ['aria-expanded'],
     });
   window.addEventListener('resize', schedule);
+  element.ownerDocument.addEventListener('scroll', schedule, true);
   window.addEventListener('stellar-stage-layout', layoutChange);
   const attemptOpen = () => {
     if (disposed || opening || !unsubscribe) return;
@@ -290,6 +304,7 @@ export function createBrowserPane(
       mutation?.disconnect();
       unsubscribe?.();
       window.removeEventListener('resize', schedule);
+      element.ownerDocument.removeEventListener('scroll', schedule, true);
       window.removeEventListener('stellar-stage-layout', layoutChange);
       void invoke({ action: 'close', id }, true);
     },

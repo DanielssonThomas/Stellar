@@ -56,6 +56,51 @@ function setup() {
   return { pane, element, api, invoke, stop, change, emit, frames };
 }
 describe('native browser pane owner', () => {
+  it('clips a retained native browser while the readable workspace canvas scrolls', async () => {
+    const { pane, element, invoke, frames } = setup();
+    await flush();
+    const clip = document.createElement('div');
+    clip.className = 'pane-scroll';
+    document.body.append(clip);
+    clip.append(element);
+    vi.spyOn(clip, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 320,
+      height: 240,
+    } as DOMRect);
+    vi.mocked(element.getBoundingClientRect).mockReturnValue({
+      x: -200,
+      y: 80,
+      width: 500,
+      height: 400,
+    } as DOMRect);
+    clip.dispatchEvent(new Event('scroll'));
+    for (const frame of frames.splice(0)) frame(0);
+    await flush();
+    const bounds = invoke.mock.calls
+      .map(
+        ([, args]) =>
+          (args.request as { operation: { action: string; bounds?: object } })
+            .operation,
+      )
+      .filter((op) => op.action === 'bounds');
+    expect(bounds.at(-1)?.bounds).toEqual({
+      x: 0,
+      y: 80,
+      width: 300,
+      height: 160,
+      visible: true,
+    });
+    expect(
+      invoke.mock.calls.filter(
+        ([, args]) =>
+          (args.request as { operation: { action: string } }).operation
+            .action === 'open',
+      ),
+    ).toHaveLength(1);
+    pane.dispose();
+  });
   it('reconciles a new URL requested while native creation is still in flight', async () => {
     const { pane, invoke } = setup();
     let release: () => void = () => undefined;

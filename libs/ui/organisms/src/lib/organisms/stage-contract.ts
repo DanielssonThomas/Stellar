@@ -1,3 +1,5 @@
+import { decodeStageTree, type StageTree, MAX_STAGE_PANES } from './stage-tree';
+import type { WorkspaceSplitPlacement } from '@stellar/desktop-contracts';
 import type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 import type {
   WorkspaceChartPayload,
@@ -51,6 +53,18 @@ export type StageCommand<P extends object> =
     })
   | (InstanceShared & { readonly action: 'resize'; readonly percent: number })
   | (InstanceShared & { readonly action: 'swap'; readonly otherId: string })
+  | (Shared & { readonly action: 'set-layout'; readonly tree: StageTree })
+  | (InstanceShared & {
+      readonly action: 'split-pane';
+      readonly otherId: string;
+      readonly splitId: string;
+      readonly placement: WorkspaceSplitPlacement;
+    })
+  | (Shared & {
+      readonly action: 'resize-split';
+      readonly splitId: string;
+      readonly percent: number;
+    })
   | (Shared & { readonly action: 'clear' })
   | (Shared & { readonly action: 'restore-layout' })
   | (Shared & {
@@ -83,7 +97,10 @@ export type StageResult = {
     | 'resize'
     | 'restore'
     | 'maximize'
-    | 'restore-layout';
+    | 'restore-layout'
+    | 'set-layout'
+    | 'split-pane'
+    | 'resize-split';
   readonly instanceId?: string;
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
@@ -138,12 +155,12 @@ function readableText(value: string): boolean {
 export function decodeAssistantMessage(
   value: unknown,
 ): ProductionPayloadMap['assistant-message'] | null {
-  if (!plainRecord(value) || !exactKeys(value, ['title', 'body'])) return null;
-  const title = value['title'],
+  if (!plainRecord(value) || !exactKeys(value, ['body'], ['title']))
+    return null;
+  const title = value['title'] ?? '',
     body = value['body'];
   if (
     typeof title !== 'string' ||
-    !title.trim() ||
     typeof body !== 'string' ||
     !body.trim() ||
     !readableText(title) ||
@@ -224,8 +241,11 @@ export function decodeStageCommand<P extends object>(
       !plainRecord(input) ||
       !boundedJson(
         input,
-        payloadLimit(input['surface']) + 1024,
+        input['action'] === 'set-layout'
+          ? 8192
+          : payloadLimit(input['surface']) + 1024,
         chartJsonAllowance(input['surface'], input['payload']),
+        input['action'] === 'set-layout' ? MAX_STAGE_PANES + 2 : 8,
       )
     )
       return null;
@@ -239,6 +259,27 @@ export function decodeStageCommand<P extends object>(
       return null;
     const workspaceShared = { contractVersion: 1 as const, commandId };
     const workspaceKeys = ['contractVersion', 'commandId', 'action'];
+    if (action === 'set-layout') {
+      const tree = decodeStageTree(input['tree']);
+      return exactKeys(input, [...workspaceKeys, 'tree']) && tree
+        ? { ...workspaceShared, action, tree }
+        : null;
+    }
+    if (action === 'resize-split') {
+      return exactKeys(input, [...workspaceKeys, 'splitId', 'percent']) &&
+        typeof input['splitId'] === 'string' &&
+        /^[A-Za-z0-9_-]{1,64}$/.test(input['splitId']) &&
+        Number.isInteger(input['percent']) &&
+        Number(input['percent']) >= 10 &&
+        Number(input['percent']) <= 90
+        ? {
+            ...workspaceShared,
+            action,
+            splitId: input['splitId'],
+            percent: Number(input['percent']),
+          }
+        : null;
+    }
     if (action === 'clear' || action === 'restore-layout')
       return exactKeys(input, workspaceKeys)
         ? Object.freeze({ ...workspaceShared, action })
@@ -248,7 +289,7 @@ export function decodeStageCommand<P extends object>(
       if (
         !exactKeys(input, [...workspaceKeys, 'instanceIds']) ||
         !Array.isArray(ids) ||
-        ids.length > 4 ||
+        ids.length > MAX_STAGE_PANES ||
         !ids.every(
           (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(id),
         ) ||
@@ -278,6 +319,22 @@ export function decodeStageCommand<P extends object>(
       return exactKeys(input, keys)
         ? Object.freeze({ ...shared, action })
         : null;
+    if (action === 'split-pane') {
+      return exactKeys(input, [...keys, 'otherId', 'splitId', 'placement']) &&
+        typeof input['otherId'] === 'string' &&
+        /^[A-Za-z0-9_-]{1,64}$/.test(input['otherId']) &&
+        typeof input['splitId'] === 'string' &&
+        /^[A-Za-z0-9_-]{1,64}$/.test(input['splitId']) &&
+        ['left', 'right', 'above', 'below'].includes(String(input['placement']))
+        ? {
+            ...shared,
+            action,
+            otherId: input['otherId'],
+            splitId: input['splitId'],
+            placement: input['placement'] as WorkspaceSplitPlacement,
+          }
+        : null;
+    }
     if (action === 'resize')
       return exactKeys(input, [...keys, 'percent']) &&
         typeof input['percent'] === 'number' &&

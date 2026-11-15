@@ -41,8 +41,8 @@
 .boundary-top {
   border-top: 1px solid var(--stellar-color-divider, var(--stellar-color-line));
 }
-.emblem-reserve {
-  padding-bottom: var(--emblem-clearance);
+.surface.full-pane {
+  padding: 0;
 }
 .pane-controls {
   position: absolute;
@@ -107,6 +107,7 @@
   z-index: 5;
   pointer-events: none;
 }
+:host(.spatial-active) .pane-scroll,
 :host(.spatial-active) .surface,
 :host(.spatial-active) .pane-divider,
 :host(.spatial-active) .minimized-panes {
@@ -167,4 +168,14 @@
 :host .composition-concealed {
   visibility: hidden;
   pointer-events: none;
+}
+
+.pane-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.pane-canvas {
+  position: relative;
 }
