@@ -68,6 +68,8 @@ fn invalid_activity_never_enters_the_snapshot() {
         json!([{"id":"secret path","kind":"shell","state":"running"}]),
         json!([{"id":"0123456789abcdef","kind":"shell","state":"running","args":"secret"}]),
         json!([{"id":"0123456789abcdef","kind":"invented","state":"running"}]),
+        json!([{"id":"0123456789abcdef","kind":"mcp","state":"running","provider":"unknown"}]),
+        json!([{"id":"0123456789abcdef","kind":"mcp","state":"running","operation":"secret command"}]),
         json!(vec![
             json!({"id":"0123456789abcdef","kind":"shell","state":"running"});
             13
@@ -88,4 +90,16 @@ fn invalid_activity_never_enters_the_snapshot() {
         drop(session);
         std::fs::remove_dir_all(directory).unwrap();
     }
+}
+
+#[test]
+fn activity_metadata_round_trips_without_open_text_fields() {
+    let (mut session, directory) = fixture();
+    let row = json!({"id":"0123456789abcdef","kind":"mcp","state":"running",
+        "provider":"calendar","operation":"list"});
+    session.event(event(1, json!([row]))).unwrap();
+    let wire = serde_json::to_value(&session.shared.view.lock().unwrap().snapshot).unwrap();
+    assert_eq!(wire["activity"], json!([row]));
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
 }

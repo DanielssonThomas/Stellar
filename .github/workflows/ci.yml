@@ -87,7 +87,8 @@ jobs:
             pnpm exec nx affected -t lint test build e2e --base="$NX_BASE" --head="$NX_HEAD" --parallel=2
           fi
       - run: pnpm run policy:test
-      - run: node --test tools/live/*.spec.mjs
+      - run: npm ci --prefix tools/engineering-intelligence --ignore-scripts --no-audit --no-fund
+      - run: node --test tools/live/*.spec.mjs tools/engineering-intelligence/*.spec.mjs
       - run: node --test tools/native/*.spec.mjs
       - run: pnpm run policy:docs
 

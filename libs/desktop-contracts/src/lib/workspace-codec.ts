@@ -8,7 +8,18 @@ import type {
   WorkspaceToolOperation,
   WorkspaceToolOutcome,
   WorkspaceToolRequest,
+  WorkspaceMutationStatus,
 } from '../generated';
+import {
+  workspaceBatchMaxOperations,
+  workspaceBatchMaxPayloadBytes,
+} from '../generated';
+import { validateWorkspaceChartContent } from './chart-codec';
+import { decodeWorkspaceIssuePayload } from './issue-codec';
+import {
+  parseWorkspaceIssueJson,
+  validateWorkspaceIssueScoreJson,
+} from './issue-json';
 import {
   boundedString,
   DesktopContractError,
@@ -22,6 +33,8 @@ const surfaces: Record<WorkspaceSurface, true> = {
   image: true,
   browser: true,
   diagram: true,
+  chart: true,
+  'github-issue': true,
   workflow: true,
   session: true,
   'assistant-message': true,
@@ -43,11 +56,27 @@ const payloadLimits: Record<WorkspaceSurface, number> = {
   image: 65536,
   'assistant-message': 65536,
   diagram: 16384,
+  chart: 16384,
+  'github-issue': 16384,
   browser: 4096,
   workflow: 2048,
   session: 2048,
   'activity-summary': 0,
 };
+const mutations = new Set([
+  'open',
+  'update',
+  'remove',
+  'focus',
+  'minimize',
+  'restore',
+  'maximize',
+  'resize',
+  'swap',
+  'restore_layout',
+  'arrange',
+  'clear',
+]);
 
 function choice<T extends string>(value: unknown, choices: Record<T, true>): T {
   if (typeof value !== 'string' || !Object.hasOwn(choices, value))
@@ -114,6 +143,43 @@ function operation(value: unknown): WorkspaceToolOperation {
   if (typeof value !== 'object' || value === null)
     throw new DesktopContractError('malformed');
   const kind = (value as Record<string, unknown>)['kind'];
+  if (kind === 'present') {
+    const data = record(value, ['kind', 'score_json']);
+    const score = boundedString(data['score_json'], 32768);
+    if (new TextEncoder().encode(score).byteLength > 32768)
+      throw new DesktopContractError('malformed');
+    validateWorkspaceIssueScoreJson(score);
+    return { kind, score_json: score };
+  }
+  if (kind === 'batch') {
+    const data = record(value, ['kind', 'operations']);
+    const entries = data['operations'];
+    if (
+      !Array.isArray(entries) ||
+      entries.length < 1 ||
+      entries.length > workspaceBatchMaxOperations ||
+      entries.some(
+        (entry) =>
+          typeof entry !== 'object' ||
+          entry === null ||
+          !mutations.has(entry['kind']),
+      )
+    )
+      throw new DesktopContractError('malformed');
+    const operations = entries.map(operation);
+    if (
+      operations.reduce(
+        (bytes, entry) =>
+          bytes +
+          ('payload_json' in entry
+            ? new TextEncoder().encode(entry.payload_json).length
+            : 0),
+        0,
+      ) > workspaceBatchMaxPayloadBytes
+    )
+      throw new DesktopContractError('malformed');
+    return { kind, operations };
+  }
   if (
     kind === 'clear' ||
     kind === 'inspect' ||
@@ -239,7 +305,12 @@ function operation(value: unknown): WorkspaceToolOperation {
     throw new DesktopContractError('unknown-variant');
   const payload = boundedString(data['payload_json'], payloadLimits[surface]);
   try {
-    const parsed: unknown = JSON.parse(payload);
+    const parsed: unknown =
+      surface === 'github-issue'
+        ? parseWorkspaceIssueJson(payload)
+        : JSON.parse(payload);
+    validateWorkspaceChartContent(surface, parsed);
+    if (surface === 'github-issue') decodeWorkspaceIssuePayload(parsed);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
       throw new Error();
     const remaining: unknown[] = [parsed];
@@ -317,10 +388,29 @@ export function decodeWorkspaceToolOutcome(
         'capture_display',
         'capture_foreground',
         'list_displays',
+        'batch',
       ].includes(request.operation.kind))
   ) {
     record(value, ['kind']);
     return { kind };
+  }
+  if (kind === 'batch' && request.operation.kind === 'batch') {
+    const data = record(value, ['kind', 'outcomes', 'panes']);
+    if (
+      !Array.isArray(data['outcomes']) ||
+      data['outcomes'].length !== request.operation.operations.length
+    )
+      throw new DesktopContractError('malformed');
+    const statuses: Record<WorkspaceMutationStatus, true> = {
+      applied: true,
+      rejected: true,
+      uncertain: true,
+    };
+    return {
+      kind,
+      outcomes: data['outcomes'].map((entry) => choice(entry, statuses)),
+      panes: data['panes'] === null ? null : decodePanes(data['panes']),
+    };
   }
   if (kind === 'content' && request.operation.kind === 'inspect_content') {
     const data = record(value, [
@@ -335,12 +425,29 @@ export function decodeWorkspaceToolOutcome(
     const surface = choice(data['surface'], surfaces);
     if (surface === 'activity-summary')
       throw new DesktopContractError('malformed');
+    const payload = boundedString(data['payload_json'], payloadLimits[surface]);
+    if (
+      surface === 'chart' ||
+      surface === 'rich-text' ||
+      surface === 'github-issue'
+    ) {
+      try {
+        const parsed: unknown =
+          surface === 'github-issue'
+            ? parseWorkspaceIssueJson(payload)
+            : JSON.parse(payload);
+        validateWorkspaceChartContent(surface, parsed);
+        if (surface === 'github-issue') decodeWorkspaceIssuePayload(parsed);
+      } catch {
+        throw new DesktopContractError('malformed');
+      }
+    }
     return {
       kind,
       instance_id: id(data['instance_id']),
       surface,
       revision: integer(data['revision'], 4294967295),
-      payload_json: boundedString(data['payload_json'], payloadLimits[surface]),
+      payload_json: payload,
     };
   }
   if (kind !== 'inspection' || request.operation.kind !== 'inspect')
@@ -350,9 +457,17 @@ export function decodeWorkspaceToolOutcome(
     'panes',
     ...(Object.hasOwn(value as object, 'tree') ? ['tree'] : []),
   ]);
-  if (!Array.isArray(data['panes']) || data['panes'].length > 12)
+  return {
+    kind,
+    ...(data['tree'] !== undefined ? { tree: layoutNode(data['tree']) } : {}),
+    panes: decodePanes(data['panes']),
+  };
+}
+
+function decodePanes(value: unknown): WorkspacePaneMetadata[] {
+  if (!Array.isArray(value) || value.length > 12)
     throw new DesktopContractError('malformed');
-  const panes: WorkspacePaneMetadata[] = data['panes'].map((item) => {
+  const panes: WorkspacePaneMetadata[] = value.map((item) => {
     const pane = record(item, [
       'instance_id',
       'surface',
@@ -394,11 +509,7 @@ export function decodeWorkspaceToolOutcome(
   });
   if (new Set(panes.map((pane) => pane.instance_id)).size !== panes.length)
     throw new DesktopContractError('malformed');
-  return {
-    kind,
-    ...(data['tree'] !== undefined ? { tree: layoutNode(data['tree']) } : {}),
-    panes,
-  };
+  return panes;
 }
 
 function integer(value: unknown, max: number): number {

@@ -1,4 +1,5 @@
 import io
+import base64
 import importlib.util
 import json
 from pathlib import Path
@@ -25,6 +26,27 @@ def wav(path):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_fixed_cached_acknowledgment_uses_validated_playback_without_model_loading(self):
+        audio = source.with_name('acknowledgment.wav').read_bytes()
+        req = {'text': "One moment.", 'cached_wav': base64.b64encode(audio).decode()}
+        with tempfile.TemporaryDirectory(prefix='stellar-cached-cue-') as directory:
+            target = Path(directory) / 'reply.wav'
+            output = io.BytesIO()
+            calls = []
+            sound = types.SimpleNamespace(PlaySound=lambda *args: calls.append(args), SND_FILENAME=0x20000, SND_NODEFAULT=2)
+            with patch.dict(sys.modules, {'winsound': sound}), patch.object(worker.VoiceEngine, 'synthesize', side_effect=AssertionError('must not infer')):
+                worker.cached_acknowledgment(req, target, output)
+            self.assertEqual(target.read_bytes(), audio)
+            frames = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual([frame['timing']['stage'] for frame in frames if 'timing' in frame],
+                ['synthesis_started', 'first_audio', 'synthesis_completed', 'playback_dispatched', 'playback_completed'])
+            self.assertEqual(frames[-1], {'done': True})
+            self.assertEqual(calls[0][0], str(target))
+            for invalid in [dict(req, text='Different sentence'), dict(req, cached_wav='x'*100001),
+                            dict(req, cached_wav='%%%'), dict(req, cached_wav=base64.b64encode(b'tampered').decode())]:
+                with self.assertRaises(worker.Failure):
+                    worker.cached_acknowledgment(invalid, Path(directory)/'other.wav', io.BytesIO())
+
     def test_parent_watchdog_blocks_without_polling_and_exits_on_parent_death(self):
         calls = []
         targets = []

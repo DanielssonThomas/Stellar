@@ -12,6 +12,7 @@ import type {
   KeywordReply,
 } from '@stellar/desktop-contracts';
 import { SpeechAdapter, SpeechAdapterError } from '../speech/speech-adapter';
+import { VolumeDucking } from '../speech/volume-ducking';
 import {
   browserSpeechTransport,
   initialSpeechSnapshot,
@@ -38,6 +39,20 @@ export class SpeechAdapterService {
   readonly keywordsAvailable =
     inject(SPEECH_TRANSPORT).keywordsAvailable === true;
   private readonly adapter = new SpeechAdapter(inject(SPEECH_TRANSPORT));
+  private readonly ducking = new VolumeDucking(inject(SPEECH_TRANSPORT));
+  private foregroundDucking = false;
+  private foregroundListening = false;
+  private readonly pendingSpeech = new Set<symbol>();
+  private readonly speechOperations = new Map<
+    string,
+    {
+      cancelled: boolean;
+      pending: boolean;
+      retired: boolean;
+      snapshot?: SpeechSnapshot;
+    }
+  >();
+  private readonly usedSpeechIds = new Set<string>();
   private readonly current = signal(initialSpeechSnapshot());
   readonly state = this.current.asReadonly();
   private disposed = false;
@@ -50,6 +65,7 @@ export class SpeechAdapterService {
   constructor() {
     inject(DestroyRef).onDestroy(() => {
       this.disposed = true;
+      this.ducking.dispose();
       ++this.generation;
       try {
         this.adapter.dispose();
@@ -59,16 +75,39 @@ export class SpeechAdapterService {
     });
   }
 
-  transcribe(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
-    return this.transcribeWith(pcm, utteranceId, false);
+  transcribe(
+    pcm: Int16Array,
+    utteranceId: string,
+    analyzeExpression = false,
+  ): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, false, analyzeExpression);
+  }
+
+  setDucking(active: boolean, listening = false) {
+    this.foregroundDucking = active;
+    this.foregroundListening = listening;
+    this.updateDucking();
+  }
+
+  private updateDucking() {
+    this.ducking.set(
+      this.foregroundDucking ||
+        this.pendingSpeech.size > 0 ||
+        ['synthesizing', 'speaking'].includes(this.current().state),
+      this.foregroundListening,
+    );
   }
 
   initialize(): Promise<void> {
     return this.run(() => this.prepare());
   }
 
-  collect(pcm: Int16Array, utteranceId: string): Promise<SpeechTranscript> {
-    return this.transcribeWith(pcm, utteranceId, true);
+  collect(
+    pcm: Int16Array,
+    utteranceId: string,
+    analyzeExpression = false,
+  ): Promise<SpeechTranscript> {
+    return this.transcribeWith(pcm, utteranceId, true, analyzeExpression);
   }
 
   async keywords(
@@ -96,6 +135,7 @@ export class SpeechAdapterService {
     pcm: Int16Array,
     utteranceId: string,
     collecting: boolean,
+    analyzeExpression: boolean,
   ): Promise<SpeechTranscript> {
     if (!pcm.length || pcm.length > 320000)
       return Promise.reject(new SpeechAdapterError('contract'));
@@ -109,6 +149,7 @@ export class SpeechAdapterService {
         utterance_id: utteranceId,
         sample_rate_hz: 16000,
         pcm: Array.from(pcm),
+        ...(analyzeExpression ? { analyze_expression: true } : {}),
       };
       return collecting
         ? this.adapter.collect(request)
@@ -116,24 +157,105 @@ export class SpeechAdapterService {
     });
   }
 
-  speak(text: string, utteranceId: string): Promise<SpeechSnapshot> {
+  speak(
+    text: string,
+    utteranceId: string,
+    current = () => true,
+  ): Promise<SpeechSnapshot> {
     const generation = this.generation;
+    if (this.usedSpeechIds.has(utteranceId) || this.usedSpeechIds.size >= 8192)
+      return Promise.reject(new SpeechAdapterError('native', 'busy'));
+    for (const [id, previous] of this.speechOperations) {
+      if (this.speechOperations.size < 32) break;
+      if (!previous.pending && previous.retired)
+        this.speechOperations.delete(id);
+    }
+    if (this.speechOperations.size >= 32)
+      return Promise.reject(new SpeechAdapterError('native', 'busy'));
+    const operation: {
+      cancelled: boolean;
+      pending: boolean;
+      retired: boolean;
+      snapshot?: SpeechSnapshot;
+    } = { cancelled: false, pending: true, retired: false };
+    this.usedSpeechIds.add(utteranceId);
+    this.speechOperations.set(utteranceId, operation);
+    let dispatched = false;
     return this.run(async () => {
       await this.prepare();
       this.assertCurrent(generation);
-      const snapshot = await this.adapter.speak({
-        version: 1,
-        epoch: this.current().epoch,
-        utterance_id: utteranceId,
-        text,
-      });
-      this.accept(snapshot, true);
-      return this.current();
+      if (operation.cancelled || !current()) {
+        operation.pending = false;
+        operation.retired = true;
+        throw new SpeechAdapterError('native', 'cancelled');
+      }
+      const request = Symbol();
+      this.pendingSpeech.add(request);
+      this.updateDucking();
+      try {
+        dispatched = true;
+        let snapshot: SpeechSnapshot;
+        try {
+          snapshot = await this.adapter.speak({
+            version: 1,
+            epoch: this.current().epoch,
+            utterance_id: utteranceId,
+            text,
+          });
+        } catch (error) {
+          if (
+            error instanceof SpeechAdapterError &&
+            error.kind === 'native' &&
+            ['busy', 'malformed_request', 'unsupported_version'].includes(
+              error.code ?? '',
+            )
+          )
+            operation.retired = true;
+          throw error;
+        }
+        operation.snapshot = snapshot;
+        this.accept(snapshot, true);
+        this.retireSpeech(this.current());
+        if (
+          operation.cancelled ||
+          !current() ||
+          generation !== this.generation
+        ) {
+          await this.stopOperation(utteranceId);
+          throw new SpeechAdapterError('native', 'cancelled');
+        }
+        return snapshot;
+      } finally {
+        operation.pending = false;
+        this.pendingSpeech.delete(request);
+        this.updateDucking();
+      }
+    }).finally(() => {
+      operation.pending = false;
+      if (!dispatched) operation.retired = true;
     });
+  }
+
+  async stopOperation(utteranceId: string): Promise<void> {
+    const operation = this.speechOperations.get(utteranceId);
+    if (!operation) return; // A queued entry still has its current() fence.
+    operation.cancelled = true;
+    const snapshot = operation.snapshot;
+    if (!snapshot) return; // In-flight ACK is unknown; speak() owns late-ACK cleanup.
+    if (!snapshot.operation_instance || snapshot.operation_id !== utteranceId)
+      throw new SpeechAdapterError('contract');
+    const result = await this.adapter.stop(snapshot.epoch, {
+      operation_id: utteranceId,
+      operation_instance: snapshot.operation_instance,
+    });
+    this.accept(result, true);
   }
 
   stop(): Promise<SpeechSnapshot> {
     ++this.generation;
+    this.pendingSpeech.clear();
+    this.foregroundDucking = false;
+    this.foregroundListening = false;
     return this.run(async () => {
       this.accept(await this.adapter.snapshot(), true);
       const snapshot = await this.adapter.stop(this.current().epoch);
@@ -178,8 +300,22 @@ export class SpeechAdapterService {
     }
   }
 
+  private retireSpeech(snapshot: SpeechSnapshot) {
+    for (const operation of this.speechOperations.values()) {
+      if (
+        snapshot.state === 'idle' &&
+        snapshot.operation_instance &&
+        snapshot.operation_instance ===
+          operation.snapshot?.operation_instance &&
+        BigInt(snapshot.epoch) >= BigInt(operation.snapshot.epoch)
+      )
+        operation.retired = true;
+    }
+  }
+
   private accept(snapshot: SpeechSnapshot, confirmedReply = false) {
     if (this.disposed) return;
+    this.retireSpeech(snapshot);
     const revision = BigInt(snapshot.revision);
     if (
       revision < this.highestRevision ||
@@ -190,6 +326,7 @@ export class SpeechAdapterService {
     this.highestRevision = revision;
     this.localFailure = false;
     this.current.set(snapshot);
+    this.updateDucking();
   }
 
   private failed(error: unknown) {
@@ -207,6 +344,7 @@ export class SpeechAdapterService {
             ? error.code
             : 'protocol',
       }));
+      this.updateDucking();
     }
   }
 

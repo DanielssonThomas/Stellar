@@ -1,4 +1,18 @@
 export * from './lib/services/desktop-adapter.service';
+export {
+  conversationDisplayText,
+  conversationSpeechText,
+} from './lib/speech/conversation-text';
+export {
+  IvyInspectorService,
+  IVY_INSPECTOR_READ,
+} from './lib/services/ivy-inspector.service';
+export type { IvyInspectorRead } from './lib/services/ivy-inspector.service';
+export {
+  DesktopAwarenessService,
+  AWARENESS_TRANSPORT,
+} from './lib/services/desktop-awareness.service';
+export type { AwarenessTransport } from './lib/services/desktop-awareness.service';
 export { IvyReflexService } from './lib/services/ivy-reflex.service';
 export { LocalActionRegistry } from './lib/reflex/action-registry';
 export type { LocalAction } from './lib/reflex/action-registry';
@@ -89,3 +103,18 @@ export { createNativeMediaWorkspace } from './lib/media/media-workspace';
 export type { MediaNativeApi } from './lib/media/browser-pane';
 export type { RequestTrace, RequestStep } from './lib/reflex/request-timeline';
 export { QuestionVoiceCue } from './lib/speech/question-voice-cue';
+export {
+  UpdateVoiceCue,
+  type UpdateVoiceFailure,
+} from './lib/speech/update-voice-cue';
+export { LifecycleEffects } from './lib/ivy/lifecycle-effects';
+export { VoicePreferences } from './lib/speech/voice-preferences';
+export type {
+  WakeSensitivity,
+  RecognitionObservation,
+} from './lib/speech/voice-preferences';
+export { spokenResponse } from './lib/speech/spoken-response';
+export {
+  SpatialNarration,
+  type SpatialNarrationMode,
+} from './lib/speech/spatial-narration';

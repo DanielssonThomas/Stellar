@@ -377,6 +377,40 @@ describe('claim status reconciliation', () => {
       updateLabels: async () => assert.fail('already written'),
     });
   });
+  it('rejects an admitted estimate rewritten during the status write', async () => {
+    const revision = {
+      revision: 1,
+      recordedAt: '2026-11-11T12:00:00.000Z',
+      estimatedTokens: 1000,
+      allocatedTokens: 2000,
+      profile: 'Codex',
+      confidence: 'low',
+    };
+    const ready = fixture('status:ready');
+    const issueBody = (estimate) =>
+      ready.body +
+      '\n\n## Development budget\n\n```json\n' +
+      JSON.stringify({
+        schemaVersion: 1,
+        revisions: [{ ...revision, estimatedTokens: estimate }],
+      }) +
+      '\n```\n';
+    let live = { ...ready, body: issueBody(1000) };
+    await assert.rejects(
+      reconcileClaimStatus({
+        issueNumber: 42,
+        worker: 'codex',
+        resumed: false,
+        admittedBudget: [revision],
+        fetchIssue: async () => structuredClone(live),
+        updateLabels: async (_number, labels) => {
+          live = { ...live, labels, body: issueBody(1500) };
+        },
+      }),
+      /immutable/,
+    );
+  });
+
   it('returns a review-stage issue to implementation only while the PR remains current', async () => {
     let live = fixture('status:review');
     const reviewPr = {

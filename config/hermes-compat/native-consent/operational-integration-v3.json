@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 3,
+  "state": "critical_design_review_accepted_for_inactive_development_only",
+  "design": "operational-integration-v3.md",
+  "reviewedDesignSha256": "0c638b8ddcd7727d2c4da7017b4b1c614a0e543abf625625b2b4c1be211d4280",
+  "producerCheckpoint": "550bc3014ef93e444644d9c9a2ab88704fa1ceb3",
+  "consumerCheckpoint": "a5fd4c70c268bba4abd18bc2c7f5a37ffc9bf9a6",
+  "consumerCheckpointDisposition": "Local-only inactive WIP; owned speech reviewed, capture smoke unresolved; not modified or published here",
+  "pinsUnchanged": {
+    "contractSha256": "008c72c917a981672e4ff5e08e54780484c784169cf91d2757fc62dc283ec724",
+    "hostInterfaceSha256": "392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e",
+    "semanticProposalSha256": "75d0f72f9dee1a892aef87a70e4069cad063509e8b2cd26d7bf12f4527a12f77",
+    "channelV2Sha256": "efbf179fcc316717f4b2d90608c705b479873a564264842dcba20b0be1ce3061"
+  },
+  "windowChoice": "Guardian-owned HWND and private OS callback in same guardian process; 299-owned native consent-ui crate supplies literal presentation/window lease. No foreign HWND, renderer proof or serialized Verified result.",
+  "producerOwns": [
+    "tools/native/consent-broker guardian/verifier/attachment/state modules",
+    "Private canonical host native_attachment/native_consent adapters and same-DB transaction design",
+    "Compatibility manifests/package and root guardian Cargo integration"
+  ],
+  "consumerOwns": [
+    "tools/native/consent-ui native scope window/view/resource crate",
+    "Desktop native client/UI and inherited owned-bridge attachment",
+    "Native selected-session/ticket-to-bind, renderer/speech exact-operation custody and monitor",
+    "App Cargo/IPC changes with normal generated bindings if needed"
+  ],
+  "nativeClientMethods": {
+    "prepareConsent": ["session_id"],
+    "completeConsent": ["challengeId"],
+    "cancelConsent": ["challengeId"]
+  },
+  "controlFraming": {
+    "prefix": "u32le UTF8 JSON payload length <=16384",
+    "request": [
+      "version=3",
+      "sequence=1..9007199254740991 strictly consecutive per actual channel",
+      "request={method,params}"
+    ],
+    "response": "version/sequence plus exactly one method-typed result or v2 closed error retryAuthorized=false",
+    "outstandingMax": 4,
+    "cancellation": "Reserved cancel slot and independent reader; never behind OS verification wait",
+    "canonicalGateway": "Existing pinned request/event codec and foreground limits remain unchanged"
+  },
+  "privateHostMethods": {
+    "reserveConsent": ["session_id"],
+    "beginConsent": ["challengeId", "preparedDigest"],
+    "consumeConsent": ["challengeId", "preparedDigest", "intentId"],
+    "cancelConsent": ["challengeId"]
+  },
+  "preparedDigest": "hex64 SHA256 canonical sorted compact UTF8 Prepared v1; equality check only, not callback proof. Existing internal policy/generation callback digest unchanged.",
+  "finalPipeRoles": {
+    "nativeClient": "Guardian creates server; retained Desktop opens client",
+    "hostAuthority": "Host creates server; retained guardian opens client",
+    "canonical": "Host creates server; retained bridge opens client",
+    "inheritance": "Bootstrap rendezvous/process references only; never assume an inherited endpoint has fresh child peer identity. Anonymous bridge/Desktop stdio relies on explicit trusted launch custody."
+  },
+  "launchChoice": "Guardian owns one new host, bridge and Desktop under fixed externally accepted release policy; no current process/gateway adoption, policy self-enrollment, caller argv/env or alternative production install.",
+  "releaseRoot": "Absent and explicitly unqualified; external release-policy bytes/custody are a proposed TCB assumption, not authenticated by their own hash or caller arguments.",
+  "osClosure": "Strict hardlink refusal currently unqualified for serviced Windows OS components; future loader review must prove workable recipe or approve exact OS alias/file-identity policy. No automatic exception.",
+  "hostTransactions": "Host is sole canonical-journal writer. Durable begin precedes OS request. Sticky deny_requested and issued->bound checks/owner insert/ticket consumption share canonical transaction domain. Bind-first cancel atomically revokes/reserves cleanup; cancel-first prevents later issue/release authorization/bind. Already queued bytes may arrive but confer no bind authority.",
+  "restartFence": "Stable profile-wide ivy exclusion independent of launch/attachment/epoch; unresolved attempts/unretired grants or custody refuse new reserve. No timeout/exit/new registry clears it; no retirement or recovery endpoint added.",
+  "windowRetirement": "Only consumed genuine callback plus known host consume success allows intentional UI retirement/observed close before complete result. Premature loss denies; deliberate retired generation does not require a live HWND through bind. Process/connection/policy gates continue.",
+  "review": {
+    "tier": "critical",
+    "route": "Existing authorized GPT-6 Astra independent reviewer",
+    "disposition": "No blocking design finding after amendments; technical inactive-design acceptance only",
+    "fixedFindings": [
+      "Cancel/bind race",
+      "Cross-launch uncertainty bypass",
+      "Inherited pipe peer ambiguity",
+      "Normal versus premature window closure"
+    ],
+    "testsThisRevision": "Document-only checks; no executable/runtime test rerun or native qualification"
+  },
+  "exactNextIvyRelayDecision": "Accept or amend guardian-hosted 299 UI crate, correlated v3 framing, inherited owned-bridge integration and exclusive paths FOR INACTIVE DEVELOPMENT ONLY. Cooperative TCB remains proposed and operational gates closed.",
+  "nextDevelopmentSlice": [
+    "Closed framing/correlation and cancel-priority handling",
+    "Pure guardian/window-retirement/attachment state with production trust constructors unavailable",
+    "Isolated canonical consent-journal transactions AFTER exact schema review",
+    "299 UI/client interfaces in agreed exclusive paths"
+  ],
+  "operationalGates": [
+    "Separate Windows unsafe lifetime/OS-verifier and release-root loader/closure reviews",
+    "Concrete externally accepted policy custody and two-sided process/channel qualification",
+    "Host schema/migration/single issuance/bind/cancel transaction code review",
+    "Actual native UI/OS, capture smoke, profile MCP and named-Ivy delivery/custody qualification when specifically authorized",
+    "Separate user TCB acceptance and coordinated managed application/start outside active Ivy turn"
+  ],
+  "cooperativeTcbUserAccepted": false,
+  "operationalEndpointImplemented": false,
+  "operationalVerifierImplemented": false,
+  "operationalTrustImplementedThisRevision": false,
+  "promptOrEnrollmentAuthorized": false,
+  "managedChangeOrInstallAuthorized": false,
+  "activationOrGatewayReplacementAuthorized": false,
+  "liveDeliveryOrMergeDeployAuthorized": false,
+  "futureCommand": {
+    "spelling": "stellar-consent-guardian start-approved",
+    "state": "PROPOSED_NOT_IMPLEMENTED_DO_NOT_RUN",
+    "futureSideEffectsIfSeparatelyAuthorized": "Verify accepted policy/main closure, require prior quiescence, start owned four-process graph, create private IPC, open canonical DB and preserve new attempt fences. User-requested complete would show native scope and OS verification. No enrollment or old-journal deletion.",
+    "currentSideEffects": "None: no executable/approved root or operational command supplied"
+  }
+}

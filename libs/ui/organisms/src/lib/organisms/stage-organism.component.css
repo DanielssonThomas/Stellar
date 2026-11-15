@@ -101,6 +101,18 @@
     width var(--emblem-duration) var(--pane-easing),
     height var(--emblem-duration) var(--pane-easing);
 }
+.spatial-slot {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+:host(.spatial-active) .surface,
+:host(.spatial-active) .pane-divider,
+:host(.spatial-active) .minimized-panes {
+  visibility: hidden;
+  pointer-events: none;
+}
 .pane-enter {
   animation: pane-reveal var(--pane-motion) ease both;
 }

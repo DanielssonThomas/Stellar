@@ -4,7 +4,8 @@ use super::{
     state::Shared,
     workspace_capture::{self, Captured},
     workspace_contracts::{
-        WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply, WorkspaceToolRequest,
+        WorkspaceCaptureFailure, WorkspaceToolOperation, WorkspaceToolOutcome, WorkspaceToolReply,
+        WorkspaceToolRequest,
     },
     workspace_data::{self, SharedImageEndpoint},
     workspace_validate,
@@ -121,8 +122,10 @@ impl WorkspaceHub {
         {
             drop(current);
             if workspace_capture::is_image(&request.operation) {
-                let header = json!({"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id});
-                let _ = self.send(&json!({"control":"workspace_capture_failed","header":header}));
+                let _ = self.send(&capture_failed(
+                    &request,
+                    WorkspaceCaptureFailure::StaleRequest,
+                ));
                 return Ok(());
             }
             let reply = WorkspaceToolReply {
@@ -195,8 +198,10 @@ impl WorkspaceHub {
     }
 
     fn reject_capture(&self, request: &WorkspaceToolRequest) -> Result<(), IvyErrorCode> {
-        let header = json!({"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id});
-        self.send(&json!({"control":"workspace_capture_failed","header":header}))?;
+        self.send(&capture_failed(
+            request,
+            WorkspaceCaptureFailure::CaptureUnavailable,
+        ))?;
         *self.pending.lock().map_err(|_| IvyErrorCode::Unavailable)? = None;
         Ok(())
     }
@@ -232,8 +237,10 @@ impl WorkspaceHub {
         match result {
             Ok(Captured::Image(image)) => {
                 if workspace_data::send(&self.image_endpoint, &header, &image).is_err() {
-                    let _ =
-                        self.send(&json!({"control":"workspace_capture_failed","header":header}));
+                    let _ = self.send(&capture_failed(
+                        request,
+                        WorkspaceCaptureFailure::ImageTransferFailed,
+                    ));
                 }
             }
             result => {
@@ -253,7 +260,12 @@ impl WorkspaceHub {
                     };
                     self.send(&json!({"control":"workspace_reply","reply":reply}))?;
                 } else {
-                    self.send(&json!({"control":"workspace_capture_failed","header":header}))?;
+                    let reason = if matches!(result, Err(IvyErrorCode::Timeout)) {
+                        WorkspaceCaptureFailure::CaptureTimeout
+                    } else {
+                        WorkspaceCaptureFailure::CaptureUnavailable
+                    };
+                    self.send(&capture_failed(request, reason))?;
                 }
             }
         }
@@ -292,4 +304,9 @@ impl WorkspaceHub {
         let input = self.input.lock().map_err(|_| IvyErrorCode::Unavailable)?;
         process::control(input.as_ref().ok_or(IvyErrorCode::Unavailable)?, frame)
     }
+}
+
+fn capture_failed(request: &WorkspaceToolRequest, reason: WorkspaceCaptureFailure) -> Value {
+    json!({"control":"workspace_capture_failed", "reason":reason,
+        "header":{"version":1,"request_id":request.request_id,"epoch":request.epoch,"turn_id":request.turn_id}})
 }

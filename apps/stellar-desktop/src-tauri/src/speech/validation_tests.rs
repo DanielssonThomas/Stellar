@@ -14,6 +14,7 @@ fn wire_requests_reject_wrong_versions_types_unknown_fields_and_pcm_bounds() {
         assert!(decode::<SpeechTranscribeRequest>(Some(value)).is_err());
     }
     let mut request = SpeechTranscribeRequest {
+        analyze_expression: None,
         version: 2,
         epoch: "0".into(),
         utterance_id: ID.into(),
@@ -56,6 +57,7 @@ fn speech_text_limit_counts_utf8_bytes_and_identity_is_canonical() {
         epoch: "0".into(),
         revision: u64::MAX.to_string(),
         operation_id: Some(ID.into()),
+        operation_instance: None,
         state: SpeechState::Speaking,
         error: None,
         timings: None,

@@ -143,9 +143,10 @@ class Keywords:
                 or type(sequence) is not int or not 0 <= sequence <= 9007199254740991
                 or type(threshold) not in (int, float) or not math.isfinite(threshold)
                 or not 0.001 <= threshold <= 0.2
-                or mode not in ('passive', 'listening', 'composing')):
+                or mode not in ('passive', 'passive_sensitive', 'listening', 'composing')):
             raise Rejected()
         audio = samples(request, 640)
+        passive = mode in ('passive', 'passive_sensitive')
         key = (identity, mode)
         if key != self.identity or (self.sequence is not None and sequence != self.sequence + 1):
             self.reset()
@@ -162,15 +163,29 @@ class Keywords:
             if not voiced:
                 self.preroll = (self.preroll + audio.tolist())[-3840:]
                 return {'sequence': sequence, 'detection': None}
-            labels = {'ivy'} if mode == 'passive' else {
+            labels = {'ivy'} if passive else {
                 'done', "i'm_done", 'im_done', 'i_am_done', 'thats_all', 'that_is_all',
                 'clear', 'new_session',
                 *({'prompt_cancel'} if mode == 'composing' else {'prompt', 'reload_mcp'})}
-            self.model = self.wake if mode == 'passive' else self.commands
-            vocabulary = '/'.join(line for line in (self.wake_vocabulary if mode == 'passive' else self.vocabulary) if line.rsplit('@', 1)[-1] in labels)
+            self.model = self.wake if passive else self.commands
+            selected = self.wake_vocabulary if passive else self.vocabulary
+            vocabulary = '/'.join(line for line in selected if line.rsplit('@', 1)[-1] in labels)
+            if passive:
+                if self.model is self.commands:
+                    vocabulary += '/HH EY1 AY1 V IY0 :1.0 #0.35 @ivy/AY1 V IY1 :1.5 #0.15 @ivy'
+                    if mode == 'passive_sensitive':
+                        vocabulary += '/AY1 V :1.0 #0.25 @ivy/AY1 M IY1 N :1.0 #0.25 @ivy/IH1 R IY0 :1.5 #0.15 @ivy/IY1 R IY0 :1.5 #0.15 @ivy'
+                else:
+                    vocabulary += '/\u2581HE Y \u2581I V Y :1.0 #0.35 @ivy'
+                    if mode == 'passive_sensitive':
+                        vocabulary += "/\u2581I ' VE :1.0 #0.25 @ivy/\u2581I \u2581MEAN :1.0 #0.25 @ivy"
             self.stream = self.model.create_stream(vocabulary)
-            if mode == 'passive' and self.ensemble_wake:
-                self.secondary_stream = self.commands.create_stream('/'.join(line for line in self.vocabulary if line.rsplit('@', 1)[-1] == 'ivy'))
+            if passive and self.ensemble_wake:
+                secondary = '/'.join(line for line in self.vocabulary if line.rsplit('@', 1)[-1] == 'ivy')
+                secondary += '/HH EY1 AY1 V IY0 :1.0 #0.35 @ivy/AY1 V IY1 :1.5 #0.15 @ivy'
+                if mode == 'passive_sensitive':
+                    secondary += '/AY1 V :1.0 #0.25 @ivy/AY1 M IY1 N :1.0 #0.25 @ivy/IH1 R IY0 :1.5 #0.15 @ivy/IY1 R IY0 :1.5 #0.15 @ivy'
+                self.secondary_stream = self.commands.create_stream(secondary)
             self.origin = previous - len(self.preroll)
             self.onset = previous
             self.decode(np.asarray(self.preroll, dtype=np.float32))
@@ -187,7 +202,7 @@ class Keywords:
                 command, start, end = self.candidate
                 if command in ("i'm done", 'im done', 'i am done', 'thats all', 'that is all'):
                     command = 'done'
-                allowed = command == 'ivy' if mode == 'passive' else command != 'ivy'
+                allowed = command == 'ivy' if passive else command != 'ivy'
                 allowed = allowed and (command != 'prompt cancel' or mode == 'composing')
                 if allowed and (command == 'ivy' or self.quiet >= self.command_silence):
                     # A standalone control must account for the end of all voiced audio.

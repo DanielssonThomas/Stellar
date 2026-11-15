@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "peerDependencies": {
     "@angular/core": "^21.2.0",
+    "@stellar/desktop-contracts": "workspace:^",
+    "chart.js": "4.6.1",
     "clsx": "^2.1.1"
   },
   "sideEffects": false

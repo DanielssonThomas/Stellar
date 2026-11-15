@@ -12,6 +12,7 @@ fn fixture() -> (IvyHost, mpsc::Receiver<Work>) {
     let workspace = Arc::new(WorkspaceHub::new(shared.clone()));
     (
         IvyHost {
+            context_provider: Arc::new(Mutex::new(None)),
             shared,
             child: Arc::new(Mutex::new(None)),
             sender,

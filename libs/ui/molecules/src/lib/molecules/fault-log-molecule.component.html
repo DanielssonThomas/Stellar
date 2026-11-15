@@ -38,6 +38,12 @@
               >
             </div>
             <p>{{ entry.message }}</p>
+            @if (entry.diagnostic) {
+              <details class="text-xs">
+                <summary>Delivery diagnostics</summary>
+                <p class="break-all">{{ entry.diagnostic }}</p>
+              </details>
+            }
           </li>
         }
       </ol>

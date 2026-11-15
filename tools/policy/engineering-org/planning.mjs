@@ -52,12 +52,11 @@ function taskContract(task, scope, snapshot) {
   const validation = validateIssue(
     {
       ...issue,
-      number: undefined,
       labels: issue.labels.map((label) =>
         label === 'status:triage' ? 'status:ready' : label,
       ),
     },
-    { authorizedWorkers: snapshot.authorizedWorkers },
+    { authorizedWorkers: snapshot.authorizedWorkers, requireReview: true },
   );
   requireValue(validation.valid, validation.errors.join('\n'));
   requireValue(hasContext(issue.body), 'Issue context is required.');

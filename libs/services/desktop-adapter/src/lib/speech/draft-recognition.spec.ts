@@ -13,6 +13,52 @@ async function flush() {
 }
 
 describe('draft recognition scheduling', () => {
+  it('drops reset work waiting for the shared collect slot and resumes with the new generation', async () => {
+    const passive = deferred<void>();
+    const completed = vi.fn();
+    const failed = vi.fn();
+    const timing = vi.fn();
+    const collect = vi.fn(async (_pcm: Int16Array, utterance_id: string) => ({
+      version: 1,
+      utterance_id,
+      text: 'new request',
+    }));
+    const queue = new DraftRecognition(
+      collect,
+      async () => undefined,
+      completed,
+      failed,
+      false,
+      timing,
+      () => passive.promise,
+    );
+    const stale = new Int16Array([1]);
+    const current = new Int16Array([2]);
+    queue.offer(stale, 'stale', true);
+    expect(collect).not.toHaveBeenCalled();
+    expect(timing).toHaveBeenCalledExactlyOnceWith('queued');
+    await queue.reset();
+    queue.offer(current, 'current', true);
+    passive.resolve();
+    await vi.waitFor(() => expect(queue.isBusy()).toBe(false));
+    expect(collect).toHaveBeenCalledExactlyOnceWith(current, 'current');
+    expect(completed).toHaveBeenCalledExactlyOnceWith(
+      'new request',
+      'current',
+      true,
+      true,
+      true,
+    );
+    expect(failed).not.toHaveBeenCalled();
+    expect(timing.mock.calls.map(([stage]) => stage)).toEqual([
+      'queued',
+      'queued',
+      'started',
+      'completed',
+    ]);
+    expect([...stale, ...current]).toEqual([0, 0]);
+  });
+
   it('waits for a warm preview before the final without restarting shared recognizers', async () => {
     const partial = deferred<{
       version: number;

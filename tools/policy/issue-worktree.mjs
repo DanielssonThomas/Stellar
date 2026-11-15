@@ -12,6 +12,7 @@ import {
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { validateIssue } from './validate-issue.mjs';
+import { admitBudgetRevisions, requiresIssueBudget } from './issue-budget.mjs';
 import { dependenciesFromBody } from './issue-dependency-identity.mjs';
 
 export { dependenciesFromBody } from './issue-dependency-identity.mjs';
@@ -53,6 +54,8 @@ export function validateAssignment({
   const policy = validateIssue(policyIssue);
   if (issue.state && issue.state !== 'OPEN') errors.push('Issue is not open.');
   if (!policy.valid) errors.push(...policy.errors);
+  if (requiresIssueBudget(issue.number) && labels.includes('type:epic'))
+    errors.push('Epics group work. Claim an actionable sub-issue instead.');
   if (
     ![
       'status:ready',
@@ -258,6 +261,11 @@ export async function claimWorktree({
         `Issue #${issue.number} is not claimable: ${validation.errors.join(' ')}`,
       );
 
+    const budgetRevisions = admitBudgetRevisions(
+      issue.body,
+      record?.budgetRevisions,
+    );
+
     let branch = issueBranch(issue);
     if (!validIssueBranch(issue.number, branch))
       throw new Error('Could not create a safe issue branch name.');
@@ -303,6 +311,7 @@ export async function claimWorktree({
         throw new Error('Review PR changed during claim recovery.');
       record.expiresAt = new Date(now + ttl * 3_600_000).toISOString();
       record.lastResumedAt = new Date(now).toISOString();
+      if (budgetRevisions.length) record.budgetRevisions = budgetRevisions;
       await writeRecord(claimFile, record);
       return { ...record, resumed: true };
     }
@@ -388,6 +397,7 @@ export async function claimWorktree({
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + ttl * 3_600_000).toISOString(),
       handoffs: record?.handoffs ?? [],
+      ...(budgetRevisions.length ? { budgetRevisions } : {}),
     };
     if (
       await access(claimFile, constants.F_OK)

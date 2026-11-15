@@ -1,0 +1,33 @@
+<section
+  class="response-caption relative min-w-0 px-4 py-3"
+  [attr.aria-label]="kind() === 'final' ? 'Ivy answer' : 'Ivy update'"
+>
+  <h2
+    class="caption-label m-0 flex items-center gap-2 text-[0.6rem] font-medium tracking-[0.18em] uppercase"
+  >
+    <span aria-hidden="true">✧</span>
+    Ivy
+    <span class="caption-kind">{{
+      kind() === 'final' ? 'Answer' : 'Update'
+    }}</span>
+  </h2>
+  @if (loading()) {
+    <stellar-skeleton-atom class="mt-2 block" shape="text" />
+  } @else {
+    <p
+      class="caption-text mt-2 mb-0 overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      tabindex="0"
+    >
+      @for (text of [visibleText()]; track text) {
+        <span
+          class="block"
+          animate.enter="caption-arrive"
+          [textContent]="text"
+        ></span>
+      }
+    </p>
+  }
+</section>

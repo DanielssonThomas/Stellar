@@ -50,7 +50,10 @@ pub(super) fn start_persistent(
     Ok((child, PersistentTransport { input, frames }))
 }
 
-pub(super) fn recognition_command(mode: &str) -> Command {
+pub(super) fn recognition_command(mode: &str) -> Result<Command, SpeechError> {
+    if mode == "expression" {
+        return expression_command();
+    }
     let mut command = Command::new(r"D:\Hermes\profiles\ivy\recognition\.venv\Scripts\python.exe");
     command.args([
         "-I",
@@ -60,7 +63,33 @@ pub(super) fn recognition_command(mode: &str) -> Command {
         mode,
     ]);
     sanitize(&mut command);
+    Ok(command)
+}
+
+pub(super) fn expression_root() -> Result<std::path::PathBuf, SpeechError> {
+    Ok(std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .ok_or(SpeechError::Unavailable)?
+        .join("Stellar/IvyExpression"))
+}
+
+fn expression_command() -> Result<Command, SpeechError> {
+    let root = expression_root()?;
+    let python = root.join(".venv/Scripts/python.exe");
+    let model = root.join("emotion2vec_plus_large");
+    if !python.is_file() || !model.join("model.pt").is_file() {
+        return Err(SpeechError::ModelMissing);
+    }
+    let mut command = Command::new(python);
     command
+        .args(["-I", "-u", "-c", include_str!("expression_worker.py")])
+        .arg(model)
+        .env("HF_HUB_OFFLINE", "1")
+        .env("TRANSFORMERS_OFFLINE", "1")
+        .env("MODELSCOPE_OFFLINE", "1");
+    sanitize(&mut command);
+    Ok(command)
 }
 
 fn sanitize(command: &mut Command) {

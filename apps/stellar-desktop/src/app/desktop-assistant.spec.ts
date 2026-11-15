@@ -6,7 +6,10 @@ import {
   IvyAdapterService,
   IvyReflexService,
 } from '@stellar/service-desktop-adapter';
-import type { IvySnapshot } from '@stellar/desktop-contracts';
+import type {
+  IvyResponseSegment,
+  IvySnapshot,
+} from '@stellar/desktop-contracts';
 import type { StageCommand, ProductionPayloadMap } from '@stellar/ui-organisms';
 import { DesktopAssistant } from './desktop-assistant';
 
@@ -45,6 +48,101 @@ function setup(
 
 describe('desktop Ivy composition', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('shows background text alongside the active turn without granting presentation authority', () => {
+    const { assistant, state, present } = setup();
+    const reflex = TestBed.inject(IvyReflexService);
+    reflex.reply.set('Earlier local acknowledgement');
+    state.set({
+      ...state(),
+      revision: '2',
+      turn: 'admitted',
+      background_updates: [
+        {
+          id: 'background',
+          text: 'Your background work is ready.',
+          speech_claim: null,
+        },
+      ],
+    });
+    TestBed.tick();
+    expect(assistant.reply()).toContain('Your background work is ready.');
+    expect(assistant.busy()).toBe(true);
+    expect(reflex.reply()).toBe('');
+    expect(present).not.toHaveBeenCalled();
+  });
+
+  const commentary: IvyResponseSegment = {
+    id: 'a'.repeat(64),
+    kind: 'commentary',
+    text: 'I found the calendar.',
+    sequence: '1',
+    reused: false,
+  };
+
+  it('replaces interim text with the canonical completed answer if native final is absent', () => {
+    const { assistant, state } = setup();
+    state.set({
+      ...state(),
+      turn: 'admitted',
+      response_segments: [commentary],
+    });
+    expect(assistant.caption()).toEqual({
+      text: commentary.text,
+      kind: 'commentary',
+    });
+
+    const text = '`Standup` is at nine.';
+    state.set({
+      ...state(),
+      turn: 'completed',
+      items: [{ kind: 'text', text }],
+    });
+    expect(assistant.caption()).toEqual({
+      text: 'Standup is at nine.',
+      kind: 'final',
+    });
+  });
+
+  it('prefers a native final caption even when its text was already narrated as commentary', () => {
+    const { assistant, state } = setup();
+    state.set({
+      ...state(),
+      turn: 'completed',
+      items: [{ kind: 'text', text: 'Canonical fallback.' }],
+      response_segments: [
+        commentary,
+        {
+          ...commentary,
+          id: 'b'.repeat(64),
+          kind: 'final',
+          sequence: null,
+          reused: true,
+        },
+      ],
+    });
+    expect(assistant.caption()).toEqual({
+      text: commentary.text,
+      kind: 'final',
+    });
+  });
+
+  it('clears interim text on completion when there is no eligible final caption', () => {
+    const { assistant, state } = setup();
+    state.set({
+      ...state(),
+      turn: 'admitted',
+      response_segments: [commentary],
+    });
+    expect(assistant.caption().text).toBe(commentary.text);
+    state.set({ ...state(), turn: 'completed' });
+    expect(assistant.caption()).toEqual({ text: '', kind: 'final' });
+    state.set({
+      ...state(),
+      items: [{ kind: 'text', text: '```json\n{}\n```' }],
+    });
+    expect(assistant.caption()).toEqual({ text: '', kind: 'final' });
+  });
+
   it('shows an authoritative recovered cloud receipt after uncertainty and ignores stale terminal events', async () => {
     const { assistant, adapter, state } = setup();
     await assistant.submit('Show my issue');
@@ -113,8 +211,12 @@ describe('desktop Ivy composition', () => {
     expect(adapter.submit).not.toHaveBeenCalled();
     const text = 'x'.repeat(8192);
     expect(await assistant.submit(text)).toBe(true);
-    expect(adapter.submit).toHaveBeenCalledWith(text, expect.any(String));
-    expect(acknowledge).toHaveBeenCalledWith([]);
+    expect(adapter.submit).toHaveBeenCalledWith(
+      text,
+      expect.any(String),
+      reflex.events(),
+    );
+    expect(acknowledge).toHaveBeenCalledWith(reflex.events());
   });
   it('waits for authoritative recovery rather than queue acceptance', async () => {
     vi.useFakeTimers();

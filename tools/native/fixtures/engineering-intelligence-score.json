@@ -1,0 +1,387 @@
+{
+  "begin": {
+    "title": "Engineering Intelligence",
+    "label": "Local history",
+    "description": "Development budgets, recorded sessions, failure patterns, and skill evidence."
+  },
+  "prepare": [
+    {
+      "kind": "show",
+      "panel": {
+        "id": "engineering-budget",
+        "title": "Development Budget",
+        "category": "Usage and estimates",
+        "summary": "3 issue budgets shown.",
+        "detail": {
+          "surface": "rich-text",
+          "payload": {
+            "title": "Development Budget",
+            "blocks": [
+              {
+                "kind": "chart",
+                "chart": {
+                  "type": "bar",
+                  "labels": ["#343"],
+                  "datasets": [
+                    {
+                      "label": "Latest estimate",
+                      "values": [900]
+                    },
+                    {
+                      "label": "Observed",
+                      "values": [890]
+                    }
+                  ],
+                  "y_label": "Tokens"
+                }
+              },
+              {
+                "kind": "heading",
+                "text": "Issue budgets"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Issue",
+                  "Estimate (initial → latest)",
+                  "Allocated",
+                  "Observed",
+                  "Initial variance",
+                  "Budget"
+                ],
+                "rows": [
+                  [
+                    "#344",
+                    "700",
+                    "800",
+                    "Unavailable",
+                    "Unavailable",
+                    "Unavailable"
+                  ],
+                  ["#343", "900", "1,100", "890", "-10", "Within"],
+                  [
+                    "#342",
+                    "1,200 → 1,400",
+                    "1,500",
+                    "1,800 (partial)",
+                    "Unavailable",
+                    "Over"
+                  ]
+                ]
+              },
+              {
+                "kind": "heading",
+                "text": "Observed usage by agent and model"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Agent / model",
+                  "Provider",
+                  "Observed",
+                  "Cached",
+                  "Uncached"
+                ],
+                "rows": [
+                  ["codex / model-a", "openai", "1,890", "150", "1,480"],
+                  ["codex / model-b", "openai", "400", "40", "280"],
+                  [
+                    "ivy / model-c",
+                    "local",
+                    "320",
+                    "Unavailable",
+                    "Unavailable"
+                  ],
+                  ["reviewer / model-a", "openai", "80 (partial)", "0", "65"]
+                ]
+              },
+              {
+                "kind": "heading",
+                "text": "Ivy reported usage"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Agent / model",
+                  "Provider",
+                  "Observed",
+                  "Cached",
+                  "Uncached"
+                ],
+                "rows": [
+                  [
+                    "ivy / model-c",
+                    "local",
+                    "320",
+                    "Unavailable",
+                    "Unavailable"
+                  ]
+                ]
+              },
+              {
+                "kind": "paragraph",
+                "text": "Subscription allowance is unavailable."
+              },
+              {
+                "kind": "paragraph",
+                "text": "API-equivalent cost and estimated allowance impact are unavailable. Issue totals describe recorded sessions. Variance requires complete observed usage for those sessions."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "show",
+      "panel": {
+        "id": "engineering-sessions",
+        "title": "Session Intelligence",
+        "category": "Development history",
+        "summary": "4 recorded sessions shown.",
+        "detail": {
+          "surface": "rich-text",
+          "payload": {
+            "title": "Session Intelligence",
+            "blocks": [
+              {
+                "kind": "heading",
+                "text": "Recorded sessions"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Session",
+                  "Issue",
+                  "Agent / model",
+                  "Status",
+                  "Started (UTC)",
+                  "Observed tokens",
+                  "Attempts",
+                  "Failures"
+                ],
+                "rows": [
+                  [
+                    "codex:fixture-343",
+                    "#343",
+                    "codex / model-a",
+                    "completed",
+                    "2026-11-04T10:00:00.000Z",
+                    "890",
+                    "1",
+                    "1"
+                  ],
+                  [
+                    "codex:fixture-review",
+                    "#342",
+                    "reviewer / model-a",
+                    "active",
+                    "2026-11-03T10:00:00.000Z",
+                    "80 (partial)",
+                    "0",
+                    "0"
+                  ],
+                  [
+                    "hermes:fixture-342",
+                    "#342",
+                    "ivy / model-c",
+                    "completed",
+                    "2026-11-02T12:00:00.000Z",
+                    "320",
+                    "1",
+                    "0"
+                  ],
+                  [
+                    "codex:fixture-342",
+                    "#342",
+                    "codex / model-a",
+                    "completed",
+                    "2026-11-02T10:00:00.000Z",
+                    "1,400",
+                    "3",
+                    "2"
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "show",
+      "panel": {
+        "id": "engineering-patterns",
+        "title": "Engineering Patterns",
+        "category": "Recurring failures",
+        "summary": "1 failure signature shown.",
+        "detail": {
+          "surface": "rich-text",
+          "payload": {
+            "title": "Engineering Patterns",
+            "blocks": [
+              {
+                "kind": "heading",
+                "text": "Observed patterns"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Signature",
+                  "Diagnostic",
+                  "Component",
+                  "Failures",
+                  "Issues",
+                  "Sessions",
+                  "Retries",
+                  "Associated tokens"
+                ],
+                "rows": [
+                  [
+                    "rust-fixture-e0308",
+                    "E0308",
+                    "desktop",
+                    "3",
+                    "2",
+                    "2",
+                    "1",
+                    "2,290"
+                  ]
+                ]
+              },
+              {
+                "kind": "paragraph",
+                "text": "Associated tokens are the observed totals from affected sessions. A session can contribute to several patterns."
+              },
+              {
+                "kind": "heading",
+                "text": "Investigation candidates"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Signature",
+                  "Diagnostic",
+                  "Occurrences",
+                  "Issues",
+                  "Suggested starting point"
+                ],
+                "rows": [
+                  ["rust-fixture-e0308", "E0308", "3", "2", "documentation"]
+                ]
+              },
+              {
+                "kind": "heading",
+                "text": "Interventions and evaluations"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Intervention",
+                  "Signature",
+                  "Evidence",
+                  "Failure rate",
+                  "Attempts",
+                  "Retries",
+                  "Implementation",
+                  "Expected improvement"
+                ],
+                "rows": [
+                  [
+                    "validation-hook",
+                    "rust-fixture-e0308",
+                    "incomplete",
+                    "75.0% → Unavailable",
+                    "4 → Unavailable",
+                    "1 → Unavailable",
+                    "fixture revision",
+                    "Reduce repeated compiler failures"
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "show",
+      "panel": {
+        "id": "engineering-skills",
+        "title": "Skill Intelligence",
+        "category": "Instruction overhead",
+        "summary": "2 skill versions shown.",
+        "detail": {
+          "surface": "rich-text",
+          "payload": {
+            "title": "Skill Intelligence",
+            "blocks": [
+              {
+                "kind": "heading",
+                "text": "Skill versions and context"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Skill",
+                  "Version",
+                  "State",
+                  "Static estimate",
+                  "Activations",
+                  "Loaded",
+                  "References",
+                  "Discovery"
+                ],
+                "rows": [
+                  [
+                    "rust-build",
+                    "2",
+                    "maintained",
+                    "140 (fixture tokenizer)",
+                    "1",
+                    "140",
+                    "Unavailable",
+                    "Unavailable"
+                  ],
+                  [
+                    "rust-build",
+                    "1",
+                    "retired",
+                    "200 (fixture tokenizer)",
+                    "0",
+                    "Unavailable",
+                    "Unavailable",
+                    "Unavailable"
+                  ]
+                ]
+              },
+              {
+                "kind": "heading",
+                "text": "Effectiveness evidence"
+              },
+              {
+                "kind": "table",
+                "columns": [
+                  "Skill",
+                  "Version",
+                  "Failures",
+                  "Retries",
+                  "Transfer evidence"
+                ],
+                "rows": [
+                  ["rust-build", "2", "1", "0", "One fixture scenario"],
+                  [
+                    "rust-build",
+                    "1",
+                    "Unavailable",
+                    "Unavailable",
+                    "Unavailable"
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

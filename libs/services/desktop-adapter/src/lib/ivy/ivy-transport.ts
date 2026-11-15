@@ -56,6 +56,7 @@ export function initialIvySnapshot(): IvySnapshot {
     turn: 'idle',
     activity: [],
     items: [],
+    response_segments: [],
     error: null,
   };
 }

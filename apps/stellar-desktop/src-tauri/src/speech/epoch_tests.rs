@@ -41,6 +41,7 @@ fn acknowledged_stop_fences_a_request_paused_before_admission() {
     let delayed = host.clone();
     let thread = std::thread::spawn(move || {
         let request = SpeechTranscribeRequest {
+            analyze_expression: None,
             version: 1,
             epoch: "0".into(),
             utterance_id: ID.into(),

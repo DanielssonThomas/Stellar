@@ -1,0 +1,910 @@
+{
+  "issue": 308,
+  "measured_date": "2026-11-07",
+  "fixture_kind": "synthetic-af_heart",
+  "microphone": false,
+  "llm_requests": 0,
+  "worker_sha256": "eac449359bfbc3b3acbbfd2f999ab3789ffcaf5d7c2644e19cbebd6ab42fb4c9",
+  "passed": 40,
+  "total": 42,
+  "results": [
+    {
+      "fixture": "ivy",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8960
+        }
+      ],
+      "pass": true,
+      "compute_ms": 37,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 10240
+        }
+      ],
+      "baseline_compute_ms": 46,
+      "baseline_pass": true,
+      "fixture_sha256": "51460985e98436560cf4d05677fd5f550820e4065da3ef66ee506df82a260d2c"
+    },
+    {
+      "fixture": "ivy",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7680
+        }
+      ],
+      "pass": true,
+      "compute_ms": 30,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 9600
+        }
+      ],
+      "baseline_compute_ms": 43,
+      "baseline_pass": true,
+      "synthetic_transcript": "Ivy, open my browser.",
+      "post_wake_transcript": "open my browser.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "51460985e98436560cf4d05677fd5f550820e4065da3ef66ee506df82a260d2c"
+    },
+    {
+      "fixture": "ivy",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7040
+        }
+      ],
+      "pass": true,
+      "compute_ms": 32,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8320
+        }
+      ],
+      "baseline_compute_ms": 35,
+      "baseline_pass": true,
+      "fixture_sha256": "51460985e98436560cf4d05677fd5f550820e4065da3ef66ee506df82a260d2c"
+    },
+    {
+      "fixture": "hey-ivy",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 12800
+        }
+      ],
+      "pass": true,
+      "compute_ms": 45,
+      "baseline_detections": [],
+      "baseline_compute_ms": 110,
+      "baseline_pass": false,
+      "fixture_sha256": "6ec7d0244a43968af17f94892be388478855ba620578c497acf61e4313ee7ec1"
+    },
+    {
+      "fixture": "hey-ivy",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 10880
+        }
+      ],
+      "pass": true,
+      "compute_ms": 35,
+      "baseline_detections": [],
+      "baseline_compute_ms": 102,
+      "baseline_pass": false,
+      "synthetic_transcript": "Hey Ivy, open my browser.",
+      "post_wake_transcript": "Open my browser.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "6ec7d0244a43968af17f94892be388478855ba620578c497acf61e4313ee7ec1"
+    },
+    {
+      "fixture": "hey-ivy",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 9600
+        }
+      ],
+      "pass": true,
+      "compute_ms": 38,
+      "baseline_detections": [],
+      "baseline_compute_ms": 100,
+      "baseline_pass": false,
+      "fixture_sha256": "6ec7d0244a43968af17f94892be388478855ba620578c497acf61e4313ee7ec1"
+    },
+    {
+      "fixture": "hey-ivy-hello",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 12800
+        }
+      ],
+      "pass": true,
+      "compute_ms": 48,
+      "baseline_detections": [],
+      "baseline_compute_ms": 88,
+      "baseline_pass": false,
+      "fixture_sha256": "465b00e6112d44e2e063d19c85ba42af0041f36e61e1b1d4570cf65d5b00a49f"
+    },
+    {
+      "fixture": "hey-ivy-hello",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 10880
+        }
+      ],
+      "pass": true,
+      "compute_ms": 37,
+      "baseline_detections": [],
+      "baseline_compute_ms": 85,
+      "baseline_pass": false,
+      "synthetic_transcript": "Hey Ivy, hello.",
+      "post_wake_transcript": "Hello.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 1
+      },
+      "fixture_sha256": "465b00e6112d44e2e063d19c85ba42af0041f36e61e1b1d4570cf65d5b00a49f"
+    },
+    {
+      "fixture": "hey-ivy-hello",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 9600
+        }
+      ],
+      "pass": true,
+      "compute_ms": 35,
+      "baseline_detections": [],
+      "baseline_compute_ms": 66,
+      "baseline_pass": false,
+      "fixture_sha256": "465b00e6112d44e2e063d19c85ba42af0041f36e61e1b1d4570cf65d5b00a49f"
+    },
+    {
+      "fixture": "ivy-time",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 11520
+        }
+      ],
+      "pass": true,
+      "compute_ms": 46,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 11520
+        }
+      ],
+      "baseline_compute_ms": 46,
+      "baseline_pass": true,
+      "fixture_sha256": "4b828fcc2182ecf9d6eae4e94986c7bc8366e7f859eac96866dc9d3f8e9a2a34"
+    },
+    {
+      "fixture": "ivy-time",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8320
+        }
+      ],
+      "pass": true,
+      "compute_ms": 35,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8960
+        }
+      ],
+      "baseline_compute_ms": 33,
+      "baseline_pass": true,
+      "synthetic_transcript": "Ivy, what time is it?",
+      "post_wake_transcript": "What time is it?",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 4
+      },
+      "fixture_sha256": "4b828fcc2182ecf9d6eae4e94986c7bc8366e7f859eac96866dc9d3f8e9a2a34"
+    },
+    {
+      "fixture": "ivy-time",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7040
+        }
+      ],
+      "pass": true,
+      "compute_ms": 38,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7040
+        }
+      ],
+      "baseline_compute_ms": 36,
+      "baseline_pass": true,
+      "fixture_sha256": "4b828fcc2182ecf9d6eae4e94986c7bc8366e7f859eac96866dc9d3f8e9a2a34"
+    },
+    {
+      "fixture": "dotted",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [],
+      "pass": false,
+      "compute_ms": 133,
+      "baseline_detections": [],
+      "baseline_compute_ms": 123,
+      "baseline_pass": false,
+      "fixture_sha256": "9b0e4680d628bfb8e4bc44b1eacf8ad3f1ca5b97e525b404f8451b50558e9f1a"
+    },
+    {
+      "fixture": "dotted",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8960
+        }
+      ],
+      "pass": true,
+      "compute_ms": 43,
+      "baseline_detections": [],
+      "baseline_compute_ms": 105,
+      "baseline_pass": false,
+      "synthetic_transcript": "IV, open my browser.",
+      "post_wake_transcript": "open my browser.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "9b0e4680d628bfb8e4bc44b1eacf8ad3f1ca5b97e525b404f8451b50558e9f1a"
+    },
+    {
+      "fixture": "dotted",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 10240
+        }
+      ],
+      "pass": true,
+      "compute_ms": 48,
+      "baseline_detections": [
+        {
+          "command": "ivy",
+          "end_sample": 10240
+        }
+      ],
+      "baseline_compute_ms": 50,
+      "baseline_pass": true,
+      "fixture_sha256": "9b0e4680d628bfb8e4bc44b1eacf8ad3f1ca5b97e525b404f8451b50558e9f1a"
+    },
+    {
+      "fixture": "mean-standard",
+      "mode": "passive",
+      "speed": 0.85,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 118,
+      "baseline_detections": [],
+      "baseline_compute_ms": 124,
+      "baseline_pass": true,
+      "fixture_sha256": "7e3006a07c546ac65f044850d75f58379e6c0f2f51a1aec45eaa36f9d18fb85d"
+    },
+    {
+      "fixture": "mean-standard",
+      "mode": "passive",
+      "speed": 1.0,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 103,
+      "baseline_detections": [],
+      "baseline_compute_ms": 109,
+      "baseline_pass": true,
+      "synthetic_transcript": "I mean open my browser.",
+      "fixture_sha256": "7e3006a07c546ac65f044850d75f58379e6c0f2f51a1aec45eaa36f9d18fb85d"
+    },
+    {
+      "fixture": "mean-standard",
+      "mode": "passive",
+      "speed": 1.2,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 127,
+      "baseline_detections": [],
+      "baseline_compute_ms": 96,
+      "baseline_pass": true,
+      "fixture_sha256": "7e3006a07c546ac65f044850d75f58379e6c0f2f51a1aec45eaa36f9d18fb85d"
+    },
+    {
+      "fixture": "mean-high",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8320
+        }
+      ],
+      "pass": true,
+      "compute_ms": 36,
+      "baseline_detections": [],
+      "baseline_compute_ms": 113,
+      "baseline_pass": false,
+      "fixture_sha256": "d1d4b78847d8395261f8aff22760ecfd2c0bda898f50208ffb5f15adfbb410db"
+    },
+    {
+      "fixture": "mean-high",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 8960
+        }
+      ],
+      "pass": true,
+      "compute_ms": 35,
+      "baseline_detections": [],
+      "baseline_compute_ms": 109,
+      "baseline_pass": false,
+      "synthetic_transcript": "I mean open my browser.",
+      "post_wake_transcript": "Open my browser.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "d1d4b78847d8395261f8aff22760ecfd2c0bda898f50208ffb5f15adfbb410db"
+    },
+    {
+      "fixture": "mean-high",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7680
+        }
+      ],
+      "pass": true,
+      "compute_ms": 35,
+      "baseline_detections": [],
+      "baseline_compute_ms": 87,
+      "baseline_pass": false,
+      "fixture_sha256": "d1d4b78847d8395261f8aff22760ecfd2c0bda898f50208ffb5f15adfbb410db"
+    },
+    {
+      "fixture": "eerie-high",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7680
+        }
+      ],
+      "pass": true,
+      "compute_ms": 33,
+      "baseline_detections": [],
+      "baseline_compute_ms": 116,
+      "baseline_pass": false,
+      "fixture_sha256": "d8a2ee58e5c96064ddda3f7aaa327869860202b875f2a2b63c7f349d6a600e10"
+    },
+    {
+      "fixture": "eerie-high",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 6400
+        }
+      ],
+      "pass": true,
+      "compute_ms": 25,
+      "baseline_detections": [],
+      "baseline_compute_ms": 97,
+      "baseline_pass": false,
+      "synthetic_transcript": "Eerie, open my browser.",
+      "post_wake_transcript": "open my browser.",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "d8a2ee58e5c96064ddda3f7aaa327869860202b875f2a2b63c7f349d6a600e10"
+    },
+    {
+      "fixture": "eerie-high",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [],
+      "pass": false,
+      "compute_ms": 85,
+      "baseline_detections": [],
+      "baseline_compute_ms": 83,
+      "baseline_pass": false,
+      "fixture_sha256": "d8a2ee58e5c96064ddda3f7aaa327869860202b875f2a2b63c7f349d6a600e10"
+    },
+    {
+      "fixture": "ive-high",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7680
+        }
+      ],
+      "pass": true,
+      "compute_ms": 38,
+      "baseline_detections": [],
+      "baseline_compute_ms": 110,
+      "baseline_pass": false,
+      "fixture_sha256": "83c7bcc095007a7bd7a091a5d8ffa68f3f7453ff6bbfc1bc8cd0aeb0b2d1b8b9"
+    },
+    {
+      "fixture": "ive-high",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 3200
+        }
+      ],
+      "pass": true,
+      "compute_ms": 34,
+      "baseline_detections": [],
+      "baseline_compute_ms": 85,
+      "baseline_pass": false,
+      "synthetic_transcript": "I've opened my browser.",
+      "post_wake_transcript": "open my browser",
+      "post_wake_word_errors": {
+        "errors": 0,
+        "referenceWords": 3
+      },
+      "fixture_sha256": "83c7bcc095007a7bd7a091a5d8ffa68f3f7453ff6bbfc1bc8cd0aeb0b2d1b8b9"
+    },
+    {
+      "fixture": "ive-high",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": "ivy",
+      "detections": [
+        {
+          "command": "ivy",
+          "end_sample": 7040
+        }
+      ],
+      "pass": true,
+      "compute_ms": 33,
+      "baseline_detections": [],
+      "baseline_compute_ms": 79,
+      "baseline_pass": false,
+      "fixture_sha256": "83c7bcc095007a7bd7a091a5d8ffa68f3f7453ff6bbfc1bc8cd0aeb0b2d1b8b9"
+    },
+    {
+      "fixture": "ambient",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 108,
+      "baseline_detections": [],
+      "baseline_compute_ms": 111,
+      "baseline_pass": true,
+      "fixture_sha256": "bd9d4a570901ec5204ec7a2af3036c10fb739fc75346d7642b41003b44f83964"
+    },
+    {
+      "fixture": "ambient",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 87,
+      "baseline_detections": [],
+      "baseline_compute_ms": 91,
+      "baseline_pass": true,
+      "synthetic_transcript": "I think this is interesting.",
+      "fixture_sha256": "bd9d4a570901ec5204ec7a2af3036c10fb739fc75346d7642b41003b44f83964"
+    },
+    {
+      "fixture": "ambient",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 89,
+      "baseline_detections": [],
+      "baseline_compute_ms": 87,
+      "baseline_pass": true,
+      "fixture_sha256": "bd9d4a570901ec5204ec7a2af3036c10fb739fc75346d7642b41003b44f83964"
+    },
+    {
+      "fixture": "embedded",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 105,
+      "baseline_detections": [],
+      "baseline_compute_ms": 106,
+      "baseline_pass": true,
+      "fixture_sha256": "ca5ca2db8269b66b268cff939fc0d1e87fb5d666a1c17c8a2ab82ff13c543a74"
+    },
+    {
+      "fixture": "embedded",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 94,
+      "baseline_detections": [],
+      "baseline_compute_ms": 92,
+      "baseline_pass": true,
+      "synthetic_transcript": "We should ask Ivy to help.",
+      "fixture_sha256": "ca5ca2db8269b66b268cff939fc0d1e87fb5d666a1c17c8a2ab82ff13c543a74"
+    },
+    {
+      "fixture": "embedded",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 86,
+      "baseline_detections": [],
+      "baseline_compute_ms": 86,
+      "baseline_pass": true,
+      "fixture_sha256": "ca5ca2db8269b66b268cff939fc0d1e87fb5d666a1c17c8a2ab82ff13c543a74"
+    },
+    {
+      "fixture": "embedded-alias",
+      "mode": "passive_sensitive",
+      "speed": 0.85,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 106,
+      "baseline_detections": [],
+      "baseline_compute_ms": 128,
+      "baseline_pass": true,
+      "fixture_sha256": "3c6cd7accf58ab9051beea63b5df00c971deeb2294a0927fd60412f3856a4706"
+    },
+    {
+      "fixture": "embedded-alias",
+      "mode": "passive_sensitive",
+      "speed": 1.0,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 117,
+      "baseline_detections": [],
+      "baseline_compute_ms": 95,
+      "baseline_pass": true,
+      "synthetic_transcript": "The room has an eerie sound.",
+      "fixture_sha256": "3c6cd7accf58ab9051beea63b5df00c971deeb2294a0927fd60412f3856a4706"
+    },
+    {
+      "fixture": "embedded-alias",
+      "mode": "passive_sensitive",
+      "speed": 1.2,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 81,
+      "baseline_detections": [],
+      "baseline_compute_ms": 80,
+      "baseline_pass": true,
+      "fixture_sha256": "3c6cd7accf58ab9051beea63b5df00c971deeb2294a0927fd60412f3856a4706"
+    },
+    {
+      "fixture": "clear-phrase",
+      "mode": "listening",
+      "speed": 0.85,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 63,
+      "baseline_detections": [],
+      "baseline_compute_ms": 64,
+      "baseline_pass": true,
+      "fixture_sha256": "983fcee4dee52d31fa018f37ea1237254b406b52f66453f4938d5c73fa405dda"
+    },
+    {
+      "fixture": "clear-phrase",
+      "mode": "listening",
+      "speed": 1.0,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 50,
+      "baseline_detections": [],
+      "baseline_compute_ms": 51,
+      "baseline_pass": true,
+      "synthetic_transcript": "Clear skies are expected tomorrow.",
+      "fixture_sha256": "983fcee4dee52d31fa018f37ea1237254b406b52f66453f4938d5c73fa405dda"
+    },
+    {
+      "fixture": "clear-phrase",
+      "mode": "listening",
+      "speed": 1.2,
+      "expected": null,
+      "detections": [],
+      "pass": true,
+      "compute_ms": 63,
+      "baseline_detections": [],
+      "baseline_compute_ms": 64,
+      "baseline_pass": true,
+      "fixture_sha256": "983fcee4dee52d31fa018f37ea1237254b406b52f66453f4938d5c73fa405dda"
+    },
+    {
+      "fixture": "clear-control",
+      "mode": "listening",
+      "speed": 0.85,
+      "expected": "clear",
+      "detections": [
+        {
+          "command": "clear",
+          "end_sample": 7680
+        }
+      ],
+      "pass": true,
+      "compute_ms": 23,
+      "baseline_detections": [
+        {
+          "command": "clear",
+          "end_sample": 7680
+        }
+      ],
+      "baseline_compute_ms": 23,
+      "baseline_pass": true,
+      "fixture_sha256": "411ebe5d9f19298edc85b40410da98bcf047116c466d5fb7d3316b8cb4e3ccfc"
+    },
+    {
+      "fixture": "clear-control",
+      "mode": "listening",
+      "speed": 1.0,
+      "expected": "clear",
+      "detections": [
+        {
+          "command": "clear",
+          "end_sample": 7040
+        }
+      ],
+      "pass": true,
+      "compute_ms": 21,
+      "baseline_detections": [
+        {
+          "command": "clear",
+          "end_sample": 7040
+        }
+      ],
+      "baseline_compute_ms": 21,
+      "baseline_pass": true,
+      "synthetic_transcript": "Clear.",
+      "fixture_sha256": "411ebe5d9f19298edc85b40410da98bcf047116c466d5fb7d3316b8cb4e3ccfc"
+    },
+    {
+      "fixture": "clear-control",
+      "mode": "listening",
+      "speed": 1.2,
+      "expected": "clear",
+      "detections": [
+        {
+          "command": "clear",
+          "end_sample": 6400
+        }
+      ],
+      "pass": true,
+      "compute_ms": 16,
+      "baseline_detections": [
+        {
+          "command": "clear",
+          "end_sample": 6400
+        }
+      ],
+      "baseline_compute_ms": 15,
+      "baseline_pass": true,
+      "fixture_sha256": "411ebe5d9f19298edc85b40410da98bcf047116c466d5fb7d3316b8cb4e3ccfc"
+    }
+  ],
+  "baseline_ref": "0cb3",
+  "baseline_worker_sha256": "e353e5c80e762cefac0140c7747574a3b59024abb9f7bc80d99682453aa63437",
+  "baseline_passed": 25,
+  "baseline_mode_mapping": "passive_sensitive maps to passive because baseline has no high mode",
+  "limitations": [
+    "Synthetic CPU replay is not physical microphone or user pronunciation accuracy.",
+    "High sensitivity intentionally treats common utterance-prefix aliases as wake words.",
+    "No background game/music or long-run false-trigger rate was measured."
+  ],
+  "native_playback": {
+    "cached_playback_cancelled": true,
+    "cached_to_ordinary_worker_reused": true,
+    "cancellation_epoch_advanced": true,
+    "completed_samples": 3,
+    "late_state_after_stop": false,
+    "llm_requests": 0,
+    "microphone": false,
+    "physical_audibility_measured": false,
+    "recovery_used_new_worker": true,
+    "runs": [
+      {
+        "cached": true,
+        "completed_ms": 1353,
+        "first_audio_observed_ms": 138,
+        "playback_dispatched_observed_ms": 144,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 2,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 1213,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "cached": false,
+        "completed_ms": 3244,
+        "first_audio_observed_ms": 1678,
+        "playback_dispatched_observed_ms": 1678,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 1676,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 1676,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 1677,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 3238,
+            "stage": "playback_completed"
+          }
+        ]
+      },
+      {
+        "cached": true,
+        "completed_ms": 1331,
+        "first_audio_observed_ms": 131,
+        "playback_dispatched_observed_ms": 131,
+        "worker_timings": [
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_started"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "first_audio"
+          },
+          {
+            "elapsed_ms": 0,
+            "stage": "synthesis_completed"
+          },
+          {
+            "elapsed_ms": 1,
+            "stage": "playback_dispatched"
+          },
+          {
+            "elapsed_ms": 1203,
+            "stage": "playback_completed"
+          }
+        ]
+      }
+    ],
+    "scratch_removed": true,
+    "windows_playback_api": true
+  },
+  "waiting_cue": {
+    "text": "One moment.",
+    "delay_ms": 3000,
+    "voice": "af_heart",
+    "speed": 1.0,
+    "duration_seconds": 1.1079583333333334,
+    "sha256": "cb4800c5f53419b46a9c8e914636098fda83a993591c70f3b72cde11c543ed81",
+    "bytes": 53226,
+    "models": {
+      "kokoro-v1.0.onnx": "beb0d1848dee9a49da392cc3df26958d46cfa35d321edf434f52949153f0df3a",
+      "voices-v1.0.bin": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"
+    },
+    "subjective_listening": "Unavailable: this agent runtime does not support audio input. Actual Windows playback API exercised."
+  },
+  "reflex_waiting_decision": "No extra Reflex inference: accepted pending state supplies all needed truth, while another local-model request adds load, latency and another failure route to each turn."
+}

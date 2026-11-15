@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "capability": "stellar.background.v1",
+  "state": "inactive_candidate_requires_host_and_consumer_wiring",
+  "marker": "lifecycle_update",
+  "limits": {
+    "eventIdUtf8Bytes": 256,
+    "canonicalEnvelopeUtf8Bytes": 16384,
+    "resultUtf8Bytes": 262144,
+    "pendingPerSession": 16,
+    "retainedBindingsPerCanonicalDatabase": 20,
+    "maximumAdmissionsPerGrant": 100,
+    "maximumConsentMilliseconds": 604800000,
+    "eventFreshnessMilliseconds": 300000,
+    "maximumSubmissionAttemptsIncludingFirst": 8,
+    "retryDelaysSeconds": [1, 2, 4, 8, 16, 30, 30]
+  },
+  "hostOnlyOriginFields": [
+    "profileId",
+    "sessionId",
+    "physicalTarget",
+    "route",
+    "producerId",
+    "workerIncarnation"
+  ],
+  "bindingFields": [
+    "bindingId",
+    "origin",
+    "consentRevision",
+    "expiresAt",
+    "maxAdmissions",
+    "spent",
+    "revoked",
+    "createdAt"
+  ],
+  "eventFields": ["schemaVersion", "eventId", "kind", "payload"],
+  "payloadFields": ["milestone", "fact", "observedAt"],
+  "milestones": [
+    "worker_exited",
+    "worker_blocked",
+    "waiting_review",
+    "checks_failed",
+    "checks_passed",
+    "merged",
+    "workflow_verified"
+  ],
+  "descriptorFields": [
+    "schemaVersion",
+    "capability",
+    "kind",
+    "bindingId",
+    "eventId",
+    "digest",
+    "origin",
+    "consentRevision",
+    "expiresAt",
+    "maxAdmissions",
+    "eventExpiresAt"
+  ],
+  "inspectFields": [
+    "schemaVersion",
+    "descriptor",
+    "status",
+    "retryAuthorized",
+    "deliveryAuthorized",
+    "receipt"
+  ],
+  "receiptFields": [
+    "admission_id",
+    "ref",
+    "status",
+    "outcome",
+    "sequence",
+    "authority_epoch",
+    "execution_generation",
+    "result"
+  ],
+  "resultFields": ["final_response"],
+  "queryStates": ["admitted", "terminal", "unknown"],
+  "effects": {
+    "kinds": ["render", "speech"],
+    "beginFields": [
+      "bindingId",
+      "eventId",
+      "digest",
+      "client",
+      "operation",
+      "kind"
+    ],
+    "finishFields": ["bindingId", "eventId", "client", "operation", "kind"],
+    "revocationStates": ["active", "revoking", "revoked"],
+    "exactRetryNeverExecutesAgain": true,
+    "lostOwnerNeverExpiresToSuccess": true
+  },
+  "authorization": {
+    "capture": "Host-authenticated explicit native user opt-in only. Never deserialize Origin from plugin/model JSON; never use a source/client label as permission.",
+    "producer": "Host derives immutable producer/profile from the registered plugin. No plugin private-authority imports.",
+    "consumer": "Host-authenticated original session subscriber; independently validate the same descriptor on live, replay and canonical receipt before persistence/render/speech.",
+    "gate": "Required transaction-local profile, physical target, route, current consent revision and required producer/version check. Missing implementation/registration is denial.",
+    "unknown": "Never retry authority. No old 299 resubmission, journal clearing, new event ID, or alternative session fallback.",
+    "revocation": "Commit revocation before new claims; terminal completion and delivery must revalidate. effectsStopped remains false while any exact consumer effect owner retains custody. Already emitted effects cannot be recalled."
+  },
+  "canonicalization": {
+    "encoding": "Strict UTF-8, sorted ASCII object keys, compact JSON separators, no Unicode/newline normalization, array order preserved, no floats/NaN; integers in JavaScript safe range.",
+    "digest": "SHA256 of schemaVersion,bindingId,host origin,consentRevision,expiresAt,maxAdmissions,eventId,kind,payload. Host computes the authoritative digest.",
+    "idempotencyKey": "producer + bindingId + eventId; the canonical request ID is a SHA256-derived namespaced identity."
+  },
+  "requiredHostPorts": [
+    "authenticated_capture_and_finite_consent",
+    "public_plugin_submit_and_inspect",
+    "same_transaction_admission_reservation",
+    "canonical_fifo_claim_gate",
+    "canonical_terminal_settlement_gate",
+    "live_and_replay_descriptor_projection",
+    "canonical_receipt_descriptor_projection",
+    "consumer_effect_custody_and_revocation_ack",
+    "cold_restart_required_producer_absence_denial",
+    "explicit_version_mismatch_and_removal_denial"
+  ]
+}

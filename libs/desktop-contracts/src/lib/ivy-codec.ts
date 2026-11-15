@@ -2,6 +2,8 @@ import type {
   IvyActivity,
   IvyActivityKind,
   IvyActivityState,
+  IvyActivityProvider,
+  IvyActivityOperation,
   IvyConnectionState,
   IvyComponent,
   IvyTurnState,
@@ -11,9 +13,13 @@ import type {
   IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
+  IvyLocalActionOutcome,
   IvySnapshot,
+  IvyBackgroundUpdate,
+  IvyClaimUpdateRequest,
   IvyQuestion,
   IvyQuestionReplyRequest,
+  IvyResponseSegment,
   WorkspaceToolsState,
 } from '../generated';
 import {
@@ -58,6 +64,10 @@ const workspaceStates: Record<WorkspaceToolsState, true> = {
 };
 
 const components: Record<IvyComponent, true> = { assistant_message: true };
+const segmentKinds: Record<IvyResponseSegment['kind'], true> = {
+  commentary: true,
+  final: true,
+};
 const kinds: Record<IvyPresentation['kind'], true> = {
   text: true,
   component: true,
@@ -101,11 +111,42 @@ export function decodeIvySelectRequest(value: unknown): IvySelectRequest {
 }
 
 export function decodeIvySubmitRequest(value: unknown): IvySubmitRequest {
-  const data = record(value, ['version', 'input_id', 'text']);
+  const data = record(
+    value,
+    ['version', 'input_id', 'text'],
+    ['local_actions', 'voice_utterance'],
+  );
+  const events = data['local_actions'];
+  const voiceUtterance = data['voice_utterance'];
+  if (events !== undefined && (!Array.isArray(events) || events.length > 6))
+    throw new DesktopContractError('malformed');
+  if (voiceUtterance !== undefined && typeof voiceUtterance !== 'boolean')
+    throw new DesktopContractError('malformed');
   return {
     version: version(data['version']),
     input_id: identifier(data['input_id']),
     text: text(data['text'], 8192),
+    ...(voiceUtterance === undefined
+      ? {}
+      : { voice_utterance: voiceUtterance }),
+    ...(events === undefined
+      ? {}
+      : { local_actions: events.map(decodeLocalAction) }),
+  };
+}
+
+const localActionOutcomes: Record<IvyLocalActionOutcome, true> = {
+  confirmed: true,
+  uncertain: true,
+};
+
+function decodeLocalAction(value: unknown) {
+  const data = record(value, ['action', 'target', 'outcome', 'reply']);
+  return {
+    action: text(data['action'], 128),
+    target: text(data['target'], 240),
+    outcome: variant(data['outcome'], localActionOutcomes),
+    reply: text(data['reply'], 512),
   };
 }
 
@@ -212,20 +253,77 @@ const activityStates: Record<IvyActivityState, true> = {
   failed: true,
   finished: true,
 };
+const activityProviders: Record<IvyActivityProvider, true> = {
+  chrome: true,
+  stellar: true,
+  github: true,
+  calendar: true,
+  spotify: true,
+  mcp: true,
+  local: true,
+  web: true,
+};
+const activityOperations: Record<IvyActivityOperation, true> = {
+  search: true,
+  read: true,
+  write: true,
+  open: true,
+  list: true,
+  inspect: true,
+  update: true,
+  execute: true,
+  call: true,
+};
 function activity(value: unknown): IvyActivity[] {
   if (!Array.isArray(value) || value.length > 12)
     throw new DesktopContractError('malformed');
   const result = value.map((row): IvyActivity => {
-    const data = record(row, ['id', 'kind', 'state']);
+    const data = record(
+      row,
+      ['id', 'kind', 'state'],
+      ['provider', 'operation'],
+    );
     const id = boundedString(data['id'], 16);
     if (!/^[0-9a-f]{16}$/.test(id)) throw new DesktopContractError('malformed');
     return {
       id,
       kind: variant(data['kind'], activityKinds),
       state: variant(data['state'], activityStates),
+      ...(Object.hasOwn(data, 'provider')
+        ? { provider: variant(data['provider'], activityProviders) }
+        : {}),
+      ...(Object.hasOwn(data, 'operation')
+        ? { operation: variant(data['operation'], activityOperations) }
+        : {}),
     };
   });
   if (new Set(result.map((row) => row.id)).size !== result.length)
+    throw new DesktopContractError('malformed');
+  return result;
+}
+
+export function decodeIvyClaimUpdate(value: unknown): IvyClaimUpdateRequest {
+  const data = record(value, ['version', 'update_id', 'request_id']);
+  return {
+    version: version(data['version']),
+    update_id: text(data['update_id'], 512),
+    request_id: identifier(data['request_id']),
+  };
+}
+
+function backgroundUpdates(value: unknown): IvyBackgroundUpdate[] {
+  if (!Array.isArray(value) || value.length > 8)
+    throw new DesktopContractError('malformed');
+  const result = value.map((item) => {
+    const data = record(item, ['id', 'text', 'speech_claim']);
+    return {
+      id: text(data['id'], 512),
+      text: text(data['text'], 262144),
+      speech_claim:
+        data['speech_claim'] === null ? null : identifier(data['speech_claim']),
+    };
+  });
+  if (new Set(result.map((item) => item.id)).size !== result.length)
     throw new DesktopContractError('malformed');
   return result;
 }
@@ -248,7 +346,12 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
       'reset_id',
       'error',
     ],
-    ['first_text_observed', 'questions'],
+    [
+      'first_text_observed',
+      'questions',
+      'background_updates',
+      'response_segments',
+    ],
   );
   if (
     Object.hasOwn(data, 'first_text_observed') &&
@@ -264,6 +367,9 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   if (decoded.filter((item) => item.kind !== 'text').length > 1)
     throw new DesktopContractError('malformed');
   const snapshot: IvySnapshot = {
+    ...(Object.hasOwn(data, 'background_updates')
+      ? { background_updates: backgroundUpdates(data['background_updates']) }
+      : {}),
     ...(Object.hasOwn(data, 'questions')
       ? { questions: questions(data['questions']) }
       : {}),
@@ -283,6 +389,7 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
     connection: variant(data['connection'], connections),
     turn: variant(data['turn'], turns),
     items: decoded,
+    response_segments: responseSegments(data['response_segments'] ?? []),
     activity: activity(data['activity']),
     reset_id: data['reset_id'] === null ? null : text(data['reset_id'], 128),
     error: data['error'] === null ? null : decodeIvyError(data['error']),
@@ -293,4 +400,54 @@ export function decodeIvySnapshot(value: unknown): IvySnapshot {
   )
     throw new DesktopContractError('malformed');
   return snapshot;
+}
+
+export function isSealedIvyProseLine(line: string): boolean {
+  const content = line.replace(/^\p{White_Space}+/u, '');
+  if (content.startsWith('[')) {
+    // An unambiguous Markdown opener can continue onto the next line.
+    const link = /^\[([^[\]{}"]+)\]\(/u.exec(content);
+    return !!link && /\P{White_Space}/u.test(link[1]);
+  }
+  if (content.startsWith('<'))
+    return /^<(?:https?:\/\/|mailto:)[^<>"\x60\p{White_Space}]+>/u.test(
+      content,
+    );
+  if (content.startsWith('\x60')) {
+    const code = /^\x60([^\x60]+)\x60/u.exec(content);
+    return !!code && /^\p{White_Space}*[^<{[\p{White_Space}]/u.test(code[1]);
+  }
+  return !content.startsWith('{');
+}
+
+function responseSegments(value: unknown): IvyResponseSegment[] {
+  if (!Array.isArray(value) || value.length > 17)
+    throw new DesktopContractError('malformed');
+  const rows = value.map((entry): IvyResponseSegment => {
+    const row = record(entry, ['id', 'kind', 'text', 'sequence', 'reused']);
+    const id = boundedString(row['id'], 64);
+    if (!/^[0-9a-f]{64}$/.test(id) || typeof row['reused'] !== 'boolean')
+      throw new DesktopContractError('malformed');
+    const kind = variant(row['kind'], segmentKinds);
+    const order = row['sequence'] === null ? null : sequence(row['sequence']);
+    if ((kind === 'commentary') !== (order !== null))
+      throw new DesktopContractError('malformed');
+    const content = text(row['text'], kind === 'commentary' ? 4096 : undefined);
+    if (
+      !content.split('\n').every(isSealedIvyProseLine) ||
+      /stellar_presentation|<\/?(?:think|analysis|tool_call)/i.test(content) ||
+      /\p{Cc}/u.test(content.replace(/[\n\t\r]/gu, '')) ||
+      (kind === 'commentary' && row['reused'])
+    )
+      throw new DesktopContractError('malformed');
+    return { id, kind, text: content, sequence: order, reused: row['reused'] };
+  });
+  if (
+    new Set(rows.map((row) => row.id)).size !== rows.length ||
+    rows.filter((row) => row.kind === 'commentary').length > 16 ||
+    rows.filter((row) => row.kind === 'final').length > 1 ||
+    rows.some((row, index) => row.kind === 'final' && index !== rows.length - 1)
+  )
+    throw new DesktopContractError('malformed');
+  return rows;
 }

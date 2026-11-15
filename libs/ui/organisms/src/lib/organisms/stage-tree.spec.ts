@@ -55,17 +55,18 @@ describe('targeted persistent layouts', () => {
         {},
       ),
     ).toBeNull();
-    expect(boundedJson({ value: 'x'.repeat(8193) }, 8192, 14)).toBe(false);
+    expect(boundedJson({ value: 'x'.repeat(8193) }, 8192, 0, 14)).toBe(false);
     expect(
       boundedJson(
         Array.from({ length: 128 }, () => [1, 2]),
         8192,
+        0,
         14,
       ),
     ).toBe(false);
     let deep: unknown = null;
     for (let index = 0; index < 16; index++) deep = { deep };
-    expect(boundedJson(deep, 8192, 14)).toBe(false);
+    expect(boundedJson(deep, 8192, 0, 14)).toBe(false);
   });
   function setup() {
     const registry = createStageRegistry({

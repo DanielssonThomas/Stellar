@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" fill="none">
+  <defs>
+    <radialGradient id="light" cx=".46" cy=".44" r=".73">
+      <stop stop-color="#2d201a"/>
+      <stop offset="1" stop-color="#0e0c0a"/>
+    </radialGradient>
+    <pattern id="grid" width="16" height="16" patternUnits="userSpaceOnUse">
+      <path d="M16 0H0v16" stroke="#e1a07c" stroke-opacity=".09"/>
+    </pattern>
+  </defs>
+  <path fill="url(#light)" d="M0 0h160v120H0z"/>
+  <path fill="url(#grid)" d="M0 0h160v120H0z"/>
+  <g stroke="#e1a07c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="25" y="25" width="84" height="65" rx="5" fill="#3b2720"/>
+    <path d="M27 78 49 54l13 12 16-18 24 27v10H27z" fill="#a46048" fill-opacity=".43"/>
+    <circle cx="51" cy="43" r="5" fill="#f4c49e" stroke="none"/>
+    <path d="M88 68 111 57l23 17-17 24-25-16z" fill="#33251f" stroke="#ffd6a4"/>
+    <circle cx="104" cy="71" r="3"/>
+    <path d="m107 82 6 5 8-9" stroke="#ffd6a4" stroke-width="2.3"/>
+    </g>
+</svg>

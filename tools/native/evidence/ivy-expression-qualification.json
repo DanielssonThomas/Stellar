@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-11",
+  "issue": 338,
+  "scope": "CPU worker protocol replay of prerecorded human speech. Delivery projections use the observed completion times at selected preparation intervals.",
+  "hardware": {
+    "os": "Windows 11 x64 build 26200",
+    "cpu": "Intel Core i7-14700K",
+    "physicalCores": 20,
+    "logicalProcessors": 28,
+    "memoryGiB": 31.69
+  },
+  "software": {
+    "python": "3.12.15",
+    "funasr": "1.3.1",
+    "torch": "2.11.0+cpu",
+    "torchaudio": "2.11.0+cpu",
+    "psutil": "7.1.3",
+    "parakeet": "NVIDIA Parakeet TDT 0.6B v2 INT8 via the existing sherpa-onnx worker",
+    "expressionVenvBytes": 1006858291
+  },
+  "source": {
+    "workerSha256Lf": "18583c85b00d359c8f4d7719d28dba167bc0c3a7ba28add0b7b697311bb78519",
+    "large": {
+      "model": "emotion2vec+ Large (~300M)",
+      "card": "https://huggingface.co/emotion2vec/emotion2vec_plus_large",
+      "revision": "6c303ba987b86b93193de93e34bb2b077a6bedc4",
+      "checkpointBytes": 1945790254,
+      "checkpointSha256": "be501a01f26fcdc7663a062dff86af839afbaef7c4de32f5e42d7e1ad2784da4"
+    },
+    "base": {
+      "model": "emotion2vec+ Base (~90M)",
+      "card": "https://www.modelscope.cn/models/iic/emotion2vec_plus_base/summary",
+      "checkpointRevision": "58354f1e5b6c118cf8b175b5b1955d6b07df42c2",
+      "checkpointBytes": 1118245678,
+      "checkpointSha256": "60710b5aae1dbe69bdac8920028fb05882d4314fd09031922b4b61ee9e7aadbd"
+    },
+    "authorsAndBackends": "https://github.com/ddlBoJack/emotion2vec",
+    "modelLicense": "FunASR Model Open Source License Agreement 1.1. Retain source, author attribution, and model names.",
+    "modelLicenseUrl": "https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE",
+    "toolkitLicense": "MIT",
+    "toolkitLicenseUrl": "https://github.com/modelscope/FunASR/blob/main/LICENSE",
+    "preprocessing": "Existing 16 kHz mono signed PCM becomes float32 scaled by 32768. FunASR applies the checkpoint's configured waveform layer normalization and utterance-level pooling. Embedding output is disabled.",
+    "localBackend": "The official toolkit's PyTorch CPU engine loads checksum-verified weights in weights-only mode. The project also documents a ModelScope pipeline."
+  },
+  "audio": [
+    {
+      "clip": "pause.wav",
+      "audioSeconds": 4.2,
+      "source": "Existing human desktop calibration for #253 on the qualification host",
+      "sha256": "e02ac33089325603853bb448aff2d0bf919824f81df50d1cafd6adee1635a62f"
+    },
+    {
+      "clip": "librispeech-0-16k.wav",
+      "audioSeconds": 5.855,
+      "source": "LibriSpeech dev-clean, Vassil Panayotov et al., recording 1272-128104-0000, CC BY 4.0",
+      "corpus": "https://www.openslr.org/12",
+      "mirror": "https://huggingface.co/datasets/hf-internal-testing/librispeech_asr_dummy",
+      "sha256": "6ba71ddda339c469a52fa48a375e17e2487a336f4434ae24ef5118637bbcb925"
+    },
+    {
+      "clip": "test.wav",
+      "audioSeconds": 4.104125,
+      "source": "Official emotion2vec+ Large model demo sample",
+      "sha256": "a4839eaaa3d54bd2db6eb48aa3d40def1b5c5004df3fd163a8dcd045097f8a23"
+    },
+    {
+      "clip": "librispeech-4-19s-16k.wav",
+      "audioSeconds": 19.8,
+      "source": "First 19.8 seconds of LibriSpeech dev-clean recording 1272-128104-0004, CC BY 4.0",
+      "sha256": "33e42c4771b792e6ae44caaf97cd610bcd6cf4af068350454eee26aed1203fe6"
+    }
+  ],
+  "qualification": {
+    "initialTwoThreadComparison": [
+      {
+        "model": "large",
+        "cold": {
+          "wall_ms": 10000.3,
+          "cpu_ms": 10218.8,
+          "logical_cpus": 1.02,
+          "rss_mib": 1099.3,
+          "audio_seconds": 4.104125,
+          "peak_rss_mib": 4577.3
+        },
+        "warm": [
+          {
+            "clip": "test.wav",
+            "audioSeconds": 4.104125,
+            "runs": 5,
+            "medianWallMs": 862.4,
+            "maxWallMs": 1031.9,
+            "medianLogicalCores": 2.01,
+            "medianRssMiB": 1103.4
+          },
+          {
+            "clip": "pause.wav",
+            "audioSeconds": 4.2,
+            "runs": 5,
+            "medianWallMs": 929.4,
+            "maxWallMs": 996.1,
+            "medianLogicalCores": 2.01,
+            "medianRssMiB": 1107.2
+          },
+          {
+            "clip": "librispeech-0-16k.wav",
+            "audioSeconds": 5.855,
+            "runs": 5,
+            "medianWallMs": 1472.5,
+            "maxWallMs": 1519.0,
+            "medianLogicalCores": 1.98,
+            "medianRssMiB": 1256.9
+          },
+          {
+            "clip": "librispeech-4-19s-16k.wav",
+            "audioSeconds": 19.8,
+            "runs": 5,
+            "medianWallMs": 5840.2,
+            "maxWallMs": 6144.2,
+            "medianLogicalCores": 1.97,
+            "medianRssMiB": 1715.2
+          }
+        ],
+        "peakRssMiB": 4577.3,
+        "supportedWarmResults": 20
+      },
+      {
+        "model": "base",
+        "cold": {
+          "wall_ms": 10697.6,
+          "cpu_ms": 10609.4,
+          "logical_cpus": 0.99,
+          "rss_mib": 1351.9,
+          "audio_seconds": 4.104125,
+          "peak_rss_mib": 2763.1
+        },
+        "warm": [
+          {
+            "clip": "test.wav",
+            "audioSeconds": 4.104125,
+            "runs": 5,
+            "medianWallMs": 670.3,
+            "maxWallMs": 691.4,
+            "medianLogicalCores": 1.94,
+            "medianRssMiB": 1354.1
+          },
+          {
+            "clip": "pause.wav",
+            "audioSeconds": 4.2,
+            "runs": 5,
+            "medianWallMs": 711.7,
+            "maxWallMs": 782.1,
+            "medianLogicalCores": 2.02,
+            "medianRssMiB": 1362.9
+          },
+          {
+            "clip": "librispeech-0-16k.wav",
+            "audioSeconds": 5.855,
+            "runs": 5,
+            "medianWallMs": 971.7,
+            "maxWallMs": 1086.3,
+            "medianLogicalCores": 1.94,
+            "medianRssMiB": 1386.2
+          },
+          {
+            "clip": "librispeech-4-19s-16k.wav",
+            "audioSeconds": 19.8,
+            "runs": 5,
+            "medianWallMs": 2495.9,
+            "maxWallMs": 2829.5,
+            "medianLogicalCores": 1.98,
+            "medianRssMiB": 1436.4
+          }
+        ],
+        "peakRssMiB": 2763.1,
+        "supportedWarmResults": 20
+      }
+    ],
+    "finalSixThreadComparison": [
+      {
+        "model": "large",
+        "cold": {
+          "wall_ms": 6313.2,
+          "cpu_ms": 9937.5,
+          "logical_cpus": 1.57,
+          "rss_mib": 2237.8,
+          "audio_seconds": 4.2,
+          "peak_rss_mib": 4561.1
+        },
+        "warm": [
+          {
+            "clip": "pause.wav",
+            "audioSeconds": 4.2,
+            "runs": 7,
+            "medianWallMs": 317.4,
+            "maxWallMs": 377.7,
+            "medianLogicalCores": 6.13,
+            "medianRssMiB": 2251.1
+          },
+          {
+            "clip": "librispeech-0-16k.wav",
+            "audioSeconds": 5.855,
+            "runs": 7,
+            "medianWallMs": 443.5,
+            "maxWallMs": 508.1,
+            "medianLogicalCores": 6.12,
+            "medianRssMiB": 2278.4
+          }
+        ],
+        "peakRssMiB": 4561.1,
+        "supportedWarmResults": 14
+      },
+      {
+        "model": "base",
+        "cold": {
+          "wall_ms": 4898.5,
+          "cpu_ms": 6937.5,
+          "logical_cpus": 1.42,
+          "rss_mib": 1383.1,
+          "audio_seconds": 4.2,
+          "peak_rss_mib": 2674.1
+        },
+        "warm": [
+          {
+            "clip": "pause.wav",
+            "audioSeconds": 4.2,
+            "runs": 7,
+            "medianWallMs": 271.9,
+            "maxWallMs": 276.4,
+            "medianLogicalCores": 6.2,
+            "medianRssMiB": 1381.9
+          },
+          {
+            "clip": "librispeech-0-16k.wav",
+            "audioSeconds": 5.855,
+            "runs": 7,
+            "medianWallMs": 321.5,
+            "maxWallMs": 336.1,
+            "medianLogicalCores": 6.1,
+            "medianRssMiB": 1408.3
+          }
+        ],
+        "peakRssMiB": 2674.1,
+        "supportedWarmResults": 14
+      }
+    ],
+    "alongsideParakeet": {
+      "deadlineMs": 1250,
+      "optionalWaitMaxMs": 75,
+      "cold": {
+        "parakeetWallMs": 2828.1,
+        "expressionWallMs": 6171.9,
+        "projectedDeliveries": 0
+      },
+      "warm": [
+        {
+          "clip": "pause.wav",
+          "audioSeconds": 4.2,
+          "runs": 7,
+          "parakeetOnlyMedianMs": 201.1,
+          "parakeetPairedMedianMs": 251.8,
+          "expressionPairedMedianMs": 406.4,
+          "expressionPairedMedianLogicalCores": 5.67,
+          "projection": [
+            {
+              "preparationMs": 0,
+              "deliveries": 1,
+              "maxWaitMs": 75
+            },
+            {
+              "preparationMs": 100,
+              "deliveries": 6,
+              "maxWaitMs": 75
+            },
+            {
+              "preparationMs": 250,
+              "deliveries": 7,
+              "maxWaitMs": 0
+            },
+            {
+              "preparationMs": 500,
+              "deliveries": 7,
+              "maxWaitMs": 0
+            }
+          ]
+        },
+        {
+          "clip": "librispeech-0-16k.wav",
+          "audioSeconds": 5.855,
+          "runs": 7,
+          "parakeetOnlyMedianMs": 255.0,
+          "parakeetPairedMedianMs": 381.6,
+          "expressionPairedMedianMs": 573.6,
+          "expressionPairedMedianLogicalCores": 5.65,
+          "projection": [
+            {
+              "preparationMs": 0,
+              "deliveries": 0,
+              "maxWaitMs": 75
+            },
+            {
+              "preparationMs": 100,
+              "deliveries": 1,
+              "maxWaitMs": 75
+            },
+            {
+              "preparationMs": 250,
+              "deliveries": 7,
+              "maxWaitMs": 0
+            },
+            {
+              "preparationMs": 500,
+              "deliveries": 7,
+              "maxWaitMs": 0
+            }
+          ]
+        }
+      ]
+    },
+    "unitTests": "4 passed, including invalid PCM, abstention and missing assets",
+    "offlineProbe": {
+      "freshInstall": "Passed with a local hash-locked wheelhouse, pip cache disabled, and official model assets cached and verified.",
+      "networkProbe": "Denied Python socket connects and DNS resolution in the worker and observed zero attempts during the official sample replay.",
+      "officialSampleOutput": {
+        "primary": "angry",
+        "confidence": "high"
+      }
+    }
+  },
+  "reproduction": [
+    "Use tools/native/setup-expression.py --install --compare-base from Windows CPython 3.12.",
+    "Convert selected LibriSpeech FLAC to WAV using ffmpeg -i 1272-128104-0000.flac -c:a pcm_s16le -ar 16000 -ac 1 librispeech-0-16k.wav.",
+    "Run tools/native/benchmark-expression.py --compare-base --alongside-parakeet --repetitions 7 with the 4.2 s and 5.855 s recordings, using the provisioned expression virtual environment.",
+    "For the initial comparison, pass --threads 2 --compare-base --repetitions 5 with the four recordings in the reported order.",
+    "Run tools/native/test_expression_worker.py using Windows CPython 3.12."
+  ],
+  "limitations": [
+    "Cold time measures the first reply, including asset verification, model initialization, and inference. Operating-system file cache state was uncontrolled.",
+    "The desktop admits final captures from one to six seconds. The initial 19.8-second comparison stresses the worker in isolation.",
+    "The paired replay isolates the ASR and expression workers. Preparation delays are modeled and vary with the actual frontend path and other activity.",
+    "Sample scores and delivery frequencies describe these recordings. They provide no population accuracy estimate, calibration claim, or inference about the speaker's emotional state.",
+    "CPU and working-set results depend on the host. Parallel classification increased measured median Parakeet time by 51 and 127 ms on the two final samples."
+  ],
+  "liveHermesQualification": {
+    "scope": "Production Desktop Python bridge and real Terra ACP, public human recording replay. Only redacted outgoing-request facts were observed.",
+    "audio_sha256": "6ba71ddda339c469a52fa48a375e17e2487a336f4434ae24ef5118637bbcb925",
+    "local_expression": {
+      "primary": "happy",
+      "confidence": "high"
+    },
+    "turns": [
+      {
+        "source": "recorded-replay",
+        "receipt_outcome": "completed",
+        "canonical_user_text_exact": true,
+        "provider_call_observations": [
+          {
+            "api_mode": "codex_responses",
+            "model": "gpt-6.1-terra",
+            "observation_present": true,
+            "observation_matches_expected": true,
+            "transport_handle_absent": true,
+            "expression_middleware_ran": true,
+            "valid_turn_id": true
+          }
+        ],
+        "staged_total": 1,
+        "staged_file_claimed": true
+      },
+      {
+        "source": "typed-follow-up",
+        "receipt_outcome": "completed",
+        "canonical_user_text_exact": true,
+        "provider_call_observations": [
+          {
+            "api_mode": "codex_responses",
+            "model": "gpt-6.1-terra",
+            "observation_present": false,
+            "observation_matches_expected": false,
+            "transport_handle_absent": true,
+            "expression_middleware_ran": true,
+            "valid_turn_id": true
+          }
+        ],
+        "staged_total": 1,
+        "staged_file_claimed": true
+      }
+    ],
+    "original_plugin_restored": true,
+    "fixture_session_cleanup": "deleted"
+  },
+  "nativeHostReplay": {
+    "source": "Public 5.855-second LibriSpeech through the flagged SpeechHost collector. The probe models 250 ms of session preparation.",
+    "warmTranscriptionMs": [491, 482, 489, 438, 465],
+    "eligibleWarmResults": 5,
+    "totalWarmResults": 5,
+    "passiveCollectionEnriched": false,
+    "repeatedOrDifferentIdEnriched": false,
+    "coldTranscriptionSettledFirst": true
+  }
+}

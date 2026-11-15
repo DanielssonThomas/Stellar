@@ -1,7 +1,9 @@
 import type {
   SpeechError,
   SpeechRequest,
+  SpeechDuckingRequest,
   SpeechStopRequest,
+  SpeechStopTarget,
   SpeechSnapshot,
   SpeechSpeakRequest,
   SpeechState,
@@ -71,6 +73,12 @@ function variant<T extends string>(value: unknown, values: Record<T, true>): T {
   return value as T;
 }
 
+function instance(value: unknown): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{32}$/.test(value))
+    throw new DesktopContractError('malformed');
+  return value;
+}
+
 function identifier(value: unknown): string {
   const result = boundedString(value, 36);
   if (
@@ -87,9 +95,32 @@ export function decodeSpeechRequest(value: unknown): SpeechRequest {
   return { version: version(data['version']) };
 }
 
+export function decodeSpeechDuckingRequest(
+  value: unknown,
+): SpeechDuckingRequest {
+  const data = record(value, ['version', 'active']);
+  if (typeof data['active'] !== 'boolean')
+    throw new DesktopContractError('malformed');
+  return { version: version(data['version']), active: data['active'] };
+}
+
 export function decodeSpeechStopRequest(value: unknown): SpeechStopRequest {
-  const data = record(value, ['version', 'epoch']);
-  return { version: version(data['version']), epoch: sequence(data['epoch']) };
+  const data = record(value, ['version', 'epoch'], ['target']);
+  const result: SpeechStopRequest = {
+    version: version(data['version']),
+    epoch: sequence(data['epoch']),
+  };
+  if (Object.hasOwn(data, 'target')) {
+    const target = record(data['target'], [
+      'operation_id',
+      'operation_instance',
+    ]);
+    result.target = {
+      operation_id: identifier(target['operation_id']),
+      operation_instance: instance(target['operation_instance']),
+    } satisfies SpeechStopTarget;
+  }
+  return result;
 }
 
 export function decodeSpeechError(value: unknown): SpeechError {
@@ -99,15 +130,16 @@ export function decodeSpeechError(value: unknown): SpeechError {
 export function decodeSpeechTranscribeRequest(
   value: unknown,
 ): SpeechTranscribeRequest {
-  const data = record(value, [
-    'version',
-    'epoch',
-    'utterance_id',
-    'sample_rate_hz',
-    'pcm',
-  ]);
+  const data = record(
+    value,
+    ['version', 'epoch', 'utterance_id', 'sample_rate_hz', 'pcm'],
+    ['analyze_expression'],
+  );
   const pcm = data['pcm'];
+  const analyzeExpression = data['analyze_expression'];
   if (
+    (analyzeExpression !== undefined &&
+      typeof analyzeExpression !== 'boolean') ||
     data['sample_rate_hz'] !== 16000 ||
     !Array.isArray(pcm) ||
     pcm.length === 0 ||
@@ -124,6 +156,9 @@ export function decodeSpeechTranscribeRequest(
     utterance_id: identifier(data['utterance_id']),
     sample_rate_hz: 16000,
     pcm: [...pcm],
+    ...(analyzeExpression === undefined
+      ? {}
+      : { analyze_expression: analyzeExpression }),
   };
 }
 
@@ -152,7 +187,7 @@ export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
   const data = record(
     value,
     ['version', 'revision', 'epoch', 'operation_id', 'state', 'error'],
-    ['timings'],
+    ['timings', 'operation_instance'],
   );
   return {
     version: version(data['version']),
@@ -160,6 +195,9 @@ export function decodeSpeechSnapshot(value: unknown): SpeechSnapshot {
     epoch: sequence(data['epoch']),
     operation_id:
       data['operation_id'] === null ? null : identifier(data['operation_id']),
+    ...(Object.hasOwn(data, 'operation_instance')
+      ? { operation_instance: instance(data['operation_instance']) }
+      : {}),
     state: variant(data['state'], states),
     error: data['error'] === null ? null : decodeSpeechError(data['error']),
     ...(Object.hasOwn(data, 'timings')

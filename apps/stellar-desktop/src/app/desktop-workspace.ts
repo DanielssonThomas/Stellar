@@ -2,6 +2,7 @@ import type {
   WorkspaceSurface,
   WorkspaceToolOutcome,
   WorkspaceToolRequest,
+  WorkspaceMutationStatus,
 } from '@stellar/desktop-contracts';
 import type { WorkspaceToolHandler } from '@stellar/service-desktop-adapter';
 import type { StageOrganism, StageResult } from '@stellar/ui-organisms';
@@ -20,6 +21,7 @@ type WorkspacePort = {
   readonly present: (command: unknown) => StageResult;
   readonly available: () => boolean;
   readonly isCurrent: (request: WorkspaceToolRequest) => boolean;
+  readonly spatial?: (request: WorkspaceToolRequest) => boolean;
 };
 
 const surfaces: readonly string[] = [
@@ -27,6 +29,8 @@ const surfaces: readonly string[] = [
   'image',
   'browser',
   'diagram',
+  'chart',
+  'github-issue',
   'workflow',
   'session',
   'assistant-message',
@@ -40,6 +44,9 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
     if (!port.available() || !port.isCurrent(request))
       return { kind: 'rejected' };
     const operation = request.operation;
+    if (operation.kind === 'batch') return { kind: 'rejected' };
+    if (operation.kind === 'present')
+      return { kind: port.spatial?.(request) ? 'applied' : 'rejected' };
     if (
       [
         'capture_window',
@@ -230,12 +237,43 @@ export function desktopWorkspace(port: WorkspacePort): WorkspaceToolHandler {
       ? { kind: 'applied' }
       : { kind: 'rejected' };
   };
-  return (request) =>
-    request.operation.kind === 'inspect' && port.stage.settlePresentations
+  return (request) => {
+    if (request.operation.kind === 'batch') {
+      let halted = false;
+      const outcomes: WorkspaceMutationStatus[] =
+        request.operation.operations.map((operation) => {
+          if (halted) return 'rejected';
+          try {
+            return handle({ ...request, operation }).kind === 'applied'
+              ? 'applied'
+              : 'rejected';
+          } catch {
+            halted = true;
+            return 'uncertain';
+          }
+        });
+      return (async () => {
+        await port.stage.settlePresentations?.(
+          () => port.available() && port.isCurrent(request),
+        );
+        const observation = handle({
+          ...request,
+          operation: { kind: 'inspect' },
+        });
+        return {
+          kind: 'batch' as const,
+          outcomes,
+          panes: observation.kind === 'inspection' ? observation.panes : null,
+        };
+      })().catch(() => ({ kind: 'batch' as const, outcomes, panes: null }));
+    }
+    return request.operation.kind === 'inspect' &&
+      port.stage.settlePresentations
       ? port.stage
           .settlePresentations(
             () => port.available() && port.isCurrent(request),
           )
           .then(() => handle(request))
       : handle(request);
+  };
 }

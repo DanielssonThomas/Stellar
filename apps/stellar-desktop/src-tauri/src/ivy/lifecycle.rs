@@ -112,6 +112,7 @@ impl Session {
         record.admission_id = None;
         record.generation = None;
         record.pending_reset = None;
+        self.reset_updates(pending.generation)?;
         self.journal.save(&record)?;
         self.record = record;
         self.buffered.clear();
@@ -121,6 +122,7 @@ impl Session {
             view.turn_id = None;
             view.turn = IvyTurnState::Idle;
             view.items.clear();
+            view.response_segments.clear();
             view.activity.clear();
             view.error = None;
         });

@@ -1,4 +1,11 @@
-use super::{contracts::*, process, scratch::Scratch, state::*, validation};
+use super::{
+    contracts::*,
+    owned::{OwnedSpeech, SpeechCompletion},
+    process,
+    scratch::Scratch,
+    state::*,
+    validation,
+};
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -15,9 +22,14 @@ pub struct SpeechHost {
 }
 
 impl SpeechHost {
+    pub fn audio_process(&self) -> Arc<std::sync::atomic::AtomicU32> {
+        self.inner.voice.audio_process.clone()
+    }
+
     pub fn new(scratch: PathBuf, publish: Publisher) -> Self {
         Self {
             inner: Arc::new(Inner {
+                resource_registry_claimed: AtomicBool::new(false),
                 voice: super::warm::WarmVoice::default(),
                 view: Mutex::new(View {
                     snapshot: SpeechSnapshot::default(),
@@ -30,6 +42,7 @@ impl SpeechHost {
                 scratch,
                 transcriber: super::warm_worker::WarmWorker::new("transcribe"),
                 keywords: super::warm_worker::WarmWorker::new("keywords"),
+                expression: super::expression::Analyzer::from_environment(),
                 #[cfg(test)]
                 settlement_gate: Mutex::new(None),
             }),
@@ -49,6 +62,16 @@ impl SpeechHost {
         id: String,
         epoch: &str,
         state: SpeechState,
+    ) -> Result<Arc<Operation>, SpeechError> {
+        self.reserve_with_expression(id, epoch, state, false)
+    }
+
+    fn reserve_with_expression(
+        &self,
+        id: String,
+        epoch: &str,
+        state: SpeechState,
+        analyze_expression: bool,
     ) -> Result<Arc<Operation>, SpeechError> {
         let epoch = validation::epoch(epoch)?;
         let (operation, snapshot) = {
@@ -70,13 +93,23 @@ impl SpeechHost {
                 return Err(SpeechError::Busy);
             }
             view.serial = view.serial.checked_add(1).ok_or(SpeechError::Unavailable)?;
+            let mut instance = [0u8; 16];
+            getrandom::fill(&mut instance).map_err(|_| SpeechError::Unavailable)?;
             let scratch = if state == SpeechState::Synthesizing {
                 Some(Scratch::new(&self.inner.scratch, view.serial)?)
             } else {
                 None
             };
+            view.snapshot.operation_id = Some(id);
+            view.snapshot.operation_instance =
+                Some(format!("{:032x}", u128::from_le_bytes(instance)));
+            view.snapshot.state = state;
+            view.snapshot.error = None;
+            view.snapshot.timings = None;
+            let admitted = advance(&mut view);
             let operation = Arc::new(Operation {
                 serial: view.serial,
+                admitted: admitted.clone(),
                 child: if scratch.is_some() {
                     self.inner.voice.child.clone()
                 } else {
@@ -85,13 +118,15 @@ impl SpeechHost {
                 cancelled: AtomicBool::new(false),
                 scratch,
                 recognition_epoch: self.inner.transcriber.ticket(),
+                expression_epoch: if analyze_expression {
+                    self.inner.expression.ticket()
+                } else {
+                    None
+                },
+                completion: Mutex::new(None),
             });
             view.active = Some(operation.clone());
-            view.snapshot.operation_id = Some(id);
-            view.snapshot.state = state;
-            view.snapshot.error = None;
-            view.snapshot.timings = None;
-            (operation, advance(&mut view))
+            (operation, admitted)
         };
         (self.inner.publish)(snapshot);
         Ok(operation)
@@ -116,13 +151,29 @@ impl SpeechHost {
         state: SpeechState,
     ) -> Result<std::sync::mpsc::Receiver<Result<SpeechTranscript, SpeechError>>, SpeechError> {
         validation::transcribe(&request)?;
+        let samples = request.pcm.len();
         let payload =
             process::payload(json!({"pcm":request.pcm,"sample_rate_hz":request.sample_rate_hz}))?;
-        let operation = self.reserve(request.utterance_id.clone(), &request.epoch, state)?;
+        let operation = self.reserve_with_expression(
+            request.utterance_id.clone(),
+            &request.epoch,
+            state,
+            request.analyze_expression == Some(true),
+        )?;
         let (send, receive) = std::sync::mpsc::sync_channel(1);
         let host = self.clone();
         std::thread::spawn(move || {
+            let pending = operation
+                .expression_epoch
+                .and_then(|epoch| host.inner.expression.start(epoch, samples, &payload));
             let result = host.execute(&operation, "transcribe", payload, Duration::from_secs(60));
+            if let Some(pending) = pending
+                && result.as_ref().is_ok_and(|text| !text.trim().is_empty())
+            {
+                host.inner
+                    .expression
+                    .bind(request.utterance_id.clone(), pending);
+            }
             let result = host
                 .settle(&operation, result)
                 .map(|text| SpeechTranscript {
@@ -134,19 +185,31 @@ impl SpeechHost {
         });
         Ok(receive)
     }
+    pub(crate) fn take_expression(&self, id: &str) -> Option<super::VoiceExpressionPending> {
+        self.inner.expression.take(id)
+    }
     pub fn speak(&self, request: SpeechSpeakRequest) -> Result<SpeechSnapshot, SpeechError> {
+        Ok(self.speak_owned(request)?.admitted())
+    }
+
+    pub fn speak_owned(&self, request: SpeechSpeakRequest) -> Result<OwnedSpeech, SpeechError> {
         validation::speak(&request)?;
         let operation = self.reserve(
             request.utterance_id,
             &request.epoch,
             SpeechState::Synthesizing,
         )?;
-        let output = operation
+        let payload = operation
             .scratch
             .as_ref()
-            .ok_or(SpeechError::Unavailable)?
-            .output();
-        let payload = process::payload(json!({"text":request.text,"output":output}));
+            .ok_or(SpeechError::Unavailable)
+            .and_then(|scratch| {
+                process::payload(super::acknowledgment::payload(
+                    request.text,
+                    &scratch.output(),
+                ))
+            });
+        let owned = OwnedSpeech::new(self.clone(), operation.clone());
         let host = self.clone();
         std::thread::spawn(move || {
             let result = payload.and_then(|bytes| {
@@ -154,7 +217,7 @@ impl SpeechHost {
             });
             let _ = host.settle(&operation, result);
         });
-        self.snapshot()
+        Ok(owned)
     }
     fn execute(
         &self,
@@ -258,7 +321,7 @@ impl SpeechHost {
         (self.inner.publish)(snapshot);
         Ok(())
     }
-    fn settle(
+    pub(super) fn settle(
         &self,
         operation: &Operation,
         mut result: Result<String, SpeechError>,
@@ -288,7 +351,9 @@ impl SpeechHost {
             result = Err(error.clone());
         }
         #[cfg(test)]
-        if let Some(gate) = self.inner.settlement_gate.lock().unwrap().take() {
+        let settlement_gate = self.inner.settlement_gate.lock().unwrap().take();
+        #[cfg(test)]
+        if let Some(gate) = settlement_gate {
             gate();
         }
         let snapshot = {
@@ -304,6 +369,15 @@ impl SpeechHost {
                 result = Err(SpeechError::Cancelled);
             }
             if cleanup.is_ok() {
+                let completion = match &result {
+                    Ok(_) => SpeechCompletion::Completed,
+                    Err(SpeechError::Cancelled) => SpeechCompletion::Cancelled,
+                    Err(error) => SpeechCompletion::Failed(error.clone()),
+                };
+                *operation
+                    .completion
+                    .lock()
+                    .map_err(|_| SpeechError::Unavailable)? = Some(completion);
                 view.active = None;
             }
             view.snapshot.state = if result.is_ok() || matches!(result, Err(SpeechError::Cancelled))
@@ -349,6 +423,7 @@ impl SpeechHost {
                 view.snapshot.state = SpeechState::Idle;
                 view.snapshot.error = None;
             }
+            self.inner.expression.stop();
             if view
                 .active
                 .as_ref()
@@ -379,6 +454,14 @@ mod tests;
 #[cfg(test)]
 #[path = "epoch_tests.rs"]
 mod epoch_tests;
+
+#[cfg(test)]
+#[path = "owned_tests.rs"]
+mod owned_tests;
+
+#[cfg(test)]
+#[path = "targeted_tests.rs"]
+mod targeted_tests;
 
 #[cfg(all(test, windows))]
 #[path = "installed_tests.rs"]

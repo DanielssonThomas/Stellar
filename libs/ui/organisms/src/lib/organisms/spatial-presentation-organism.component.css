@@ -1,0 +1,115 @@
+:host {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.spatial-shell {
+  --gold: var(--stellar-color-primary);
+  --gold-line: var(--stellar-color-divider);
+  --detail-line: color-mix(in srgb, var(--gold) 52%, transparent);
+  --ink: var(--stellar-color-foreground);
+  --body-ink: color-mix(in srgb, var(--ink) 76%, var(--stellar-color-canvas));
+  --projection-ease: cubic-bezier(0.21, 0.72, 0.25, 1);
+  position: absolute;
+  inset: 0;
+  color: var(--ink);
+}
+.microtype {
+  font:
+    500 0.65rem / 1.35 ui-monospace,
+    Consolas,
+    monospace;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.projection-context {
+  position: absolute;
+  top: clamp(0.75rem, 3.1vh, 1.8rem);
+}
+
+button,
+a {
+  color: inherit;
+  cursor: pointer;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+}
+.spatial-viewport {
+  position: absolute;
+  inset-inline: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-line) transparent;
+}
+.spatial-viewport:has(.spatial-field.is-scrollable) {
+  pointer-events: auto;
+}
+.spatial-field {
+  position: relative;
+  min-height: 100%;
+}
+.projection-link {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.28;
+}
+.empty-state,
+.stage-skeleton {
+  margin: 2rem;
+}
+.stage-skeleton {
+  display: block;
+  min-height: 9rem;
+}
+.projection-subtitles {
+  position: absolute;
+  inset-inline: 1rem;
+  bottom: clamp(0.65rem, 2.7vh, 1.55rem);
+  display: flex;
+  justify-content: center;
+}
+.projection-caption {
+  max-width: min(72ch, 100%);
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--detail-line);
+}
+.projection-caption p {
+  margin: 0.12rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink);
+  max-height: 4.2em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-line) transparent;
+  pointer-events: auto;
+}
+.selection-hint {
+  margin-top: 0.22rem;
+}
+:host(.motion-reduced) *,
+:host(.motion-reduced) *::before,
+:host(.motion-reduced) *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

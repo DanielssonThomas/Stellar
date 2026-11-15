@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 import socket
 import queue
+import runpy
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -25,12 +27,16 @@ def load(name):
 
 
 protocol = load('workspace_protocol')
+engineering = sys.modules['stellar_engineering_intelligence'] = load('engineering_intelligence')
+sys.modules['stellar_engineering_presentation'] = load('engineering_presentation')
 mcp = load('workspace_mcp')
 service = load('workspace_service')
 credentials = load('workspace_credentials')
 bridge = load('ivy_bridge')
+sys.modules['stellar_ivy_lifecycle'] = load('ivy_lifecycle')
 sys.modules['stellar_ivy_controls'] = load('ivy_controls')
 sys.modules['stellar_ivy_edit_policy'] = load('ivy_edit_policy')
+conversation = sys.modules['stellar_ivy_conversation'] = load('ivy_conversation')
 
 
 class MemoryCredentials:
@@ -75,9 +81,16 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
         instance.bind_session('owned')
         class Client:
             completed = set()
+            def __init__(self):
+                self.client = conversation.ConversationClient(self, ValueError)
+
             async def call(self, method, params):
+                return await self.client.rpc(method, **params)
+
+            async def rpc(self, method, **params):
                 token = gate.active[2]
-                assert token in params['text']
+                assert token in params['api_text']
+                assert params['text'] == 'hello'
                 headers = {'Authorization': 'Bearer ' + instance.bearer}
                 async with httpx2.AsyncClient(headers=headers, trust_env=False) as http:
                     async with streamable_http_client(f"http://127.0.0.1:{descriptor['port']}/mcp", http_client=http) as streams:
@@ -288,9 +301,10 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     names = {tool.name for tool in tools}
                     self.assertIn('conversing inside Stellar Desktop', next(t.description for t in tools if t.name == 'open_pane'))
                     self.assertIn('expected_revision', next(t.description for t in tools if t.name == 'open_pane'))
-                    self.assertEqual(names, {'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
+                    self.assertEqual(names, {'present_spatial', 'apply_workspace', 'open_pane', 'update_pane', 'remove_pane', 'focus_pane',
                                              'arrange_panes', 'clear_panes', 'inspect_panes', 'capture_window', 'capture_display', 'capture_foreground', 'list_displays',
-                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace', 'set_layout', 'split_pane', 'resize_split', 'create_layout'})
+                                             'minimize_pane', 'restore_pane', 'maximize_pane', 'resize_pane', 'swap_panes', 'restore_layout', 'inspect_content', 'snapshot_workspace', 'set_layout', 'split_pane', 'resize_split', 'create_layout', 'get_engineering_intelligence', 'show_engineering_intelligence'})
+
                     task = asyncio.create_task(session.call_tool('clear_panes', {'turn_token': token}))
                     for _ in range(200):
                         if self.frames:
@@ -306,6 +320,104 @@ class WorkspaceMcpTests(unittest.IsolatedAsyncioTestCase):
                     self.assertFalse(result.is_error)
                     self.assertEqual(json.loads(result.content[0].text), {'outcome': {'kind': 'applied'}, 'workspace': {'kind': 'inspection', 'panes': []}, 'snapshot': 'captured'})
                     self.assertEqual(result.content[1].type, 'image')
+
+                    score = json.dumps({'prepare': [{'kind': 'overview'}]})
+                    task = asyncio.create_task(session.call_tool('present_spatial', {'turn_token': token, 'score_json': score}))
+                    request = await self.next_request()
+                    self.assertEqual(request['operation'], {'kind': 'present', 'score_json': score})
+                    self.assertNotIn(token, str(request))
+                    header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                    self.gate.reply({**header, 'outcome': {'kind': 'applied'}})
+                    result = await asyncio.wait_for(task, 5)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(json.loads(result.content[0].text), {'kind': 'applied'})
+                    self.assertFalse(self.frames)
+
+    async def test_engineering_tools_use_live_turn_read_only_database_and_existing_stage_command(self):
+        populate = runpy.run_path(str(Path(__file__).with_name('engineering_intelligence_test.py')))['populate']
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'engineering.sqlite'
+            populate(path)
+            before = path.read_bytes()
+            token = self.gate.arm('1', 'turn-one')
+            async with httpx2.AsyncClient(headers={'Authorization': 'Bearer ' + self.bearer}, trust_env=False) as http:
+                async with streamable_http_client(self.url, http_client=http) as streams:
+                    async with ClientSession(streams[0], streams[1]) as session:
+                        await session.initialize()
+                        args = {'turn_token': token, 'view': 'budget', 'issue_number': 342, 'limit': 1}
+                        with patch.object(engineering, 'database_path', return_value=path):
+                            result = await session.call_tool('get_engineering_intelligence', args)
+                            self.assertFalse(result.is_error)
+                            report = json.loads(result.content[0].text)
+                            self.assertEqual(report['state'], 'available')
+                            self.assertEqual(report['data']['budget']['issues']['rows'][0]['observed_tokens'], 1800)
+                            self.assertTrue(report['data']['budget']['usage_by_model']['more'])
+                            self.assertFalse(self.frames)
+                            task = asyncio.create_task(session.call_tool('show_engineering_intelligence', args))
+                            request = await self.next_request()
+                            score = json.loads(request['operation']['score_json'])
+                            self.assertEqual(request['operation']['kind'], 'present')
+                            self.assertEqual(score['begin']['title'], 'Engineering Intelligence')
+                            self.assertEqual(score['prepare'][0]['panel']['id'], 'engineering-budget')
+                            self.assertNotIn(token, str(request))
+                            header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                            self.gate.reply({**header, 'outcome': {'kind': 'applied'}})
+                            result = await asyncio.wait_for(task, 5)
+                            self.assertEqual(json.loads(result.content[0].text),
+                                             {'outcome': {'kind': 'applied'}, 'data_state': 'available', 'view': 'budget'})
+                            self.gate.disarm()
+                            rejected = await session.call_tool('get_engineering_intelligence', args)
+                            self.assertTrue(rejected.is_error)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse(self.frames)
+
+    async def test_bulk_tool_returns_one_final_image_without_intermediate_inspection_or_replay(self):
+        token = self.gate.arm('1', 'turn-one')
+        opens = [{'kind': 'open', 'instance_id': name, 'surface': 'image', 'prominence': 'secondary',
+                  'payload_json': '{"src":"https://example.com/picture.png","alt":"Picture"}'} for name in ('left', 'right')]
+        panes = [{'instance_id': name, 'surface': 'image', 'prominence': 'secondary', 'minimized': False,
+                  'render_state': 'ready'} for name in ('left', 'right')]
+        cases = [(opens, ['applied', 'applied'], panes, None),
+                 ([{'kind': 'clear'}], ['applied'], [], None),
+                 (opens, ['applied', 'rejected'], panes[:1], 'image_transfer_failed'),
+                 (opens, ['uncertain', 'rejected'], None, 'capture_timeout')]
+        async with httpx2.AsyncClient(headers={'Authorization': 'Bearer ' + self.bearer}, trust_env=False) as http:
+            async with streamable_http_client(self.url, http_client=http) as streams:
+                async with ClientSession(streams[0], streams[1]) as session:
+                    await session.initialize()
+                    for operations, statuses, observed, failure in cases:
+                        task = asyncio.create_task(session.call_tool('apply_workspace', {'turn_token': token, 'operations': operations}))
+                        request = await self.next_request()
+                        self.assertEqual(request['operation'], {'kind': 'batch', 'operations': operations})
+                        header = {key: request[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                        self.gate.reply({**header, 'outcome': {'kind': 'batch', 'outcomes': statuses, 'panes': observed}})
+                        capture = await self.next_request()
+                        self.assertEqual(capture['operation'], {'kind': 'capture_window'})
+                        capture_header = {key: capture[key] for key in ('version', 'request_id', 'epoch', 'turn_id')}
+                        if failure:
+                            self.gate.reject_image(capture_header, failure)
+                        else:
+                            # Real decodable one-pixel PNG: MCP must return exactly this single final image.
+                            import base64
+                            png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=')
+                            self.gate.reply_image(capture_header, png)
+                        result = await asyncio.wait_for(task, 5)
+                        self.assertFalse(result.is_error)
+                        report = json.loads(result.content[0].text)
+                        self.assertEqual(report['outcome'], {'kind': 'batch', 'outcomes': statuses})
+                        self.assertEqual(report['workspace'], {'kind': 'inspection', 'panes': observed} if observed is not None else {'kind': 'unavailable'})
+                        images = [item for item in result.content if item.type == 'image']
+                        if failure:
+                            self.assertEqual(images, [])
+                            self.assertEqual(report['snapshot_error'], failure)
+                            self.assertEqual(report['snapshot_retry'], 'do_not_retry_unchanged')
+                        else:
+                            self.assertEqual(len(images), 1)
+                            self.assertEqual(base64.b64decode(images[0].data), png)
+                        self.assertFalse(self.frames)
+                    result = await session.call_tool('apply_workspace', {'turn_token': token, 'operations': [{'kind': 'capture_window'}]})
+                    self.assertTrue(result.is_error)
+                    self.assertFalse(self.frames)
 
     async def test_large_private_capture_result_reaches_real_mcp_client(self):
         token = self.gate.arm('1', 'turn-one')

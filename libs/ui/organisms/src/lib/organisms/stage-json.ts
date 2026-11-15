@@ -15,9 +15,17 @@ export function plainRecord(value: unknown): value is Record<string, unknown> {
 export function boundedJson(
   value: unknown,
   maximumBytes: number,
+  additionalNodes = 0,
   maximumDepth = 8,
 ): boolean {
-  let remaining = 256;
+  if (
+    !Number.isInteger(additionalNodes) ||
+    additionalNodes < 0 ||
+    additionalNodes > 20000
+  )
+    return false;
+  let remaining = 256 + additionalNodes;
+
   function visit(entry: unknown, depth: number): boolean {
     if (--remaining < 0 || depth > maximumDepth) return false;
     if (entry === null || typeof entry === 'boolean') return true;

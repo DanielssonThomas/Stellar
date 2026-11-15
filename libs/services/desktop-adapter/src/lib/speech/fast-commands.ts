@@ -67,7 +67,7 @@ export class FastCommands {
       offset: this.offset,
     };
     this.offset += chunk.samples.length;
-    if (mode === 'passive') {
+    if (mode === 'passive' || mode === 'passive_sensitive') {
       this.tail.push({
         chunk: { ...chunk, samples: chunk.samples.slice() },
         offset: entry.offset,
@@ -107,7 +107,8 @@ export class FastCommands {
           if (!detection) continue;
           if (
             detection.end_sample > entry.offset + entry.chunk.samples.length ||
-            (this.mode === 'passive') !== (detection.command === 'ivy') ||
+            ['passive', 'passive_sensitive'].includes(this.mode) !==
+              (detection.command === 'ivy') ||
             (detection.command === 'prompt cancel' &&
               this.mode !== 'composing') ||
             (this.mode === 'composing' &&

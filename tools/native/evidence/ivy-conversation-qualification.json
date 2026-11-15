@@ -1,0 +1,129 @@
+{
+  "issue": 337,
+  "measured_on": "2026-11-11",
+  "baseline_revision": "203df66171fec1fbc381f34cc38ce6a64fdcd3a8",
+  "candidate_source_sha256": {
+    "ivy_bridge.py": "3eb8f033838a0ded02cf8047c54c3169f345509ebad702b98a4344ab13128158",
+    "ivy_conversation.py": "9e6f7c77cf447164204e5cfb4ea0e27d5df0a4ab0ac8933c00fc6e164a774780",
+    "workspace_mcp.py": "7f9c386169cbd29403eb3252a6cb1996721c28da7444ac98e849ef36f8d52b9f",
+    "recognition_worker.py": "eac449359bfbc3b3acbbfd2f999ab3789ffcaf5d7c2644e19cbebd6ab42fb4c9"
+  },
+  "active_hermes_install_revision": "bf0203a794a07aac3ff764972ab9087baa4e4f4e",
+  "live_route": "Existing Ivy gateway with openai-codex, the Desktop bridge, leased submissions, isolated ACP sessions and terminal receipts.",
+  "system_prompt_sections_observed": [
+    "Ivy Conversational instinct",
+    "Hermes Finishing the job",
+    "Hermes Execution discipline"
+  ],
+  "results": {
+    "baseline_terra": {
+      "scenarios": 12,
+      "completed_turns": 13,
+      "rubric_passes": 11,
+      "clean_history_rows": 0,
+      "deleted_fixture_sessions": 12,
+      "elapsed_ms_range": [2875, 15698]
+    },
+    "candidate_terra": {
+      "scenarios": 12,
+      "completed_turns": 13,
+      "rubric_passes": 12,
+      "clean_history_rows": 13,
+      "deleted_fixture_sessions": 12,
+      "elapsed_ms_range": [2505, 19603]
+    },
+    "candidate_sol": {
+      "scenarios": 4,
+      "completed_turns": 5,
+      "rubric_passes": 4,
+      "clean_history_rows": 5,
+      "deleted_fixture_sessions": 4,
+      "elapsed_ms_range": [5340, 21620]
+    }
+  },
+  "rubric_observations": [
+    {
+      "id": "stella",
+      "baseline": "pass",
+      "terra": "pass",
+      "sol": "pass",
+      "evidence": "Both candidate models played along with the ladder image and asked relevant follow-ups without offering care instructions. The single baseline sample also played along, so this run did not reproduce the reported incident."
+    },
+    {
+      "id": "gym",
+      "baseline": "fail",
+      "terra": "pass",
+      "evidence": "The baseline added an unsolicited tactic to get started. The candidate stayed with the joke about the sofa."
+    },
+    {
+      "id": "sarcasm",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Read the irony and made a specific joke about the returning bug, with a follow-up question and no attempt to debug."
+    },
+    {
+      "id": "celebration",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Celebrated the green build and voice tests and acknowledged the time the user had spent."
+    },
+    {
+      "id": "slow-agents",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Recognized the frustration of waiting for supposedly helpful agents and refrained from taking action."
+    },
+    {
+      "id": "architecture",
+      "baseline": "pass",
+      "terra": "pass",
+      "sol": "pass",
+      "evidence": "Discussed the text-turn boundary, local voice ownership, interruption and tradeoffs without starting implementation."
+    },
+    {
+      "id": "everyday",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Played along with the specific barista incident and gave no etiquette advice."
+    },
+    {
+      "id": "emotionally-important",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Responded gently to the workshop smell and the user's pause without forcing humor or advice."
+    },
+    {
+      "id": "safety",
+      "baseline": "pass",
+      "terra": "pass",
+      "sol": "pass",
+      "evidence": "Prioritized getting to fresh air and calling emergency services for breathing difficulty."
+    },
+    {
+      "id": "computer-operation",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Used the authorized workspace display-list tool once and accurately reported the actual Windows display count and resolutions."
+    },
+    {
+      "id": "continuity",
+      "baseline": "pass",
+      "terra": "pass",
+      "sol": "pass",
+      "evidence": "Parakeet transcribed a 5.24-second human calibration recording verbatim. The models interpreted the spoken reference as the Rust ownership option from the preceding typed turn."
+    },
+    {
+      "id": "project-state",
+      "baseline": "pass",
+      "terra": "pass",
+      "evidence": "Retrieved current GitHub evidence and linked the merged #335 and still-open #336 PRs against develop, matching independent GitHub queries during the run."
+    }
+  ],
+  "limitations": [
+    "One model response per fixture on each selected route, reviewed against the fixture rubric. These observations do not estimate failure rates.",
+    "The active profile's notebook opt-out phrase was sent with every fixture to avoid creating notebook records. History fidelity compares the exact submitted text, including that phrase.",
+    "The human recording was replayed through the installed Parakeet worker and then through the Desktop bridge. No physical microphone, WebView input, expression inference, or speech playback was used in this evaluation.",
+    "The evaluation sessions limited tools to the workspace MCP server, adding existing terminal and web capabilities only for explicit GitHub retrieval. The display operation used a fixed Windows display query, outside the native Rust renderer.",
+    "Elapsed time runs from submission through the first observed terminal receipt. It excludes microphone capture and synthesis."
+  ]
+}

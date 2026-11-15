@@ -10,13 +10,20 @@ import {
   viewChild,
 } from '@angular/core';
 import { SkeletonAtom } from '@stellar/ui-atoms';
-import type { PresentationMediaPayload } from './presentation-model';
+import type {
+  PresentationImage,
+  PresentationMediaPayload,
+} from './presentation-model';
 import { PRESENTATION_EDIT, PRESENTATION_SELECT } from './presentation-edit';
 import {
   PRESENTATION_WORKSPACE,
   type BrowserPane,
   type BrowserView,
 } from './presentation-workspace';
+
+export function isBundledBriefingArtwork(value: unknown): value is string {
+  return typeof value === 'string' && /^\/briefing\/[a-z-]+\.svg$/u.test(value);
+}
 
 @Component({
   selector: 'stellar-presentation-media-molecule',
@@ -32,6 +39,7 @@ import {
 export class PresentationMediaMolecule {
   readonly payload = input<PresentationMediaPayload | null>(null);
   readonly loading = input(false);
+  readonly thumbnail = input<PresentationImage | null>(null);
   private readonly workspace = inject(PRESENTATION_WORKSPACE);
   private readonly edit = inject(PRESENTATION_EDIT);
   private readonly selectPane = inject(PRESENTATION_SELECT);
@@ -46,7 +54,7 @@ export class PresentationMediaMolecule {
   readonly browserState = signal<BrowserView | null>(null);
   readonly displaySrc = signal<string | null>(null);
   readonly failed = signal(false);
-  private readonly loaded = signal(false);
+  readonly loaded = signal(false);
   readonly pan = signal({ x: 0, y: 0 });
   private drag: { x: number; y: number; px: number; py: number } | null = null;
   readonly image = computed(() => {
@@ -58,12 +66,14 @@ export class PresentationMediaMolecule {
     return p ? (p.images ?? [p]) : [];
   });
   readonly selected = computed(() => this.image()?.selected ?? 0);
-  readonly current = computed(() => this.images()[this.selected()] ?? null);
+  readonly current = computed(
+    () => this.thumbnail() ?? this.images()[this.selected()] ?? null,
+  );
   readonly zoom = computed(() => this.image()?.zoom ?? 1);
   readonly pending = computed(
     () =>
       this.loading() ||
-      (!!this.image() && !this.loaded() && !this.failed()) ||
+      (!!this.current() && !this.loaded() && !this.failed()) ||
       !!this.browserState()?.pending,
   );
   readonly renderState = computed(() => {
@@ -71,7 +81,7 @@ export class PresentationMediaMolecule {
     if (this.pending()) return 'loading';
     if (this.payload()?.kind === 'browser' && !this.browserState())
       return 'loading';
-    return this.payload() ? 'ready' : 'unavailable';
+    return this.payload() || this.thumbnail() ? 'ready' : 'unavailable';
   });
 
   constructor() {
@@ -85,6 +95,10 @@ export class PresentationMediaMolecule {
       this.failed.set(false);
       this.displaySrc.set(null);
       if (!source) return;
+      if (this.thumbnail() && isBundledBriefingArtwork(source)) {
+        this.displaySrc.set(source);
+        return;
+      }
       const controller = new AbortController();
       this.imageAbort = controller;
       void this.workspace

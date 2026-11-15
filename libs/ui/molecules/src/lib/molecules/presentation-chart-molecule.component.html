@@ -1,0 +1,11 @@
+@if (loading()) {
+  <stellar-skeleton-atom shape="control" />
+} @else if (payload(); as content) {
+  <article class="presentation chart-presentation">
+    <h2>{{ content.title }}</h2>
+    <stellar-presentation-chart-atom
+      [chart]="content.chart"
+      [title]="content.title"
+    />
+  </article>
+}

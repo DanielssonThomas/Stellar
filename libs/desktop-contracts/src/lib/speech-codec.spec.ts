@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeSpeechError,
   decodeSpeechRequest,
+  decodeSpeechDuckingRequest,
   decodeSpeechStopRequest,
   decodeSpeechSnapshot,
   decodeSpeechSpeakRequest,
@@ -19,6 +20,19 @@ const input = {
 };
 
 describe('speech wire boundary', () => {
+  it('validates the fixed native volume lease contract', () => {
+    for (const active of [true, false]) {
+      const request = { version: 1, active };
+      expect(decodeSpeechDuckingRequest(request)).toEqual(request);
+    }
+    for (const request of [
+      { version: 2, active: true },
+      { version: 1, active: 'true' },
+      { version: 1 },
+      { version: 1, active: true, level: 0.2 },
+    ])
+      expect(() => decodeSpeechDuckingRequest(request)).toThrow();
+  });
   it('decodes bounded content-free timings and rejects unknown, duplicate or unbounded records', () => {
     const snapshot = {
       version: 1,

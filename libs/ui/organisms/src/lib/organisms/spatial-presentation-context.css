@@ -1,0 +1,67 @@
+.projection-context {
+  right: clamp(1rem, 3.8vw, 3.5rem);
+  z-index: 4;
+  pointer-events: auto;
+}
+.context-trigger {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  color: var(--gold);
+}
+.context-trigger:hover,
+.context-trigger[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+}
+.context-actions {
+  position: absolute;
+  inset: calc(100% + 0.3rem) 0 auto auto;
+  display: grid;
+  width: min(16rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 4rem);
+  overflow: auto;
+  padding: 0.3rem;
+  border: 1px solid var(--gold-line);
+  background: var(--stellar-color-canvas);
+  box-shadow: 0 8px 26px #000a;
+}
+.context-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2rem;
+  gap: 1rem;
+  padding: 0.28rem 0.55rem;
+  text-align: left;
+  color: var(--ink);
+  font-size: 0.8rem;
+}
+.context-actions button:hover,
+.context-actions button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  color: var(--gold);
+}
+.context-actions kbd {
+  color: var(--gold);
+  font:
+    0.65rem ui-monospace,
+    Consolas,
+    monospace;
+}
+.context-transcript {
+  max-height: 13rem;
+  overflow: auto;
+  padding: 0.6rem;
+  border-top: 1px solid var(--gold-line);
+}
+.context-transcript ol {
+  padding-inline-start: 1.1rem;
+  list-style-type: decimal;
+  color: var(--body-ink);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.context-transcript li {
+  margin-block: 0.5rem;
+}

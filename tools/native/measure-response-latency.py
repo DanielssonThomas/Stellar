@@ -48,7 +48,7 @@ def percentile(values, fraction):
     return sorted(values)[math.ceil(len(values) * fraction) - 1]
 
 
-def run(source, directory, count):
+def run(source, directory, count, cached_wav=None):
     launch = time.perf_counter()
     process = subprocess.Popen([
         'D:/Hermes/profiles/ivy/voice/.venv/Scripts/python.exe', '-I', '-u', '-c', WRAPPER, str(source), str(count)
@@ -63,7 +63,10 @@ def run(source, directory, count):
             timer = threading.Timer(60, process.kill)
             timer.start()
             try:
-                process.stdin.write((json.dumps({'text': TEXT, 'output': str(folder/'reply.wav')})+'\n').encode())
+                request = {'text': TEXT, 'output': str(folder/'reply.wav')}
+                if cached_wav is not None:
+                    request['cached_wav'] = cached_wav
+                process.stdin.write((json.dumps(request)+'\n').encode())
                 process.stdin.flush()
                 result = {'worker_timings': []}
                 while True:

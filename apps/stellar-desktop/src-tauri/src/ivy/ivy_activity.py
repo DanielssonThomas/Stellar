@@ -1,9 +1,46 @@
 """Lossy, bounded UI projection. No arguments, tool output or reasoning leave here."""
 import hashlib
+import re
 import time
 
 LIMIT = 12
 INTERVAL = 0.1
+
+MCP_PROVIDERS = {
+    'chrome_devtools': 'chrome', 'chrome-devtools': 'chrome', 'chrome': 'chrome',
+    'stellar_workspace': 'stellar', 'stellar-workspace': 'stellar', 'stellar': 'stellar',
+    'github': 'github', 'google_calendar': 'calendar', 'google-calendar': 'calendar',
+    'calendar': 'calendar', 'spotify': 'spotify',
+}
+
+
+def metadata(name, kind):
+    provider = 'mcp' if kind == 'mcp' else 'web' if kind == 'web' else 'local'
+    operation_name = name.lower()
+    if kind == 'mcp':
+        remainder = operation_name.removeprefix('mcp__').removeprefix('mcp_')
+        for server, known in MCP_PROVIDERS.items():
+            if remainder.startswith(server + '_'):
+                provider = known
+                operation_name = remainder[len(server):].lstrip('_')
+                break
+        else:
+            return {'provider': provider, 'operation': 'call'}
+    if kind == 'shell':
+        return {'provider': provider, 'operation': 'execute'}
+    if kind in {'memory', 'skill', 'skill_create'}:
+        return {'provider': provider, 'operation': 'update'}
+    for word in re.split('[^a-z0-9]+', operation_name):
+        operation = {
+            'search': 'search', 'find': 'search', 'read': 'read', 'get': 'read',
+            'fetch': 'read', 'list': 'list', 'inspect': 'inspect', 'capture': 'inspect',
+            'open': 'open', 'navigate': 'open', 'present': 'open', 'show': 'open',
+            'write': 'write', 'create': 'write', 'edit': 'update', 'patch': 'update',
+            'update': 'update', 'delete': 'update', 'remove': 'update',
+        }.get(word)
+        if operation:
+            return {'provider': provider, 'operation': operation}
+    return {'provider': provider, 'operation': 'call'}
 
 
 def category(name, args):
@@ -69,7 +106,10 @@ class Activity:
         args = payload.get('args')
         args = args if type(args) is dict else {}
         kind = self.rows.get(token, {}).get('kind', category(payload['name'], args))
-        row = {'id': token, 'kind': kind,
+        previous = self.rows.get(token)
+        details = ({k: previous[k] for k in ('provider', 'operation')}
+                   if previous else metadata(payload['name'], kind))
+        row = {'id': token, 'kind': kind, **details,
                'state': 'running' if params['type'] == 'tool.start' else outcome(payload, kind)}
         if token not in self.rows and len(self.rows) == LIMIT:
             victim = next((k for k, v in self.rows.items() if v['state'] != 'running'), next(iter(self.rows)))

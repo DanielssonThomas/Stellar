@@ -23,6 +23,7 @@ const commands: Record<KeywordCommand, true> = {
 };
 const modes: Record<KeywordMode, true> = {
   passive: true,
+  passive_sensitive: true,
   listening: true,
   composing: true,
 };

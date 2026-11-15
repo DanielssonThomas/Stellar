@@ -43,6 +43,43 @@ Dependencies must be issues in the configured repository. A local issue number a
 
 Use GitHub sub-issues for Epic membership. Use native dependencies for blocking order. Avoid creating a separate blocker for each local test failure. A capability blocker may be reported on the existing issue without inventing a dependency.
 
+### Development budgets
+
+Actionable issues after #342 and new local drafts need a valid `Development budget`
+section before readiness or implementation. Issues through #342 retain their
+original admission rules, including existing claims and completed work. The
+validator checks any supplied budget once the issue leaves triage. Use the
+[task template](../../.github/ISSUE_TEMPLATE/task.md) for the version 1 JSON
+contract. Keep the section to a single fenced JSON object.
+
+- Start `revisions` at 1 and append consecutive revisions in chronological
+  order. Use a UTC `recordedAt` timestamp when recording the estimate. Keep prior
+  revisions intact. The worktree claim records them before implementation and
+  rejects edits or removals on later admission so the original prediction and subsequent allocations can be
+  compared with observed usage.
+- Record positive integer `estimatedTokens` and `allocatedTokens` for the issue.
+  The estimate predicts expected work and the allocation sets the working
+  budget. Include implementation, expected retries, and review in the estimate.
+- State the assumed models or execution profiles, reasoning configuration,
+  and agent or review scope in `profile`. Set `confidence` to `low`, `medium`, or
+  `high`. When evidence exists, add an optional `evidence` array of up to ten
+  issue links or concise references.
+- Epic grouping issues may omit the budget. Claim a budgeted actionable
+  sub-issue for implementation. Codex or a maintainer may defer estimation for
+  an urgent `priority:critical` incident with
+  `{"schemaVersion":1,"exception":{"kind":"urgent-incident","reason":"..."}}`.
+  State why a pre-work estimate could not be recorded. A later estimate may be
+  added as a revision alongside that exception.
+
+Budget validation uses the issue body. A Project number field can mirror the
+current estimate or allocation for visibility. Token counts, model costs,
+and subscription allowance are separate measurements. A token budget supplies
+no conversion to an allowance percentage.
+
+Worktree admission uses the policy in the checkout running the manager. GitHub's
+issue template and issue-event workflow run from the default branch and pick up
+this policy on its next authorized promotion.
+
 ## Implementation path
 
 Start from a validated issue and its exact target branch. Create an issue-specific branch and worktree, make linked conventional commits, run affected checks, and open a PR back to that target. The [create-issue skill](../../.agents/skills/create-issue/SKILL.md) defines the repeatable creation workflow.

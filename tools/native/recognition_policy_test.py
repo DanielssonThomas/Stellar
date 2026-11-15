@@ -102,6 +102,16 @@ class RecognitionPolicyTests(unittest.TestCase):
         self.assertLess(results[0][0], 20)
         self.assertEqual(results[0][1]['end_sample'], 5760)
 
+    def test_sensitive_graph_only_adds_wake_aliases_and_never_controls(self):
+        engine = self.engine(keyword='ivy')
+        results = self.feed(engine, [True]*20+[False]*20, 'passive_sensitive')
+        self.assertEqual(results[0][1]['command'], 'ivy')
+        graph = engine.wake.graphs[0]
+        self.assertIn('MEAN', graph)
+        self.assertNotIn('@clear', graph)
+        self.assertNotIn('@prompt', graph)
+        self.assertEqual(self.feed(self.engine(keyword='clear'), [True]*20+[False]*20, 'passive_sensitive'), [])
+
     def test_long_continuous_speech_bounds_acoustic_features_without_rearming_mid_sentence(self):
         engine = self.engine(at=99999999)
         self.assertEqual(self.feed(engine, [True]*250), [])

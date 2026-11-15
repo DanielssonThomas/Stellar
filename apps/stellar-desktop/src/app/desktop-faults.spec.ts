@@ -4,6 +4,59 @@ import { DesktopFaults } from './desktop-faults';
 describe('desktop fault history', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('retains separate bounded update attempts and stage-only diagnostics beside generic voice faults', () => {
+    const faults = new DesktopFaults();
+    const failure = {
+      admissionId: 'admission',
+      claimId: 'claim-1',
+      operationId: null,
+      stage: 'claim' as const,
+      code: 'timeout' as const,
+      time: '2026-11-14T16:00:00Z',
+    };
+    faults.observeUpdate(failure);
+    faults.observeUpdate(failure);
+    faults.observe('voice', 'failure');
+    faults.observe('voice', null);
+    expect(
+      faults.entries().filter((e) => e.category === 'Voice update'),
+    ).toHaveLength(1);
+    expect(
+      faults.entries().find((e) => e.category === 'Voice update'),
+    ).toMatchObject({
+      status: 'active',
+      time: '2026-11-14T16:00:00.000Z',
+      count: 1,
+    });
+    faults.observeUpdate({
+      ...failure,
+      claimId: 'claim-2',
+      time: '2026-11-14T16:01:00Z',
+    });
+    expect(
+      faults.entries().filter((e) => e.category === 'Voice update'),
+    ).toHaveLength(2);
+    expect(faults.entries()[0].diagnostic).toContain('claim-2');
+    expect(faults.entries().some((e) => e.category === 'Ivy')).toBe(false);
+    faults.observeUpdate(null);
+    expect(faults.entries()[0].status).toBe('resolved');
+  });
+
+  it('omits private/error-like identifiers and never copies raw messages into update diagnostics', () => {
+    const faults = new DesktopFaults();
+    faults.observeUpdate({
+      admissionId: 'private answer with spaces',
+      claimId: 'C:/private/token',
+      operationId: 'x'.repeat(300),
+      stage: 'speech_dispatch',
+      code: 'failed',
+      time: '2026-11-14T16:00:00Z',
+    });
+    const output = JSON.stringify(faults.entries());
+    expect(output).toContain('Stage: speech_dispatch');
+    expect(output).not.toContain('private');
+    expect(output).not.toContain('x'.repeat(300));
+  });
   it('deduplicates continuous observations and counts a later recurrence', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-03T08:00:00Z'));

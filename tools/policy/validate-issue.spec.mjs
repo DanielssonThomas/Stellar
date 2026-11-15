@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import {
+  admitBudgetRevisions,
+  lastPreBudgetIssue,
+  readIssueBudget,
+} from './issue-budget.mjs';
 import { validateIssue } from './validate-issue.mjs';
 
 const body = `## Objective\nAdd an example capability.\n\n## Expected outcome\nThe behavior is observable.\n\n## Acceptance criteria\n- [ ] A user can verify the result.\n\n## Constraints\nKeep changes within shared libraries.\n\n## Dependencies\nNone\n\n## Verification expectations\nRun the affected unit test.`;
@@ -7,6 +12,238 @@ const body = `## Objective\nAdd an example capability.\n\n## Expected outcome\nT
 function issue(labels) {
   return { number: 42, body, labels: labels.map((name) => ({ name })) };
 }
+
+const firstEstimate = {
+  revision: 1,
+  recordedAt: '2026-11-11T08:00:00Z',
+  estimatedTokens: 42000,
+  allocatedTokens: 60000,
+  profile: 'Codex Sol medium with an independent review',
+  confidence: 'medium',
+  evidence: ['#300'],
+};
+
+function budgetSection(
+  contract = { schemaVersion: 1, revisions: [firstEstimate] },
+) {
+  return (
+    '\n\n## Development budget\n\n```json\n' +
+    JSON.stringify(contract) +
+    '\n```\n'
+  );
+}
+
+function newIssue(overrides = {}) {
+  return {
+    number: lastPreBudgetIssue + 1,
+    body,
+    labels: [
+      'priority:medium',
+      'review:standard',
+      'target:develop',
+      'type:feature',
+      'owner:codex',
+      'status:ready',
+    ],
+    ...overrides,
+  };
+}
+
+describe('development budget policy', () => {
+  it('requires a budget for new issues and drafts at readiness', () => {
+    for (const number of [lastPreBudgetIssue + 1, undefined]) {
+      assert.equal(validateIssue(newIssue({ number })).ready, false);
+      assert.equal(
+        validateIssue(newIssue({ number, body: body + budgetSection() })).ready,
+        true,
+      );
+    }
+    assert.deepEqual(
+      validateIssue(
+        newIssue({
+          body: body + budgetSection(null),
+          labels: ['status:triage'],
+        }),
+      ),
+      { valid: true, ready: false, errors: [] },
+    );
+  });
+
+  it('grandfathers existing issues and checks a budget when supplied', () => {
+    const historical = newIssue({
+      number: lastPreBudgetIssue,
+      labels: newIssue().labels.map((label) =>
+        label === 'status:ready' ? 'status:in-progress' : label,
+      ),
+    });
+    assert.equal(validateIssue(historical).valid, true);
+    assert.equal(
+      validateIssue({ ...historical, body: body + budgetSection(null) }).valid,
+      false,
+    );
+  });
+
+  it('preserves the original estimate when another revision is appended', () => {
+    const revised = {
+      ...firstEstimate,
+      revision: 2,
+      recordedAt: '2026-11-11T09:00:00.142Z',
+      estimatedTokens: 54000,
+      allocatedTokens: 50000,
+      confidence: 'low',
+    };
+    const original = readIssueBudget(body + budgetSection());
+    const current = readIssueBudget(
+      body +
+        budgetSection({
+          schemaVersion: 1,
+          revisions: [firstEstimate, revised],
+        }),
+    );
+    assert.deepEqual(current.revisions, [
+      { ...firstEstimate, recordedAt: '2026-11-11T08:00:00.000Z' },
+      revised,
+    ]);
+    assert.deepEqual(current.revisions[0], original.revisions[0]);
+  });
+
+  it('rejects malformed or ambiguous contracts without returning issue text', () => {
+    const invalid = [
+      { revision: 2 },
+      { recordedAt: '2026-02-30T08:00:00Z' },
+      { recordedAt: '2026-11-11T10:00:00+02:00' },
+      { estimatedTokens: '42000' },
+      { allocatedTokens: 1.5 },
+      { allocatedTokens: 0 },
+      { estimatedTokens: Number.MAX_SAFE_INTEGER + 1 },
+      { profile: ' ' },
+      { confidence: 'unknown' },
+      { evidence: ['\n'] },
+    ];
+    for (const override of invalid) {
+      const candidate = newIssue({
+        body:
+          body +
+          budgetSection({
+            schemaVersion: 1,
+            revisions: [{ ...firstEstimate, ...override }],
+          }),
+      });
+      assert.equal(
+        validateIssue(candidate).valid,
+        false,
+        JSON.stringify(override),
+      );
+    }
+    assert.throws(
+      () => readIssueBudget(budgetSection() + budgetSection()),
+      /exactly one/,
+    );
+    assert.throws(
+      () =>
+        readIssueBudget(
+          budgetSection().replace(
+            JSON.stringify({
+              schemaVersion: 1,
+              revisions: [firstEstimate],
+            }),
+            'untrusted-marker',
+          ),
+        ),
+      { message: 'Development budget must contain valid JSON.' },
+    );
+    assert.throws(
+      () =>
+        readIssueBudget(
+          budgetSection({
+            schemaVersion: 1,
+            revisions: [
+              firstEstimate,
+              {
+                ...firstEstimate,
+                revision: 2,
+                recordedAt: '2026-11-10T08:00:00Z',
+              },
+            ],
+          }),
+        ),
+      /chronological UTC timestamp/,
+    );
+    assert.equal(
+      readIssueBudget('````markdown\n' + budgetSection() + '````\n'),
+      null,
+    );
+  });
+
+  it('accepts only visible sections and preserves previously admitted estimates', () => {
+    const first = budgetSection();
+    assert.equal(readIssueBudget('<!--\n' + first + '\n## Other\n-->'), null);
+    const admitted = admitBudgetRevisions(first);
+    const second = budgetSection({
+      schemaVersion: 1,
+      revisions: [
+        firstEstimate,
+        { ...firstEstimate, revision: 2, allocatedTokens: 9000 },
+      ],
+    });
+    assert.equal(admitBudgetRevisions(second, admitted).length, 2);
+    assert.throws(() =>
+      admitBudgetRevisions(
+        first.replace('"profile":', '"incorrect":'),
+        admitted,
+      ),
+    );
+    assert.throws(() => admitBudgetRevisions('', admitted), /immutable/);
+    assert.throws(
+      () =>
+        admitBudgetRevisions(
+          budgetSection({
+            schemaVersion: 1,
+            revisions: [
+              {
+                ...firstEstimate,
+                estimatedTokens: firstEstimate.estimatedTokens + 1,
+              },
+            ],
+          }),
+          admitted,
+        ),
+      /immutable/,
+    );
+  });
+
+  it('permits an epic grouping and only authorized urgent incident exceptions', () => {
+    const incidentBody =
+      body +
+      budgetSection({
+        schemaVersion: 1,
+        exception: {
+          kind: 'urgent-incident',
+          reason: 'Restore failing release validation.',
+        },
+      });
+    const changeLabel = (oldLabel, newLabel, labels = newIssue().labels) =>
+      labels.map((label) => (label === oldLabel ? newLabel : label));
+    const epicLabels = changeLabel('type:feature', 'type:epic');
+    const criticalLabels = changeLabel('priority:medium', 'priority:critical');
+    assert.equal(validateIssue(newIssue({ labels: epicLabels })).ready, true);
+    assert.equal(validateIssue(newIssue({ body: incidentBody })).valid, false);
+    assert.equal(
+      validateIssue(newIssue({ body: incidentBody, labels: criticalLabels }))
+        .ready,
+      true,
+    );
+    assert.equal(
+      validateIssue(
+        newIssue({
+          body: incidentBody,
+          labels: changeLabel('owner:codex', 'worker:ivy', criticalLabels),
+        }),
+      ).valid,
+      false,
+    );
+  });
+});
 
 describe('issue metadata policy', () => {
   for (const worker of ['ivy', 'foreman-cloud', 'peon-cloud']) {

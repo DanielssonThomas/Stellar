@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "capability": "stellar.background.v1",
+  "state": "inactive_callable_candidate_awaiting_consumer_wire_agreement_and_native_application_review",
+  "baseline": "contract-v1.json",
+  "transport": "Existing authenticated canonical gateway connection, already subscribed to the original session. Profile is connection-scoped; no profile redirect parameter.",
+  "rpcMethods": {
+    "stellar.background.bind": ["session_id", "consentTicket"],
+    "stellar.background.inspect": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "digest"
+    ],
+    "stellar.background.revoke": ["session_id", "bindingId"],
+    "stellar.background.effect.begin": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "digest",
+      "operation",
+      "kind"
+    ],
+    "stellar.background.effect.finish": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "operation",
+      "kind"
+    ]
+  },
+  "rpcParametersAreClosed": true,
+  "rpcErrors": {
+    "code": 4001,
+    "message": "bounded reason",
+    "data": { "reason": "bounded reason", "retryAuthorized": false }
+  },
+  "bindResult": "Baseline bindingFields. Host-only approve verifies native transport and explicit user gesture, captures Origin, and creates a one-use ticket tied to that actual connection for at most 60 seconds. No approve/submit RPC or model/tool gesture proof.",
+  "inspectResult": "Baseline inspectFields; unknown has schemaVersion/status/retryAuthorized=false only. Known events additionally carry immutable descriptor, deliveryAuthorized and optional canonical receipt/result. Inspect is never resend authority.",
+  "liveAndReplay": {
+    "event": "message.start",
+    "payloadFields": ["display_kind", "display_text", "text", "background_v1"],
+    "background_v1": "Exact baseline descriptorFields; marker lifecycle_update. Canonical authority/generation/admission ID and replay epoch/sequence stay on the ordinary event frame."
+  },
+  "promptReceipt": {
+    "method": "prompt.receipt",
+    "existingParams": {
+      "session_id": "original",
+      "admission_id": "exact canonical ID",
+      "include_result": true
+    },
+    "additionalFields": ["background_v1", "background_delivery_authorized"],
+    "background_v1": "Same exact descriptor as live/replay",
+    "result": "Existing canonical result.final_response; never plugin text",
+    "earlySettlement": "A receipt still exposing started during publication cannot authorize delivery."
+  },
+  "effects": {
+    "kind": ["render", "speech"],
+    "operation": "Consumer-generated durable exact-operation ID, persisted before begin",
+    "client": "Host derives from authenticated subject AND transport ID; forbidden in RPC input",
+    "beginResults": [
+      { "status": "claimed", "execute": true },
+      { "status": "unknown", "execute": false },
+      { "status": "finished", "execute": false }
+    ],
+    "finishResult": "Baseline revocation status; finish only after physical stop/relinquishment by the exact authenticated transport owner",
+    "disconnect": "A new transport cannot finish old custody. Remains revoking/effectsStopped=false. No timeout, same-subject takeover or automatic reconnect recovery."
+  },
+  "producerPython": {
+    "accessor": "ctx.background_v1, host-exposed only to exact profile/plugin manager; None otherwise",
+    "prepare": "prepare(bindingId,event) -> {event:frozenCanonicalEvent,digest}; persist both with original binding before first attempt; not an admission",
+    "submit": "await submit(bindingId,prepared.event) -> baseline inspect result; commit/publication/schedule use existing tracked ordered writes",
+    "inspect": "inspect(bindingId,eventId,prepared.digest) -> baseline inspect result after any uncertain ACK; no resend on unknown",
+    "authority": "No actor, arbitrary destination, epoch, descriptor, client or private authority passed by plugin."
+  },
+  "hostComposition": [
+    "Complete pinned pre/postimage verification and loaded canonical code match",
+    "Explicit same-SessionDB schema installation",
+    "Mandatory verified-native transport port",
+    "Mandatory fresh explicit-native-gesture verifier",
+    "Mandatory transaction-local consent/profile/route/producer-version policy gate",
+    "Host loader registers verified producer version and incarnation; immutable incarnation-to-version mapping, at most 20 retained",
+    "Host exposes facade to exact profile/plugin manager; unregister removes only its exact facade",
+    "No capability advertisement until consumer/native/application qualification is reviewed"
+  ],
+  "disable": "Host.detach durably revokes grants/registration and cancels only their exact queued admissions; preserves all identities and outstanding effect custody. Does not certify physical stop or remove source bytes.",
+  "consumerDecisionRequired": [
+    "Accept exact new method/field names and existing closed descriptor on both live/replay and prompt.receipt",
+    "Wire genuine native consent gesture and transport attestation, not JSON flags or legacy owner registration alone",
+    "Accept fail-closed transport-bound custody after disconnect, or separately design/review authenticated custody recovery before activation",
+    "Independently validate v1 provenance and canonical fences in Rust before persistence/render/speech; use begin/finish on actual side effects"
+  ]
+}

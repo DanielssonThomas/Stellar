@@ -24,21 +24,189 @@ The opt-in installs `personal-config.yaml` and `personal-soul.md` from each role
 Ivy follows this procedure for direct or delegated repository work:
 
 1. Read `AGENTS.md`, this guide and the applicable repository skills. Search for an existing issue before creating a distinct outcome. Assign it to exactly one of the three identities; validate its target, metadata, review tier and native dependencies through the existing issue helpers. Create the corresponding `worker:<profile>` GitHub label if it is missing. Protected governance changes remain Codex/maintainer work.
-2. Generate a stable assignment session ID and use `manage-issue-worktree.mjs claim <issue> --worker <profile> --session-id <stable-id>`. Do not start work on a claim error, active conflicting session, unrelated issue or unresolved dependency. Use the returned worktree and branch. Ivy's own implementation follows the same path with `--worker ivy`.
-3. For a delegate, write a UTF-8 task file containing the exact issue, owner, claim session ID, worktree, branch, baseline revision, allowed source/test paths, objective, acceptance criteria, relevant guidance and verification commands. Explicitly forbid protected governance edits, credential access, merging and approval bypass. Tell the child to read repository guidance itself; it has no Ivy conversation or memory. Do not put secrets in task files.
-4. Invoke one named profile in the claimed worktree, using `--query-file` rather than shell-interpolating the task. For example:
+2. Before claiming work for a delegate, check that its configured model matches the role and that Hermes can reach the Codex account endpoint without inference:
+
+   ```powershell
+   node scripts/check-stellar-delegate.mjs peon-cloud --hermes 'D:/Hermes/bin/hermes.exe'
+   ```
+
+   Use `foreman-cloud` for Foreman. Continue when the check exits zero and returns `ready: true`. A saved login can pass `hermes auth status openai-codex` even after the provider revokes it. If live access fails, report the profile and stop before claiming or launching the assignment.
+
+3. Generate a stable assignment session ID and use `manage-issue-worktree.mjs claim <issue> --worker <profile> --session-id <stable-id>`. Do not start work on a claim error, active conflicting session, unrelated issue or unresolved dependency. Use the returned worktree and branch. Ivy's own implementation follows the same path with `--worker ivy`.
+4. For a delegate, write a UTF-8 task file containing the exact issue, owner, claim session ID, worktree, branch, baseline revision, allowed source/test paths, objective, acceptance criteria, relevant guidance and verification commands. Explicitly forbid protected governance edits, credential access, merging and approval bypass. Tell the child to read repository guidance itself; it has no Ivy conversation or memory. Do not put secrets in task files.
+5. Invoke one named profile in the claimed worktree, using `--query-file` rather than shell-interpolating the task. For example:
 
    ```powershell
    & 'D:/Hermes/bin/hermes.exe' -p peon-cloud chat --in '<claimed-worktree>' --query-file '<task-file>' --oneshot --max-turns 24 --format stream-json
    ```
 
-   Substitute `foreman-cloud` for difficult work. The configured run budget asks Hermes to wrap up and is not a hard process-isolation guarantee. The installed gateway CLI rejects `--run-budget`; use the configuration value. Keep one writer per worktree; wait for the child to finish before inspecting its diff or starting another writer. Preserve its session ID and output outside the source tree. A failed or timed-out launch is not permission to launch a duplicate: inspect the original process, session and worktree first. Approval denial stops that action; do not change profiles, tools or consent settings to retry it.
+   Substitute `foreman-cloud` for difficult work. The configured run budget asks Hermes to wrap up and is not a hard process-isolation guarantee. The installed gateway CLI rejects `--run-budget`; use the configuration value. Keep one writer per worktree and wait for the child to finish before inspecting its diff or starting another writer. Preserve the process ID, exit code, final result and Hermes session ID outside the source tree. A running process or a session ID only confirms the launch. Use the result to report provider or task failure, and inspect the original process, session and worktree before any retry. Approval denial stops that action.
 
-5. Independently inspect the actual changed bytes and run the required checks. Append verified progress with `update-issue`, and use `handle-blocker` on a blocked assignment. Foreman may review Peon's exact head. Foreman-authored work requires a different authorized reviewer; Ivy must not label a worker's own assessment independent review. Follow `prepare-pr` before opening a PR to the issue's target. None of these three identities may merge, change protected governance, promote main or deploy production.
+6. Independently inspect the actual changed bytes and run the required checks. Append verified progress with `update-issue`, and use `handle-blocker` on a blocked assignment. Foreman may review Peon's exact head. Foreman-authored work requires a different authorized reviewer; Ivy must not label a worker's own assessment independent review. Follow `prepare-pr` before opening a PR to the issue's target. None of these three identities may merge, change protected governance, promote main or deploy production.
+
+When a worker reports Codex HTTP 401 `token_revoked` and uses the shared login, ask the account owner to authorize one new Hermes root sign-in:
+
+```powershell
+& 'D:/Hermes/bin/hermes.exe' -p default auth add openai-codex --type oauth --browser --priority 0
+```
+
+Run the readiness check again for both delegates and verify that Ivy can reach Codex with `hermes -p ivy usage --provider openai-codex --json`. Keep only one sign-in for the same account. Profile-local entries take precedence over the shared login, and a new sign-in can revoke an older grant for the same account. The account owner can retire an obsolete entry through Hermes's auth commands. Preserve the profile's model configuration if logging it out to return it to the shared login. [Hermes credential pools](https://hermes-agent.nousresearch.com/docs/user-guide/features/credential-pools)
 
 Ivy's desktop foreground retains the ACP edit policy of `ask`. Issue #269 adds an explicit personal-host opt-in in `integration/desktop-access.json`: the user can supply standing consent for all file proposals and enable a native Allow once/Deny dialog for other required approvals. See [Desktop approvals](desktop-development.md#personal-host-file-access-and-approvals) for configuration, revocation and lifecycle details. Desktop submissions then use interactive gateway routing, so flagged delegate launches can reach the human instead of failing as unattended single queries. Missing or malformed configuration retains automatic denial. This does not change delegate profiles: their own flagged single-query operations still deny, and an approval denial must not be retried through another profile or tool. The existing issue, worktree and independent verification procedure applies to Desktop assignments too.
 
 The 3 November 2026 qualification verified actual edits to three separate disposable numeric functions by Ivy/Terra, Foreman cloud/Sol and Peon cloud/Luna. Tests and unchanged test-file bytes were checked independently, and each Node test passed. After the initial unattended launch denial, the user explicitly approved two fixture launches; an interactive Ivy session launched each named profile sequentially with an Allow once decision and unchanged approval settings. The stored sessions confirmed each expected model and `openai-codex` provider. Peon's own test passed. Foreman's own PowerShell test command was denied in single-query mode; Foreman stopped without retrying, and independent host verification subsequently passed. This proves the small personal-host coding/delegation path, not arbitrary task competence, isolated execution, merge authority or native desktop editing. Flagged future commands can still require interactive consent.
+
+## Personal Ivy worker view in Herdr
+
+The optional [Stellar Herdr plugin](../../config/hermes-plugins/stellar-herdr/) connects Ivy to the local Windows Herdr app and Core. Core owns the worker terminals. Ivy receives a fresh worker inventory each turn and can read the recent output of a specific issue on request. A live terminal means its process is still running. Exit zero alone does not establish that the issue is complete.
+
+Install the plugin's Python files and `plugin.yaml` into `plugins/stellar-herdr` under the personal Ivy profile. In that same profile, create `integration/stellar-herdr/settings.json` with absolute paths for `repo` (the trusted Stellar checkout), `core` (`herdr-core.exe`), `app` (`herdr-app.exe`), `hermes`, `node`, `git` and `gh`. Enable only in Ivy and open a new Ivy session if Hermes defers tool registration.
+
+```powershell
+hermes -p ivy plugins enable stellar-herdr --no-allow-tool-override
+hermes -p ivy plugins doctor --ci stellar-herdr
+hermes -p ivy stellar-herdr
+```
+
+After validation and the issue worktree claim, Ivy uses `stellar_herdr` to start the selected personal worker. The plugin checks the active claim, GitHub ownership and checked-out branch, writes the task outside the repository, and invokes the same named profile in Core. A repeated request using the same claim is refused. If a launch result is uncertain, inspect the issue's terminal and worktree before reassigning it.
+
+Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manual or automatic. Manual is the default. Automatic opens and focuses the view when a worker starts. Hiding the window leaves workers running in Core. Disabling the plugin stops Ivy's integration. Existing workers can still be inspected through the Herdr CLI.
+
+### Local lifecycle observations and the background delivery boundary
+
+The repository plugin records opted-in lifecycle observations and implements forwarding to the reviewed, **uninstalled** Hermes notification candidate. Installed-runtime and Desktop acceptance remain incomplete. The installed public injection API cannot provide the original-session pin, stable producer identity, trusted descriptor and durable admission receipt required by [#339](https://github.com/DanielssonThomas/Stellar/issues/339) and the [#299](https://github.com/DanielssonThomas/Stellar/issues/299) consumer. A scheduling boolean is not a receipt. Do not substitute private authority calls, loosen consumer checks or change injection permissions to work around an unavailable API.
+
+Tracking defaults off and is separate from the manual/automatic window preference. Enable it only when the user explicitly requests observation of an exact launch, using `stellar_herdr` or the plugin CLI:
+
+```json
+{
+  "action": "tracking",
+  "issue": 23,
+  "role": "peon-cloud",
+  "session_id": "exact-launch-claim",
+  "enabled": true,
+  "kinds": [
+    "worker_exited",
+    "worker_blocked",
+    "waiting_review",
+    "checks_failed",
+    "checks_passed",
+    "merged",
+    "workflow_verified"
+  ]
+}
+```
+
+New launches retain a versioned receipt with a random incarnation also attached to Core's worker labels, exact issue/worker/claim/branch/target and baseline SHA. Older receipts lack this provenance and cannot be opted into observation. They remain available through ordinary status/progress; do not relabel an old terminal or invent a receipt. Enabling tracking verifies current structured sources and establishes a silent baseline. Re-enabling starts a new tracking revision with a fresh baseline. `{"action":"tracking","issue":23,"enabled":false}` disables local observation, removes displayed transitions and invalidates in-flight reconciliation. Notification attempts and unknown outcomes remain retained; host revocation can remain pending. A concurrent tracking change also invalidates a slow enable request.
+
+`{"action":"reconcile"}` performs one bounded observation tick. `{"action":"observations"}` reads tracking health and recent local transitions. SQLite transactions in `integration/stellar-herdr/observations.sqlite3` preserve tracking revisions, snapshots and deterministic transition identities across restarts. A transition alone is **not a wake admission**. Optional notification bookkeeping retains the host-captured profile/session/route binding, immutable event evidence and canonical receipt metadata; it does not capture conversation transcripts. The observer reads only claim metadata, structured Core metadata and GitHub issue/PR/check metadata. It does not read terminal output, start Core, assign work, approve reviews, merge or deploy.
+
+Each successful observation requires the same claim and GitHub owner/target, plus Core's exact incarnation. An unexpired active claim or its unchanged released record is accepted; reassignment, expiry, missing retained worker data, ambiguous PR links or unavailable sources suppress transitions. A PR must close the exact repository issue, use the claimed branch and target in the same repository, and expose a full head SHA. Worker exit records only the process exit code; `worker_blocked` reflects structured Core status. Waiting for review requires a non-draft open PR and GitHub `status:review`. Check results are scoped to the returned PR head; empty, truncated, unknown, skipped or pending checks never establish success. Merge is distinct from `workflow_verified`, which additionally requires a closed `status:done` issue, checked issue criteria and successful head checks. This last observation reports workflow metadata, not an independent verification of the artifacts.
+
+Limits: at most 20 retained launches, four launches per tick, one attempt per source per launch, a 60-second minimum polling interval and a 120-second reconciliation lease. A source bundle must complete within 60 seconds. Outages preserve the previous baseline, hide its transitions and back off for 60, 120, 240, 480 and 960 seconds; the sixth failed attempt pauses tracking until explicit re-enablement. Fresh observations are shown for five minutes. Tracking expires after seven days, retained rows are removed 30 days after expiry, and a launch pauses at 100 journal entries instead of deleting deduplication evidence. Recovering an abandoned lease re-observes sources without duplicating committed transitions. These limits bound observation work, not the worker's implementation time.
+
+For an explicitly configured observation-only schedule, `observer_tick.py` is a one-shot entry point for Hermes' [supported no-agent cron mode](https://hermes-agent.nousresearch.com/docs/user-guide/features/cron#no-agent-mode-script-only-jobs). Supply the installed file as the job's script in the owning profile, at a cadence of at least one minute. It never starts a daemon or model call and always emits the silent `wakeAgent:false` sentinel; even errors are recorded only on stderr. No job is created by plugin registration. Disabling the plugin does not remove a separately configured cron job: pause/remove that job and opt out of tracked work explicitly. No installed plugin, live schedule or Desktop restart is implied by repository changes.
+
+The [Hermes plugin API](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins) documents the supported extension surfaces. Completing delivery requires a host-supported producer with atomic original-session authorization, stable event admission/reconciliation, a validated trusted descriptor and dispatch-time opt-out enforcement. Session reset/compression policy must be explicit. Until that interface is qualified, the journal and silent scheduler entry point are independent groundwork; idle/concurrent Desktop presentation, cancellation and speech-once end-to-end acceptance remain unverified.
+
+The [background compatibility architecture](../architecture/hermes-background.md) records the inactive
+`stellar.background.v1` candidate, executable process qualification, transaction tests and remaining
+host/consumer integration gates. It does not authorize installation or enable notification delivery.
+
+The trusted-local scope of [#339](https://github.com/DanielssonThomas/Stellar/issues/339)
+does not require adversarial same-user isolation, a guardian, biometric consent or an external
+policy root. Those inactive development candidates remain preserved and deferred. Explicit
+tracking, source verification, destination binding, durable deduplication, uncertain-outcome
+reconciliation and effective opt-out still apply, alongside existing approvals and repository
+governance. Notification evidence supplies no assignment, review, merge or deployment authority.
+
+On the qualified Hermes `3b421578588243f920886e6fe79a6faa87ea026e` sources,
+`PluginContext.inject_message` returns scheduling success, generates a new admission identity
+on dispatch and exposes no exact-event inspect or withdrawal operation. `post_message` provides
+real session-bound notices, but its process-local handle does not provide restart-safe event
+recovery. The existing native automation queue is reusable; these public APIs do not yet expose
+the supported stable-event admission, inspection and opt-out operations needed by the observer.
+Genuine `terminal(background=true, notify_on_complete=true)` completion remains a separate
+supported lifecycle path where the calling session supports asynchronous delivery. It must not
+be fabricated to represent an arbitrary GitHub observation. No runtime activation follows from
+this source qualification; named-Ivy Desktop delivery remains unverified.
+
+Plugin1.2 forwards through `ctx.notification` only. Its required runtime proposal is pinned to
+Hermes3b421578 plus patch SHA256c0a21ab5118d6f7ab23b617e7ea2d2f81d072fa1d9fcd63ba0ba857d8d7356ce.
+The async `stellar_herdr` tracking tool binds in the original real turn context. The CLI and
+standalone silent cron script remain observation-only: they cannot create a conversation binding.
+No schedule, daemon, permission grant or notification is installed by registration.
+
+Three registered RPCs reuse Hermes's existing authenticated session dispatch:
+`plugin.stellar-herdr.observations.reconcile` accepts the selected `session_id`;
+`observations.inspect` and `observations.revoke` also require the exact retained `event_id`.
+The server-authorized session must match the original binding owner. A worker's launch-claim
+`session_id` in a tracking tool request is a separate identity. RPCs accept no caller-selected
+binding, destination or observation payload. Reconciliation reserves exact incarnation/revision
+pairs and processes only the authorized session's notifications.
+
+`notification_bindings` and `notification_attempts` add local bookkeeping to the existing observer
+database. Before its first possible host submission, one transaction freezes the evidence and
+records UNKNOWN. Only that inserting caller may first-send; a crash before sending can therefore
+miss an alert. Later ticks inspect the same identity and never take over or blindly resend.
+Known receipts cannot regress or become another admission. Up to four due attempts rotate per
+tick; 100 retained bindings/1000 attempts bound storage without deleting UNKNOWN evidence.
+Expiry, supersession, retry exhaustion and journal-full disable paths also reconcile revocation.
+
+Inspection preserves the raw canonical host result and separately combines host eligibility with
+fresh local tracking/event evidence. Local opt-out closes eligibility before awaiting host
+revocation. A started/unknown host operation is not a successful physical-stop receipt. The host
+truthfully stamps `internal_notification` and a bound producer descriptor. Consumer checkpoint
+5de9a09 implements the explicit named-notification classification, canonical inspection and
+binding-scoped revocation path. Earlier b61907d rejects it. Do not strip the marker or manufacture
+process completion. Installed-runtime and live Desktop acceptance remain separate gates.
+
+For disconnected final-pair qualification, `tools/hermes-background/compose_final.py` exports
+producer a0eea43 and applies the exact consumer e216f69-to-5de9a09 delta once after checking every
+preimage. It verifies consumer postimages and the uninstalled runtime patch, and compares the
+earlier and final captured frame schemas and source differences. It does not claim byte equality.
+`verify_final.py` consumes fresh canonical host frames through offline bridge projection and native tests,
+builds native code against the current production renderer, and runs that renderer's existing
+notification/speech-dispatch fixture. The native fixture replays captured inspection through an inert
+mock reply. These checks use fake inference and mocked effect IPC;
+they do not qualify a live gateway, notification, voice playback or installation. Disposable Git
+metadata permits the unchanged native source-size check without touching an owning checkout.
+
+Consumer e35a746 adds the connection-owned reconciliation timer and private forwarding to the
+existing producer RPC. `compose_timer.py` verifies and applies only its sealed six-file delta to
+an immutable export of the qualified 5de9a09 pair. `verify_timer.py` checks the assembled timer
+against the real candidate admission store with a fake clock/inference, runs focused timing and
+native receipt checks, and rebuilds the native host with the unchanged verified renderer assets.
+It verifies that the new executable contains the exact timer/bridge source; the retained older
+binary remains valid evidence for its older pair. No installed runtime or live delivery follows.
+
+The earlier retained-record recovery qualification uses `prepare_recovery_qualification.py` to export
+that exact pair with a test-only native module. A real disposable authority restart retains
+canonical receipts but changes the replay epoch. Consumer e35a746 rejects the resulting gap,
+including after authenticated notice revocation; original-host inspection is also unavailable
+for unrevoked retained notices. The copied UNKNOWN record, notices and speech claim remain
+intact, but this is a verified refusal, not working recovery. Consumer same-session checkpoint
+recovery must be qualified before activation; clearing journals or merely replacing the cursor
+does not establish that missed events were recovered.
+
+The follow-up `prepare_recovery_composition.py` imports only sealed consumer a88ccbd over
+that retained pair, verifies all nineteen pre/postimages and unchanged source, and reuses
+Hermes candidate 6ebd6d7 and the same 534 renderer assets. `run_recovery_composition.py`
+executes actual source-runner authority/store fixtures and native recovery against their
+fresh captures. These cover retained notices, wholly missed completion, ordered revocation,
+speech claims and byte-identical fixture UNKNOWN state. Unsupported inspection is a transport
+fixture proving suppression, not a full live original-host recovery. The rebuilt client embeds
+both recovery modules; `seal_recovery_composition.py` checks all 2,381 production files and
+the exact embedded Python sources. No real uncertain submission or journal is retried or cleared.
+
+`tools/hermes-background/external_operator.py plan` records task-scoped metadata only. Its
+cutover/recovery entry requires a GREEN qualification and a separate explicit maintenance
+handoff after Ivy has informed the user and completed its response. It never infers completion
+from a timer or silence. Live cutover remains disabled pending that separate handoff and
+fresh quiescence/admission checks. Planned effects include graceful
+Desktop close, the eleven-profile host lifecycle, pinned maintained source application and the
+documented Ivy producer-code installation; settings/history are not restored over new records.
+Five minutes was an earlier interruption estimate, not an issue acceptance limit or hard cutoff.
 
 ## Identity templates and Hermes profiles
 

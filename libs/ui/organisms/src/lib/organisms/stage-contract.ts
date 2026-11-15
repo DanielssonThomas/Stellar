@@ -2,6 +2,10 @@ import { decodeStageTree, type StageTree, MAX_STAGE_PANES } from './stage-tree';
 import type { WorkspaceSplitPlacement } from '@stellar/desktop-contracts';
 import type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 import type {
+  WorkspaceChartPayload,
+  WorkspaceIssuePayload,
+} from '@stellar/desktop-contracts';
+import type {
   PresentationTextPayload,
   PresentationMediaPayload,
   PresentationDiagramPayload,
@@ -13,6 +17,7 @@ import {
   plainRecord,
   freezeJson,
 } from './stage-json';
+import { chartJsonAllowance } from './stage-chart-budget';
 
 export type Surface<P extends object> = Extract<keyof P, string>;
 export type Decoders<P extends object> = {
@@ -100,6 +105,8 @@ export type StageResult = {
 };
 export type { ActivitySummaryPayload } from '@stellar/ui-molecules';
 export type ProductionPayloadMap = {
+  readonly 'github-issue': WorkspaceIssuePayload;
+  readonly chart: WorkspaceChartPayload;
   readonly 'rich-text': PresentationTextPayload;
   readonly image: Extract<PresentationMediaPayload, { kind: 'image' }>;
   readonly browser: Extract<PresentationMediaPayload, { kind: 'browser' }>;
@@ -122,6 +129,8 @@ function payloadLimit(surface: unknown): number {
     case 'image':
       return 512 * 1024 + 6144;
     case 'diagram':
+    case 'chart':
+    case 'github-issue':
       return 16384;
     case 'browser':
       return 4096;
@@ -235,6 +244,7 @@ export function decodeStageCommand<P extends object>(
         input['action'] === 'set-layout'
           ? 8192
           : payloadLimit(input['surface']) + 1024,
+        chartJsonAllowance(input['surface'], input['payload']),
         input['action'] === 'set-layout' ? MAX_STAGE_PANES + 2 : 8,
       )
     )
@@ -364,7 +374,11 @@ export function decodeStageCommand<P extends object>(
     if (
       typeof input['surface'] !== 'string' ||
       !Object.hasOwn(decoders, input['surface']) ||
-      !boundedJson(input['payload'], payloadLimit(input['surface']))
+      !boundedJson(
+        input['payload'],
+        payloadLimit(input['surface']),
+        chartJsonAllowance(input['surface'], input['payload']),
+      )
     )
       return null;
     if (
@@ -377,7 +391,11 @@ export function decodeStageCommand<P extends object>(
     const payload = decode(input['payload']);
     if (
       payload === null ||
-      !boundedJson(payload, payloadLimit(input['surface']))
+      !boundedJson(
+        payload,
+        payloadLimit(input['surface']),
+        chartJsonAllowance(input['surface'], payload),
+      )
     )
       return null;
     const detached = freezeJson(JSON.parse(canonicalJson(payload)));

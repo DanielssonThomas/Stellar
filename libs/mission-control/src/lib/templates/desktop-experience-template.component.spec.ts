@@ -27,12 +27,119 @@ describe('DesktopExperienceTemplate', () => {
     }
   });
 
+  it('shows interim and final response captions outside the menu without consuming a Stage pane', async () => {
+    fixture.componentRef.setInput(
+      'responseCaptionText',
+      'I found the calendar.',
+    );
+    fixture.componentRef.setInput('assistantBusy', true);
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector('stellar-response-caption-molecule'),
+    ).toBeNull();
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    await fixture.whenStable();
+    const caption: HTMLElement = fixture.nativeElement.querySelector(
+      'stellar-response-caption-molecule',
+    );
+    expect(caption.textContent).toContain('I found the calendar.');
+    expect(caption.closest('dialog, stellar-stage-organism')).toBeNull();
+    expect(fixture.componentInstance.menu.open()).toBe(false);
+    expect(
+      fixture.componentInstance.stage().inspectPresentations(),
+    ).toHaveLength(0);
+    fixture.componentRef.setInput('responseCaptionKind', 'final');
+    fixture.componentRef.setInput(
+      'responseCaptionText',
+      'Your first meeting is at nine.',
+    );
+    await fixture.whenStable();
+    expect(caption.getAttribute('data-response-kind')).toBe('final');
+    expect(caption.textContent).toContain('Your first meeting is at nine.');
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        'stellar-response-caption-molecule',
+      ),
+    ).toHaveLength(1);
+    expect(
+      fixture.componentInstance.stage().inspectPresentations(),
+    ).toHaveLength(0);
+  });
+
+  it('only shows recognition results when diagnostics are enabled', async () => {
+    fixture.componentRef.setInput('responseCaptionText', 'I will check that.');
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    fixture.componentRef.setInput(
+      'recognitionText',
+      'hey ivy show my calendar',
+    );
+    await fixture.whenStable();
+    const captions: HTMLElement = fixture.nativeElement.querySelector(
+      '.conversation-captions',
+    );
+    expect(
+      captions.querySelector(':scope > stellar-response-caption-molecule'),
+    ).not.toBeNull();
+    expect(
+      captions.querySelector('stellar-voice-transcript-molecule'),
+    ).toBeNull();
+    fixture.componentRef.setInput('showRecognition', true);
+    await fixture.whenStable();
+    expect(
+      captions.querySelector(':scope > stellar-voice-transcript-molecule')
+        ?.textContent,
+    ).toContain('hey ivy show my calendar');
+    fixture.componentRef.setInput('showRecognition', false);
+    await fixture.whenStable();
+    expect(
+      captions.querySelector('stellar-voice-transcript-molecule'),
+    ).toBeNull();
+    expect(
+      captions.querySelector('stellar-response-caption-molecule'),
+    ).not.toBeNull();
+  });
+
+  it('loads response captions through the shared skeleton state and hides captions on suspend/shutdown', async () => {
+    fixture.componentRef.setInput('responseCaptionText', 'A committed update.');
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    fixture.componentRef.setInput('showRecognition', true);
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('state', {
+      ...initialState,
+      reducedMotion: true,
+    });
+    await fixture.whenStable();
+    const caption: HTMLElement = fixture.nativeElement.querySelector(
+      'stellar-response-caption-molecule',
+    );
+    expect(caption.querySelector('stellar-skeleton-atom')).not.toBeNull();
+    expect(caption.getAttribute('aria-busy')).toBe('true');
+    expect(caption.classList.contains('motion-reduced')).toBe(true);
+    for (const phase of ['suspended', 'shutdown']) {
+      fixture.componentRef.setInput('state', { ...initialState, phase });
+      await fixture.whenStable();
+      expect(
+        fixture.nativeElement.querySelector('.conversation-captions'),
+      ).toBeNull();
+    }
+  });
+
+  it('does not invent an empty caption when no response text has arrived', async () => {
+    fixture.componentRef.setInput('loading', true);
+    fixture.componentRef.setInput('showResponseCaptions', true);
+    fixture.componentRef.setInput('responseCaptionText', '   ');
+    await fixture.whenStable();
+    expect(
+      fixture.nativeElement.querySelector('stellar-response-caption-molecule'),
+    ).toBeNull();
+  });
+
   it('exposes Reflex as a named switch with status and emits its next preference', async () => {
     fixture.componentRef.setInput('reflexEnabled', true);
     fixture.componentRef.setInput('reflexStatus', 'Ready');
     fixture.componentRef.setInput('reflexLastRoute', 'Reflex · confirmed');
     await fixture.whenStable();
-    const toggle: HTMLButtonElement = fixture.nativeElement.querySelector(
+    const toggle: HTMLInputElement = fixture.nativeElement.querySelector(
       '[role="switch"][aria-label="Ivy Reflex"]',
     );
     expect(toggle.getAttribute('aria-checked')).toBe('true');
@@ -47,12 +154,44 @@ describe('DesktopExperienceTemplate', () => {
     expect(change).toHaveBeenCalledWith(false);
   });
 
+  it('delegates recognition preferences and blocks sensitivity changes while voice is busy', async () => {
+    const sensitivity = vi.fn();
+    const recognition = vi.fn();
+    fixture.componentInstance.wakeSensitivityChange.subscribe(sensitivity);
+    fixture.componentInstance.showRecognitionChange.subscribe(recognition);
+    const wake: HTMLInputElement = fixture.nativeElement.querySelector(
+      '[aria-label="Higher wake sensitivity"]',
+    );
+    const show: HTMLInputElement = fixture.nativeElement.querySelector(
+      '[aria-label="Show recognition results"]',
+    );
+    wake.click();
+    show.click();
+    expect(sensitivity).toHaveBeenCalledExactlyOnceWith('high');
+    expect(recognition).toHaveBeenCalledExactlyOnceWith(true);
+    fixture.componentRef.setInput('voiceBusy', true);
+    fixture.componentRef.setInput('wakeSensitivity', 'high');
+    await fixture.whenStable();
+    expect(wake.disabled).toBe(true);
+    expect(wake.checked).toBe(true);
+    wake.click();
+    expect(sensitivity).toHaveBeenCalledTimes(1);
+    show.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'm',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(fixture.componentInstance.menu.open()).toBe(true);
+  });
+
   it('routes the pane controls checkbox to Stage and retains it when the menu reopens', async () => {
     const view = fixture.componentInstance;
     view.menu.toggle();
     await fixture.whenStable();
     const toggle: HTMLInputElement = fixture.nativeElement.querySelector(
-      '#desktop-pane-controls',
+      '[role="switch"][aria-label="Show pane controls"]',
     );
     expect(toggle.checked).toBe(false);
     expect(view.stage().showPaneControls()).toBe(false);
@@ -198,37 +337,6 @@ describe('DesktopExperienceTemplate', () => {
     expect(open).toHaveBeenCalledTimes(2);
   });
 
-  it('shows only available Whisper input and hides it throughout prompt mode and suspension', async () => {
-    const panel = () =>
-      fixture.nativeElement.querySelector('stellar-voice-transcript-molecule');
-    expect(panel()).toBeNull();
-    fixture.componentRef.setInput('voiceInputText', 'Ivy, misheard request');
-    await fixture.whenStable();
-    expect(panel()?.textContent).toContain('Ivy, misheard request');
-    fixture.componentRef.setInput('promptStatus', 'error');
-    await fixture.whenStable();
-    expect(panel()?.textContent).toContain('Ivy, misheard request');
-    fixture.componentRef.setInput('solActive', true);
-    for (const status of [
-      'composing',
-      'refining',
-      'finalizing',
-      'submitting',
-      'error',
-    ]) {
-      fixture.componentRef.setInput('promptStatus', status);
-      await fixture.whenStable();
-      expect(panel()).toBeNull();
-    }
-    fixture.componentRef.setInput('promptStatus', 'idle');
-    fixture.componentRef.setInput('state', {
-      ...initialState,
-      phase: 'suspended',
-    });
-    await fixture.whenStable();
-    expect(panel()).toBeNull();
-  });
-
   it('retains assembled presence between foreground turns until clear, while suspension still wins', async () => {
     expect(fixture.componentInstance.emblemPhase()).toBe('idle');
     fixture.componentRef.setInput('conversationActive', true);
@@ -295,7 +403,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
     const button: HTMLButtonElement = fixture.nativeElement.querySelector(
-      '[data-desktop-menu] .actions button',
+      '[data-settings-section="overview"] .settings-button-row button',
     );
     expect(button.textContent).toContain('Start activity');
     expect(
@@ -311,7 +419,7 @@ describe('DesktopExperienceTemplate', () => {
     await fixture.whenStable();
     expect(
       fixture.nativeElement.querySelector(
-        '[data-desktop-menu] .actions button',
+        '[data-settings-section="overview"] .settings-button-row button',
       ),
     ).toBe(button);
     expect(button.textContent).toContain('End activity');
@@ -332,7 +440,7 @@ describe('DesktopExperienceTemplate', () => {
     fixture.componentInstance.menu.toggle();
     await fixture.whenStable();
     const input: HTMLInputElement = fixture.nativeElement.querySelector(
-      '#desktop-reduce-motion',
+      '[role="switch"][aria-label="Reduce motion"]',
     );
     input.checked = true;
     input.dispatchEvent(new Event('change'));

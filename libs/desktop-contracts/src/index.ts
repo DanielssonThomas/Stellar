@@ -1,4 +1,56 @@
 export type { ShellRequest, ShellReply, ShellError } from './generated';
+export type { IvyLifecycleKind, IvyLifecycleLease } from './generated';
+export { decodeIvyLifecycleLease } from './lib/lifecycle-codec';
+export type {
+  WorkspaceIssuePayload,
+  WorkspaceIssueData,
+  WorkspaceIssueReference,
+  WorkspaceIssueState,
+  WorkspaceIssueStatus,
+} from './generated';
+export { decodeWorkspaceIssuePayload } from './lib/issue-codec';
+export type { IvyResponseSegment, IvyResponseSegmentKind } from './generated';
+export type {
+  WorkspaceChartType,
+  WorkspaceChartDataset,
+  WorkspaceChart,
+  WorkspaceChartPayload,
+} from './generated';
+export {
+  decodeWorkspaceChart,
+  decodeWorkspaceChartPayload,
+} from './lib/chart-codec';
+export type {
+  IvyInspectorRequest,
+  IvyInspectorSnapshot,
+  IvySessionSummary,
+  IvySessionMessage,
+  IvySessionContext,
+  IvyUsageWindow,
+  IvyAccountUsage,
+  IvyUsageState,
+  IvySessionRole,
+} from './generated';
+export { ivyInspectCommand } from './generated';
+export { decodeIvyInspectorSnapshot } from './lib/ivy-inspector-codec';
+export type {
+  AwarenessApp,
+  AwarenessMedia,
+  AwarenessHealth,
+  AwarenessPane,
+  AwarenessWorkspace,
+  AwarenessRequest,
+  AwarenessSetEnabled,
+  AwarenessSnapshot,
+  AwarenessError,
+} from './generated';
+export {
+  awarenessSnapshotCommand,
+  awarenessSetEnabledCommand,
+  awarenessWorkspaceCommand,
+  awarenessEvent,
+} from './generated';
+export { decodeAwarenessSnapshot } from './lib/awareness-codec';
 export type {
   ReflexChoice,
   ReflexAvailability,
@@ -52,6 +104,8 @@ export type {
   IvyActivity,
   IvyActivityKind,
   IvyActivityState,
+  IvyActivityProvider,
+  IvyActivityOperation,
   IvyConnectionState,
   IvyTurnState,
   IvyErrorCode,
@@ -59,9 +113,13 @@ export type {
   IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
+  IvyLocalActionEvent,
+  IvyLocalActionOutcome,
   IvyComponent,
   IvyPresentation,
   IvySnapshot,
+  IvyBackgroundUpdate,
+  IvyClaimUpdateRequest,
   IvyQuestion,
   IvyQuestionAction,
   IvyQuestionReplyRequest,
@@ -74,6 +132,8 @@ export type {
   WorkspaceToolRequest,
   WorkspacePaneMetadata,
   WorkspaceRenderState,
+  WorkspaceMutationStatus,
+  WorkspaceCaptureFailure,
   WorkspaceToolOutcome,
   WorkspaceToolReply,
 } from './generated';
@@ -89,6 +149,7 @@ export {
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
   ivyQuestionReplyCommand,
+  ivyClaimUpdateCommand,
   ivyEvent,
   workspaceToolEvent,
   workspaceToolReplyCommand,
@@ -100,6 +161,8 @@ export {
   decodeIvyError,
   decodeIvySnapshot,
   decodeIvyQuestionReply,
+  decodeIvyClaimUpdate,
+  isSealedIvyProseLine,
 } from './lib/ivy-codec';
 export {
   decodeWorkspaceToolRequest,
@@ -109,7 +172,9 @@ export type {
   SpeechState,
   SpeechError,
   SpeechRequest,
+  SpeechDuckingRequest,
   SpeechStopRequest,
+  SpeechStopTarget,
   SpeechTranscribeRequest,
   SpeechTranscript,
   SpeechSpeakRequest,
@@ -128,10 +193,12 @@ export {
   speechSpeakCommand,
   speechStopCommand,
   speechSnapshotCommand,
+  speechSetDuckingCommand,
   speechEvent,
 } from './generated';
 export {
   decodeSpeechRequest,
+  decodeSpeechDuckingRequest,
   decodeSpeechStopRequest,
   decodeSpeechTranscribeRequest,
   decodeSpeechTranscript,

@@ -2,10 +2,11 @@ import type {
   ReflexPlan,
   ReflexRequest,
   ReflexMode,
+  IvyLocalActionEvent,
 } from '@stellar/desktop-contracts';
 import { LocalActionRegistry, type LocalAction } from './action-registry';
 import { ReflexLatency, type ReflexTimingStage } from './reflex-latency';
-import { isPaneSwap } from './pane-swap';
+import { paneShortcut } from './pane-shortcuts';
 
 export interface ReflexEnvironment {
   readonly epoch: string;
@@ -24,12 +25,7 @@ export interface ReflexOutcome {
     | 'hermes'
     | 'unavailable';
 }
-export interface ReflexEvent {
-  readonly action: string;
-  readonly target: string;
-  readonly outcome: 'confirmed' | 'uncertain';
-  readonly reply: string;
-}
+export type ReflexEvent = Readonly<IvyLocalActionEvent>;
 export interface ReflexPorts {
   readonly environment: (
     signal: AbortSignal,
@@ -150,20 +146,19 @@ export class ReflexController {
       const environment = await this.ports.environment(controller.signal, text);
       if (!current() || environment.epoch !== epoch) return result('cancelled');
       const registry = new LocalActionRegistry(environment.actions);
-      const shortcut = isPaneSwap(text);
+      const shortcut = paneShortcut(text);
       if (!shortcut) point('inference_start');
       const plan: ReflexPlan | null = shortcut
-        ? registry.choices().some((choice) => choice.id === 'pane.swap_pair')
+        ? registry.choices().some((choice) => choice.id === shortcut.id)
           ? {
               route: 'action',
-              action_id: 'pane.swap_pair',
-              reply: 'Swapped the panes.',
+              action_id: shortcut.id,
+              reply: shortcut.reply,
             }
           : {
               route: 'clarify',
               action_id: null,
-              reply:
-                'I need exactly two visible panes for that shortcut. Which panes should I swap?',
+              reply: shortcut.unavailable,
             }
         : await this.ports.infer(
             {

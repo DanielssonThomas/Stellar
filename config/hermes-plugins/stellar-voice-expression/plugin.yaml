@@ -1,0 +1,5 @@
+name: stellar-voice-expression
+version: 1.0.0
+description: Transient voice-expression context for Ivy's Stellar Desktop turns.
+kind: standalone
+provides_hooks: [post_llm_call]

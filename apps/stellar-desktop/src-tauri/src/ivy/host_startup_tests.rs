@@ -53,6 +53,8 @@ fn busy_owner_retries_only_on_connect_and_loads_the_retained_record() {
     });
     sender
         .send(Work {
+            expression: None,
+            context: None,
             epoch: 1,
             workspace_epoch: 0,
             action: Action::Reconcile,
@@ -62,6 +64,8 @@ fn busy_owner_retries_only_on_connect_and_loads_the_retained_record() {
     assert_eq!(refused.error, Some(IvyErrorCode::Busy));
     sender
         .send(Work {
+            expression: None,
+            context: None,
             epoch: 1,
             workspace_epoch: 0,
             action: Action::Connect,
@@ -73,6 +77,8 @@ fn busy_owner_retries_only_on_connect_and_loads_the_retained_record() {
     drop(first_owner);
     sender
         .send(Work {
+            expression: None,
+            context: None,
             epoch: 1,
             workspace_epoch: 0,
             action: Action::Connect,

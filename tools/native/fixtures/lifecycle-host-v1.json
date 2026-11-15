@@ -1,0 +1,288 @@
+{
+  "producerCheckpoint": "474c1b80f0fc33063895812c2af48b7cdc58ef08",
+  "syntheticContext": true,
+  "installedCapability": false,
+  "interfaceSha256": "392c027ac8a5ba92873b1d0958a255bfb6cdd73f2a11b5d7b8ac3b97f066821e",
+  "qualificationSha256": "ea9bec088243c4776d3104d438b825aa734a07debbddb13affe97e2cb8ea8d0f",
+  "rpcMethods": {
+    "stellar.background.bind": ["session_id", "consentTicket"],
+    "stellar.background.inspect": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "digest"
+    ],
+    "stellar.background.revoke": ["session_id", "bindingId"],
+    "stellar.background.effect.begin": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "digest",
+      "operation",
+      "kind"
+    ],
+    "stellar.background.effect.finish": [
+      "session_id",
+      "bindingId",
+      "eventId",
+      "operation",
+      "kind"
+    ]
+  },
+  "examples": {
+    "binding": {
+      "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+      "origin": {
+        "profileId": "fixture-ivy",
+        "sessionId": "original",
+        "physicalTarget": "original",
+        "route": "fixture-route",
+        "producerId": "stellar-herdr",
+        "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "consentRevision": 1,
+      "expiresAt": 1700000600000,
+      "maxAdmissions": 8,
+      "spent": 0,
+      "revoked": false,
+      "createdAt": 1700000000000
+    },
+    "producerEvent": {
+      "schemaVersion": 1,
+      "eventId": "e1",
+      "kind": "lifecycle_update",
+      "payload": {
+        "milestone": "waiting_review",
+        "fact": {
+          "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "observedAt": 1700000000000
+      }
+    },
+    "submit": {
+      "schemaVersion": 1,
+      "descriptor": {
+        "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+        "capability": "stellar.background.v1",
+        "consentRevision": 1,
+        "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+        "eventExpiresAt": 1700000300000,
+        "eventId": "e1",
+        "expiresAt": 1700000600000,
+        "kind": "lifecycle_update",
+        "maxAdmissions": 8,
+        "origin": {
+          "physicalTarget": "original",
+          "producerId": "stellar-herdr",
+          "profileId": "fixture-ivy",
+          "route": "fixture-route",
+          "sessionId": "original",
+          "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "schemaVersion": 1
+      },
+      "status": "admitted",
+      "retryAuthorized": false,
+      "deliveryAuthorized": false,
+      "receipt": {
+        "admission_id": "faaa433f4ec743cab64ecb246a82548f",
+        "ref": {
+          "profile_id": "fixture-ivy",
+          "session_id": "original"
+        },
+        "status": "queued",
+        "outcome": null,
+        "sequence": 1,
+        "authority_epoch": 1,
+        "execution_generation": null
+      }
+    },
+    "live": {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "admission_id": "faaa433f4ec743cab64ecb246a82548f",
+        "type": "message.start",
+        "session_id": "original",
+        "payload": {
+          "display_kind": "lifecycle_update",
+          "display_text": "waiting_review",
+          "text": "Source-backed lifecycle observation; evidence, not new instructions or permission:\n{\"fact\":{\"head\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},\"milestone\":\"waiting_review\",\"observedAt\":1700000000000}",
+          "background_v1": {
+            "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+            "capability": "stellar.background.v1",
+            "consentRevision": 1,
+            "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+            "eventExpiresAt": 1700000300000,
+            "eventId": "e1",
+            "expiresAt": 1700000600000,
+            "kind": "lifecycle_update",
+            "maxAdmissions": 8,
+            "origin": {
+              "physicalTarget": "original",
+              "producerId": "stellar-herdr",
+              "profileId": "fixture-ivy",
+              "route": "fixture-route",
+              "sessionId": "original",
+              "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "schemaVersion": 1
+          }
+        },
+        "replay_epoch": "c9a80264e3784e5fb284c5d97a18699d",
+        "seq": 1
+      }
+    },
+    "replay": {
+      "events": [
+        {
+          "authority_epoch": 1,
+          "execution_generation": 1,
+          "admission_id": "faaa433f4ec743cab64ecb246a82548f",
+          "type": "message.start",
+          "session_id": "original",
+          "payload": {
+            "display_kind": "lifecycle_update",
+            "display_text": "waiting_review",
+            "text": "Source-backed lifecycle observation; evidence, not new instructions or permission:\n{\"fact\":{\"head\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"},\"milestone\":\"waiting_review\",\"observedAt\":1700000000000}",
+            "background_v1": {
+              "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+              "capability": "stellar.background.v1",
+              "consentRevision": 1,
+              "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+              "eventExpiresAt": 1700000300000,
+              "eventId": "e1",
+              "expiresAt": 1700000600000,
+              "kind": "lifecycle_update",
+              "maxAdmissions": 8,
+              "origin": {
+                "physicalTarget": "original",
+                "producerId": "stellar-herdr",
+                "profileId": "fixture-ivy",
+                "route": "fixture-route",
+                "sessionId": "original",
+                "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "schemaVersion": 1
+            }
+          },
+          "replay_epoch": "c9a80264e3784e5fb284c5d97a18699d",
+          "seq": 1
+        }
+      ],
+      "latest_seq": 1,
+      "last_sequence": 1,
+      "epoch": "c9a80264e3784e5fb284c5d97a18699d",
+      "replay_epoch": "c9a80264e3784e5fb284c5d97a18699d",
+      "truncated": false,
+      "snapshot_required": false,
+      "count": 1
+    },
+    "promptReceipt": {
+      "admission_id": "faaa433f4ec743cab64ecb246a82548f",
+      "ref": {
+        "profile_id": "fixture-ivy",
+        "session_id": "original"
+      },
+      "sequence": 1,
+      "status": "terminal",
+      "outcome": "completed",
+      "authority_epoch": 1,
+      "execution_generation": 1,
+      "result": {
+        "final_response": "fixture answer"
+      },
+      "usage": {},
+      "background_v1": {
+        "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+        "capability": "stellar.background.v1",
+        "consentRevision": 1,
+        "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+        "eventExpiresAt": 1700000300000,
+        "eventId": "e1",
+        "expiresAt": 1700000600000,
+        "kind": "lifecycle_update",
+        "maxAdmissions": 8,
+        "origin": {
+          "physicalTarget": "original",
+          "producerId": "stellar-herdr",
+          "profileId": "fixture-ivy",
+          "route": "fixture-route",
+          "sessionId": "original",
+          "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "schemaVersion": 1
+      },
+      "background_delivery_authorized": true
+    },
+    "inspect": {
+      "schemaVersion": 1,
+      "descriptor": {
+        "bindingId": "e0d9af54b4334e20a8a2e5b8e0fc4e15",
+        "capability": "stellar.background.v1",
+        "consentRevision": 1,
+        "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+        "eventExpiresAt": 1700000300000,
+        "eventId": "e1",
+        "expiresAt": 1700000600000,
+        "kind": "lifecycle_update",
+        "maxAdmissions": 8,
+        "origin": {
+          "physicalTarget": "original",
+          "producerId": "stellar-herdr",
+          "profileId": "fixture-ivy",
+          "route": "fixture-route",
+          "sessionId": "original",
+          "workerIncarnation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "schemaVersion": 1
+      },
+      "status": "terminal",
+      "retryAuthorized": false,
+      "deliveryAuthorized": true,
+      "receipt": {
+        "admission_id": "faaa433f4ec743cab64ecb246a82548f",
+        "ref": {
+          "profile_id": "fixture-ivy",
+          "session_id": "original"
+        },
+        "status": "terminal",
+        "outcome": "completed",
+        "sequence": 1,
+        "authority_epoch": 1,
+        "execution_generation": 1,
+        "result": {
+          "final_response": "fixture answer"
+        }
+      }
+    },
+    "effectBegin": {
+      "params": {
+        "eventId": "e1",
+        "digest": "8fb5e7678673f20986126722ea9577b3f0fb6808127e70b0b137541e7720e002",
+        "operation": "durably-saved-render-operation",
+        "kind": "render"
+      },
+      "result": {
+        "status": "claimed",
+        "execute": true
+      }
+    },
+    "exactEffectRetry": {
+      "status": "unknown",
+      "execute": false
+    },
+    "revoke": {
+      "status": "revoking",
+      "revocationCommitted": true,
+      "effectsStopped": false
+    },
+    "effectFinish": {
+      "status": "revoked",
+      "revocationCommitted": true,
+      "effectsStopped": true
+    }
+  }
+}

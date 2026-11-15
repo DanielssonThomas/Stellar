@@ -13,25 +13,43 @@ const row: IvyActivityItem = {
 };
 afterEach(() => vi.useRealTimers());
 describe('Ivy activity timing', () => {
-  it('never opens for short requests and shows only minimal working after five seconds', () => {
+  it('opens immediately on accepted requests without inventing tool activity', () => {
     vi.useFakeTimers();
     const publish = vi.fn();
     const timeline = new IvyActivityTimeline(publish);
     timeline.update(true, 'short', []);
+    expect(publish.mock.lastCall?.[0]).toMatchObject({
+      visible: true,
+      actions: [],
+    });
     vi.advanceTimersByTime(1000);
     timeline.update(false, 'short', []);
     vi.advanceTimersByTime(6000);
     expect(publish.mock.lastCall?.[0].visible).toBe(false);
     timeline.update(true, 'long', []);
-    vi.advanceTimersByTime(4999);
-    expect(publish.mock.lastCall?.[0].visible).toBe(false);
-    vi.advanceTimersByTime(1);
     expect(publish.mock.lastCall?.[0]).toMatchObject({
       visible: true,
       actions: [],
     });
     timeline.dispose();
     expect(vi.getTimerCount()).toBe(0);
+  });
+  it('measures observed action elapsed time and freezes completed rows', () => {
+    vi.useFakeTimers();
+    let now = 100;
+    const publish = vi.fn();
+    const timeline = new IvyActivityTimeline(publish, () => now);
+    timeline.update(true, 'turn', [row]);
+    now = 2100;
+    vi.advanceTimersByTime(1000);
+    expect(publish.mock.lastCall?.[0].actions[0].elapsedMs).toBe(2000);
+    timeline.update(true, 'turn', [{ ...row, running: false }]);
+    now = 5100;
+    vi.advanceTimersByTime(1000);
+    expect(publish.mock.lastCall?.[0].actions[0].elapsedMs).toBe(2000);
+    timeline.update(true, 'new', [row]);
+    expect(publish.mock.lastCall?.[0].actions[0].elapsedMs).toBe(0);
+    timeline.dispose();
   });
   it('opens on real tools, bounds rows and avoids flicker between adjacent turns', () => {
     vi.useFakeTimers();

@@ -268,10 +268,7 @@ async function wakeCapture(page: Page) {
     );
   await feed(false, 20);
   await page.keyboard.press('m');
-  const say = async (
-    text: string,
-    options: { wake?: boolean; recognize?: boolean } = {},
-  ) => {
+  const say = async (text: string, options: { wake?: boolean } = {}) => {
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -301,16 +298,6 @@ async function wakeCapture(page: Page) {
     await feed(false, 20);
     await feed(true, 10);
     await feed(false, 60);
-    if (options.recognize === false) {
-      expect(
-        await page.evaluate(
-          () =>
-            (window as unknown as { __composerFixture: ComposerFixture })
-              .__composerFixture.recognitions.length,
-        ),
-      ).toBe(before);
-      return;
-    }
     await expect
       .poll(() =>
         page.evaluate(
@@ -374,8 +361,12 @@ test('wake-only foreground flow resumes active Terra after cancelling the first 
     'I mean',
     'I mean, explain the next task',
     'prompt',
-  ])
-    await say(ambient, { recognize: false });
+  ]) {
+    await say(ambient);
+    expect((await observed()).sessions).toEqual([]);
+    expect((await observed()).submissions).toEqual([]);
+    await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
+  }
   expect((await observed()).sessions).toEqual([]);
   expect((await observed()).submissions).toEqual([]);
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
@@ -418,15 +409,7 @@ test('wake-only foreground flow resumes active Terra after cancelling the first 
     submissions: [{ text: 'tell me the plan', dissolved: false }],
   });
   expect((await observed()).sessions).toEqual(['terra']);
-  await expect(transcript.getByRole('status')).toHaveText('tell me the plan');
-  const bounds = await transcript.evaluate((element) => {
-    const { x, y, width, height } = element.getBoundingClientRect();
-    return { x, y, width, height, viewportHeight: window.innerHeight };
-  });
-  expect(bounds.x).toBeGreaterThanOrEqual(12);
-  expect(bounds.x).toBeLessThan(32);
-  expect(bounds.width).toBeLessThanOrEqual(340);
-  expect(bounds.y + bounds.height).toBeCloseTo(bounds.viewportHeight - 16, 0);
+  await expect(transcript).toHaveCount(0);
   expect(
     await page.evaluate(
       () =>
@@ -482,7 +465,7 @@ test('wake-only foreground flow resumes active Terra after cancelling the first 
     ]);
   await say("Alright, I'm done!");
   await expect(page.locator('.emblem')).toHaveClass(/idle-motion/);
-  await say('another ambient request', { recognize: false });
+  await say('another ambient request');
   expect((await observed()).submissions).toHaveLength(2);
 });
 

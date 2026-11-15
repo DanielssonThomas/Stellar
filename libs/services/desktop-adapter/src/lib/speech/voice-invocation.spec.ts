@@ -2,6 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { VoiceInvocation, cancelsPrompt } from './voice-invocation';
 
 describe('exact Ivy invocation', () => {
+  it('accepts Hey Ivy without broadening ambient words', () => {
+    const gate = new VoiceInvocation();
+    expect(gate.accept('Hey Ivy, open the issue', false)).toEqual({
+      text: 'open the issue',
+      invoked: true,
+    });
+    gate.reset();
+    expect(gate.accept('They said hey Ivy yesterday', false)).toBeNull();
+  });
+  it.each(['I mean', 'I think', 'Heidi', 'IV', 'eerie', "I've"])(
+    'accepts %s only as a high-sensitivity prefix and preserves following text',
+    (alias) => {
+      const gate = new VoiceInvocation();
+      expect(gate.accept(`${alias}, show my calendar`, false)).toBeNull();
+      gate.setSensitivity('high');
+      expect(gate.accept(`${alias}, show my calendar`, false)).toEqual({
+        text: 'show my calendar',
+        invoked: true,
+      });
+      gate.reset();
+      expect(gate.accept(`Tell me what ${alias} means`, false)).toBeNull();
+      expect(gate.accept(`${alias}, keep this dictation`, true)).toEqual({
+        text: `${alias}, keep this dictation`,
+        invoked: false,
+      });
+    },
+  );
   it('carries an acoustic wake into one following request without a transcribed wake spelling', () => {
     const gate = new VoiceInvocation();
     gate.activateAcoustically();
