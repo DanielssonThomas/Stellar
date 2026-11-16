@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { PresentationChartAtom } from '@stellar/ui-atoms';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PresentationTextMolecule } from './presentation-text-molecule.component';
 import {
   decodePresentationStatistics,
@@ -31,6 +31,31 @@ const stats: PresentationStatistics = {
   ],
 };
 describe('statistical presentation', () => {
+  it.each([
+    ['state', 'ready'],
+    ['state', 'loading'],
+    ['state', 'error'],
+    ['coverage', 'complete'],
+    ['coverage', 'partial'],
+    ['freshness', 'current'],
+    ['freshness', 'stale'],
+    ['chartType', 'line'],
+    ['chartType', 'bar'],
+    ['chartType', 'doughnut'],
+  ])(
+    'requires a literal string for %s=%s without array or object coercion',
+    (field, member) => {
+      const value = { ...stats, metrics: [], [field]: member };
+      expect(decodePresentationStatistics(value)).not.toBeNull();
+      const object = { toString: vi.fn(() => member) };
+      for (const malformed of [[member], [[member]], object, Object(member)]) {
+        expect(
+          decodePresentationStatistics({ ...value, [field]: malformed }),
+        ).toBeNull();
+      }
+      expect(object.toString).not.toHaveBeenCalled();
+    },
+  );
   it('requires explicit source, period, state, coverage, freshness and bounded metrics', () => {
     expect(decodePresentationStatistics(stats)).toEqual(stats);
     for (const bad of [
