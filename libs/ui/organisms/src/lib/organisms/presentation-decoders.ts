@@ -5,6 +5,7 @@ import type {
   PresentationTextBlock,
   PresentationTextPayload,
 } from '@stellar/ui-molecules';
+import { decodePresentationStatistics } from '@stellar/ui-molecules';
 import { plainRecord } from './stage-json';
 import {
   decodeWorkspaceChart,
@@ -54,6 +55,10 @@ const list = (value: unknown, maximum: number): value is unknown[] =>
 function block(value: unknown): PresentationTextBlock | null {
   if (!plainRecord(value)) return null;
   const kind = value['kind'];
+  if (kind === 'statistics' && exact(value, ['kind', 'statistics'])) {
+    const statistics = decodePresentationStatistics(value['statistics']);
+    return statistics ? { kind, statistics } : null;
+  }
   if (kind === 'chart' && exact(value, ['kind', 'chart'])) {
     try {
       return { kind, chart: decodeWorkspaceChart(value['chart']) };
