@@ -1,6 +1,8 @@
 import type { WorkspaceChart } from '@stellar/desktop-contracts';
+import type { PresentationStatistics } from './presentation-statistics';
 
 export type PresentationTextBlock =
+  | { readonly kind: 'statistics'; readonly statistics: PresentationStatistics }
   | { readonly kind: 'chart'; readonly chart: WorkspaceChart }
   | { readonly kind: 'paragraph' | 'heading'; readonly text: string }
   | { readonly kind: 'code'; readonly text: string; readonly language?: string }

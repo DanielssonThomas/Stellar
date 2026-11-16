@@ -6,6 +6,77 @@
     @for (block of content.blocks; track $index) {
       @let blockIndex = $index;
       @switch (block.kind) {
+        @case ('statistics') {
+          @let stats = block.statistics;
+          <section
+            class="statistics rounded border border-stellar-line p-4"
+            aria-label="Statistical card"
+            [attr.data-state]="stats.state"
+          >
+            <h3>{{ stats.title }}</h3>
+            <p>Source: {{ stats.source }}</p>
+            <p>Observation period: {{ stats.period }}</p>
+            @if (stats.state === 'loading') {
+              <div aria-busy="true">
+                <stellar-skeleton-atom shape="text" /><span class="sr-only"
+                  >Loading statistics</span
+                >
+              </div>
+            } @else if (stats.state === 'error') {
+              <p role="status">Retrieval failed; values unknown.</p>
+            } @else {
+              <p class="text-stellar-muted">
+                {{
+                  stats.coverage === 'partial'
+                    ? 'Partial coverage — incomplete.'
+                    : 'Complete coverage.'
+                }}
+              </p>
+              @if (stats.freshness === 'stale') {
+                <p role="status">Stale data — not current.</p>
+              }
+              <dl class="statistical-metrics grid gap-4">
+                @for (metric of stats.metrics; track $index) {
+                  <div class="min-w-0">
+                    <dt>{{ metric.name }}</dt>
+                    <dd class="text-stellar-primary">
+                      {{ metric.value === null ? 'Unknown' : metric.value }}
+                      {{ metric.unit }}
+                    </dd>
+                    @if (metric.comparison; as comparison) {
+                      <dd>
+                        Comparison: {{ comparison.value }} {{ metric.unit }} ·
+                        {{ comparison.period }} · Source:
+                        {{ comparison.source }}
+                      </dd>
+                    }
+                  </div>
+                } @empty {
+                  <div>
+                    <dt>No observations</dt>
+                    <dd>No data for this period.</dd>
+                  </div>
+                }
+              </dl>
+              @if (stats.chartType) {
+                @if (statisticsCharts()[blockIndex]; as chart) {
+                  <p>
+                    Known {{ stats.metrics[0].unit }} values; unknowns omitted,
+                    never zero.
+                  </p>
+                  <stellar-presentation-chart-atom
+                    [chart]="chart"
+                    [title]="stats.title"
+                  />
+                } @else {
+                  <p>
+                    No chart: units must match; doughnut needs positive data.
+                  </p>
+                }
+              }
+            }
+          </section>
+        }
         @case ('chart') {
           <stellar-presentation-chart-atom
             [chart]="block.chart"

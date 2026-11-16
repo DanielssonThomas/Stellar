@@ -1,7 +1,8 @@
-import { Component, input, inject } from '@angular/core';
+import { Component, input, inject, computed } from '@angular/core';
 import { SkeletonAtom, PresentationChartAtom } from '@stellar/ui-atoms';
 import type { PresentationTextPayload } from './presentation-model';
 import { PRESENTATION_EDIT } from './presentation-edit';
+import { statisticsChart } from './presentation-statistics';
 
 @Component({
   selector: 'stellar-presentation-text-molecule',
@@ -13,6 +14,12 @@ import { PRESENTATION_EDIT } from './presentation-edit';
 })
 export class PresentationTextMolecule {
   readonly payload = input<PresentationTextPayload | null>(null);
+  readonly statisticsCharts = computed(
+    () =>
+      this.payload()?.blocks.map((block) =>
+        block.kind === 'statistics' ? statisticsChart(block.statistics) : null,
+      ) ?? [],
+  );
   readonly loading = input(false);
   private readonly edit = inject(PRESENTATION_EDIT);
   toggle(blockIndex: number, itemIndex: number) {

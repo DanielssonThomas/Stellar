@@ -1,4 +1,14 @@
 @import './presentation-content.css';
+.statistics {
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+@container (min-width: 32rem) {
+  .statistical-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 .presentation .checklist {
   padding-left: 0;
   list-style: none;
