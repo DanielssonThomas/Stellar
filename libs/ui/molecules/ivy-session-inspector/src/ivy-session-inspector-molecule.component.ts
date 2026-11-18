@@ -34,6 +34,7 @@ export class IvySessionInspectorMolecule {
   readonly sessions = input<readonly IvySessionSummary[]>([]);
   readonly messages = input<readonly IvySessionMessage[]>([]);
   readonly error = input('');
+  readonly recoveryNotice = input('');
   readonly status = input('Disconnected');
   readonly voice = input('Local voice idle');
   readonly reflex = input('Unavailable');
@@ -51,6 +52,7 @@ export class IvySessionInspectorMolecule {
   readonly moreSessions = output<void>();
   readonly olderMessages = output<void>();
   readonly newSession = output<void>();
+  readonly recoverSession = output<string>();
   readonly query = signal('');
   readonly filtered = computed(() => {
     const query = this.query().trim().toLowerCase();

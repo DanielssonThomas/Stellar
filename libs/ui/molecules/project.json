@@ -1,7 +1,7 @@
 {
   "name": "ui-molecules",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/ui/molecules/src",
+  "sourceRoot": "libs/ui/molecules",
   "prefix": "stellar",
   "projectType": "library",
   "tags": ["scope:shared", "type:ui", "layer:molecule"],
@@ -29,7 +29,9 @@
     },
     "unit-test": {
       "executor": "@nx/angular:unit-test",
-      "options": {}
+      "options": {
+        "include": ["src/**/*.spec.ts", "ivy-session-inspector/**/*.spec.ts"]
+      }
     },
     "lint": {
       "executor": "@nx/eslint:lint"

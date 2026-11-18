@@ -98,6 +98,44 @@ Angular production builds keep critical CSS external (`optimization.styles.inlin
 
 ## Contracts and checks
 
+### Recover a retained Ivy conversation
+
+Open the session inspector with **C**, browse to the conversation, then choose
+**Recover this conversation**. Browsing alone remains read-only. Recovery uses
+the Desktop's own workspace transport and the native owner's existing fenced
+`editor_mcp` operation; credentials and transport specifications never cross the
+renderer contract. The selected conversation's actual model and logical/stored
+identity must match the readback. Recovery creates no conversation, sends no
+prompt, changes no edit-approval policy and resets no backend history.
+
+The native host first checks current/target quiescence and rejects pending turns,
+approvals, unknown notification work, unsupported models, foreign profiles or an
+editor selection other than the Desktop-owned workspace. It journals the bounded
+load intent before rebinding. A lost reply retains that same native operation ID
+and fences new prompts/model rotation; **Check response** inspects/completes that
+same intent instead of inventing another operation. Failure preserves the prior
+selection and reports busy/unavailable/uncertain recovery. Do not use New session,
+edit journals or strip MCP to work around a refused load.
+
+Settled prior selection metadata and notification journals are retained in
+native-owned per-session archives before switching the active journal. Unknown
+notification work prevents a switch. Existing lifecycle journals keep their
+session scope; recovery does not migrate notification recipients or authorize
+speech. The inspector is a deferred package entry point, loaded when opened, to
+keep recovery within the unchanged initial bundle limit.
+
+Automated bridge/native/adapter/browser fixtures cover transport reattachment,
+identity/history preservation, explicit selection and refusal. They do not prove
+an installed original conversation recovered. For live qualification after a
+separately authorized application: retain the original logical ID and terminal
+admission reference without copying its transport; use the running Desktop's
+recovery action; verify the same logical/stored identity by source-backed native
+metadata; send one new ordinary request asking for one harmless supported status
+tool call; correlate its canonical completed admission, model/tool results and
+unchanged identity. Never resubmit a failed admission. Record native response,
+Desktop presentation, notification binding and audible playback separately. Stop
+on refusal or unknown effect and retain the native pending-load journal.
+
 Active Ivy voice interactions fade other Windows playback sessions to 20% of their saved scalar level over approximately 800 ms. Foreground speech starts the fade; transcription, prompt preparation, model thinking, synthesis and playback keep it held. Listening pauses have a 1.6-second grace period so the utterance boundary does not briefly restore volume. Every local speech request also holds ducking through synthesis and playback, without requiring a microphone turn. Completed playback, cancellation, failure, microphone stop and suspension release the interaction lease with an approximately 800 ms fade back. Passive wake listening alone does not change playback volume. Master endpoint volume and mute remain unchanged. Ivy's native-owned speech worker identifies its actual interpreter over its private protocol before any audio request is dispatched; its process and the native Stellar host are excluded.
 
 The native volume worker retains each session's original scalar throughout a turn, so renewals and interrupted fades do not compound reductions. It checks active render devices and new sessions every 250 ms, with at most 256 owned or manually overridden session identities. Explicit per-session volume changes supersede the saved level and suppress further attenuation of that session until release. Changing master volume remains a user adjustment and does not affect saved per-session levels. Removed sessions and graceful exit restore owned levels when their interfaces remain available. The renderer renews a six-second native lease every two seconds; expiry starts restoration. Shared sessions with ambiguous process ownership are skipped unless identified as Windows system sounds. Disconnected devices, failed writes and abrupt process termination cannot guarantee restoration; Windows may retain session mixer levels after a forced kill. Exclusive-mode applications and hardware mixing can bypass session volume controls. This is Windows-only attenuation, with no claim of physical acoustic measurement.

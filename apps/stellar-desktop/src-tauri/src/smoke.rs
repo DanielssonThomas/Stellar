@@ -221,7 +221,7 @@ fn check_page(window: Webview) {
                 if(inspectorRejected!==2)throw Error('Inspector malformed contract failed');
                 stage='lifecycle-validation';
                 let lifecycleRejected = 0;
-                for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply']) {
+                for (const name of ['ivy_new_session', 'ivy_reload_mcp', 'ivy_question_reply', 'ivy_load_retained']) {
                     try { await invoke(name, { request: { version: 2 } }); }
                     catch (error) { if (error === 'malformed_request') lifecycleRejected++; }
                 }
@@ -276,7 +276,7 @@ fn check_page(window: Webview) {
                     stage='detailed-window-capture';
                     if (!await (__DETAILED_CAPTURE__)) throw Error('Repeated detailed window capture failed');
                 }
-                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, awarenessChecks, diagnostics:[awarenessOk,musicOk,...workspaceChecks,mediaOk,lifecycleRejected===3,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: awarenessOk && musicOk && mediaOk && lifecycleRejected === 3 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
+                await invoke('smoke_result', { workspaceMetrics, stage, volumeProbe, awarenessChecks, diagnostics:[awarenessOk,musicOk,...workspaceChecks,mediaOk,lifecycleRejected===4,cleanupRejected,telemetryOk,sessionsOk,snapshotBusy,disconnectResponsive,cancelledRotation,capturedWindow,!!rendered,styled,adapterReady,malformedRejected,rejected], success: awarenessOk && musicOk && mediaOk && lifecycleRejected === 4 && cleanupRejected && telemetryOk && sessionsOk && snapshotBusy && disconnectResponsive && cancelledRotation && capturedWindow && !!rendered && styled && adapterReady && malformedRejected && reply.version === 1 &&
                     reply.application === 'stellar-desktop' && reply.ready === true && rejected });
             } catch (error) { if(typeof error==='string' && ['blocked','limit','unavailable','malformed'].includes(error))stage+='-'+error; await invoke('smoke_result', { success:false,stage }); }
         })();
@@ -346,6 +346,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::ivy::ivy_clear_conversation,
             crate::ivy::ivy_new_session,
             crate::ivy::ivy_reload_mcp,
+            crate::ivy::ivy_load_retained,
             crate::ivy::ivy_question_reply,
             crate::ivy::ivy_claim_update,
             crate::ivy::ivy_disconnect,

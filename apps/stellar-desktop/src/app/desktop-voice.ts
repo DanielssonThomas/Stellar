@@ -222,6 +222,8 @@ export class DesktopVoice {
     newSession: () => this.ivy.newSession(),
     onNewSession: () => this.foregroundCleared?.('new_session'),
     reloadMcp: () => this.ivy.reloadMcp(),
+    loadRetained: async (sid) =>
+      (await this.ivy.loadRetained(sid)) ? this.ivy.state().model : null,
     readSession: () => this.readSession(),
     id: () => crypto.randomUUID(),
     onChange: (view) =>
@@ -323,6 +325,9 @@ export class DesktopVoice {
 
   newSession(): Promise<boolean> {
     return this.conversation.newSession();
+  }
+  loadRetained(sid: string): Promise<boolean> {
+    return this.conversation.loadRetained(sid);
   }
   submitText(text: string): Promise<boolean> {
     return this.conversation.withCaptureReleased(async (signal) => {

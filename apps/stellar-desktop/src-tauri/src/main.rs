@@ -32,7 +32,7 @@ pub use speech::{OwnedSpeech, SpeechCompletion};
 fn main() {
     use tauri::{Emitter, Manager};
     debug_assert_eq!(awareness::contracts::AWARENESS_COMMANDS.len(), 3);
-    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 12);
+    debug_assert_eq!(ivy::contracts::IVY_COMMANDS.len(), 13);
     debug_assert_eq!(
         ivy::contracts::WORKSPACE_REPLY_COMMAND,
         "workspace_tool_reply"
@@ -183,6 +183,7 @@ fn main() {
         ivy::ivy_clear_conversation,
         ivy::ivy_new_session,
         ivy::ivy_reload_mcp,
+        ivy::ivy_load_retained,
         ivy::ivy_question_reply,
         ivy::ivy_claim_update,
         ivy::workspace_tool_reply,

@@ -240,7 +240,19 @@
         </section>
       </div>
       <footer class="inspector-footer flex items-center justify-between gap-3">
+        @if (recoveryNotice()) {
+          <p role="status">{{ recoveryNotice() }}</p>
+        }
         <p>Browsing history keeps your current conversation active.</p>
+        @if (current(); as selected) {
+          <button
+            type="button"
+            [disabled]="busy() || loading()"
+            (click)="recoverSession.emit(selected.id)"
+          >
+            Recover this conversation
+          </button>
+        }
         <button type="button" [disabled]="busy()" (click)="newSession.emit()">
           New session
         </button>

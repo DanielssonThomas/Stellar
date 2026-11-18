@@ -3,6 +3,11 @@ use serde_json::{Value, json};
 
 impl Session {
     pub fn event(&mut self, frame: Value) -> Result<(), IvyErrorCode> {
+        if self.record.pending_load.is_some() {
+            // Leave replay cursors untouched until the selected owner is confirmed.
+            self.restore_admission_state();
+            return Ok(());
+        }
         self.apply_event(&frame)?;
         if frame.get("event").and_then(Value::as_str) == Some("gateway")
             && let Some(params) = frame.pointer("/data/params")

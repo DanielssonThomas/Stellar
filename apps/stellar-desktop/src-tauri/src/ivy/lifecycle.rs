@@ -2,10 +2,11 @@ use super::{contracts::*, journal::PendingReset, session::Session};
 use serde_json::{Value, json};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Control {
     NewSession,
     ReloadMcp,
+    LoadRetained(String),
 }
 
 impl Session {
@@ -13,8 +14,11 @@ impl Session {
         let result = match control {
             Control::NewSession => self.new_session(),
             Control::ReloadMcp => self.reload_mcp(),
+            Control::LoadRetained(sid) => self.load_retained(&sid),
         };
-        if result.is_err() && self.record.pending_reset.is_some() {
+        if result.is_err()
+            && (self.record.pending_reset.is_some() || self.record.pending_load.is_some())
+        {
             self.shared.update(self.epoch, |view| {
                 view.turn = IvyTurnState::Uncertain;
                 view.activity.clear();
@@ -30,7 +34,10 @@ impl Session {
     }
 
     fn reload_mcp(&mut self) -> Result<(), IvyErrorCode> {
-        if self.record.unsettled || self.record.pending_reset.is_some() {
+        if self.record.unsettled
+            || self.record.pending_reset.is_some()
+            || self.record.pending_load.is_some()
+        {
             return Err(IvyErrorCode::Busy);
         }
         if let Some(sid) = self.record.session_id.clone() {
@@ -47,7 +54,7 @@ impl Session {
     }
 
     pub(super) fn new_session(&mut self) -> Result<(), IvyErrorCode> {
-        if self.record.unsettled {
+        if self.record.unsettled || self.record.pending_load.is_some() {
             return Err(IvyErrorCode::Busy);
         }
         if let Some(pending) = &self.record.pending_reset {

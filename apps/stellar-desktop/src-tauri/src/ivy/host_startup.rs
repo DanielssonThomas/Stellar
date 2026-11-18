@@ -28,7 +28,10 @@ pub(super) fn acquire(
                         view.model = record.model;
                         view.verified_model = None;
                         view.workspace_tools = WorkspaceToolsState::Unavailable;
-                        view.turn = if record.unsettled || record.pending_reset.is_some() {
+                        view.turn = if record.unsettled
+                            || record.pending_reset.is_some()
+                            || record.pending_load.is_some()
+                        {
                             IvyTurnState::Uncertain
                         } else {
                             IvyTurnState::Idle

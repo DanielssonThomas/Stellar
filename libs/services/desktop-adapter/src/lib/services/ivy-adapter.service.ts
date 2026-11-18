@@ -16,6 +16,7 @@ import {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyLoadRetainedCommand,
   ivyQuestionReplyCommand,
   ivyClaimUpdateCommand,
   type IvyQuestionAction,
@@ -172,6 +173,18 @@ export class IvyAdapterService {
         return false;
       throw error;
     }
+  }
+
+  async loadRetained(sessionId: string): Promise<boolean> {
+    const state = await this.invoke(ivyLoadRetainedCommand, {
+      version: 1,
+      session_id: sessionId,
+    });
+    return (
+      state.turn === 'idle' &&
+      state.verified_model === state.model &&
+      !state.error
+    );
   }
 
   private listen(): Promise<() => void> {

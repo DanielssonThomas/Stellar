@@ -1,0 +1,127 @@
+"""Inert native-client contract tests; no installed gateway or credential access."""
+import copy
+import importlib.util
+from pathlib import Path
+import sys
+import unittest
+from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[2] / 'apps/stellar-desktop/src-tauri/src/ivy'
+def load(name):
+    spec = importlib.util.spec_from_file_location('stellar_' + name, ROOT / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules['stellar_' + name] = module
+    return module
+controls = load('ivy_controls')
+retained = load('ivy_retained')
+service = load('workspace_service')
+
+class Lease:
+    record = Path(__file__).with_suffix('.inert-absent')
+    def acquire(self): pass
+    def release(self): pass
+
+class Workspace:
+    task = object()
+    owner_session = 'current'
+    def editor(self):
+        return {'mcp_servers': [{'type':'http', 'name':'stellar_workspace', 'url':'http://127.0.0.1:1/mcp', 'headers':[{'name':'Authorization','value':'inert-own-token'}]}]}
+    def verifies(self, info): return info.get('attached') is True
+    def bind_session(self, sid): self.owner_session = sid
+
+class Client:
+    def __init__(self):
+        self.calls = []
+        self.info = {'source':'acp', 'profile_id':'fixture', 'model':'gpt-6.1-sol',
+                     'edit_approval_policy':'ask', 'enabled_toolsets':['file','mcp-editor_stellar_workspace_1234abcd']}
+        self.state = {'session_id':'retained','stored_session_id':'physical','running':False,'pending':[],
+                      'open_requests':[], 'revision':4,'execution_generation':2,'info':self.info}
+        self.mutations = {}
+        self.history = ['user question', 'original answer']
+    async def rpc(self, method, **p):
+        self.calls.append((method, p))
+        if method == 'runtime.describe': return {'capabilities':['acp-session-mcp-v1']}
+        if method == 'session.resume':
+            if p.get('editor'): self.info['attached'] = True
+            state=copy.deepcopy(self.state)
+            if p['session_id']=='current': state['session_id']='current'
+            return state
+        if method == 'session.mutate':
+            self.mutations.setdefault(p['request_id'], p)
+            if self.mutations[p['request_id']] != p: raise ValueError('identity conflict')
+            self.info['attached'] = True
+            return {'session_id':'retained','operation':'editor_mcp'}
+        raise AssertionError('Unexpected effect ' + method)
+
+class Connection:
+    active = None
+    selected_session = 'current'
+    def __init__(self):
+        self.client = Client()
+        self.lease = Lease()
+
+class RetainedTests(unittest.IsolatedAsyncioTestCase):
+    async def test_existing_current_session_reconnect_resupplies_only_its_own_transport(self):
+        own=service.WorkspaceService(None,None,None)
+        own.port=1;own.bearer='inert-own-token';own.task=SimpleNamespace(done=lambda:False)
+        own.bind_session('retained')
+        raw=Client();wrapped=own.wrap_client(raw)
+        await wrapped.rpc('session.resume',session_id='retained')
+        self.assertEqual(raw.calls[-1][1]['editor'],{'mcp_servers':own.editor()['mcp_servers']})
+        await wrapped.rpc('session.resume',session_id='other')
+        self.assertNotIn('editor',raw.calls[-1][1])
+    async def test_restart_restores_actual_own_transport_without_new_conversation_or_policy_change(self):
+        c, w = Connection(), Workspace()
+        prepared = await retained.prepare(c, w, 'retained', 'fixture')
+        request = {**prepared, 'request_id':'load-once'}
+        first = await retained.commit(c, w, request, 'fixture')
+        self.assertEqual((first['session_id'], first['stored_session_id'], first['model']), ('retained','physical','gpt-6.1-sol'))
+        # A lost reply is checked with the same immutable native operation, never a new grant/effect.
+        await retained.commit(c, w, request, 'fixture')
+        self.assertEqual(len(c.client.mutations), 1)
+        self.assertEqual(c.client.history, ['user question', 'original answer'])
+        self.assertEqual(w.owner_session, 'retained')
+        mutation = next(iter(c.client.mutations.values()))
+        self.assertEqual(mutation['operation'], 'editor_mcp')
+        self.assertEqual(mutation['payload'], {'mcp_servers':w.editor()['mcp_servers']})
+        self.assertEqual(mutation['expected_revision'], 4)
+        self.assertEqual(mutation['expected_generation'], 2)
+        self.assertTrue(any(p.get('editor') == {'mcp_servers':w.editor()['mcp_servers']} for m,p in c.client.calls if m=='session.resume'))
+        self.assertFalse(any(m in {'prompt.submit','session.create','approval.respond','reload.mcp'} for m,p in c.client.calls))
+
+    async def test_busy_approval_unknown_or_foreign_target_is_refused_before_mutation(self):
+        changes = [('running',True),('pending',[{}]),('open_requests',[{}]),('stored_session_id',None)]
+        for key,value in changes:
+            c,w=Connection(),Workspace();c.client.state[key]=value
+            with self.subTest(key=key), self.assertRaises(controls.Refused):
+                await retained.prepare(c,w,'retained','fixture')
+            self.assertFalse(c.client.mutations)
+            self.assertEqual(w.owner_session,'current')
+        for key,value in [('source','cli'),('profile_id','other'),('model','unknown'),('enabled_toolsets',['file','mcp-editor_other_1234abcd'])]:
+            c,w=Connection(),Workspace();c.client.info[key]=value
+            with self.subTest(key=key), self.assertRaises(controls.Refused):
+                await retained.prepare(c,w,'retained','fixture')
+            self.assertFalse(c.client.mutations)
+
+    async def test_mismatched_physical_model_or_policy_readback_does_not_bind_new_selection(self):
+        for key,value in [('stored_session_id','different'),('model','gpt-6.1-terra'),('edit_approval_policy','session')]:
+            c,w=Connection(),Workspace();p=await retained.prepare(c,w,'retained','fixture')
+            if key=='stored_session_id':c.client.state[key]=value
+            else:c.client.info[key]=value
+            with self.subTest(key=key), self.assertRaises(controls.Refused):
+                await retained.commit(c,w,{**p,'request_id':'fixed'},'fixture')
+            self.assertEqual(w.owner_session,'current')
+
+    async def test_unknown_native_result_is_not_retried_and_preserves_selection(self):
+        c,w=Connection(),Workspace();p=await retained.prepare(c,w,'retained','fixture')
+        original=c.client.rpc
+        async def fail(method,**params):
+            if method=='session.mutate': raise TimeoutError('private details')
+            return await original(method,**params)
+        c.client.rpc=fail
+        with self.assertRaises(TimeoutError):
+            await retained.commit(c,w,{**p,'request_id':'fixed'},'fixture')
+        self.assertEqual(w.owner_session,'current')
+
+if __name__=='__main__': unittest.main()

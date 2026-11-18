@@ -15,6 +15,8 @@ import {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyLoadRetainedCommand,
+  decodeIvyLoadRetainedRequest,
   ivyQuestionReplyCommand,
   decodeIvyQuestionReply,
   decodeIvyClaimUpdate,
@@ -49,6 +51,7 @@ const commands: Record<keyof IvyCommands, true> = {
   [ivyClearConversationCommand]: true,
   [ivyNewSessionCommand]: true,
   [ivyReloadMcpCommand]: true,
+  [ivyLoadRetainedCommand]: true,
   [ivyQuestionReplyCommand]: true,
   [ivyClaimUpdateCommand]: true,
 };
@@ -67,15 +70,17 @@ export class IvyAdapter {
     try {
       if (!Object.hasOwn(commands, command)) throw new Error();
       request = (
-        command === ivyClaimUpdateCommand
-          ? decodeIvyClaimUpdate(input)
-          : command === ivyQuestionReplyCommand
-            ? decodeIvyQuestionReply(input)
-            : command === ivySubmitCommand
-              ? decodeIvySubmitRequest(input)
-              : command === ivySelectSessionCommand
-                ? decodeIvySelectRequest(input)
-                : decodeIvyRequest(input)
+        command === ivyLoadRetainedCommand
+          ? decodeIvyLoadRetainedRequest(input)
+          : command === ivyClaimUpdateCommand
+            ? decodeIvyClaimUpdate(input)
+            : command === ivyQuestionReplyCommand
+              ? decodeIvyQuestionReply(input)
+              : command === ivySubmitCommand
+                ? decodeIvySubmitRequest(input)
+                : command === ivySelectSessionCommand
+                  ? decodeIvySelectRequest(input)
+                  : decodeIvyRequest(input)
       ) as IvyCommands[K];
     } catch {
       throw new IvyAdapterError('contract');

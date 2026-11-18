@@ -80,6 +80,7 @@ export interface VoicePorts {
   readonly onForegroundEnd?: () => void;
   readonly newSession?: () => Promise<boolean>;
   readonly reloadMcp?: () => Promise<boolean>;
+  readonly loadRetained?: (sid: string) => Promise<VoiceModel | null>;
   readonly onNewSession?: () => void;
   readonly transcribe: (
     pcm: Int16Array,
@@ -1427,6 +1428,37 @@ export class VoiceConversation {
     return this.withCaptureReleased(() =>
       this.lifecycleCommand('new session', this.generation),
     );
+  }
+
+  async loadRetained(sid: string): Promise<boolean> {
+    return this.withCaptureReleased(async () => {
+      const context = this.context;
+      if (
+        !context ||
+        ['submitting', 'admitted', 'uncertain'].includes(
+          context.assistant.turn,
+        ) ||
+        this.dispatchPending ||
+        this.dispatchUncertain ||
+        this.sessionPending
+      )
+        return false;
+      this.sessionPending = true;
+      this.publish();
+      try {
+        const model = await this.ports.loadRetained?.(sid);
+        if (!model || this.disposed) return false;
+        this.finishNewSession();
+        this.solSessionStarted = model === 'sol';
+        this.setComposition({ ...this.composition, model });
+        this.controlNotice = 'Retained conversation recovered. Say Ivy.';
+        this.publish();
+        return true;
+      } finally {
+        this.sessionPending = false;
+        if (!this.disposed) this.publish();
+      }
+    });
   }
 
   private async lifecycleCommand(

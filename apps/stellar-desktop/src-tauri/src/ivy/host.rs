@@ -120,7 +120,10 @@ impl IvyHost {
                 snapshot.turn_id = record.input_id.clone();
                 snapshot.model = record.model;
                 snapshot.verified_model = None;
-                if record.unsettled || record.pending_reset.is_some() {
+                if record.unsettled
+                    || record.pending_reset.is_some()
+                    || record.pending_load.is_some()
+                {
                     snapshot.turn = IvyTurnState::Uncertain;
                 }
             }

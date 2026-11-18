@@ -18,6 +18,18 @@ import { createNativePromptCleanup } from './native-prompt-cleanup';
 
 const id = '11111111-2222-4333-8444-555555555555';
 
+describe('retained conversation voice ownership', () => {
+  it('loads once without model rotation or prompt dispatch and retains the confirmed model', async () => {
+    const loadRetained = vi.fn(async () => 'sol' as const);
+    const f = fixture({ loadRetained });
+    expect(await f.controller.loadRetained('retained')).toBe(true);
+    expect(loadRetained).toHaveBeenCalledExactlyOnceWith('retained');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.composition().model).toBe('sol');
+    f.controller.dispose();
+  });
+});
+
 describe('local Reflex admission', () => {
   const settle = async () => {
     for (let i = 0; i < 8; i++) await flush();

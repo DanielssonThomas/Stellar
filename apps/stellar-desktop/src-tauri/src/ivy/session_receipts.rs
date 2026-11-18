@@ -33,6 +33,9 @@ impl Session {
     }
 
     pub fn reconcile(&mut self) -> Result<(), IvyErrorCode> {
+        if self.record.pending_load.is_some() {
+            return self.finish_retained_load();
+        }
         if self.record.pending_reset.is_some() {
             return self.new_session();
         }

@@ -20,6 +20,9 @@ METHODS = {
     'ping': {}, 'runtime.describe': {},
     'session.create': {'request_id': str, 'model': str},
     'session.resume': {'session_id': str},
+    'session.load.prepare': {'session_id': str},
+    'session.load': {'session_id': str, 'stored_session_id': str, 'request_id': str,
+                     'revision': int, 'generation': int, 'model': str, 'edit_policy': str, 'current_session_id': object},
     'session.info': {'session_id': str},
     'session.events.since': {'session_id': str, 'replay_epoch': str, 'last_sequence': int},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
@@ -603,17 +606,25 @@ async def request_worker(conn, workspace, queue, approvals=None):
             raise Closed() from None
         rid, method, params = request
         reconciler = getattr(conn, 'notification_reconciler', None)
-        if method in {'session.create', 'session.resume', 'session.new', 'workspace.stop'}:
+        if method in {'session.create', 'session.resume', 'session.load', 'session.new', 'workspace.stop'}:
             if reconciler is not None:
                 reconciler.pause()
         if method == 'runtime.describe':
             conn.background_v1 = False
-        resuming = method == 'session.resume' and approvals is not None
+        resuming = method in {'session.resume', 'session.load'} and approvals is not None
         if resuming:
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'stellar.session.recover':
+            if method in {'session.load.prepare', 'session.load'}:
+                from stellar_ivy_retained import prepare, commit
+                async with asyncio.timeout(DEADLINE):
+                    if method == 'session.load.prepare':
+                        result = await prepare(conn, workspace, params['session_id'], PROFILE)
+                    else:
+                        result = await commit(conn, workspace, params, PROFILE)
+                        conn.sessions.add(params['session_id'])
+            elif method == 'stellar.session.recover':
                 from stellar_ivy_recovery import recover
                 result = await recover(conn, params, PROFILE, DEADLINE,
                     lambda peer, cursor: replay_events(peer, cursor, workspace))
@@ -782,11 +793,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if type(saved.get('response_reused')) is bool:
                             projected['result']['response_reused'] = saved['response_reused']
                 result = projected
-            if method in {'session.create', 'session.resume'}:
+            if method in {'session.create', 'session.resume', 'session.load'}:
                 conn.selected_session = result.get('session_id')
                 if reconciler is not None:
                     if (not string(conn.selected_session) or
-                            (method == 'session.resume' and conn.selected_session != params['session_id'])):
+                            (method in {'session.resume', 'session.load'} and conn.selected_session != params['session_id'])):
                         raise Closed()
                     reconciler.select(conn.selected_session)
             if resuming:

@@ -16,6 +16,42 @@ describe('IvySessionInspectorMolecule', () => {
     dialog.close = vi.fn(() => dialog.removeAttribute('open'));
   });
 
+  it('requires an explicit recovery click and blocks it while busy without changing history selection', async () => {
+    const recover = vi.fn(),
+      selected = vi.fn();
+    fixture.componentInstance.recoverSession.subscribe(recover);
+    fixture.componentInstance.selected.subscribe(selected);
+    fixture.componentRef.setInput('visible', true);
+    fixture.componentRef.setInput('sessions', [
+      {
+        id: 'retained',
+        title: 'Earlier conversation',
+        model: 'gpt-6.1-sol',
+        started_at: null,
+        last_activity_at: null,
+        message_count: 2,
+      },
+    ]);
+    fixture.componentRef.setInput('snapshot', {
+      selected_session_id: 'retained',
+    });
+    await fixture.whenStable();
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'button',
+      ) as NodeListOf<HTMLButtonElement>,
+    ).find((b) => b.textContent?.includes('Recover this conversation'));
+    expect(recover).not.toHaveBeenCalled();
+    button?.click();
+    expect(recover).toHaveBeenCalledExactlyOnceWith('retained');
+    expect(selected).not.toHaveBeenCalled();
+    fixture.componentRef.setInput('busy', true);
+    await fixture.whenStable();
+    expect(button?.disabled).toBe(true);
+    button?.click();
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
   it('renders honest unavailable state and current runtime status while open', async () => {
     fixture.componentRef.setInput('visible', true);
     await fixture.whenStable();

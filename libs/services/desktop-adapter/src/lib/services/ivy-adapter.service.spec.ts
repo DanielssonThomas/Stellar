@@ -3,12 +3,42 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   ivyConnectCommand,
   ivyClaimUpdateCommand,
+  ivyLoadRetainedCommand,
   type IvySnapshot,
 } from '@stellar/desktop-contracts';
 import { initialIvySnapshot, type IvyTransport } from '../ivy/ivy-transport';
 import { IvyAdapterService, IVY_TRANSPORT } from './ivy-adapter.service';
 describe('Ivy service startup and revision ownership', () => {
   afterEach(() => TestBed.resetTestingModule());
+  it('loads the exact requested identity only through native confirmation and preserves uncertain refusal', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...initialIvySnapshot(),
+        revision: '1',
+        model: 'sol',
+        verified_model: 'sol',
+      })
+      .mockRejectedValueOnce('uncertain');
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: IVY_TRANSPORT,
+          useValue: { invoke, listen: async () => vi.fn() },
+        },
+      ],
+    });
+    const service = TestBed.inject(IvyAdapterService);
+    expect(await service.loadRetained('retained')).toBe(true);
+    expect(invoke).toHaveBeenCalledWith(ivyLoadRetainedCommand, {
+      request: { version: 1, session_id: 'retained' },
+    });
+    await expect(service.loadRetained('another')).rejects.toMatchObject({
+      code: 'uncertain',
+    });
+    expect(service.state().model).toBe('sol');
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
   it('subscribes before one silent connection and keeps a newer event over an older reply', async () => {
     let callback!: (value: unknown) => void;
     const events: string[] = [];

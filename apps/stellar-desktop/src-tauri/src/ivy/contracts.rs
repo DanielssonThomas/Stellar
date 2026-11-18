@@ -127,6 +127,12 @@ pub struct IvySelectRequest {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
+pub struct IvyLoadRetainedRequest {
+    pub version: u16,
+    pub session_id: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
 pub struct IvyRequest {
     pub version: u16,
 }
