@@ -29,6 +29,7 @@ class WorkspaceService:
         self.reference = None
         self.bearer = None
         self.owner_session = None
+        self._confirmed = None
         self.tokens = []
         self.image_server = None
         self.image_secret = None
@@ -106,14 +107,11 @@ class WorkspaceService:
         if (type(info) is not dict or info.get('source') != 'acp'
                 or info.get('edit_approval_policy') not in {'ask', 'workspace_session', 'session'}):
             return False
-        launch = info.get('launch_request')
-        editor = launch.get('editor') if type(launch) is dict else None
-        servers = editor.get('mcp_servers') if type(editor) is dict else None
-        fingerprint = servers.get('fingerprint') if type(servers) is dict else None
+        if self._confirmed is None or info is not self._confirmed[0]:
+            return False
         expected = hashlib.sha256(json.dumps(self.editor()['mcp_servers'], sort_keys=True,
                                   separators=(',', ':')).encode('utf-8')).hexdigest()
-        return (type(fingerprint) is str and fingerprint.isascii() and
-                hmac.compare_digest(fingerprint, expected))
+        return hmac.compare_digest(self._confirmed[1], expected)
 
     def remember_token(self, token):
         if len(self.tokens) >= 1024:
@@ -133,9 +131,24 @@ class WorkspaceService:
                 return getattr(client, name)
 
             async def rpc(self, method, **params):
+                if method in {'session.create', 'session.resume', 'session.mutate'}:
+                    service._confirmed = None
                 if method == 'session.resume' and service.owner_session is not None and params.get('session_id') == service.owner_session:
                     params['editor'] = {'mcp_servers': service.editor()['mcp_servers']}
-                return await client.rpc(method, **params)
+                editor = params.get('editor')
+                offered = editor.get('mcp_servers') if type(editor) is dict else None
+                own = service.editor()['mcp_servers'] if offered else None
+                result = await client.rpc(method, **params)
+                if (method in {'session.create', 'session.resume'} and own is not None and offered == own
+                        and type(result) is dict and type(result.get('info')) is dict
+                        and type(result.get('session_id')) is str and result['session_id']
+                        and (method == 'session.create' or result['session_id'] == params.get('session_id'))):
+                    # Native successful resume with offered servers validates the CURRENT policy
+                    # fingerprint. launch_request retains immutable creation metadata after rebind.
+                    fingerprint = hashlib.sha256(json.dumps(own, sort_keys=True,
+                                                 separators=(',', ':')).encode('utf-8')).hexdigest()
+                    service._confirmed = (result['info'], fingerprint)
+                return result
 
         return ScopedClient()
 
@@ -181,6 +194,7 @@ class WorkspaceService:
         return result
 
     async def stop(self):
+        self._confirmed = None
         self.gate.disarm()
         if self.image_server is not None:
             self.image_server.close()
