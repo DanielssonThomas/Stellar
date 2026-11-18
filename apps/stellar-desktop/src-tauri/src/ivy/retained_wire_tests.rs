@@ -111,3 +111,94 @@ fn uncertain_serialized_commit_retains_and_reconciles_one_durable_native_intent(
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+fn archived_cursor(directory: &std::path::Path) {
+    use sha2::{Digest, Sha256};
+    let path = directory.join("retained-updates");
+    std::fs::create_dir_all(&path).unwrap();
+    super::update_store::Updates {
+        session: "retained".into(),
+        cursor: Some(("epoch".into(), 5)),
+        ..Default::default()
+    }
+    .save(&path.join(format!("{:x}.json", Sha256::digest(b"retained"))))
+    .unwrap();
+}
+
+#[test]
+fn retained_load_replays_missed_admission_before_reporting_success() {
+    let (mut session, directory, audit) = wire(Some("replay"));
+    archived_cursor(&directory);
+    let snapshot = session
+        .control(Control::LoadRetained("retained".into()))
+        .unwrap();
+    let updates =
+        super::update_store::Updates::load(&session.journal.updates_path(), "retained").unwrap();
+    assert_eq!(
+        updates.completed.len(),
+        1,
+        "missed start must be discovered from retained cursor"
+    );
+    assert_eq!(updates.completed[0].id, "missed");
+    assert_eq!(updates.completed[0].text, "Retained background answer");
+    assert_eq!(updates.cursor, Some(("epoch".into(), 6)));
+    assert_eq!(snapshot.background_updates.unwrap()[0].id, "missed");
+    assert!(session.record.pending_load.is_none());
+    let calls: Value = serde_json::from_slice(&std::fs::read(audit).unwrap()).unwrap();
+    assert!(
+        calls["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "session.events.since")
+    );
+    assert_eq!(calls["mutations"], 1);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn failed_retained_replay_keeps_same_durable_intent_and_reconciles_one_effect() {
+    let (mut session, directory, audit) = wire(Some("replay-fail-once"));
+    archived_cursor(&directory);
+    assert!(
+        session
+            .control(Control::LoadRetained("retained".into()))
+            .is_err(),
+        "replay failure cannot report recovery complete"
+    );
+    let pending = session.record.pending_load.clone().unwrap();
+    let saved: Record =
+        serde_json::from_slice(&std::fs::read(directory.join("ivy-session.json")).unwrap())
+            .unwrap();
+    assert_eq!(saved.pending_load.unwrap().request_id, pending.request_id);
+    assert_eq!(saved.session_id.as_deref(), Some("retained"));
+    assert_eq!(
+        session.shared.view.lock().unwrap().snapshot.turn,
+        IvyTurnState::Uncertain
+    );
+    session.reconcile().unwrap();
+    assert!(session.record.pending_load.is_none());
+    let updates =
+        super::update_store::Updates::load(&session.journal.updates_path(), "retained").unwrap();
+    assert_eq!(updates.completed.len(), 1);
+    let calls: Value = serde_json::from_slice(&std::fs::read(audit).unwrap()).unwrap();
+    assert_eq!(calls["mutations"], 1);
+    assert_eq!(calls["requests"][0]["request_id"], pending.request_id);
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn retained_replay_preserves_policy_differing_from_normal_access_sync() {
+    let (mut session, directory, audit) = wire(Some("policy-preserved"));
+    session
+        .control(Control::LoadRetained("retained".into()))
+        .unwrap();
+    let calls: Value = serde_json::from_slice(&std::fs::read(audit).unwrap()).unwrap();
+    assert_eq!(calls["mutations"], 1);
+    assert_eq!(calls["requests"][0]["operation"], "editor_mcp");
+    assert_eq!(calls["policy"], "workspace_session");
+    drop(session);
+    std::fs::remove_dir_all(directory).unwrap();
+}

@@ -38,7 +38,10 @@ impl Session {
             }
             // Refuse another surface's live turn or approval before changing the local selection.
             if let Some(current) = &self.record.session_id {
-                let before = self.call("session.resume", json!({"session_id":current}))?;
+                let before = self.call(
+                    "session.resume",
+                    json!({"session_id":current,"preserve_policy":true}),
+                )?;
                 if before["running"] != false
                     || before["pending"] != json!([])
                     || before.get("open_requests").is_some_and(|v| v != &json!([]))
@@ -103,7 +106,7 @@ impl Session {
         next.generation = None;
         next.model = model;
         next.route_verified = true;
-        next.pending_load = None;
+        // Keep the same durable intent through target cursor/lifecycle reconciliation.
         self.journal.save(&next)?;
         self.record = next;
         self.buffered.clear();
@@ -111,7 +114,7 @@ impl Session {
         self.shared.update(self.epoch, |view| {
             view.model = model;
             view.verified_model = Some(model);
-            view.turn = IvyTurnState::Idle;
+            view.turn = IvyTurnState::Uncertain;
             view.turn_id = None;
             view.items.clear();
             view.response_segments.clear();
@@ -121,12 +124,35 @@ impl Session {
             view.workspace_tools = WorkspaceToolsState::Unavailable;
             view.error = None;
         });
-        Ok(())
+        let pending = self.record.pending_load.take();
+        let replayed = super::connection::resume_retained(self);
+        self.record.pending_load = pending;
+        let completed = replayed.and_then(|()| {
+            let mut settled = self.record.clone();
+            settled.pending_load = None;
+            self.journal.save(&settled)?;
+            self.record = settled;
+            Ok(())
+        });
+        self.restore_admission_state();
+        completed
     }
 
     fn select_update_store(&self, target: &str) -> Result<(), IvyErrorCode> {
-        self.check_update_switch(target)?;
         let path = self.journal.updates_path();
+        if self.record.session_id.as_deref() == Some(target)
+            && self
+                .record
+                .pending_load
+                .as_ref()
+                .is_some_and(|p| p.session_id == target)
+        {
+            // Replay may have admitted background work before interruption. Resume that
+            // same confirmed selection; fresh switches still require the normal fence.
+            super::update_store::Updates::load(&path, target)?;
+            return Ok(());
+        }
+        self.check_update_switch(target)?;
         let archive = path.with_file_name("retained-updates");
         let archived =
             |sid: &str| archive.join(format!("{:x}.json", Sha256::digest(sid.as_bytes())));

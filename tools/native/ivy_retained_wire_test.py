@@ -24,6 +24,17 @@ async def exchange(conn, workspace, method, params):
 
 
 class RetainedWireTests(unittest.IsolatedAsyncioTestCase):
+    async def test_private_policy_preserving_resume_requires_owned_workspace_and_strict_bool(self):
+        conn = connection()
+        reply = await exchange(conn, None, 'session.resume',
+                               {'session_id':'retained', 'preserve_policy':True})
+        self.assertEqual(reply, {'id':1,'error':{'code':'unavailable'}})
+        self.assertEqual(conn.client.calls, [])
+        for value in (1, 'true', None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                bridge.validate({'id':1,'method':'session.resume',
+                                 'params':{'session_id':'retained','preserve_policy':value}})
+
     async def test_nullable_current_selection_survives_the_wire_without_creating_a_session(self):
         conn, workspace = connection(), Workspace()
         conn.selected_session = None

@@ -13,14 +13,40 @@ from ivy_bridge_test import bridge
 from ivy_retained_test import Connection, Workspace, retained
 
 
-def connection(audit=None):
+def connection(audit=None, mode=None):
     conn = Connection()
     conn.sessions = {'current'}
     conn.client.info['attached'] = True
+    if mode == 'policy-preserved':
+        conn.client.info['edit_approval_policy'] = 'workspace_session'
+    conn.client.state.update(replay_epoch='epoch', last_sequence=7)
     original = conn.client.rpc
+    replay_failed = False
 
     async def rpc(method, **params):
-        result = await original(method, **params)
+        nonlocal replay_failed
+        assert 'preserve_policy' not in params, 'private option must not reach native API'
+        if method == 'session.events.since':
+            conn.client.calls.append((method, params))
+            if mode == 'replay-fail-once' and not replay_failed:
+                replay_failed = True
+                raise retained.Refused('unavailable')
+            events = []
+            if mode in {'replay', 'replay-fail-once'}:
+                events = [{'session_id': 'retained', 'admission_id': 'missed',
+                           'authority_epoch': 1, 'execution_generation': 2,
+                           'replay_epoch': 'epoch', 'seq': 6, 'type': 'message.start',
+                           'payload': {'autonomous': True}}]
+            result = {'events': events, 'replay_epoch': 'epoch',
+                      'last_sequence': 7, 'truncated': False}
+        elif method == 'prompt.receipt':
+            conn.client.calls.append((method, params))
+            result = {'ref': {'session_id': 'retained'}, 'admission_id': 'missed',
+                      'authority_epoch': 1, 'execution_generation': 2, 'sequence': 6,
+                      'status': 'terminal', 'outcome': 'completed',
+                      'result': {'final_response': 'Retained background answer'}}
+        else:
+            result = await original(method, **params)
         if audit is not None:
             Path(audit).write_text(json.dumps({
                 'methods': [m for m, _ in conn.client.calls],
@@ -29,6 +55,7 @@ def connection(audit=None):
                               'generation': p['expected_generation'], 'operation': p['operation']}
                              for p in conn.client.mutations.values()],
                 'history': conn.client.history,
+                'policy': conn.client.info['edit_approval_policy'],
             }))
         return result
 
@@ -42,7 +69,8 @@ def connection(audit=None):
 
 async def serve(audit=None, mode=None):
     bridge.PROFILE = 'fixture'
-    conn, workspace, queue = connection(audit), Workspace(), asyncio.Queue()
+    conn, workspace, queue = connection(audit, mode), Workspace(), asyncio.Queue()
+    workspace.redact = lambda text: text
     if mode == 'lost-commit-reply':
         original_commit = retained.commit
         first = True

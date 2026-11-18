@@ -19,7 +19,7 @@ DEADLINE = 15
 METHODS = {
     'ping': {}, 'runtime.describe': {},
     'session.create': {'request_id': str, 'model': str},
-    'session.resume': {'session_id': str},
+    'session.resume': {'session_id': str, 'preserve_policy': bool},
     'session.load.prepare': {'session_id': str},
     'session.load': {'session_id': str, 'stored_session_id': str, 'request_id': str,
                      'revision': int, 'generation': int, 'model': str, 'edit_policy': str, 'current_session_id': object},
@@ -119,7 +119,7 @@ def validate(request):
     if type(method) is not str or method not in METHODS or type(params) is not dict:
         raise ValueError()
     schema = METHODS[method]
-    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
+    optional = {'session.resume': {'preserve_policy'}, 'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
     required = set(schema) - optional.get(method, set())
     if not required <= set(params) or set(params) - set(schema):
         raise ValueError()
@@ -709,14 +709,21 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if info.get('model') != params['model'] or not workspace.verifies(info):
                             raise Closed()
                     result = {'session_id': sid, 'model': info['model']}
-            elif method == 'session.resume' and workspace is not None and workspace.task is not None:
-                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
-                if 'acp-session-mcp-v1' not in description.get('capabilities', []):
-                    raise Closed()
-                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
-                if not workspace.verifies(result.get('info', {})):
-                    raise Closed()
-                result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+            elif method == 'session.resume':
+                preserve_policy = params.pop('preserve_policy', False)
+                if workspace is not None and workspace.task is not None:
+                    description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                    if 'acp-session-mcp-v1' not in description.get('capabilities', []):
+                        raise Closed()
+                    result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+                    if not workspace.verifies(result.get('info', {})):
+                        raise Closed()
+                    if not preserve_policy:
+                        result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                else:
+                    if preserve_policy:
+                        raise Refused('unavailable')
+                    result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
             elif method == 'prompt.submit':
                 epoch = params.pop('workspace_epoch', None)
                 token = None

@@ -31,7 +31,8 @@ fn broker_fault(wrong: bool, fault_path: Option<&std::path::Path>) -> Broker {
 while ($line = [Console]::ReadLine()) {{
  $r = $line | ConvertFrom-Json
  $result = switch ($r.method) {{
-  'session.resume' {{ @{{session_id='session';running=$false;pending=@();open_requests=@();replay_epoch='epoch';last_sequence=5;execution_generation=3}} }}
+  'session.resume' {{ @{{session_id=$r.params.session_id;running=$false;pending=@();open_requests=@();replay_epoch='epoch';last_sequence=5;execution_generation=3}} }}
+  'session.events.since' {{ @{{events=@();truncated=$false;replay_epoch=$r.params.replay_epoch;last_sequence=$r.params.last_sequence}} }}
   'session.load.prepare' {{ @{{session_id='retained';stored_session_id='physical';revision=4;generation=2;model='gpt-6.1-sol';edit_policy='ask'}} }}
   'session.load' {{ {fault} if ($r.params.session_id -ne 'retained' -or $r.params.revision -ne 4) {{ exit 4 }}; @{{session_id='retained';stored_session_id='{}';model='gpt-6.1-sol'}} }}
   default {{ exit 2 }}
@@ -209,6 +210,7 @@ fn interrupted_final_save_reconnect_preserves_both_stores_and_their_speech_claim
     let store = |sid: &str, claim: &str| Updates {
         session: sid.into(),
         settled_sequence: 17,
+        cursor: Some(("epoch".into(), 17)),
         completed: vec![IvyBackgroundUpdate {
             id: format!("done-{sid}"),
             text: "Retained receipt".into(),
