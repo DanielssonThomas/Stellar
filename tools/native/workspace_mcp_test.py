@@ -1,6 +1,5 @@
 import asyncio
 import importlib.util
-import hashlib
 import json
 from pathlib import Path
 import socket
@@ -118,12 +117,17 @@ class WorkspaceServiceTests(unittest.IsolatedAsyncioTestCase):
         first_setup = await first.start()
         descriptor = first_setup['descriptor']
         editor = first.editor()
-        fingerprint = hashlib.sha256(json.dumps(editor['mcp_servers'], sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        info = {'source': 'acp', 'edit_approval_policy': 'ask', 'launch_request': {'editor': {'mcp_servers': {'fingerprint': fingerprint}}}}
+        info = {'source': 'acp', 'edit_approval_policy': 'ask', 'launch_request': {'editor': {'mcp_servers': {'fingerprint': '0' * 64}}}}
+        self.assertFalse(first.verifies(info))
+        class Client:
+            async def rpc(self, method, **params):
+                return {'session_id':'owned', 'info':info}
+        await first.wrap_client(Client()).rpc('session.create', editor=editor)
         self.assertTrue(first.verifies(info))
         self.assertFalse(first.verifies({**info, 'source': 'cli'}))
-        self.assertTrue(first.verifies({**info, 'edit_approval_policy': 'session'}))
-        self.assertTrue(first.verifies({**info, 'edit_approval_policy': 'workspace_session'}))
+        for policy in ('session', 'workspace_session'):
+            info['edit_approval_policy'] = policy
+            self.assertTrue(first.verifies(info))
         self.assertFalse(first.verifies({**info, 'edit_approval_policy': 'unknown'}))
         self.assertFalse(first.verifies({**info, 'launch_request': {'editor': {'mcp_servers': {'fingerprint': '0' * 64}}}}))
         old_token = first.gate.arm('1', 'old-turn')

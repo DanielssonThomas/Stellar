@@ -120,6 +120,14 @@ merely because its transport fingerprint was saved. Recovery reports
 busy/unavailable/uncertain status. Do not use New session,
 edit journals or strip MCP to work around a refused load.
 
+Binding verification uses the successful native create/resume response that
+offered this owned workspace's exact current transport. Native resume validates
+that transport against the current editor policy; `info.launch_request` retains
+immutable creation metadata and cannot confirm a later rebind. Confirmation is
+local to that response and invalidated on a later session operation or transport
+change. It never substitutes for successful discovery, identity checks or idle
+and approval fences.
+
 Unavailable keyword recognition alone does not block explicit recovery or typed
 input. Its voice error remains visible; recovery still acquires the existing
 capture lease, awaits owned speech/capture release and rechecks context before

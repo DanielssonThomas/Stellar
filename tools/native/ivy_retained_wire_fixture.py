@@ -10,11 +10,14 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ivy_bridge_test import bridge
-from ivy_retained_test import Connection, Workspace, retained
+from ivy_retained_test import Connection, NativeBindingClient, owned_workspace, retained
+
+Workspace = owned_workspace
 
 
 def connection(audit=None, mode=None):
     conn = Connection()
+    conn.client = NativeBindingClient()
     conn.sessions = {'current'}
     conn.client.info['attached'] = True
     if mode == 'policy-preserved':
@@ -70,7 +73,10 @@ def connection(audit=None, mode=None):
 async def serve(audit=None, mode=None):
     bridge.PROFILE = 'fixture'
     conn, workspace, queue = connection(audit, mode), Workspace(), asyncio.Queue()
-    workspace.redact = lambda text: text
+    conn.client = workspace.wrap_client(conn.client)
+    async def call(method, params):
+        return await conn.client.rpc(method, **params)
+    conn.call = call
     if mode == 'lost-commit-reply':
         original_commit = retained.commit
         first = True

@@ -13,6 +13,12 @@ CONTRACT = json.loads((Path(__file__).resolve().parents[2] / 'apps/stellar-deskt
 
 
 async def exchange(conn, workspace, method, params):
+    if workspace is not None and getattr(conn, '_owned_workspace', None) is not workspace:
+        conn.client = workspace.wrap_client(conn.client)
+        conn._owned_workspace = workspace
+        async def call(name, values):
+            return await conn.client.rpc(name, **values)
+        conn.call = call
     queue = asyncio.Queue()
     raw = json.dumps({'id': 1, 'method': method, 'params': params})
     await queue.put(bridge.validate(json.loads(raw, object_pairs_hook=bridge.pairs)))

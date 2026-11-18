@@ -63,7 +63,7 @@ async def main():
             with patch.object(bridge, 'emit', frames.append):
                 await bridge.request_worker(conn, workspace, queue)
             sid = frames[-1]['result']['session_id']
-            attached = await client.rpc('session.resume', session_id=sid)
+            attached = await conn.client.rpc('session.resume', session_id=sid)
             info = attached['info']
             tools = {name for names in info.get('tools', {}).values() for name in names}
             # Inventory's API schemas collapse deferred tools into tool_search. Inspect its

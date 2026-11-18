@@ -61,7 +61,83 @@ class Connection:
         self.client = Client()
         self.lease = Lease()
 
+def owned_workspace():
+    own = service.WorkspaceService(None, None, None)
+    own.port = 1
+    own.bearer = 'inert-own-token'
+    own.task = SimpleNamespace(done=lambda: False)
+    own.bind_session('current')
+    return own
+
+
+class NativeBindingClient(Client):
+    """Native contract: immutable creation metadata, mutable current selection."""
+    def __init__(self):
+        super().__init__()
+        self.selected = None
+        self.info['launch_request'] = {'editor': {'mcp_servers': {'fingerprint': '0' * 64}}}
+
+    async def rpc(self, method, **params):
+        offered = (params.get('editor') or {}).get('mcp_servers')
+        if method == 'session.resume' and offered:
+            # The current owner's attach and target attach use distinct native policies.
+            if params['session_id'] == 'retained' and offered != self.selected:
+                raise ValueError('acp_mcp_policy_conflict')
+        result = await super().rpc(method, **params)
+        if method == 'session.mutate' and params['operation'] == 'editor_mcp':
+            self.selected = copy.deepcopy(params['payload']['mcp_servers'])
+        return result
+
 class RetainedTests(unittest.IsolatedAsyncioTestCase):
+    async def test_real_service_confirms_current_native_binding_not_immutable_creation_request(self):
+        c, own = Connection(), owned_workspace()
+        raw = NativeBindingClient()
+        c.client = own.wrap_client(raw)
+        prepared = await retained.prepare(c, own, 'retained', 'fixture')
+        request = {**prepared, 'request_id': 'one-saved-load'}
+        result = await retained.commit(c, own, request, 'fixture')
+        self.assertEqual(result['session_id'], 'retained')
+        self.assertEqual(raw.info['launch_request']['editor']['mcp_servers']['fingerprint'], '0' * 64)
+        await retained.commit(c, own, request, 'fixture')
+        self.assertEqual(len(raw.mutations), 1)
+        self.assertEqual(raw.history, ['user question', 'original answer'])
+        resumed = await c.client.rpc('session.resume', session_id='retained')
+        self.assertTrue(own.verifies(resumed['info']))
+        self.assertFalse(own.verifies(copy.deepcopy(resumed['info'])))
+
+    async def test_real_service_does_not_confirm_missing_rejected_foreign_or_stale_attach(self):
+        own, raw = owned_workspace(), NativeBindingClient()
+        wrapped = own.wrap_client(raw)
+        unoffered = await wrapped.rpc('session.resume', session_id='retained')
+        self.assertFalse(own.verifies(unoffered['info']))
+        own.bind_session('retained')
+        with self.assertRaises(ValueError):
+            await wrapped.rpc('session.resume', session_id='retained')
+        self.assertFalse(own.verifies(unoffered['info']))
+        raw.selected = own.editor()['mcp_servers']
+        accepted = await wrapped.rpc('session.resume', session_id='retained')
+        self.assertTrue(own.verifies(accepted['info']))
+        own.port = 2
+        self.assertFalse(own.verifies(accepted['info']))
+        own.port = 1
+        await wrapped.rpc('session.resume', session_id='other')
+        self.assertFalse(own.verifies(accepted['info']))
+
+    async def test_confirmation_requires_exact_owned_offer_and_native_session_identity(self):
+        own = owned_workspace()
+        info = {'source':'acp', 'edit_approval_policy':'ask'}
+        class Peer:
+            async def rpc(self, method, **params):
+                return {'session_id':'wrong', 'info':info}
+        wrapped = own.wrap_client(Peer())
+        await wrapped.rpc('session.resume', session_id='target', editor=own.editor())
+        self.assertFalse(own.verifies(info))
+        await wrapped.rpc('session.create', editor={'mcp_servers':[]})
+        self.assertFalse(own.verifies(info))
+        await wrapped.rpc('session.create', editor=own.editor())
+        self.assertTrue(own.verifies(info))
+        await wrapped.rpc('session.mutate', session_id='wrong', operation='editor_mcp')
+        self.assertFalse(own.verifies(info))
     async def test_existing_current_session_reconnect_resupplies_only_its_own_transport(self):
         own=service.WorkspaceService(None,None,None)
         own.port=1;own.bearer='inert-own-token';own.task=SimpleNamespace(done=lambda:False)
