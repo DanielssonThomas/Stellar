@@ -32,6 +32,10 @@ def policy_generations(db, sid, snapshot):
             raise ValueError('recovery_mutation_receipt')
         if result['operation'] not in POLICY_CHANGES:
             continue
+        # Deferred model/reasoning picks share the receipt namespace, but do not
+        # advance a generation. Only the status-free committed result proves it.
+        if 'status' in result:
+            continue
         generation, revision = result.get('execution_generation'), result.get('revision')
         if (result.get('session_id') != sid or type(generation) is not int or type(revision) is not int
                 or not 1 <= generation <= snapshot['execution_generation']

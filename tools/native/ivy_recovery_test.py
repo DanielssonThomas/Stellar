@@ -121,6 +121,20 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.conn.lease.released,[])
         self.assertFalse(any(m in {'prompt.submit','session.mutate'} for m,_ in self.calls))
 
+    def test_deferred_settings_do_not_explain_missing_turns_or_conflict_with_committed_changes(self):
+        self.policy_receipt(operation='model',status='deferred')
+        snapshot={**self.cursor,'execution_generation':2,'revision':2}
+        with self.assertRaisesRegex(ValueError,'unaccounted_generation'):
+            inventory(self.profile,snapshot)
+        self.db.execute("DELETE FROM state_meta")
+        self.policy_receipt()
+        for key in ('c','d'):
+            receipt={'digest':'e'*64,'result':{'session_id':self.sid,'operation':'model','status':'deferred',
+                       'execution_generation':2,'revision':2}}
+            self.db.execute('INSERT INTO state_meta VALUES(?,?)',('gateway.mutation.v1.'+key*64,json.dumps(receipt)))
+        self.db.commit()
+        self.assertEqual(len(inventory(self.profile,snapshot)[1]),1)
+
     def test_foreign_destructive_future_or_malformed_receipts_cannot_explain_a_generation_gap(self):
         for change in ({'session_id':'foreign'},{'operation':'reset'},{'operation':'compress'},{'execution_generation':True},{'execution_generation':3},{'revision':3}):
             self.db.execute("DELETE FROM state_meta WHERE key LIKE 'gateway.mutation.v1.%'")
