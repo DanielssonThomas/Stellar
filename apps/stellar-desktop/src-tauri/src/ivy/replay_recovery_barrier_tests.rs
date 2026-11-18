@@ -44,9 +44,24 @@ fn older_foreground_after_a_settled_background_is_not_an_autonomous_answer() {
         .extend([old, current]);
     data["recovery_rpc"]["snapshot"]["execution_generation"] = json!(3);
     let (mut session, dir) = reopen(&source, &data, false);
-    let before = fs::read(session.journal.updates_path()).unwrap();
-    assert!(session.recover_updates().is_err());
-    assert_eq!(before, fs::read(session.journal.updates_path()).unwrap());
+    let before = Updates::load(
+        &session.journal.updates_path(),
+        &session.record.session_id.clone().unwrap(),
+    )
+    .unwrap();
+    let foreground = fs::read(dir.join("copied/ivy-session.json")).unwrap();
+    session.recover_updates().unwrap();
+    let after = Updates::load(
+        &session.journal.updates_path(),
+        &session.record.session_id.clone().unwrap(),
+    )
+    .unwrap();
+    assert!(after.pending == before.pending);
+    assert!(after.completed == before.completed);
+    assert_eq!(
+        foreground,
+        fs::read(dir.join("copied/ivy-session.json")).unwrap()
+    );
     assert!(hidden(&session));
     cleanup(session, source, dir);
 }

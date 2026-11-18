@@ -153,6 +153,14 @@ impl Session {
         let mut next = previous.clone();
         for entry in &recovery.entries {
             entry.validate(s)?;
+            if entry.kind == "ordinary"
+                && entry.receipt.status != "terminal"
+                && self.record.admission_id.as_deref() != Some(&entry.receipt.admission_id)
+                && self.record.input_id.as_deref() != Some(&entry.input_id)
+            {
+                let admission = entry.admission().ok_or(IvyErrorCode::Uncertain)?;
+                require(next.pending.iter().any(|pending| pending == &admission))?;
+            }
             require(
                 !staging
                     .entries
@@ -199,10 +207,13 @@ impl Session {
                         next.notices.insert(admission.id.clone(), notice);
                     }
                 } else {
-                    // The inventory cannot distinguish an older foreground answer from an
-                    // autonomous answer. Only existing ordinary custody permits recovery.
-                    require(next.pending.iter().any(|v| v == &admission))?;
-                    next.admit(admission)?;
+                    if next.pending.iter().any(|v| v == &admission) {
+                        next.admit(admission)?;
+                    } else {
+                        // Unowned terminal history grants no presentation or speech custody.
+                        // It remains inspectable in history; attaching does not replay it.
+                        require(entry.receipt.status == "terminal")?;
+                    }
                 }
             }
         }

@@ -236,6 +236,49 @@ fn actual_missed_terminal_is_recovered_once_without_replaying_retained_speech() 
 }
 
 #[test]
+fn historical_unowned_terminal_ordinary_turns_do_not_block_attach_or_gain_presentation() {
+    for status in ["terminal", "started", "unknown", "queued"] {
+        let mut data = capture(false);
+        let mut old = data["recovery_rpc"]["entries"][0].clone();
+        old["kind"] = json!("ordinary");
+        old["descriptor"] = Value::Null;
+        old["input_id"] = json!("old-ordinary-input");
+        old["receipt"]["admission_id"] = json!("old-ordinary-admission");
+        old["receipt"]["sequence"] = json!(2);
+        old["receipt"]["execution_generation"] = if status == "queued" {
+            Value::Null
+        } else {
+            json!(2)
+        };
+        old["receipt"]["status"] = json!(status);
+        old["receipt"]["outcome"] = if status == "terminal" {
+            json!("completed")
+        } else {
+            Value::Null
+        };
+        data["recovery_rpc"]["snapshot"]["execution_generation"] = json!(2);
+        data["recovery_rpc"]["entries"]
+            .as_array_mut()
+            .unwrap()
+            .push(old);
+        let (source, owner) = seed(&data, false);
+        let (mut session, dir) = reopen(&source, &data, false);
+        let before = Updates::load(&session.journal.updates_path(), &owner).unwrap();
+        let journal = fs::read(dir.join("copied/ivy-session.json")).unwrap();
+        let result = session.resume_updates(&data["resume_after_restart"]["result"]);
+        assert_eq!(result.is_ok(), status == "terminal");
+        let after = Updates::load(&session.journal.updates_path(), &owner).unwrap();
+        assert!(after.pending == before.pending);
+        assert_eq!(after.completed, before.completed);
+        assert_eq!(
+            fs::read(dir.join("copied/ivy-session.json")).unwrap(),
+            journal
+        );
+        cleanup(session, source, dir);
+    }
+}
+
+#[test]
 fn unsupported_original_host_hides_notices_and_preserves_custody_and_unknown() {
     let data = capture(false);
     let (source, owner) = seed(&data, false);

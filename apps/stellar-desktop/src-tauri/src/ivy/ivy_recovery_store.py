@@ -2,10 +2,43 @@
 from contextlib import closing
 import json
 import sqlite3
+import re
 
 from stellar_ivy_notifications import marker, uint, text
 
 LIMIT = 2048
+POLICY_CHANGES = {'model', 'reasoning', 'workspace', 'editor_mcp', 'edit_policy'}
+
+
+def policy_generations(db, sid, snapshot):
+    """Policy commits consume a generation without admitting a model turn."""
+    rows = db.execute("SELECT key,substr(value,1,65537) FROM state_meta "
+                      "WHERE key LIKE 'gateway.mutation.v1.%' "
+                      "AND json_extract(value,'$.result.session_id')=? LIMIT ?",
+                      (sid, LIMIT + 1)).fetchall()
+    if len(rows) > LIMIT:
+        raise ValueError('recovery_mutation_capacity')
+    generations = set()
+    for key, raw in rows:
+        if len(raw.encode('utf-8')) > 65536 or re.fullmatch(r'gateway\.mutation\.v1\.[0-9a-f]{64}', key) is None:
+            raise ValueError('recovery_mutation_receipt')
+        receipt = json.loads(raw)
+        if (type(receipt) is not dict or set(receipt) != {'digest', 'result'}
+                or type(receipt['digest']) is not str or re.fullmatch(r'[0-9a-f]{64}', receipt['digest']) is None
+                or type(receipt['result']) is not dict):
+            raise ValueError('recovery_mutation_receipt')
+        result = receipt['result']
+        if type(result.get('operation')) is not str:
+            raise ValueError('recovery_mutation_receipt')
+        if result['operation'] not in POLICY_CHANGES:
+            continue
+        generation, revision = result.get('execution_generation'), result.get('revision')
+        if (result.get('session_id') != sid or type(generation) is not int or type(revision) is not int
+                or not 1 <= generation <= snapshot['execution_generation']
+                or not 1 <= revision <= snapshot['revision'] or generation in generations):
+            raise ValueError('recovery_mutation_receipt')
+        generations.add(generation)
+    return generations
 
 
 def inventory(profile, snapshot):
@@ -75,8 +108,9 @@ def inventory(profile, snapshot):
             result.append({'admission_id':row['admission_id'], 'input_id':row['request_id'],
                 'sequence':row['seq'], 'generation':generation, 'authority':row['owner_epoch'],
                 'kind':kind, 'descriptor':descriptor})
-        # Every execution increments this persistent counter. Gaps include reset/compression
-        # or incomplete imported/retired history and cannot be explained by a new cursor.
-        if generations != set(range(1, snapshot['execution_generation'] + 1)):
+        expected = set(range(1, snapshot['execution_generation'] + 1))
+        # Do not interpret unexplained imports/reset/compression as missing messages,
+        # or manufacture an admission for a committed non-turn policy change.
+        if generations != expected and generations | policy_generations(db, sid, snapshot) != expected:
             raise ValueError('recovery_unaccounted_generation')
         return physical, result
