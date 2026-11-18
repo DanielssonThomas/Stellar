@@ -113,8 +113,11 @@ approvals, unknown notification work, unsupported models, foreign profiles or an
 editor selection other than the Desktop-owned workspace. It journals the bounded
 load intent before rebinding. A lost reply retains that same native operation ID
 and fences new prompts/model rotation; **Check response** inspects/completes that
-same intent instead of inventing another operation. Failure preserves the prior
-selection and reports busy/unavailable/uncertain recovery. Do not use New session,
+same intent instead of inventing another operation. A failed or interrupted load
+retains the prior active journal and unresolved intent; native effects may remain
+uncertain until checked. Failed MCP discovery cannot report successful recovery
+merely because its transport fingerprint was saved. Recovery reports
+busy/unavailable/uncertain status. Do not use New session,
 edit journals or strip MCP to work around a refused load.
 
 Settled prior selection metadata and notification journals are retained in

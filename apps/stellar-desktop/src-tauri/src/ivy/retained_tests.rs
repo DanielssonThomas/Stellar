@@ -14,14 +14,26 @@ use std::{
 };
 
 fn broker(wrong: bool) -> Broker {
+    broker_fault(wrong, None)
+}
+
+fn broker_fault(wrong: bool, fault_path: Option<&std::path::Path>) -> Broker {
+    let fault = fault_path
+        .map(|path| {
+            format!(
+                "New-Item -ItemType Directory -Path '{}' -Force | Out-Null;",
+                path.display().to_string().replace('\'', "''")
+            )
+        })
+        .unwrap_or_default();
     let script = format!(
         r#"
 while ($line = [Console]::ReadLine()) {{
  $r = $line | ConvertFrom-Json
  $result = switch ($r.method) {{
-  'session.resume' {{ @{{session_id='session';running=$false;pending=@();open_requests=@()}} }}
+  'session.resume' {{ @{{session_id='session';running=$false;pending=@();open_requests=@();replay_epoch='epoch';last_sequence=5;execution_generation=3}} }}
   'session.load.prepare' {{ @{{session_id='retained';stored_session_id='physical';revision=4;generation=2;model='gpt-6.1-sol';edit_policy='ask'}} }}
-  'session.load' {{ if ($r.params.session_id -ne 'retained' -or $r.params.revision -ne 4) {{ exit 4 }}; @{{session_id='retained';stored_session_id='{}';model='gpt-6.1-sol'}} }}
+  'session.load' {{ {fault} if ($r.params.session_id -ne 'retained' -or $r.params.revision -ne 4) {{ exit 4 }}; @{{session_id='retained';stored_session_id='{}';model='gpt-6.1-sol'}} }}
   default {{ exit 2 }}
  }}
  [Console]::WriteLine((@{{id=$r.id;result=$result}} | ConvertTo-Json -Compress -Depth 6))
@@ -186,4 +198,77 @@ fn pending_intent_storage_failure_preserves_original_journal_and_never_commits_l
     assert_eq!(session.record.session_id.as_deref(), Some("session"));
     drop(session);
     std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn interrupted_final_save_reconnect_preserves_both_stores_and_their_speech_claims() {
+    use sha2::{Digest, Sha256};
+    let (mut session, directory) = fixture();
+    ready(&mut session, false);
+    session.journal.save(&session.record).unwrap();
+    let store = |sid: &str, claim: &str| Updates {
+        session: sid.into(),
+        settled_sequence: 17,
+        completed: vec![IvyBackgroundUpdate {
+            id: format!("done-{sid}"),
+            text: "Retained receipt".into(),
+            speech_claim: Some(claim.into()),
+        }],
+        ..Updates::default()
+    };
+    let current = session.journal.updates_path();
+    store("session", "original-speech-claim")
+        .save(&current)
+        .unwrap();
+    let original = std::fs::read(&current).unwrap();
+    let archives = directory.join("retained-updates");
+    std::fs::create_dir_all(&archives).unwrap();
+    let archive = |sid: &str| archives.join(format!("{:x}.json", Sha256::digest(sid.as_bytes())));
+    store("retained", "target-speech-claim")
+        .save(&archive("retained"))
+        .unwrap();
+    let target = std::fs::read(archive("retained")).unwrap();
+    session.broker = Some(broker_fault(
+        false,
+        Some(&directory.join("ivy-session.pending")),
+    ));
+    assert!(matches!(
+        session.control(Control::LoadRetained("retained".into())),
+        Err(IvyErrorCode::Storage)
+    ));
+    assert_eq!(std::fs::read(&current).unwrap(), target);
+    let request = session
+        .record
+        .pending_load
+        .as_ref()
+        .unwrap()
+        .request_id
+        .clone();
+    drop(session);
+    let (journal, record) = Journal::open(&directory).unwrap();
+    let (mut recovered, extra) = fixture();
+    recovered.journal = journal;
+    recovered.record = record;
+    recovered.broker = Some(broker(false));
+    // Exercise the exact post-workspace initialization path used by normal reconnect.
+    super::connection::resume_selected(&mut recovered).unwrap();
+    super::connection::publish_ready(&recovered);
+    assert_eq!(std::fs::read(&current).unwrap(), target);
+    assert_eq!(
+        recovered.shared.view.lock().unwrap().snapshot.turn,
+        IvyTurnState::Uncertain
+    );
+    assert_eq!(
+        recovered.record.pending_load.as_ref().unwrap().request_id,
+        request
+    );
+    std::fs::remove_dir(directory.join("ivy-session.pending")).unwrap();
+    recovered.reconcile().unwrap();
+    assert_eq!(std::fs::read(&current).unwrap(), target);
+    assert_eq!(std::fs::read(archive("session")).unwrap(), original);
+    assert_eq!(std::fs::read(archive("retained")).unwrap(), target);
+    assert!(recovered.record.pending_load.is_none());
+    drop(recovered);
+    std::fs::remove_dir_all(directory).unwrap();
+    std::fs::remove_dir_all(extra).unwrap();
 }

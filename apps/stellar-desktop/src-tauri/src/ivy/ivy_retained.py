@@ -22,12 +22,12 @@ def idle(value):
         raise Refused('busy')
 
 
-def own_selection(info):
+def own_selection(info, failure='unavailable'):
     tools = info.get('enabled_toolsets')
     if (type(tools) is not list or any(type(t) is not str for t in tools)
             or len([t for t in tools if t.startswith('mcp-editor_')]) != 1
             or not any(WORKSPACE.fullmatch(t) for t in tools)):
-        raise Refused('unavailable')
+        raise Refused(failure)
 
 
 async def current_idle(conn, current, target):
@@ -97,6 +97,8 @@ async def commit(conn, workspace, params, profile):
             editor={'mcp_servers':workspace.editor()['mcp_servers']})
         info = identity(value, sid, profile)
         idle(value)
+        # A committed fingerprint does not prove discovery actually retained the server.
+        own_selection(info, 'uncertain')
         if (value['stored_session_id'] != params['stored_session_id'] or info['model'] != params['model']
                 or info['edit_approval_policy'] != params['edit_policy'] or not workspace.verifies(info)):
             raise Refused('uncertain')

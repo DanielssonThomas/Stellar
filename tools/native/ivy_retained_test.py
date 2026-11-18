@@ -124,4 +124,21 @@ class RetainedTests(unittest.IsolatedAsyncioTestCase):
             await retained.commit(c,w,{**p,'request_id':'fixed'},'fixture')
         self.assertEqual(w.owner_session,'current')
 
+    async def test_native_skipped_discovery_with_matching_fingerprint_cannot_report_success(self):
+        c,w=Connection(),Workspace();p=await retained.prepare(c,w,'retained','fixture')
+        original=c.client.rpc
+        async def skip(method,**params):
+            value=await original(method,**params)
+            if method=='session.mutate':
+                # Native preserves supplied fingerprint even when server discovery produced no tools.
+                c.client.info['enabled_toolsets']=['file']
+                value['mcp_servers']=[]
+            return value
+        c.client.rpc=skip
+        with self.assertRaises(controls.Refused) as failure:
+            await retained.commit(c,w,{**p,'request_id':'discovery-once'},'fixture')
+        self.assertEqual(failure.exception.code,'uncertain')
+        self.assertEqual(w.owner_session,'current')
+        self.assertEqual(len(c.client.mutations),1)
+
 if __name__=='__main__': unittest.main()
