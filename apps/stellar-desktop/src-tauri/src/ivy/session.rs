@@ -20,7 +20,10 @@ pub struct Session {
 impl Session {
     pub fn restore_admission_state(&self) {
         self.shared.update(self.epoch, |view| {
-            if self.record.unsettled || self.record.pending_reset.is_some() {
+            if self.record.unsettled
+                || self.record.pending_reset.is_some()
+                || self.record.pending_load.is_some()
+            {
                 view.turn = IvyTurnState::Uncertain;
             } else if matches!(
                 view.turn,
@@ -61,7 +64,10 @@ impl Session {
         if self.record.input_id.as_deref() == Some(&request.input_id) {
             return Ok(());
         }
-        if self.record.unsettled || self.record.pending_reset.is_some() {
+        if self.record.unsettled
+            || self.record.pending_reset.is_some()
+            || self.record.pending_load.is_some()
+        {
             return Err(IvyErrorCode::Uncertain);
         }
         let sid = self.ensure_session(&request.input_id)?;
@@ -78,6 +84,7 @@ impl Session {
             route_verified: true,
             workspace: self.record.workspace.clone(),
             pending_reset: None,
+            pending_load: None,
         };
         self.journal.save(&next)?;
         self.record = next;
@@ -198,7 +205,10 @@ impl Session {
     }
 
     pub fn rotate(&mut self, model: IvyModel, force: bool) -> Result<(), IvyErrorCode> {
-        if self.record.unsettled || self.record.pending_reset.is_some() {
+        if self.record.unsettled
+            || self.record.pending_reset.is_some()
+            || self.record.pending_load.is_some()
+        {
             return Err(IvyErrorCode::Uncertain);
         }
         if !force && self.record.model == model {

@@ -77,6 +77,7 @@ impl Broker {
                 include_str!("ivy_notifications.py"),
             ),
             ("stellar_ivy_controls", include_str!("ivy_controls.py")),
+            ("stellar_ivy_retained", include_str!("ivy_retained.py")),
             (
                 "stellar_ivy_recovery_store",
                 include_str!("ivy_recovery_store.py"),

@@ -107,6 +107,7 @@ fn main() {
         IvySelectRequest::decl(&config),
         IvyRequest::decl(&config),
         IvySubmitRequest::decl(&config),
+        IvyLoadRetainedRequest::decl(&config),
         IvyLocalActionEvent::decl(&config),
         IvyLocalActionOutcome::decl(&config),
         IvyComponent::decl(&config),
@@ -246,6 +247,7 @@ fn main() {
         "ivyClearConversationCommand",
         "ivyNewSessionCommand",
         "ivyReloadMcpCommand",
+        "ivyLoadRetainedCommand",
         "ivyQuestionReplyCommand",
         "ivyClaimUpdateCommand",
     ]
@@ -273,7 +275,7 @@ fn main() {
         serde_json::to_string(WORKSPACE_REPLY_COMMAND).unwrap()
     );
     println!(
-        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest; [ivyClaimUpdateCommand]: IvyClaimUpdateRequest }};"
+        "export type IvyCommands = {{ [ivyConnectCommand]: IvyRequest; [ivySnapshotCommand]: IvyRequest; [ivySubmitCommand]: IvySubmitRequest; [ivyCancelCommand]: IvyRequest; [ivyReconcileCommand]: IvyRequest; [ivyDisconnectCommand]: IvyRequest; [ivySelectSessionCommand]: IvySelectRequest; [ivyClearConversationCommand]: IvyRequest; [ivyNewSessionCommand]: IvyRequest; [ivyReloadMcpCommand]: IvyRequest; [ivyLoadRetainedCommand]: IvyLoadRetainedRequest; [ivyQuestionReplyCommand]: IvyQuestionReplyRequest; [ivyClaimUpdateCommand]: IvyClaimUpdateRequest }};"
     );
     for (name, command) in [
         "speechTranscribeCommand",

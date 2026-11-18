@@ -1,0 +1,36 @@
+{
+  "renderer_request": {
+    "version": 1,
+    "session_id": "retained"
+  },
+  "prepare_result": {
+    "session_id": "retained",
+    "stored_session_id": "physical",
+    "model": "gpt-6.1-sol",
+    "revision": 4,
+    "generation": 2,
+    "edit_policy": "ask",
+    "current_session_id": "current"
+  },
+  "commit_result": {
+    "session_id": "retained",
+    "stored_session_id": "physical",
+    "model": "gpt-6.1-sol"
+  },
+  "renderer_result": {
+    "activity": [],
+    "connection": "ready",
+    "error": null,
+    "items": [],
+    "model": "sol",
+    "reset_id": null,
+    "response_segments": [],
+    "revision": "3",
+    "turn": "idle",
+    "turn_id": null,
+    "verified_model": "sol",
+    "version": 1,
+    "workspace_epoch": "0",
+    "workspace_tools": "unavailable"
+  }
+}

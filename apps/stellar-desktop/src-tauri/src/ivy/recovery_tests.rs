@@ -33,6 +33,7 @@ pub(super) fn fixture(receipt: &str) -> (Session, std::path::PathBuf) {
         route_verified: true,
         workspace: None,
         pending_reset: None,
+        pending_load: None,
     };
     journal.save(&record).unwrap();
     let shared = Shared {

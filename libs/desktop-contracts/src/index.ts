@@ -113,6 +113,7 @@ export type {
   IvySelectRequest,
   IvyRequest,
   IvySubmitRequest,
+  IvyLoadRetainedRequest,
   IvyLocalActionEvent,
   IvyLocalActionOutcome,
   IvyComponent,
@@ -148,6 +149,7 @@ export {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyLoadRetainedCommand,
   ivyQuestionReplyCommand,
   ivyClaimUpdateCommand,
   ivyEvent,
@@ -157,6 +159,7 @@ export {
 export {
   decodeIvyRequest,
   decodeIvySelectRequest,
+  decodeIvyLoadRetainedRequest,
   decodeIvySubmitRequest,
   decodeIvyError,
   decodeIvySnapshot,

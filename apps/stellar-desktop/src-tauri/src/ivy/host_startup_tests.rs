@@ -20,6 +20,7 @@ fn busy_owner_retries_only_on_connect_and_loads_the_retained_record() {
         route_verified: true,
         workspace: None,
         pending_reset: None,
+        pending_load: None,
     };
     first_owner.save(&original).unwrap();
     let initial = Journal::open(&directory);

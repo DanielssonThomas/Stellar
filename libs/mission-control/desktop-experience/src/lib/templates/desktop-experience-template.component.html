@@ -646,25 +646,31 @@
     />
   }
 </div>
-<stellar-ivy-session-inspector-molecule
-  [visible]="sessionsVisible()"
-  [snapshot]="sessionSnapshot()"
-  [sessions]="sessionRows()"
-  [messages]="sessionMessages()"
-  [loading]="sessionLoading()"
-  [error]="sessionError()"
-  [status]="assistantStatus()"
-  [voice]="voiceStatus()"
-  [reflex]="reflexStatus()"
-  [model]="cloudLabel()"
-  [verifiedModel]="verifiedModel()"
-  [busy]="
-    assistantBusy() || voiceBusy() || composing() || cloudStatus() !== 'ready'
-  "
-  (closed)="setSessionsVisible(false)"
-  (selected)="sessionSelected.emit($event)"
-  (refresh)="sessionRefresh.emit()"
-  (moreSessions)="sessionMore.emit()"
-  (olderMessages)="sessionOlderMessages.emit()"
-  (newSession)="sessionNew.emit()"
-/>
+@defer (when sessionsVisible()) {
+  <stellar-ivy-session-inspector-molecule
+    [visible]="sessionsVisible()"
+    [snapshot]="sessionSnapshot()"
+    [sessions]="sessionRows()"
+    [messages]="sessionMessages()"
+    [loading]="sessionLoading()"
+    [error]="sessionError()"
+    [status]="assistantStatus()"
+    [voice]="voiceStatus()"
+    [reflex]="reflexStatus()"
+    [model]="cloudLabel()"
+    [verifiedModel]="verifiedModel()"
+    [busy]="
+      assistantBusy() || voiceBusy() || composing() || cloudStatus() !== 'ready'
+    "
+    (closed)="setSessionsVisible(false)"
+    (selected)="sessionSelected.emit($event)"
+    (refresh)="sessionRefresh.emit()"
+    (moreSessions)="sessionMore.emit()"
+    (olderMessages)="sessionOlderMessages.emit()"
+    (newSession)="sessionNew.emit()"
+    (recoverSession)="sessionRecover.emit($event)"
+    [recoveryNotice]="sessionRecoveryNotice()"
+  />
+} @loading {
+  <p role="status">Loading conversations…</p>
+}

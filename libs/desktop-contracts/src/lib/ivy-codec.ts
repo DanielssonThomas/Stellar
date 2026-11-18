@@ -11,6 +11,7 @@ import type {
   IvyPresentation,
   IvyModel,
   IvySelectRequest,
+  IvyLoadRetainedRequest,
   IvyRequest,
   IvySubmitRequest,
   IvyLocalActionOutcome,
@@ -108,6 +109,23 @@ export function decodeIvySelectRequest(value: unknown): IvySelectRequest {
     version: version(data['version']),
     model: variant(data['model'], models),
   };
+}
+
+export function decodeIvyLoadRetainedRequest(
+  value: unknown,
+): IvyLoadRetainedRequest {
+  const data = record(value, ['version', 'session_id']);
+  const sessionId = boundedString(data['session_id'], 512);
+  if (
+    !sessionId ||
+    Array.from(sessionId).some(
+      (c) =>
+        c.charCodeAt(0) < 32 ||
+        (c.charCodeAt(0) >= 127 && c.charCodeAt(0) <= 159),
+    )
+  )
+    throw new DesktopContractError('malformed');
+  return { version: version(data['version']), session_id: sessionId };
 }
 
 export function decodeIvySubmitRequest(value: unknown): IvySubmitRequest {

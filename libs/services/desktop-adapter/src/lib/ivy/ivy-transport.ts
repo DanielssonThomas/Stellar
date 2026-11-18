@@ -4,6 +4,7 @@ import {
   ivyClearConversationCommand,
   ivyNewSessionCommand,
   ivyReloadMcpCommand,
+  ivyLoadRetainedCommand,
   type IvyCommands,
   type IvySnapshot,
 } from '@stellar/desktop-contracts';
@@ -68,7 +69,8 @@ export function browserIvyTransport(): IvyTransport {
         command === ivySelectSessionCommand ||
         command === ivyClearConversationCommand ||
         command === ivyNewSessionCommand ||
-        command === ivyReloadMcpCommand
+        command === ivyReloadMcpCommand ||
+        command === ivyLoadRetainedCommand
       )
         throw 'unavailable';
       return {

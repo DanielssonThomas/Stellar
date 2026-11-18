@@ -19,7 +19,10 @@ DEADLINE = 15
 METHODS = {
     'ping': {}, 'runtime.describe': {},
     'session.create': {'request_id': str, 'model': str},
-    'session.resume': {'session_id': str},
+    'session.resume': {'session_id': str, 'preserve_policy': bool},
+    'session.load.prepare': {'session_id': str},
+    'session.load': {'session_id': str, 'stored_session_id': str, 'request_id': str,
+                     'revision': int, 'generation': int, 'model': str, 'edit_policy': str, 'current_session_id': object},
     'session.info': {'session_id': str},
     'session.events.since': {'session_id': str, 'replay_epoch': str, 'last_sequence': int},
     'prompt.submit': {'session_id': str, 'input_id': str, 'text': str, 'workspace_epoch': str,
@@ -116,7 +119,7 @@ def validate(request):
     if type(method) is not str or method not in METHODS or type(params) is not dict:
         raise ValueError()
     schema = METHODS[method]
-    optional = {'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
+    optional = {'session.resume': {'preserve_policy'}, 'prompt.receipt': {'include_result'}, 'prompt.submit': {'workspace_epoch', 'observation', 'voice_expression'}}
     required = set(schema) - optional.get(method, set())
     if not required <= set(params) or set(params) - set(schema):
         raise ValueError()
@@ -603,17 +606,25 @@ async def request_worker(conn, workspace, queue, approvals=None):
             raise Closed() from None
         rid, method, params = request
         reconciler = getattr(conn, 'notification_reconciler', None)
-        if method in {'session.create', 'session.resume', 'session.new', 'workspace.stop'}:
+        if method in {'session.create', 'session.resume', 'session.load', 'session.new', 'workspace.stop'}:
             if reconciler is not None:
                 reconciler.pause()
         if method == 'runtime.describe':
             conn.background_v1 = False
-        resuming = method == 'session.resume' and approvals is not None
+        resuming = method in {'session.resume', 'session.load'} and approvals is not None
         if resuming:
             conn.selected_session = None
             approvals.begin_resume(params['session_id'])
         try:
-            if method == 'stellar.session.recover':
+            if method in {'session.load.prepare', 'session.load'}:
+                from stellar_ivy_retained import prepare, commit
+                async with asyncio.timeout(DEADLINE):
+                    if method == 'session.load.prepare':
+                        result = await prepare(conn, workspace, params['session_id'], PROFILE)
+                    else:
+                        result = await commit(conn, workspace, params, PROFILE)
+                        conn.sessions.add(params['session_id'])
+            elif method == 'stellar.session.recover':
                 from stellar_ivy_recovery import recover
                 result = await recover(conn, params, PROFILE, DEADLINE,
                     lambda peer, cursor: replay_events(peer, cursor, workspace))
@@ -698,14 +709,21 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if info.get('model') != params['model'] or not workspace.verifies(info):
                             raise Closed()
                     result = {'session_id': sid, 'model': info['model']}
-            elif method == 'session.resume' and workspace is not None and workspace.task is not None:
-                description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
-                if 'acp-session-mcp-v1' not in description.get('capabilities', []):
-                    raise Closed()
-                result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
-                if not workspace.verifies(result.get('info', {})):
-                    raise Closed()
-                result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+            elif method == 'session.resume':
+                preserve_policy = params.pop('preserve_policy', False)
+                if workspace is not None and workspace.task is not None:
+                    description = await asyncio.wait_for(conn.call('runtime.describe', {}), DEADLINE)
+                    if 'acp-session-mcp-v1' not in description.get('capabilities', []):
+                        raise Closed()
+                    result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
+                    if not workspace.verifies(result.get('info', {})):
+                        raise Closed()
+                    if not preserve_policy:
+                        result = await asyncio.wait_for(synchronize(conn.client, result, access), DEADLINE)
+                else:
+                    if preserve_policy:
+                        raise Refused('unavailable')
+                    result = await asyncio.wait_for(conn.call(method, params), DEADLINE)
             elif method == 'prompt.submit':
                 epoch = params.pop('workspace_epoch', None)
                 token = None
@@ -762,6 +780,9 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 if type(result) is not dict or result.get('pong') is not True:
                     raise Closed()
                 result = {'pong': result['pong']}
+            elif method in {'session.load.prepare', 'session.load'}:
+                from stellar_ivy_retained import reply
+                result = reply(method, result)
             else:
                 projected = project(result)
                 if method == 'session.create':
@@ -782,11 +803,11 @@ async def request_worker(conn, workspace, queue, approvals=None):
                         if type(saved.get('response_reused')) is bool:
                             projected['result']['response_reused'] = saved['response_reused']
                 result = projected
-            if method in {'session.create', 'session.resume'}:
+            if method in {'session.create', 'session.resume', 'session.load'}:
                 conn.selected_session = result.get('session_id')
                 if reconciler is not None:
                     if (not string(conn.selected_session) or
-                            (method == 'session.resume' and conn.selected_session != params['session_id'])):
+                            (method in {'session.resume', 'session.load'} and conn.selected_session != params['session_id'])):
                         raise Closed()
                     reconciler.select(conn.selected_session)
             if resuming:

@@ -7,6 +7,7 @@ interface InspectorFixture {
   unavailable: boolean;
   invalid: boolean;
   active: string;
+  recoverRefused?: boolean;
   publishBusy(): void;
 }
 
@@ -150,6 +151,11 @@ async function install(page: Page) {
               fixture.active = 'new-ivy-session';
               return { ...assistant(), reset_id: 'stellar-new-confirmed' };
             }
+            if (command === 'ivy_load_retained') {
+              if (fixture.recoverRefused) throw 'uncertain';
+              fixture.active = String(request['session_id']);
+              return assistant();
+            }
             if (command === 'speech_snapshot' || command === 'speech_stop')
               return {
                 version: 1,
@@ -181,6 +187,65 @@ async function install(page: Page) {
 
 const dialog = (page: Page) =>
   page.getByRole('dialog', { name: 'Ivy sessions' });
+
+test('explicit retained recovery preserves history identity without a reset or replay', async ({
+  page,
+}) => {
+  await install(page);
+  await page.keyboard.press('c');
+  const panel = dialog(page);
+  await panel.getByRole('button', { name: /Earlier music discussion/ }).click();
+  expect(await calls(page, 'ivy_load_retained')).toBe(0);
+  await panel
+    .getByRole('button', { name: 'Recover this conversation', exact: true })
+    .click();
+  await expect.poll(() => calls(page, 'ivy_load_retained')).toBe(1);
+  await expect(
+    panel.getByText(
+      'Conversation recovered. History and session identity preserved.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(await calls(page, 'ivy_new_session')).toBe(0);
+  expect(await calls(page, 'ivy_submit')).toBe(0);
+  expect(await calls(page, 'ivy_select_session')).toBe(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __inspectorFixture: InspectorFixture })
+          .__inspectorFixture.active,
+    ),
+  ).toBe('older-ivy-session');
+});
+
+test('retained recovery refusal remains actionable and never retries', async ({
+  page,
+}) => {
+  await install(page);
+  await page.keyboard.press('c');
+  await page.evaluate(() => {
+    (
+      window as unknown as { __inspectorFixture: InspectorFixture }
+    ).__inspectorFixture.recoverRefused = true;
+  });
+  const panel = dialog(page);
+  await panel.getByRole('button', { name: /Earlier music discussion/ }).click();
+  await panel
+    .getByRole('button', { name: 'Recover this conversation', exact: true })
+    .click();
+  await expect(
+    panel.getByText(/Recovery stopped \(native_load \/ uncertain\)/),
+  ).toBeVisible();
+  expect(await calls(page, 'ivy_load_retained')).toBe(1);
+  expect(await calls(page, 'ivy_submit')).toBe(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __inspectorFixture: InspectorFixture })
+          .__inspectorFixture.active,
+    ),
+  ).toBe('current-ivy-session');
+});
 const calls = (page: Page, command: string) =>
   page.evaluate(
     (command) =>

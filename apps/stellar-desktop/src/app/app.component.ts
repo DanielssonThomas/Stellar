@@ -17,6 +17,8 @@ import {
   DesktopAdapterService,
   DesktopAwarenessService,
   IvyAdapterService,
+  IvyAdapterError,
+  SessionRecoveryError,
   WorkspaceToolsService,
   MusicVisualizerService,
   createNativeMediaWorkspace,
@@ -72,6 +74,35 @@ import { SpatialPresentationOrganism } from '@stellar/ui-organisms';
 })
 export class AppComponent {
   readonly inspector = inject(IvyInspectorService);
+  readonly recoveryNotice = signal('');
+  readonly recoveryPending = signal(false);
+  async recoverInspectorSession(id: string) {
+    if (this.recoveryPending()) return;
+    this.recoveryPending.set(true);
+    this.recoveryNotice.set('Recovering the selected conversation…');
+    try {
+      if (await this.voice.loadRetained(id)) {
+        this.recoveryNotice.set(
+          'Conversation recovered. History and session identity preserved.',
+        );
+        this.inspector.select(null);
+      } else {
+        this.recoveryNotice.set(
+          'Recovery was not confirmed. Check response before continuing; no prompt was replayed.',
+        );
+      }
+    } catch (error) {
+      this.recoveryNotice.set(
+        error instanceof SessionRecoveryError
+          ? error.message
+          : error instanceof IvyAdapterError && error.code === 'busy'
+            ? 'This conversation is busy or has a pending approval. Finish or check that work before recovery.'
+            : 'Recovery is unavailable or uncertain. Check response to inspect the retained operation; no prompt was replayed.',
+      );
+    } finally {
+      this.recoveryPending.set(false);
+    }
+  }
   inspectorVisible(visible: boolean) {
     if (visible) this.inspector.open();
     else this.inspector.close();

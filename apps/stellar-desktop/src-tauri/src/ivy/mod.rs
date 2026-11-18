@@ -68,6 +68,11 @@ mod replay_recovery_tests;
 mod response_segments;
 #[cfg(test)]
 mod response_segments_tests;
+mod retained;
+#[cfg(test)]
+mod retained_tests;
+#[cfg(test)]
+mod retained_wire_tests;
 mod rotation;
 pub(crate) mod runtime;
 mod session;
@@ -90,7 +95,8 @@ mod workspace_validate;
 mod workspace_validate_tests;
 
 use contracts::{
-    IvyErrorCode, IvyModel, IvyRequest, IvySelectRequest, IvySnapshot, IvySubmitRequest,
+    IvyErrorCode, IvyLoadRetainedRequest, IvyModel, IvyRequest, IvySelectRequest, IvySnapshot,
+    IvySubmitRequest,
 };
 use host::Action;
 pub use host::IvyHost;
@@ -262,6 +268,27 @@ pub async fn ivy_reload_mcp(
 ) -> Result<IvySnapshot, IvyErrorCode> {
     validate(request)?;
     let pending = host.lifecycle(lifecycle::Control::ReloadMcp)?;
+    tauri::async_runtime::spawn_blocking(move || pending.wait())
+        .await
+        .map_err(|_| IvyErrorCode::Unavailable)?
+}
+
+#[tauri::command]
+pub async fn ivy_load_retained(
+    host: tauri::State<'_, IvyHost>,
+    request: Option<serde_json::Value>,
+) -> Result<IvySnapshot, IvyErrorCode> {
+    let request: IvyLoadRetainedRequest =
+        serde_json::from_value(request.ok_or(IvyErrorCode::MalformedRequest)?)
+            .map_err(|_| IvyErrorCode::MalformedRequest)?;
+    if request.version != 1
+        || request.session_id.is_empty()
+        || request.session_id.len() > 512
+        || request.session_id.chars().any(char::is_control)
+    {
+        return Err(IvyErrorCode::MalformedRequest);
+    }
+    let pending = host.lifecycle(lifecycle::Control::LoadRetained(request.session_id))?;
     tauri::async_runtime::spawn_blocking(move || pending.wait())
         .await
         .map_err(|_| IvyErrorCode::Unavailable)?

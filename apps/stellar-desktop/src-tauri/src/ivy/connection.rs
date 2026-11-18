@@ -53,8 +53,32 @@ pub(super) fn connect(
             return Err(IvyErrorCode::Protocol);
         }
     }
+    resume_selected(session)?;
+    publish_ready(session);
+    Ok(())
+}
+
+pub(super) fn resume_selected(session: &mut Session) -> Result<(), IvyErrorCode> {
+    resume_selection(session, false)
+}
+
+pub(super) fn resume_retained(session: &mut Session) -> Result<(), IvyErrorCode> {
+    resume_selection(session, true)
+}
+
+fn resume_selection(session: &mut Session, preserve_policy: bool) -> Result<(), IvyErrorCode> {
+    // The update store may already belong to the target while the active journal
+    // still retains the previous selection. Only the saved load intent can settle it.
+    if session.record.pending_load.is_some() {
+        session.restore_admission_state();
+        return Ok(());
+    }
     if let Some(sid) = session.record.session_id.clone() {
-        let resumed = session.call("session.resume", json!({"session_id":sid}))?;
+        let mut params = json!({"session_id":sid});
+        if preserve_policy {
+            params["preserve_policy"] = json!(true);
+        }
+        let resumed = session.call("session.resume", params)?;
         if resumed
             .get("session_id")
             .and_then(serde_json::Value::as_str)
@@ -70,7 +94,6 @@ pub(super) fn connect(
             .shared
             .update(session.epoch, |view| view.background_updates = None);
     }
-    publish_ready(session);
     Ok(())
 }
 

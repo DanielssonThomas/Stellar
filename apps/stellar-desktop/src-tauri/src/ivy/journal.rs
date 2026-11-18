@@ -21,6 +21,19 @@ pub struct PendingReset {
     pub generation: u64,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PendingLoad {
+    pub session_id: String,
+    pub stored_session_id: String,
+    pub request_id: String,
+    pub revision: u64,
+    pub generation: u64,
+    pub model: String,
+    pub edit_policy: String,
+    pub current_session_id: Option<String>,
+}
+
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
@@ -37,6 +50,8 @@ pub struct Record {
     pub workspace: Option<WorkspaceDescriptor>,
     #[serde(default)]
     pub pending_reset: Option<PendingReset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_load: Option<PendingLoad>,
 }
 
 pub struct Journal {

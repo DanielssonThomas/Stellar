@@ -55,6 +55,7 @@ fn main() {
         ivy_names::IVY_COMMANDS[9],
         ivy_names::IVY_COMMANDS[10],
         ivy_names::IVY_COMMANDS[11],
+        ivy_names::IVY_COMMANDS[12],
         ivy_names::WORKSPACE_REPLY_COMMAND,
         speech_names::SPEECH_COMMANDS[0],
         speech_names::SPEECH_COMMANDS[1],

@@ -1,11 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import {
   decodeIvyClaimUpdate,
+  decodeIvyLoadRetainedRequest,
   decodeIvySnapshot,
   decodeIvySubmitRequest,
   decodeIvyQuestionReply,
 } from './ivy-codec';
 const id = '00000000-0000-4000-8000-000000000001';
+
+describe('explicit retained recovery contract', () => {
+  it('accepts only a bounded identity and never accepts client credentials or authority', () => {
+    expect(
+      decodeIvyLoadRetainedRequest({ version: 1, session_id: 'retained' }),
+    ).toEqual({ version: 1, session_id: 'retained' });
+    for (const request of [
+      { version: 2, session_id: 's' },
+      { version: 1, session_id: '' },
+      { version: 1, session_id: 'x'.repeat(513) },
+      { version: 1, session_id: 's\n' },
+      { version: 1, session_id: 's', mcp_servers: [] },
+      { version: 1, session_id: 's', policy: 'session' },
+    ]) {
+      expect(() => decodeIvyLoadRetainedRequest(request)).toThrow();
+    }
+  });
+});
 
 describe('background update contract', () => {
   it('retains bounded text and a native speech claim while rejecting duplicates and executable fields', () => {

@@ -34,9 +34,9 @@ import {
   type EmblemManifest,
   RequestStatusMolecule,
   IvyQuestionMolecule,
-  IvySessionInspectorMolecule,
   type RequestStatusEntry,
 } from '@stellar/ui-molecules';
+import { IvySessionInspectorMolecule } from '@stellar/ui-molecules/ivy-session-inspector';
 import { StageOrganism } from '@stellar/ui-organisms';
 import type {
   IvyQuestion,
@@ -94,6 +94,8 @@ export class DesktopExperienceTemplate {
   readonly sessionMore = output<void>();
   readonly sessionOlderMessages = output<void>();
   readonly sessionNew = output<void>();
+  readonly sessionRecover = output<string>();
+  readonly sessionRecoveryNotice = input('');
   readonly questions = input<readonly IvyQuestion[]>([]);
   readonly questionShown = output<string>();
   readonly questionAnswer = output<{ id: string; action: IvyQuestionAction }>();
