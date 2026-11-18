@@ -294,6 +294,7 @@ if (action === 'smoke' || action === 'background-smoke') {
       'ivy_approvals_test.py',
       'ivy_workspace_bridge_test.py',
       'ivy_retained_test.py',
+      'ivy_retained_wire_test.py',
       'engineering_intelligence_test.py',
       'workspace_protocol_test.py',
       'issue_protocol_test.py',

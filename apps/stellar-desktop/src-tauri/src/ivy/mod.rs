@@ -71,6 +71,8 @@ mod response_segments_tests;
 mod retained;
 #[cfg(test)]
 mod retained_tests;
+#[cfg(test)]
+mod retained_wire_tests;
 mod rotation;
 pub(crate) mod runtime;
 mod session;

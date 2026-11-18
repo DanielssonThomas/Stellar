@@ -4,7 +4,40 @@ import re
 from stellar_ivy_controls import Refused, settled_lease
 
 MODELS = {'gpt-6.1-terra', 'gpt-6.1-sol'}
+EDIT_POLICIES = {'ask', 'workspace_session', 'session'}
 WORKSPACE = re.compile(r'mcp-editor_stellar_workspace_[0-9a-f]{8}\Z', re.ASCII)
+
+
+def wire_id(value):
+    if type(value) is not str or not value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        return False
+    try:
+        return len(value.encode('utf-8')) <= 512
+    except UnicodeError:
+        return False
+
+
+def reply(method, value):
+    """Exact private load wire contract; never use the generic identity projection."""
+    prepare = method == 'session.load.prepare'
+    fields = {'session_id', 'stored_session_id', 'model'}
+    if prepare:
+        fields |= {'revision', 'generation', 'edit_policy', 'current_session_id'}
+    code = 'protocol' if prepare else 'outcome_uncertain'
+    if (type(value) is not dict or set(value) != fields
+            or type(value.get('model')) is not str or value['model'] not in MODELS):
+        raise Refused(code)
+    for key in ('session_id', 'stored_session_id'):
+        if not wire_id(value[key]):
+            raise Refused(code)
+    if prepare:
+        current = value['current_session_id']
+        if (type(value['edit_policy']) is not str or value['edit_policy'] not in EDIT_POLICIES
+                or any(type(value[k]) is not int or not 0 <= value[k] <= 18446744073709551615
+                       for k in ('revision', 'generation'))
+                or (current is not None and not wire_id(current))):
+            raise Refused(code)
+    return {key: value[key] for key in fields}
 
 
 def identity(value, sid, profile):
@@ -12,7 +45,7 @@ def identity(value, sid, profile):
     if (value.get('session_id') != sid or not isinstance(value.get('stored_session_id'), str)
             or not value['stored_session_id'] or info.get('source') != 'acp'
             or info.get('profile_id') != str(profile) or info.get('model') not in MODELS
-            or info.get('edit_approval_policy') not in {'ask', 'workspace_session', 'session'}):
+            or info.get('edit_approval_policy') not in EDIT_POLICIES):
         raise Refused('unavailable')
     return info
 

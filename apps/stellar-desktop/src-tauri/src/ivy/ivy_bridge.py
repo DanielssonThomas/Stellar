@@ -773,6 +773,9 @@ async def request_worker(conn, workspace, queue, approvals=None):
                 if type(result) is not dict or result.get('pong') is not True:
                     raise Closed()
                 result = {'pong': result['pong']}
+            elif method in {'session.load.prepare', 'session.load'}:
+                from stellar_ivy_retained import reply
+                result = reply(method, result)
             else:
                 projected = project(result)
                 if method == 'session.create':

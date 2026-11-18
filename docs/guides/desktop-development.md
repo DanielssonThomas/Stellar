@@ -131,6 +131,15 @@ starts remain uncertain, including cancellation with a lost response. A guard
 failure with no saved pending-load intent is not a reason to reconcile an older
 failed admission with Check response.
 
+The private JSONL bridge uses exact method-specific load replies. Preparation
+retains the model, edit policy, nullable current selection and native fences;
+confirmation retains the model and logical/stored identity. The generic identity
+projection omits model/policy data and must not serialize these two methods.
+Serialized worker and Rust broker regressions exercise the real dispatch,
+projection, pipe, journal and reconciliation path with inert external peers.
+Malformed preparation fails before intent; an invalid post-effect confirmation
+remains uncertain and can settle only the same journaled operation.
+
 Settled prior selection metadata and notification journals are retained in
 native-owned per-session archives before switching the active journal. Unknown
 notification work prevents a switch. Existing lifecycle journals keep their

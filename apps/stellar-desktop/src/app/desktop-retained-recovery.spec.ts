@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DesktopAssistant } from './desktop-assistant';
 import { DesktopExperience } from './desktop-experience';
 import { DesktopVoice } from './desktop-voice';
+import wire from './testing/retained-recovery-wire.json';
 
 async function reconnect(refused = false) {
   let receive!: (event: PcmEvent) => void;
@@ -33,7 +34,7 @@ async function reconnect(refused = false) {
       clipped: false,
     },
   });
-  let native = {
+  const native = {
     ...initialIvySnapshot(),
     revision: '1',
     connection: 'ready' as const,
@@ -44,18 +45,10 @@ async function reconnect(refused = false) {
       if (command === 'ivy_snapshot' || command === 'ivy_connect')
         return native;
       if (command === 'ivy_load_retained') {
-        expect(args?.request).toEqual({
-          version: 1,
-          session_id: 'retained-session',
-        });
+        expect(args?.request).toEqual(wire.renderer_request);
         if (refused) throw 'approval_required';
-        native = {
-          ...native,
-          revision: '2',
-          verified_model: 'sol',
-          turn_id: null,
-        };
-        return native;
+        // Produced by the real Rust/Python wire regression; both sides enforce parity.
+        return JSON.parse(JSON.stringify(wire.renderer_result));
       }
       throw Error('Unexpected fixture command');
     },
@@ -137,7 +130,9 @@ describe('cold retained recovery through Desktop adapters', () => {
   afterEach(() => TestBed.resetTestingModule());
   it('loads the retained identity once with unavailable keyword recognition and retains the voice failure', async () => {
     const f = await reconnect();
-    expect(await f.voice.loadRetained('retained-session')).toBe(true);
+    expect(await f.voice.loadRetained(wire.renderer_request.session_id)).toBe(
+      true,
+    );
     expect(
       f.invoke.mock.calls.filter((c) => c[0] === 'ivy_load_retained'),
     ).toHaveLength(1);
@@ -160,7 +155,7 @@ describe('cold retained recovery through Desktop adapters', () => {
   it('preserves a genuine native approval refusal with its load stage and never retries', async () => {
     const f = await reconnect(true);
     await expect(
-      f.voice.loadRetained('retained-session'),
+      f.voice.loadRetained(wire.renderer_request.session_id),
     ).rejects.toMatchObject({
       stage: 'native_load',
       code: 'approval_required',
