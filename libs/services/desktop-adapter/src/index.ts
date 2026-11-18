@@ -66,6 +66,7 @@ export {
   SPEECH_TRANSPORT,
 } from './lib/services/speech-adapter.service';
 export { VoiceConversation } from './lib/speech/voice-conversation';
+export { SessionRecoveryError } from './lib/speech/session-recovery-error';
 export type {
   VoiceContext,
   VoiceView,

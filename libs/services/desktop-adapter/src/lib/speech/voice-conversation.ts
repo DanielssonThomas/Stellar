@@ -34,6 +34,11 @@ import { conversationSpeechText } from './conversation-text';
 import { SpeechActivity } from './speech-activity';
 import { SpeechPlaybackQueue } from './speech-playback-queue';
 import { responseSpeech } from './response-speech';
+import {
+  SessionRecoveryError,
+  type RecoveryCode,
+  type RecoveryStage,
+} from './session-recovery-error';
 import { PassiveRecognition } from './passive-recognition';
 import type {
   RecognitionObservation,
@@ -158,6 +163,7 @@ export class VoiceConversation {
   private awaitingQuiet = false;
   private muted = false;
   private blocked = false;
+  private commandRecognitionUnavailable = false;
   private failure = '';
   private disposed = false;
   private stopping = false;
@@ -278,6 +284,7 @@ export class VoiceConversation {
         () =>
           this.fail(
             'Local command recognition unavailable. Retry voice or use text.',
+            true,
           ),
       );
     }
@@ -915,6 +922,7 @@ export class VoiceConversation {
 
   async withCaptureReleased(
     action: (signal: AbortSignal) => Promise<boolean>,
+    reportFailure?: (failure: SessionRecoveryError) => void,
   ): Promise<boolean> {
     const context = this.context;
     const passive = this.passiveRecognition?.pending();
@@ -924,28 +932,41 @@ export class VoiceConversation {
           speech.operation_id !== passive.id ||
           speech.epoch !== context?.speech.epoch)) ||
       ['transcribing', 'synthesizing', 'speaking'].includes(speech.state);
-    if (
-      this.disposed ||
-      !context?.available ||
-      (context.assistant.connection !== 'ready' && !context.localAvailable) ||
-      ['submitting', 'admitted', 'uncertain'].includes(
-        context.assistant.turn,
-      ) ||
-      this.typedLease ||
-      this.phase ||
-      this.stopping ||
-      this.unconfirmedStop ||
-      this.sessionPending ||
-      this.dispatchPending ||
-      this.dispatchUncertain ||
-      this.blocked ||
-      this.routeUncertain ||
-      preparing(this.composition.status) ||
-      this.draftRecognition?.isBusy() ||
-      this.draftCleanups.size ||
-      speechOccupied(context.speech)
-    )
+    const refuse = (stage: RecoveryStage, code: RecoveryCode) => {
+      reportFailure?.(new SessionRecoveryError(stage, code));
       return false;
+    };
+    const guard = (owner?: AbortController): RecoveryCode | null => {
+      const context = this.context;
+      if (this.disposed || !context?.available) return 'context_unavailable';
+      if (context.assistant.connection !== 'ready' && !context.localAvailable)
+        return 'assistant_unavailable';
+      if (
+        ['submitting', 'admitted', 'uncertain'].includes(context.assistant.turn)
+      )
+        return 'assistant_busy';
+      if (this.stopping || this.unconfirmedStop)
+        return 'capture_stop_unconfirmed';
+      if (this.dispatchUncertain) return 'dispatch_uncertain';
+      if (this.dispatchPending) return 'dispatch_pending';
+      if (this.routeUncertain) return 'route_uncertain';
+      // A failed keyword recognizer owns no conversation effect. Keep its voice
+      // error, but release/await capture normally before any explicit action.
+      if (this.blocked && !this.commandRecognitionUnavailable)
+        return 'voice_busy';
+      if (
+        (this.typedLease && this.typedLease !== owner) ||
+        this.phase ||
+        this.sessionPending ||
+        preparing(this.composition.status) ||
+        this.draftRecognition?.isBusy() ||
+        this.draftCleanups.size
+      )
+        return 'voice_busy';
+      return speechOccupied(context.speech) ? 'speech_busy' : null;
+    };
+    const initialFailure = guard();
+    if (initialFailure) return refuse('capture_guard', initialFailure);
     this.fastCommands?.reset();
     this.resetSpeechActivity();
     const controller = new AbortController();
@@ -954,6 +975,7 @@ export class VoiceConversation {
     const generation = this.generation;
     this.publish();
     let onAbort: (() => void) | undefined;
+    let stage: RecoveryStage = 'capture_release';
     try {
       await Promise.race([
         Promise.all([this.ports.waitForCapturePause?.(), passive?.promise]),
@@ -967,21 +989,25 @@ export class VoiceConversation {
       if (
         controller.signal.aborted ||
         !this.current(generation) ||
-        !this.context?.available ||
-        this.typedLease !== controller ||
-        ['submitting', 'admitted', 'uncertain'].includes(
-          this.context.assistant.turn,
-        ) ||
-        speechOccupied(this.context.speech)
+        this.typedLease !== controller
       )
-        return false;
+        return refuse('context_recheck', 'cancelled');
+      const changed = guard(controller);
+      if (changed) return refuse('context_recheck', changed);
+      stage = 'native_load';
       const accepted = await action(controller.signal);
       if (accepted && this.current(generation)) {
         this.invocation.activate();
         this.controlNotice = '';
       }
       return accepted;
-    } catch {
+    } catch (error) {
+      reportFailure?.(
+        stage !== 'native_load' &&
+          (controller.signal.aborted || !this.current(generation))
+          ? new SessionRecoveryError(stage, 'cancelled')
+          : SessionRecoveryError.from(stage, error),
+      );
       return false;
     } finally {
       if (onAbort) controller.signal.removeEventListener('abort', onAbort);
@@ -1431,34 +1457,44 @@ export class VoiceConversation {
   }
 
   async loadRetained(sid: string): Promise<boolean> {
-    return this.withCaptureReleased(async () => {
-      const context = this.context;
-      if (
-        !context ||
-        ['submitting', 'admitted', 'uncertain'].includes(
-          context.assistant.turn,
-        ) ||
-        this.dispatchPending ||
-        this.dispatchUncertain ||
-        this.sessionPending
-      )
-        return false;
-      this.sessionPending = true;
-      this.publish();
-      try {
-        const model = await this.ports.loadRetained?.(sid);
-        if (!model || this.disposed) return false;
-        this.finishNewSession();
-        this.solSessionStarted = model === 'sol';
-        this.setComposition({ ...this.composition, model });
-        this.controlNotice = 'Retained conversation recovered. Say Ivy.';
+    let failure: SessionRecoveryError | undefined;
+    const accepted = await this.withCaptureReleased(
+      async () => {
+        const context = this.context;
+        if (
+          !context ||
+          ['submitting', 'admitted', 'uncertain'].includes(
+            context.assistant.turn,
+          ) ||
+          this.dispatchPending ||
+          this.dispatchUncertain ||
+          this.sessionPending
+        )
+          throw new SessionRecoveryError('context_recheck', 'assistant_busy');
+        this.sessionPending = true;
         this.publish();
-        return true;
-      } finally {
-        this.sessionPending = false;
-        if (!this.disposed) this.publish();
-      }
-    });
+        try {
+          const model = await this.ports.loadRetained?.(sid);
+          if (!model || this.disposed)
+            throw new SessionRecoveryError('native_load', 'unconfirmed');
+          this.finishNewSession();
+          this.solSessionStarted = model === 'sol';
+          this.setComposition({ ...this.composition, model });
+          this.controlNotice = 'Retained conversation recovered. Say Ivy.';
+          this.publish();
+          return true;
+        } finally {
+          this.sessionPending = false;
+          if (!this.disposed) this.publish();
+        }
+      },
+      (error) => {
+        failure = error;
+      },
+    );
+    if (!accepted)
+      throw failure ?? new SessionRecoveryError('native_load', 'unconfirmed');
+    return true;
   }
 
   private async lifecycleCommand(
@@ -2188,6 +2224,7 @@ export class VoiceConversation {
       this.awaitingQuiet = true;
     } catch {
       this.blocked = true;
+      this.commandRecognitionUnavailable = false;
       this.failure =
         'Local speech could not stop. Retry voice before resuming.';
     } finally {
@@ -2196,9 +2233,10 @@ export class VoiceConversation {
     }
   }
 
-  private fail(message: string) {
+  private fail(message: string, commandRecognitionUnavailable = false) {
     this.invalidate();
     this.blocked = true;
+    this.commandRecognitionUnavailable = commandRecognitionUnavailable;
     this.failure = message;
     this.publish();
   }

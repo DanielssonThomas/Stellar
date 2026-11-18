@@ -15,10 +15,169 @@ import {
 } from './voice-conversation';
 import { voiceCommand, type VoiceComposition } from './voice-composition';
 import { createNativePromptCleanup } from './native-prompt-cleanup';
+import { IvyAdapterError } from '../ivy/ivy-adapter';
 
 const id = '11111111-2222-4333-8444-555555555555';
 
 describe('retained conversation voice ownership', () => {
+  it('recovers a cold retained conversation after command recognition fails without retrying speech', async () => {
+    const released = deferred<void>();
+    const loadRetained = vi.fn(async () => 'sol' as const);
+    const keywords = vi.fn(async () => {
+      throw new Error('PRIVATE recognition detail');
+    });
+    const f = fixture({
+      loadRetained,
+      keywords,
+      waitForCapturePause: () => released.promise,
+    });
+    f.controller.initializeSession('sol');
+    f.feed(true, 5);
+    await vi.waitFor(() =>
+      expect(f.view().status).toBe(
+        'Local command recognition unavailable. Retry voice or use text.',
+      ),
+    );
+    const attempts = keywords.mock.calls.length;
+    const pending = f.controller.loadRetained('retained');
+    await flush();
+    expect(loadRetained).not.toHaveBeenCalled();
+    released.resolve();
+    expect(await pending).toBe(true);
+    expect(loadRetained).toHaveBeenCalledExactlyOnceWith('retained');
+    expect(f.ports.submit).not.toHaveBeenCalled();
+    expect(f.view().error).toBe(true);
+    expect(keywords).toHaveBeenCalledTimes(attempts);
+    f.controller.dispose();
+  });
+  it.each([
+    'busy',
+    'approval_required',
+    'uncertain',
+    'storage',
+    'timeout',
+  ] as const)(
+    'retains the native %s load stage without hiding it as a capture failure',
+    async (code) => {
+      const loadRetained = vi.fn(async () => {
+        throw new IvyAdapterError('native', code);
+      });
+      const f = fixture({ loadRetained });
+      await expect(f.controller.loadRetained('retained')).rejects.toMatchObject(
+        { stage: 'native_load', code },
+      );
+      expect(loadRetained).toHaveBeenCalledOnce();
+      expect(f.ports.submit).not.toHaveBeenCalled();
+      f.controller.dispose();
+    },
+  );
+  it('does not expose raw capture or load errors, and never loads after failed capture release', async () => {
+    const loadRetained = vi.fn(async () => {
+      throw Error('PRIVATE native transport');
+    });
+    const f = fixture({
+      loadRetained,
+      waitForCapturePause: async () => {
+        throw Error('PRIVATE capture detail');
+      },
+    });
+    const error = await f.controller.loadRetained('retained').catch((e) => e);
+    expect(error).toMatchObject({
+      stage: 'capture_release',
+      code: 'unavailable',
+    });
+    expect(String(error)).not.toContain('PRIVATE');
+    expect(loadRetained).not.toHaveBeenCalled();
+    f.controller.dispose();
+    const native = fixture({ loadRetained });
+    const nativeError = await native.controller
+      .loadRetained('retained')
+      .catch((e) => e);
+    expect(nativeError).toMatchObject({
+      stage: 'native_load',
+      code: 'uncertain',
+    });
+    expect(String(nativeError)).not.toContain('PRIVATE');
+    native.controller.dispose();
+  });
+  it('keeps a possible native load effect uncertain when disposal races its lost response', async () => {
+    const reply = deferred<'sol'>();
+    const loadRetained = vi.fn(() => reply.promise);
+    const f = fixture({ loadRetained });
+    const pending = f.controller.loadRetained('retained').catch((e) => e);
+    await vi.waitFor(() => expect(loadRetained).toHaveBeenCalledOnce());
+    f.controller.dispose();
+    reply.reject(new IvyAdapterError('native', 'uncertain'));
+    expect(await pending).toMatchObject({
+      stage: 'native_load',
+      code: 'uncertain',
+    });
+  });
+  it('does not treat an actual capture failure as a keyword-only failure', async () => {
+    const loadRetained = vi.fn(async () => 'sol' as const);
+    const f = fixture({
+      loadRetained,
+      keywords: async () => {
+        throw Error('PRIVATE');
+      },
+    });
+    f.feed(true, 5);
+    await vi.waitFor(() => expect(f.view().error).toBe(true));
+    f.controller.accept({ type: 'unavailable' });
+    await expect(f.controller.loadRetained('retained')).rejects.toMatchObject({
+      stage: 'capture_guard',
+      code: 'voice_busy',
+    });
+    expect(loadRetained).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+  it('rechecks a new speech owner and cancellation after capture release before loading', async () => {
+    for (const cancel of [false, true]) {
+      const released = deferred<void>();
+      const loadRetained = vi.fn(async () => 'sol' as const);
+      const f = fixture({
+        loadRetained,
+        waitForCapturePause: () => released.promise,
+      });
+      const pending = f.controller.loadRetained('retained').catch((e) => e);
+      if (cancel) f.controller.dispose();
+      else
+        f.update({
+          speech: {
+            ...initialSpeechSnapshot(),
+            operation_id: id,
+            state: 'speaking',
+          },
+        });
+      released.resolve();
+      expect(await pending).toMatchObject({
+        stage: cancel ? 'capture_release' : 'context_recheck',
+        code: cancel ? 'cancelled' : 'speech_busy',
+      });
+      expect(loadRetained).not.toHaveBeenCalled();
+      f.controller.dispose();
+    }
+  });
+  it.each(['admitted', 'uncertain'] as const)(
+    'keeps the %s assistant fence after local recognition fails',
+    async (turn) => {
+      const loadRetained = vi.fn(async () => 'sol' as const);
+      const f = fixture({
+        loadRetained,
+        keywords: async () => {
+          throw Error('PRIVATE');
+        },
+      });
+      f.feed(true, 5);
+      await vi.waitFor(() => expect(f.view().error).toBe(true));
+      f.update({ assistant: { ...f.context().assistant, turn } });
+      await expect(f.controller.loadRetained('retained')).rejects.toMatchObject(
+        { stage: 'capture_guard', code: 'assistant_busy' },
+      );
+      expect(loadRetained).not.toHaveBeenCalled();
+      f.controller.dispose();
+    },
+  );
   it('loads once without model rotation or prompt dispatch and retains the confirmed model', async () => {
     const loadRetained = vi.fn(async () => 'sol' as const);
     const f = fixture({ loadRetained });

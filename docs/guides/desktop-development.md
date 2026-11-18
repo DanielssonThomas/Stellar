@@ -120,6 +120,17 @@ merely because its transport fingerprint was saved. Recovery reports
 busy/unavailable/uncertain status. Do not use New session,
 edit journals or strip MCP to work around a refused load.
 
+Unavailable keyword recognition alone does not block explicit recovery or typed
+input. Its voice error remains visible; recovery still acquires the existing
+capture lease, awaits owned speech/capture release and rechecks context before
+loading. Unconfirmed stops, other speech owners, busy turns, approvals and
+uncertain dispatch remain fenced. A failure shows a bounded stage and code
+(`capture_guard`, `capture_release`, `context_recheck` or `native_load`); raw
+exception details never enter that notice. Unknown failures after native load
+starts remain uncertain, including cancellation with a lost response. A guard
+failure with no saved pending-load intent is not a reason to reconcile an older
+failed admission with Check response.
+
 Settled prior selection metadata and notification journals are retained in
 native-owned per-session archives before switching the active journal. Unknown
 notification work prevents a switch. Existing lifecycle journals keep their

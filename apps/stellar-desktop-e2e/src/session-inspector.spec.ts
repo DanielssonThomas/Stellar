@@ -233,7 +233,9 @@ test('retained recovery refusal remains actionable and never retries', async ({
   await panel
     .getByRole('button', { name: 'Recover this conversation', exact: true })
     .click();
-  await expect(panel.getByText(/Recovery was not confirmed/)).toBeVisible();
+  await expect(
+    panel.getByText(/Recovery stopped \(native_load \/ uncertain\)/),
+  ).toBeVisible();
   expect(await calls(page, 'ivy_load_retained')).toBe(1);
   expect(await calls(page, 'ivy_submit')).toBe(0);
   expect(
