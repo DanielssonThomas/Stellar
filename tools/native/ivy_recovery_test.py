@@ -91,6 +91,57 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError,'unaccounted_generation'):
             inventory(self.profile,{**self.cursor,'execution_generation':2})
 
+    def policy_receipt(self, **change):
+        result={'session_id':self.sid,'operation':'editor_mcp','execution_generation':2,'revision':2,**change}
+        self.db.execute('UPDATE sessions SET runtime_generation=2,runtime_revision=2')
+        self.db.execute('INSERT INTO state_meta VALUES(?,?)',('gateway.mutation.v1.'+'a'*64,json.dumps({'digest':'b'*64,'result':result})))
+        self.db.commit()
+
+    def test_committed_non_turn_policy_generation_accounts_for_a_gap_without_creating_an_admission(self):
+        self.policy_receipt()
+        before=hashlib.sha256((self.profile/'state.db').read_bytes()).hexdigest()
+        physical, rows=inventory(self.profile,{**self.cursor,'execution_generation':2,'revision':2})
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['generation'],1)
+        self.assertEqual(hashlib.sha256((self.profile/'state.db').read_bytes()).hexdigest(),before)
+
+    async def test_cold_bridge_recovery_serializes_policy_gap_and_terminal_ordinary_history(self):
+        self.policy_receipt()
+        self.snapshot.update(execution_generation=2,revision=2)
+        self.db.execute("UPDATE session_admissions SET principal_id='desktop',request_id='old-input',payload_json='{}'")
+        self.db.commit()
+        self.receipt.update(execution_generation=1)
+        # Real recovery producer/receipt reconciliation and wire JSON, with inert RPC peers.
+        result=json.loads(json.dumps(await self.recovery(retained=[])))
+        self.assertEqual(result['snapshot']['execution_generation'],2)
+        self.assertEqual(result['entries'][0]['kind'],'ordinary')
+        self.assertIsNone(result['entries'][0]['descriptor'])
+        self.assertEqual(result['entries'][0]['receipt']['status'],'terminal')
+        self.assertEqual(self.conn.active['input_id'],'old-UNKNOWN')
+        self.assertEqual(self.conn.lease.released,[])
+        self.assertFalse(any(m in {'prompt.submit','session.mutate'} for m,_ in self.calls))
+
+    def test_deferred_settings_do_not_explain_missing_turns_or_conflict_with_committed_changes(self):
+        self.policy_receipt(operation='model',status='deferred')
+        snapshot={**self.cursor,'execution_generation':2,'revision':2}
+        with self.assertRaisesRegex(ValueError,'unaccounted_generation'):
+            inventory(self.profile,snapshot)
+        self.db.execute("DELETE FROM state_meta")
+        self.policy_receipt()
+        for key in ('c','d'):
+            receipt={'digest':'e'*64,'result':{'session_id':self.sid,'operation':'model','status':'deferred',
+                       'execution_generation':2,'revision':2}}
+            self.db.execute('INSERT INTO state_meta VALUES(?,?)',('gateway.mutation.v1.'+key*64,json.dumps(receipt)))
+        self.db.commit()
+        self.assertEqual(len(inventory(self.profile,snapshot)[1]),1)
+
+    def test_foreign_destructive_future_or_malformed_receipts_cannot_explain_a_generation_gap(self):
+        for change in ({'session_id':'foreign'},{'operation':'reset'},{'operation':'compress'},{'execution_generation':True},{'execution_generation':3},{'revision':3}):
+            self.db.execute("DELETE FROM state_meta WHERE key LIKE 'gateway.mutation.v1.%'")
+            self.policy_receipt(**change)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                inventory(self.profile,{**self.cursor,'execution_generation':2,'revision':2})
+
     async def test_receipt_conflict_or_selection_change_cannot_commit_a_recovery(self):
         self.receipt['sequence']=77
         with self.assertRaisesRegex(ValueError,'receipt_conflict'):
