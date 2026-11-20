@@ -7,7 +7,7 @@ import subprocess
 import time
 
 LABEL = 'stellar-delegate=ivy'
-ADDRESS = re.compile(r't[1-9][0-9]*')
+ADDRESS = re.compile(r't[1-9a-z][0-9a-z]*')
 WORKER_NAME = re.compile(r'stellar-([1-9][0-9]*)')
 HIDDEN = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 ROLES = ('peon-cloud', 'foreman-cloud')
@@ -61,7 +61,7 @@ class Core:
                 'state': row['state'] if row.get('state') in ('live', 'finished') else 'unknown',
                 'exit_code': exit_code if type(exit_code) is int else None,
             })
-        return sorted(workers, key=lambda row: int(row['terminal'][1:]), reverse=True)
+        return sorted(workers, key=lambda row: int(row['terminal'][1:], 36), reverse=True)
 
     def detail(self, worker):
         row = self.call('get', worker['terminal'], '--json')

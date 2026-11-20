@@ -148,6 +148,9 @@ def operate(profile, args):
     core = Core(settings)
     action = args.get('action')
     issue = args.get('issue')
+    if action == 'overview':
+        from .overview import overview
+        return overview(root, core, issue=issue)
     if action in ('tracking', 'observations', 'reconcile'):
         from .observation import operate_observation
         return operate_observation(root, settings, core, args)
@@ -178,7 +181,7 @@ def operate(profile, args):
         temporary.write_text(mode, encoding='utf-8')
         temporary.replace(root / 'view-mode.txt')
         return {'view_preference': mode}
-    raise Unavailable('Choose status, progress, launch, show, hide, focus or preference.')
+    raise Unavailable('Choose overview, status, progress, launch, show, hide, focus or preference.')
 
 
 def observe(profile):
