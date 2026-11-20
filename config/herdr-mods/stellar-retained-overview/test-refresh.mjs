@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { MAX_BYTES, POLL_MS, RefreshController, RetainedSnapshot, freshness } from "./snapshot-state.mjs";
@@ -8,7 +9,8 @@ const frame = (generated_at = 10, extras = {}) => JSON.stringify({
   schemaVersion: 1, generated_at, available: true, coverage: "Confirmed launch receipts only.", warnings: [],
   workers: [{ issue: 367, role: "peon-cloud", claim_session: "claim-367", runtime_session: null,
     incarnation: "inc-367", terminal: "t7", process: "exited", status: "blocked", exit_code: 0,
-    tests: "unverified", review: "unverified", merge: "unverified", task: "private", ...extras }],
+    source: "attempts/367/terminal.json", tests: "unverified", review: "unverified", merge: "unverified",
+    task: "private", ...extras }],
 });
 
 test("accepts producer Unix-seconds timestamp and keeps process distinct from verification", () => {
@@ -32,6 +34,27 @@ test("malformed, unavailable and oversized updates retain last-good identity", (
     assert.equal(state.snapshot, retained);
     assert.match(state.warning, /last-good/);
   }
+});
+
+test("malformed worker identity and nested or unknown private fields never replace last-good state", () => {
+  const state = new RetainedSnapshot();
+  state.accept(frame());
+  const retained = state.snapshot;
+  const base = JSON.parse(frame());
+  const invalid = [
+    { ...base, workers: [null] },
+    { ...base, workers: [{ ...base.workers[0], claim_session: undefined }] },
+    { ...base, workers: [{ ...base.workers[0], summary: { reasoning: "private" } }] },
+  ];
+  for (const value of invalid) {
+    try { state.accept(JSON.stringify(value)); } catch (error) { state.fail(error); }
+    assert.equal(state.snapshot, retained);
+    assert.match(state.warning, /last-good/);
+  }
+  const accepted = state.accept(JSON.stringify({ ...base, reasoning: "private", extra: { task: "private" } }));
+  assert.deepEqual(Object.keys(accepted).sort(), ["available", "coverage", "generated_at", "schemaVersion", "warnings", "workers"]);
+  assert.equal("reasoning" in accepted, false);
+  assert.equal("extra" in accepted, false);
 });
 
 test("refreshes do not overlap; disposal cancels scheduling after an in-flight read", async () => {
@@ -79,7 +102,7 @@ test("successful refresh schedules the next one-shot only after completion", asy
 });
 
 test("a fresh mod instance recovers the exact retained identities from atomic source", () => {
-  const directory = mkdtempSync(join(process.env.TMPDIR, "stellar-retained-"));
+  const directory = mkdtempSync(join(tmpdir(), "stellar-retained-"));
   try {
     const file = join(directory, "snapshot.json");
     writeFileSync(file, frame(), "utf8");

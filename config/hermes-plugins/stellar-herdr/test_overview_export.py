@@ -114,6 +114,50 @@ class ExportTests(unittest.TestCase):
         self.assertFalse(result['available'])
         self.assertEqual(self.destination.read_bytes(), old)
 
+    def test_missing_real_launch_registry_preserves_prior_bytes(self):
+        old = b'{"retained":"last good identity"}'
+        self.destination.write_bytes(old)
+        root = Path(self.temp.name) / 'missing-registry'
+        root.mkdir()
+        with patch.object(overview_export.importlib, 'import_module',
+                          return_value=SimpleNamespace(snapshot=snapshot)):
+            result = overview_export.export_snapshot(root, Mock(), self.destination)
+        self.assertFalse(result['available'])
+        self.assertIn('last-good', result['warnings'][0])
+        self.assertEqual(self.destination.read_bytes(), old)
+        self.assertFalse(list(self.destination.parent.glob('*.tmp')))
+
+    def test_unreadable_real_launch_registry_preserves_prior_bytes(self):
+        old = b'{"retained":"last good identity"}'
+        self.destination.write_bytes(old)
+        root = Path(self.temp.name) / 'unreadable-registry'
+        (root / 'attempts').mkdir(parents=True)
+        original_iterdir = Path.iterdir
+
+        def unreadable_attempts(path):
+            if path == root / 'attempts':
+                raise OSError('registry unavailable')
+            return original_iterdir(path)
+
+        with (patch.object(overview_export.importlib, 'import_module',
+                           return_value=SimpleNamespace(snapshot=snapshot)),
+              patch.object(Path, 'iterdir', unreadable_attempts)):
+            result = overview_export.export_snapshot(root, Mock(), self.destination)
+        self.assertFalse(result['available'])
+        self.assertEqual(self.destination.read_bytes(), old)
+        self.assertFalse(list(self.destination.parent.glob('*.tmp')))
+
+    def test_real_available_empty_registry_replaces_snapshot(self):
+        root = Path(self.temp.name) / 'empty-registry'
+        (root / 'attempts').mkdir(parents=True)
+        self.destination.write_bytes(b'{"retained":"old"}')
+        with patch.object(overview_export.importlib, 'import_module',
+                          return_value=SimpleNamespace(snapshot=snapshot)):
+            result = overview_export.export_snapshot(root, Mock(), self.destination)
+        self.assertTrue(result['available'])
+        self.assertEqual(result['workers'], [])
+        self.assertEqual(json.loads(self.destination.read_text(encoding='utf-8'))['workers'], [])
+
     def test_oversized_snapshot_is_refused(self):
         with self.assertRaisesRegex(ValueError, '64 KiB'):
             overview_export._contract({'workers': [{'summary': 'x' * 70000}],

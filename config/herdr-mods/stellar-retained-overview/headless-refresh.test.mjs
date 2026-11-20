@@ -2,14 +2,19 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
-const require = createRequire("D:/ai-repositories/stellar-issue-352/package.json");
+const playwrightRoot = process.env.STELLAR_OVERVIEW_PLAYWRIGHT_ROOT;
+const require = createRequire(playwrightRoot
+  ? resolve(playwrightRoot, "package.json")
+  : new URL("../../../package.json", import.meta.url));
 const { chromium } = require("@playwright/test");
 
 const worker = (summary) => ({ issue: 367, role: "peon-cloud", claim_session: "claim-367",
   runtime_session: null, incarnation: "inc-367", terminal: "t7", process: "running",
-  status: "working", exit_code: null, tests: "unverified", review: "unverified", merge: "unverified", summary });
+  status: "working", exit_code: null, source: "attempts/367/terminal.json", tests: "unverified",
+  review: "unverified", merge: "unverified", summary });
 const snapshot = (summary, generated_at = Date.now() / 1000) => JSON.stringify({
   schemaVersion: 1, generated_at, available: true,
   coverage: "Confirmed receipt-backed launches only; missing entries are not an all-clear.",
@@ -37,8 +42,9 @@ catch(e){state.fail(e)}},render,(ms,callback)=>{const timer=setTimeout(callback,
 refresh.start();addEventListener('pagehide',()=>refresh.close());
 </script>`;
 
-test("isolated headless 360/1440 update, stale outage retention, reload and reopen", async () => {
+test("isolated headless 360/1440 update, failure recovery, stale warning, reload and reopen", async () => {
   let payload = snapshot("Running · update A");
+  let responseMode = "valid";
   const server = createServer((request, response) => {
     if (request.url === "/snapshot-state.mjs") {
       response.setHeader("content-type", "text/javascript; charset=utf-8");
@@ -47,6 +53,20 @@ test("isolated headless 360/1440 update, stale outage retention, reload and reop
     }
     if (request.url === "/snapshot") {
       response.setHeader("content-type", "application/json; charset=utf-8");
+      if (responseMode === "unavailable") {
+        response.statusCode = 503;
+        response.end("unavailable");
+        return;
+      }
+      if (responseMode === "malformed") {
+        response.end(JSON.stringify({ schemaVersion: 1, generated_at: Date.now() / 1000,
+          available: true, coverage: "test", warnings: [], workers: [null] }));
+        return;
+      }
+      if (responseMode === "oversized") {
+        response.end("x".repeat(65537));
+        return;
+      }
       response.end(payload);
       return;
     }
@@ -59,14 +79,32 @@ test("isolated headless 360/1440 update, stale outage retention, reload and reop
   try {
     for (const width of [360, 1440]) {
       payload = snapshot("Running · update A");
+      responseMode = "valid";
       const context = await browser.newContext({ viewport: { width, height: 900 } });
       const page = await context.newPage();
+      await page.addInitScript(() => {
+        const original = window.setTimeout.bind(window);
+        window.setTimeout = (callback, delay, ...args) => original(callback, Math.min(delay, 30), ...args);
+      });
       page.on("pageerror", (error) => console.error("headless fixture page error:", error));
       page.on("requestfailed", (request) => console.error("headless fixture request failed:", request.url(), request.failure()?.errorText));
       await page.goto(`http://127.0.0.1:${address.port}/`);
       await page.getByText("Running · update A").waitFor();
       payload = snapshot("Running · update B");
       await page.getByText("Running · update B").waitFor();
+      for (const [mode, warning] of [
+        ["unavailable", "Snapshot unavailable"],
+        ["malformed", "malformed worker identity"],
+        ["oversized", "Snapshot exceeds 64 KiB"],
+      ]) {
+        responseMode = mode;
+        await page.locator("#warning").getByText(warning).waitFor();
+        await page.getByText("Running · update B").waitFor();
+        assert.equal(await page.locator("article").count(), 1);
+      }
+      responseMode = "valid";
+      payload = snapshot("Recovered · update C");
+      await page.getByText("Recovered · update C").waitFor();
       payload = snapshot("Last good retained during outage", (Date.now() - 120000) / 1000);
       await page.locator("#fresh").filter({ hasText: "Snapshot stale" }).waitFor();
       await page.getByText("Last good retained during outage").waitFor();

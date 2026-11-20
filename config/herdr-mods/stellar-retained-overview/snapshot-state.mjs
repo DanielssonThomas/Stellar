@@ -11,9 +11,52 @@ export function validateSnapshot(value) {
   const safeWorkerFields = ["issue", "role", "claim_session", "runtime_session", "attempt", "incarnation",
     "terminal", "branch", "target", "baseline", "process", "status", "exit_code", "tests", "review",
     "merge", "observed_at", "source", "issue_source", "summary"];
-  const workers = value.workers.slice(0, 20).filter((row) => row && typeof row === "object").map((row) =>
-    Object.fromEntries(safeWorkerFields.filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]])));
-  return { ...value, workers, warnings: value.warnings.slice(0, 32).map((warning) => String(warning).slice(0, 512)) };
+  const scalarFields = new Set(["role", "claim_session", "runtime_session", "attempt", "incarnation",
+    "terminal", "branch", "target", "baseline", "process", "status", "tests", "review", "merge",
+    "source", "issue_source", "summary"]);
+  const required = ["issue", "role", "claim_session", "runtime_session", "incarnation", "terminal",
+    "process", "status", "exit_code", "tests", "review", "merge", "source"];
+  const nonemptyStrings = ["role", "claim_session", "incarnation", "terminal", "process", "status",
+    "tests", "review", "merge", "source"];
+  if (value.workers.length > 20 || value.coverage.length > 1024 || value.warnings.length > 32 ||
+      value.warnings.some((warning) => typeof warning !== "string")) {
+    throw new Error("Snapshot exceeds its bounded contract.");
+  }
+  const workers = value.workers.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row) ||
+        required.some((key) => !Object.hasOwn(row, key))) {
+      throw new Error("Snapshot contains a malformed worker identity.");
+    }
+    if (!Number.isSafeInteger(row.issue) || row.issue < 1 ||
+        (row.exit_code !== null && !Number.isSafeInteger(row.exit_code)) ||
+        (row.observed_at !== undefined && row.observed_at !== null &&
+          (typeof row.observed_at !== "number" || !Number.isFinite(row.observed_at))) ||
+        nonemptyStrings.some((key) => typeof row[key] !== "string" || !row[key].length)) {
+      throw new Error("Snapshot contains a malformed worker value.");
+    }
+    for (const key of safeWorkerFields) {
+      if (!Object.hasOwn(row, key)) continue;
+      const valid = scalarFields.has(key)
+        ? (typeof row[key] === "string" && row[key].length <= 2048) ||
+          (key === "runtime_session" && row[key] === null)
+        : key === "issue" ? Number.isSafeInteger(row[key]) && row[key] > 0
+          : key === "exit_code" ? row[key] === null || Number.isSafeInteger(row[key])
+            : key === "observed_at" ? row[key] === null ||
+              (typeof row[key] === "number" && Number.isFinite(row[key]))
+              : false;
+      if (!valid) throw new Error(`Snapshot contains a malformed ${key} field.`);
+    }
+    return Object.fromEntries(safeWorkerFields.filter((key) => Object.hasOwn(row, key))
+      .map((key) => [key, row[key]]));
+  });
+  return {
+    schemaVersion: 1,
+    generated_at: value.generated_at,
+    available: true,
+    coverage: value.coverage,
+    warnings: value.warnings.map((warning) => warning.slice(0, 512)),
+    workers,
+  };
 }
 
 export function freshness(timestamp, now = Date.now()) {

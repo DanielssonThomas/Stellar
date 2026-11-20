@@ -9,3 +9,5 @@ The existing maintained no-agent path is `observer_tick.py`, whose current one-s
 Coverage is limited to confirmed receipt-backed Stellar launches. Missing records are not an all-clear. A process exit code, including zero, does not prove tests, independent review, merge or completion. Private tasks, terminal logs and reasoning are excluded. The Herdr app reads the snapshot; it does not read a worker transcript or run commands. Headless rendering cannot establish native desktop focus or foreground acceptance.
 
 The mod is source-only; it is not installed, and no runtime, layout, schedule or app restart was performed.
+
+The isolated headless test resolves the declared `@playwright/test` dependency from this repository's normal Node module resolution. On a host where repository dependencies are not installed, the fixture may be run with `STELLAR_OVERVIEW_PLAYWRIGHT_ROOT` explicitly set to an existing local checkout containing that dependency (for example the read-only issue352 checkout used during development); this is a test-only module-resolution override, not a product dependency or installation step.

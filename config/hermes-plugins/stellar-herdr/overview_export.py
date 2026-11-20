@@ -68,6 +68,12 @@ def export_snapshot(root: Path, core, destination: Path):
         return unavailable('Retained overview projection is not integrated yet.')
     try:
         data = projection(Path(root), core)
+        warnings = data.get('warnings', []) if isinstance(data, dict) else []
+        if isinstance(warnings, list) and any(
+                warning in ('Launch registry unavailable or not yet created.',
+                            'Launch registry is partially unavailable.')
+                for warning in warnings):
+            return unavailable('Launch registry is unavailable; last-good data is retained.')
         encoded = _contract(data)
     except (OSError, ValueError, TypeError, RuntimeError):
         return unavailable('Retained overview source is unavailable or malformed.')
