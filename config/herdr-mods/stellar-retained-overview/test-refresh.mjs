@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { MAX_BYTES, POLL_MS, RefreshController, RetainedSnapshot, freshness } from "./snapshot-state.mjs";
+import { MAX_BYTES, POLL_MS, RefreshController, RetainedSnapshot, freshness, utf8ByteLength } from "./snapshot-state.mjs";
 
 const frame = (generated_at = 10, extras = {}) => JSON.stringify({
   schemaVersion: 1, generated_at, available: true, coverage: "Confirmed launch receipts only.", warnings: [],
@@ -55,6 +55,35 @@ test("malformed worker identity and nested or unknown private fields never repla
   assert.deepEqual(Object.keys(accepted).sort(), ["available", "coverage", "generated_at", "schemaVersion", "warnings", "workers"]);
   assert.equal("reasoning" in accepted, false);
   assert.equal("extra" in accepted, false);
+});
+
+test("UTF-8 byte bounds work without TextEncoder and preserve prior snapshots", () => {
+  const sample = "ASCII|é|水|😀|\ud800";
+  assert.equal(utf8ByteLength(sample), Buffer.byteLength(sample, "utf8"));
+  const original = globalThis.TextEncoder;
+  globalThis.TextEncoder = undefined;
+  try {
+    const state = new RetainedSnapshot();
+    state.accept(frame());
+    const lastGood = state.snapshot;
+    const oversized = JSON.stringify({ ...JSON.parse(frame()), coverage: "é".repeat(33000) });
+    assert.ok(oversized.length < MAX_BYTES);
+    assert.ok(Buffer.byteLength(oversized, "utf8") > MAX_BYTES);
+    assert.throws(() => state.accept(oversized), /64 KiB/);
+    state.fail(new Error("Snapshot exceeds 64 KiB."));
+    assert.equal(state.snapshot, lastGood);
+    assert.match(state.warning, /last-good/);
+    assert.equal(state.accept(frame()).workers[0].claim_session, "claim-367");
+  } finally {
+    globalThis.TextEncoder = original;
+  }
+});
+
+test("native overview root keeps a stable id and vertical scrolling enabled", () => {
+  const source = readFileSync(new URL("./main.js", import.meta.url), "utf8");
+  assert.match(source, /\.id\("stellar-retained-overview-root"\)/);
+  assert.match(source, /\.overflow_y_scrollbar\(\)/);
+  assert.doesNotMatch(source, /TextEncoder/);
 });
 
 test("refreshes do not overlap; disposal cancels scheduling after an in-flight read", async () => {

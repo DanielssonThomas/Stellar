@@ -1,6 +1,15 @@
 export const POLL_MS = 5000;
 export const MAX_BYTES = 65536;
 
+export function utf8ByteLength(value) {
+  let bytes = 0;
+  for (const character of value) {
+    const point = character.codePointAt(0);
+    bytes += point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+  }
+  return bytes;
+}
+
 export function validateSnapshot(value) {
   if (!value || value.schemaVersion !== 1 || value.available !== true ||
       !Array.isArray(value.workers) || typeof value.generated_at !== "number" ||
@@ -71,7 +80,7 @@ export class RetainedSnapshot {
 
   accept(raw, now = Date.now()) {
     if (typeof raw !== "string") throw new Error("Snapshot file is unavailable.");
-    if (new TextEncoder().encode(raw).length > MAX_BYTES) throw new Error("Snapshot exceeds 64 KiB.");
+    if (utf8ByteLength(raw) > MAX_BYTES) throw new Error("Snapshot exceeds 64 KiB.");
     const next = validateSnapshot(JSON.parse(raw));
     this.snapshot = next;
     this.warning = next.warnings.length ? next.warnings.join(" · ") : "";

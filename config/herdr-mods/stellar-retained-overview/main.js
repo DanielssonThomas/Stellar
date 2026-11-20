@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { appHome, readTextFile } from "herdr";
-import { MAX_BYTES, RefreshController, RetainedSnapshot, freshness } from "./snapshot-state.mjs";
+import { RefreshController, RetainedSnapshot, freshness } from "./snapshot-state.mjs";
 
 export default class StellarRetainedOverview extends View {
   init(_props, cx) {
@@ -9,7 +9,6 @@ export default class StellarRetainedOverview extends View {
       try {
         const raw = await readTextFile(`${appHome()}/stellar-retained-overview.json`);
         if (raw === null) throw new Error("Snapshot file is unavailable.");
-        if (new TextEncoder().encode(raw).length > MAX_BYTES) throw new Error("Snapshot exceeds 64 KiB.");
         this.retained.accept(raw);
       } catch (error) { this.retained.fail(error); }
     }, (timerCx) => timerCx.notify(), (ms, callback) => cx.timer.after(ms, (timerCx) => callback(timerCx)));
@@ -21,7 +20,8 @@ export default class StellarRetainedOverview extends View {
   }
 
   render() {
-    const root = div().flex().flex_col().gap(12).p(16).size_full().bg("#081426").text_color("#eef1f6");
+    const root = div().id("stellar-retained-overview-root").flex().flex_col().gap(12).p(16)
+      .size_full().overflow_y_scrollbar().bg("#081426").text_color("#eef1f6");
     const text = (value, size = 13, color = "#eef1f6") => div().text_size(size).text_color(color).child(String(value));
     root.child(text("STELLAR / RETAINED WORKERS", 12, "#e4c477"));
     root.child(text("Confirmed launch history · refreshes automatically", 18));
