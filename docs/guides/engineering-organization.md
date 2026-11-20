@@ -72,6 +72,48 @@ After validation and the issue worktree claim, Ivy uses `stellar_herdr` to start
 
 Ask Ivy to show Herdr, focus an issue, hide Herdr, or set the preference to manual or automatic. Manual is the default. Automatic opens and focuses the view when a worker starts. Hiding the window leaves workers running in Core. Disabling the plugin stops Ivy's integration. Existing workers can still be inspected through the Herdr CLI.
 
+### Retained outcome overview (source candidate)
+
+The repository tool adds `{"action":"overview"}` (optionally `"issue":352`). It reads
+confirmed launch receipts and continuation archives from the existing `attempts` directory,
+then requests exact-incarnation structured Core metadata. It returns readable summaries and
+the path to `integration/stellar-herdr/overview.html`. Open that local file in a browser for
+the compact/wide navy-and-gold equivalent view. This is a static snapshot, not native Agents
+integration or automatic live reporting; request overview again to refresh it. Native status
+support remains unqualified when the worker has no reported status.
+
+The view retains issue, worker, claim, optional runtime session, attempt incarnation, terminal,
+branch, target, baseline and relative receipt references. Missing Core data preserves the
+launch with an unavailable state; reported status older than five minutes or without a valid
+timestamp is stale. Process exit zero is explicitly incomplete/unverified. Tests, independent
+review and merge stay unverified in this slice; no success is inferred from model output.
+The overview never reads task files, transcripts or raw terminal logs. Existing `progress`
+remains a separate, explicitly requested untrusted-log inspection surface; it selects the
+latest Core terminal for an issue, not every historical attempt.
+
+Only confirmed Herdr-launched workers are covered, not internal Hermes helpers. At most 20
+recent attempts are displayed, with a 200-entry scan bound, 16 KiB receipt bound and one
+one-second Core request per displayed attempt. Omitted/invalid receipts and unavailable
+registry data produce warnings, not an empty all-clear. Source `show`/`focus` still use the
+supported app/pane operations; this HTML snapshot is not installed as a native app pane and
+does not claim reliable browser foreground focus. Existing spaces and writers are untouched
+by overview generation.
+
+Do not copy the repository plugin over the installed Ivy integration: installed manager
+renewal, continuation and guidance may be newer. This source candidate requires independent
+exact-head review and a separately reviewed minimal application delta. No installed product
+change, runtime restart or full Windows lifecycle acceptance follows from source tests.
+
+Run deterministic Python checks with
+`python -m unittest discover -s config/hermes-plugins -p 'test_*.py'`. After the ordinary
+locked dependency install, run
+`node config/hermes-plugins/stellar-herdr/test_overview_ui.cjs <absolute-output-directory>`.
+The browser check generates its own offline fixtures through the registry reader and saves
+compact/wide screenshots and JSON results outside the source tree. It requires Python and
+the installed Playwright Chromium browser; it never reads the personal launch registry or
+starts a worker. No Angular or Rust application build is needed for this Python/static-HTML
+delta; native integration and real window foreground behavior remain separate checks.
+
 ### Local lifecycle observations and the background delivery boundary
 
 The repository plugin records opted-in lifecycle observations and implements forwarding to the reviewed, **uninstalled** Hermes notification candidate. Installed-runtime and Desktop acceptance remain incomplete. The installed public injection API cannot provide the original-session pin, stable producer identity, trusted descriptor and durable admission receipt required by [#339](https://github.com/DanielssonThomas/Stellar/issues/339) and the [#299](https://github.com/DanielssonThomas/Stellar/issues/299) consumer. A scheduling boolean is not a receipt. Do not substitute private authority calls, loosen consumer checks or change injection permissions to work around an unavailable API.
