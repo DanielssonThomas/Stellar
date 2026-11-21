@@ -158,6 +158,7 @@ export class DesktopExperienceTemplate {
   readonly solActive = input(false);
   readonly faultActive = input(false);
   readonly faultVisible = input(false);
+  readonly faultHistoryRequested = input(false);
   readonly faultEntries = input<readonly FaultLogEntry[]>([]);
   readonly faultRecovering = input(false);
   readonly recoverFault = output<void>();
@@ -169,16 +170,30 @@ export class DesktopExperienceTemplate {
   readonly promptRefinementRevision = input(0);
   readonly promptRefined = input<string | null>(null);
   readonly promptStatus = input<PromptComposerStatus>('idle');
-  readonly composing = computed(
-    () =>
+  readonly promptError = input('');
+  readonly promptProgress = computed(() => {
+    switch (this.promptStatus()) {
+      case 'refining':
+        return 'Preparing prompt…';
+      case 'finalizing':
+        return 'Finishing prompt preview…';
+      case 'submitting':
+        return 'Sending to Ivy…';
+      default:
+        return '';
+    }
+  });
+  readonly composing = computed(() => {
+    const status = this.promptStatus();
+    const preparing = status === 'refining' || status === 'finalizing';
+    const drafting = status === 'composing' || status === 'error';
+    return (
       this.solActive() &&
       !this.faultActive() &&
-      !this.faultVisible() &&
-      ['composing', 'refining', 'finalizing', 'error'].includes(
-        this.promptStatus(),
-      ) &&
-      !['suspended', 'shutdown'].includes(this.state().phase),
-  );
+      (preparing || (drafting && !this.faultHistoryRequested())) &&
+      !['suspended', 'shutdown'].includes(this.state().phase)
+    );
+  });
   readonly emblem = viewChild(EmblemMotionMolecule);
   readonly promptComposer = viewChild.required(PromptComposerMolecule);
   readonly assistantActive = computed(

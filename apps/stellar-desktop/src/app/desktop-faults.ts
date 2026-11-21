@@ -115,7 +115,9 @@ const definitions: Record<
 @Injectable()
 export class DesktopFaults {
   private readonly history = signal<readonly StoredFault[]>([]);
-  private readonly opened = signal(false);
+  private readonly historyVisibility = signal<
+    'hidden' | 'automatic' | 'requested'
+  >('hidden');
   private nextId = 0;
 
   readonly entries = computed<readonly DesktopFaultEntry[]>(() =>
@@ -135,7 +137,12 @@ export class DesktopFaults {
   readonly active = computed(() =>
     this.history().some((entry) => entry.status !== 'resolved'),
   );
-  readonly visible = computed(() => this.active() || this.opened());
+  readonly visible = computed(
+    () => this.active() || this.historyVisibility() !== 'hidden',
+  );
+  readonly historyRequested = computed(
+    () => this.historyVisibility() === 'requested',
+  );
 
   observe(source: FaultSource, code: string | null): void {
     untracked(() => this.record(source, code));
@@ -201,7 +208,8 @@ export class DesktopFaults {
         : entry,
     );
     if (code !== null) {
-      this.opened.set(true);
+      if (this.historyVisibility() === 'hidden')
+        this.historyVisibility.set('automatic');
       const previous = entries.find(
         (entry) =>
           entry.source === source &&
@@ -251,11 +259,15 @@ export class DesktopFaults {
   }
 
   dismiss(): void {
-    if (!this.active()) this.opened.set(false);
+    if (!this.active()) this.historyVisibility.set('hidden');
+  }
+
+  dismissRecovered(): void {
+    if (this.historyVisibility() === 'automatic') this.dismiss();
   }
 
   show(): void {
-    this.opened.set(true);
+    this.historyVisibility.set('requested');
   }
 
   private changeStatus(

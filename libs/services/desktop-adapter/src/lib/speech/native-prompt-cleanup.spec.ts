@@ -46,6 +46,23 @@ describe('native prompt cleanup', () => {
       status: 'refined',
     });
   });
+  it('returns the exact draft at the send deadline while a native request is still running', async () => {
+    vi.useFakeTimers();
+    try {
+      const invoke = vi.fn(() => new Promise(() => undefined));
+      const cleanup = createNativePromptCleanup(invoke);
+      const pending = cleanup(raw, new AbortController().signal, 5000);
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(pending).resolves.toEqual({
+        raw,
+        text: raw,
+        status: 'fallback',
+      });
+      expect(invoke).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('keeps the raw transcript when a native reply applies an ambiguous revision', async () => {
     const invoke = vi.fn().mockResolvedValue({
       version: 1,

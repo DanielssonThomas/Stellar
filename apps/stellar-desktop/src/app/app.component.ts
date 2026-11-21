@@ -24,6 +24,7 @@ import {
   createNativeMediaWorkspace,
   IvyReflexService,
   IvyInspectorService,
+  PromptPresentationBlockedError,
   type MediaNativeApi,
 } from '@stellar/service-desktop-adapter';
 import {
@@ -226,9 +227,7 @@ export class AppComponent {
       const active = this.faults.active();
       if (active) clearTimeout(recoveredTimer);
       else if (hadActiveFault)
-        recoveredTimer = setTimeout(() => {
-          if (!this.faults.active()) this.faults.dismiss();
-        }, 2000);
+        recoveredTimer = setTimeout(() => this.faults.dismissRecovered(), 2000);
       hadActiveFault = active;
     });
     afterNextRender(() => {
@@ -276,11 +275,11 @@ export class AppComponent {
       destroy.onDestroy(() => clearInterval(awarenessTimer));
       effect(observeWorkspace, { injector: this.injector });
       destroy.onDestroy(
-        this.voice.bindPromptPresentation((text, signal) =>
-          text.model === 'sol'
-            ? this.view().presentFinalizedPrompt(text, signal)
-            : Promise.resolve(),
-        ),
+        this.voice.bindPromptPresentation(async (text, signal) => {
+          if (text.model !== 'sol') return;
+          if (this.faults.active()) throw new PromptPresentationBlockedError();
+          await this.view().presentFinalizedPrompt(text, signal);
+        }),
       );
       const unbind = this.workspace.bind(
         desktopWorkspace({

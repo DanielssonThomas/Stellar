@@ -14,8 +14,12 @@
       (dismiss)="statusVisible.set(false)"
     />
   }
-  @if (voiceNotice()) {
-    <p class="voice-notice" role="status">{{ voiceNotice() }}</p>
+  @if (promptError()) {
+    <p class="voice-notice" role="alert">{{ promptError() }}</p>
+  } @else if (promptProgress() || voiceNotice()) {
+    <p class="voice-notice" role="status">
+      {{ promptProgress() || voiceNotice() }}
+    </p>
   }
   <stellar-ivy-activity-molecule
     [preparing]="ivyPreparing()"
@@ -79,7 +83,7 @@
     <ng-container ngProjectAs="[stage-spatial]">
       <ng-content select="[desktop-spatial]" />
     </ng-container>
-    @if (faultVisible() && !spatialVisible()) {
+    @if (faultVisible() && !spatialVisible() && !composing()) {
       <stellar-fault-log-molecule
         stage-composer
         [entries]="faultEntries()"
@@ -94,7 +98,6 @@
     }
     <stellar-prompt-composer-molecule
       stage-composer
-      [style.display]="faultVisible() ? 'none' : null"
       [raw]="promptRaw()"
       [draft]="promptDraft()"
       [preview]="promptPreview()"

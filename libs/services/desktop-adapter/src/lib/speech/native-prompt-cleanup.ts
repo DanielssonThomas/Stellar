@@ -3,19 +3,14 @@ import {
   decodeCleanupReply,
   type CleanupRequest,
 } from '@stellar/desktop-contracts';
-import {
-  createPromptCleanup,
-  type PromptCleanupResult,
-} from './prompt-cleanup';
+import { createPromptCleanup } from './prompt-cleanup';
 
 export type CleanupInvoke = (
   command: typeof cleanupRefineCommand,
   args: { request: CleanupRequest },
 ) => Promise<unknown>;
 
-export function createNativePromptCleanup(
-  invoke?: CleanupInvoke,
-): (raw: string, signal: AbortSignal) => Promise<PromptCleanupResult> {
+export function createNativePromptCleanup(invoke?: CleanupInvoke) {
   // The native child outlives an aborted frontend wait. Serialize until the
   // underlying invocation settles, not until its caller stops waiting.
   let nativeTail: Promise<void> = Promise.resolve();
