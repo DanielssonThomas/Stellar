@@ -565,7 +565,7 @@ test('spoken send progresses and dispatches once while native cleanup is stalled
     .poll(async () => (await state(page)).submissions)
     .toEqual([{ text: raw, dissolved: true }]);
   await expect(
-    page.getByText('Prompt submitted.', { exact: true }),
+    page.getByRole('status').filter({ hasText: 'Prompt submitted.' }),
   ).toBeVisible();
 });
 
