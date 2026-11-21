@@ -600,6 +600,17 @@ test('an active Desktop fault explains why send stopped and recovered history pe
   await expect(
     recoveredPrompt.getByText(refined, { exact: true }),
   ).toBeVisible();
+  await page.keyboard.press('m');
+  await page
+    .getByRole('button', { name: 'Recent errors', exact: true })
+    .click();
+  const history = page.getByRole('region', { name: 'Recent errors' });
+  await expect(history).toContainText('Resolved');
+  await expect(recoveredPrompt).toBeHidden();
+  await history.getByRole('button', { name: 'Dismiss history' }).click();
+  await expect(
+    recoveredPrompt.getByText(refined, { exact: true }),
+  ).toBeVisible();
   await finalize(page);
   await expect
     .poll(async () => (await state(page)).submissions)

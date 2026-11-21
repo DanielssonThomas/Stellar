@@ -158,6 +158,7 @@ export class DesktopExperienceTemplate {
   readonly solActive = input(false);
   readonly faultActive = input(false);
   readonly faultVisible = input(false);
+  readonly faultHistoryRequested = input(false);
   readonly faultEntries = input<readonly FaultLogEntry[]>([]);
   readonly faultRecovering = input(false);
   readonly recoverFault = output<void>();
@@ -182,15 +183,17 @@ export class DesktopExperienceTemplate {
         return '';
     }
   });
-  readonly composing = computed(
-    () =>
+  readonly composing = computed(() => {
+    const status = this.promptStatus();
+    const preparing = status === 'refining' || status === 'finalizing';
+    const drafting = status === 'composing' || status === 'error';
+    return (
       this.solActive() &&
       !this.faultActive() &&
-      ['composing', 'refining', 'finalizing', 'error'].includes(
-        this.promptStatus(),
-      ) &&
-      !['suspended', 'shutdown'].includes(this.state().phase),
-  );
+      (preparing || (drafting && !this.faultHistoryRequested())) &&
+      !['suspended', 'shutdown'].includes(this.state().phase)
+    );
+  });
   readonly emblem = viewChild(EmblemMotionMolecule);
   readonly promptComposer = viewChild.required(PromptComposerMolecule);
   readonly assistantActive = computed(

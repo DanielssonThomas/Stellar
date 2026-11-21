@@ -227,9 +227,7 @@ export class AppComponent {
       const active = this.faults.active();
       if (active) clearTimeout(recoveredTimer);
       else if (hadActiveFault)
-        recoveredTimer = setTimeout(() => {
-          if (!this.faults.active()) this.faults.dismiss();
-        }, 2000);
+        recoveredTimer = setTimeout(() => this.faults.dismissRecovered(), 2000);
       hadActiveFault = active;
     });
     afterNextRender(() => {

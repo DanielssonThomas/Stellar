@@ -58,6 +58,7 @@
     [assistantStatus]="assistant.status()"
     [faultActive]="faults.active()"
     [faultVisible]="faults.visible()"
+    [faultHistoryRequested]="faults.historyRequested()"
     [faultEntries]="faults.entries()"
     [faultRecovering]="faultRecovering() || assistant.recovery() === 'checking'"
     (recoverFault)="recoverFault()"
