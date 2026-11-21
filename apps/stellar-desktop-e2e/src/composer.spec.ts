@@ -596,7 +596,10 @@ test('an active Desktop fault explains why send stopped and recovered history pe
   ).toBeVisible();
   expect((await state(page)).submissions).toEqual([]);
   await observe(null);
-  await expect(page.locator('.prompt-text')).toHaveText(refined);
+  const recoveredPrompt = page.getByRole('region', { name: 'Spoken prompt' });
+  await expect(
+    recoveredPrompt.getByText(refined, { exact: true }),
+  ).toBeVisible();
   await finalize(page);
   await expect
     .poll(async () => (await state(page)).submissions)
