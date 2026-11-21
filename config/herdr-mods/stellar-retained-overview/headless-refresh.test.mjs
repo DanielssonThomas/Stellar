@@ -1,26 +1,48 @@
-import assert from "node:assert/strict";
-import { createServer } from "node:http";
-import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import test from 'node:test';
 
 const playwrightRoot = process.env.STELLAR_OVERVIEW_PLAYWRIGHT_ROOT;
-const require = createRequire(playwrightRoot
-  ? resolve(playwrightRoot, "package.json")
-  : new URL("../../../package.json", import.meta.url));
-const { chromium } = require("@playwright/test");
+const require = createRequire(
+  playwrightRoot
+    ? resolve(playwrightRoot, 'package.json')
+    : new URL('../../../package.json', import.meta.url),
+);
+const { chromium } = require('@playwright/test');
 
-const worker = (summary) => ({ issue: 367, role: "peon-cloud", claim_session: "claim-367",
-  runtime_session: null, incarnation: "inc-367", terminal: "t7", process: "running",
-  status: "working", exit_code: null, source: "attempts/367/terminal.json", tests: "unverified",
-  review: "unverified", merge: "unverified", summary });
-const snapshot = (summary, generated_at = Date.now() / 1000) => JSON.stringify({
-  schemaVersion: 1, generated_at, available: true,
-  coverage: "Confirmed receipt-backed launches only; missing entries are not an all-clear.",
-  warnings: [], workers: [worker(summary)],
+const worker = (summary) => ({
+  issue: 367,
+  role: 'peon-cloud',
+  claim_session: 'claim-367',
+  runtime_session: null,
+  incarnation: 'inc-367',
+  terminal: 't7',
+  process: 'running',
+  status: 'working',
+  exit_code: null,
+  source: 'attempts/367/terminal.json',
+  tests: 'unverified',
+  review: 'unverified',
+  merge: 'unverified',
+  summary,
 });
-const productionState = readFileSync(new URL("./snapshot-state.mjs", import.meta.url), "utf8");
+const snapshot = (summary, generated_at = Date.now() / 1000) =>
+  JSON.stringify({
+    schemaVersion: 1,
+    generated_at,
+    available: true,
+    coverage:
+      'Confirmed receipt-backed launches only; missing entries are not an all-clear.',
+    warnings: [],
+    workers: [worker(summary)],
+  });
+const productionState = readFileSync(
+  new URL('./snapshot-state.mjs', import.meta.url),
+  'utf8',
+);
 
 const html = `<!doctype html><meta charset="utf-8"><style>
 *{box-sizing:border-box}body{margin:0;padding:16px;background:#081426;color:#eef1f6;font:14px system-ui}
@@ -42,90 +64,155 @@ catch(e){state.fail(e)}},render,(ms,callback)=>{const timer=setTimeout(callback,
 refresh.start();addEventListener('pagehide',()=>refresh.close());
 </script>`;
 
-test("isolated headless 360/1440 update, failure recovery, stale warning, reload and reopen", async () => {
-  let payload = snapshot("Running · update A");
-  let responseMode = "valid";
+async function closeServer(server) {
+  if (!server.listening) return;
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+}
+
+async function launchBrowserWithCleanup(server, launch) {
+  try {
+    return await launch();
+  } catch (error) {
+    await closeServer(server);
+    throw error;
+  }
+}
+
+test('closes the isolated server if headless browser launch fails', async () => {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const failure = new Error('fixture browser launch failed');
+  await assert.rejects(
+    launchBrowserWithCleanup(server, async () => {
+      throw failure;
+    }),
+    failure,
+  );
+  assert.equal(server.listening, false);
+});
+
+test('isolated headless 360/1440 update, failure recovery, stale warning, reload and reopen', async () => {
+  let payload = snapshot('Running · update A');
+  let responseMode = 'valid';
   const server = createServer((request, response) => {
-    if (request.url === "/snapshot-state.mjs") {
-      response.setHeader("content-type", "text/javascript; charset=utf-8");
+    if (request.url === '/snapshot-state.mjs') {
+      response.setHeader('content-type', 'text/javascript; charset=utf-8');
       response.end(productionState);
       return;
     }
-    if (request.url === "/snapshot") {
-      response.setHeader("content-type", "application/json; charset=utf-8");
-      if (responseMode === "unavailable") {
+    if (request.url === '/snapshot') {
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      if (responseMode === 'unavailable') {
         response.statusCode = 503;
-        response.end("unavailable");
+        response.end('unavailable');
         return;
       }
-      if (responseMode === "malformed") {
-        response.end(JSON.stringify({ schemaVersion: 1, generated_at: Date.now() / 1000,
-          available: true, coverage: "test", warnings: [], workers: [null] }));
+      if (responseMode === 'malformed') {
+        response.end(
+          JSON.stringify({
+            schemaVersion: 1,
+            generated_at: Date.now() / 1000,
+            available: true,
+            coverage: 'test',
+            warnings: [],
+            workers: [null],
+          }),
+        );
         return;
       }
-      if (responseMode === "oversized") {
-        response.end("x".repeat(65537));
+      if (responseMode === 'oversized') {
+        response.end('x'.repeat(65537));
         return;
       }
       response.end(payload);
       return;
     }
-    response.setHeader("content-type", "text/html; charset=utf-8");
+    response.setHeader('content-type', 'text/html; charset=utf-8');
     response.end(html);
   });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
-  const browser = await chromium.launch({ headless: true });
+  let browser;
   try {
+    browser = await launchBrowserWithCleanup(server, () =>
+      chromium.launch({ headless: true }),
+    );
     for (const width of [360, 1440]) {
-      payload = snapshot("Running · update A");
-      responseMode = "valid";
-      const context = await browser.newContext({ viewport: { width, height: 900 } });
+      payload = snapshot('Running · update A');
+      responseMode = 'valid';
+      const context = await browser.newContext({
+        viewport: { width, height: 900 },
+      });
       const page = await context.newPage();
       await page.addInitScript(() => {
         const original = window.setTimeout.bind(window);
-        window.setTimeout = (callback, delay, ...args) => original(callback, Math.min(delay, 30), ...args);
+        window.setTimeout = (callback, delay, ...args) =>
+          original(callback, Math.min(delay, 30), ...args);
       });
-      page.on("pageerror", (error) => console.error("headless fixture page error:", error));
-      page.on("requestfailed", (request) => console.error("headless fixture request failed:", request.url(), request.failure()?.errorText));
+      page.on('pageerror', (error) =>
+        console.error('headless fixture page error:', error),
+      );
+      page.on('requestfailed', (request) =>
+        console.error(
+          'headless fixture request failed:',
+          request.url(),
+          request.failure()?.errorText,
+        ),
+      );
       await page.goto(`http://127.0.0.1:${address.port}/`);
-      await page.getByText("Running · update A").waitFor();
-      payload = snapshot("Running · update B");
-      await page.getByText("Running · update B").waitFor();
+      await page.getByText('Running · update A').waitFor();
+      payload = snapshot('Running · update B');
+      await page.getByText('Running · update B').waitFor();
       for (const [mode, warning] of [
-        ["unavailable", "Snapshot unavailable"],
-        ["malformed", "malformed worker identity"],
-        ["oversized", "Snapshot exceeds 64 KiB"],
+        ['unavailable', 'Snapshot unavailable'],
+        ['malformed', 'malformed worker identity'],
+        ['oversized', 'Snapshot exceeds 64 KiB'],
       ]) {
         responseMode = mode;
-        await page.locator("#warning").getByText(warning).waitFor();
-        await page.getByText("Running · update B").waitFor();
-        assert.equal(await page.locator("article").count(), 1);
+        await page.locator('#warning').getByText(warning).waitFor();
+        await page.getByText('Running · update B').waitFor();
+        assert.equal(await page.locator('article').count(), 1);
       }
-      responseMode = "valid";
-      payload = snapshot("Recovered · update C");
-      await page.getByText("Recovered · update C").waitFor();
-      payload = snapshot("Last good retained during outage", (Date.now() - 120000) / 1000);
-      await page.locator("#fresh").filter({ hasText: "Snapshot stale" }).waitFor();
-      await page.getByText("Last good retained during outage").waitFor();
+      responseMode = 'valid';
+      payload = snapshot('Recovered · update C');
+      await page.getByText('Recovered · update C').waitFor();
+      payload = snapshot(
+        'Last good retained during outage',
+        (Date.now() - 120000) / 1000,
+      );
+      await page
+        .locator('#fresh')
+        .filter({ hasText: 'Snapshot stale' })
+        .waitFor();
+      await page.getByText('Last good retained during outage').waitFor();
       const layout = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth > innerWidth,
         background: getComputedStyle(document.body).backgroundColor,
-        gold: getComputedStyle(document.querySelector("h1")).color,
+        gold: getComputedStyle(document.querySelector('h1')).color,
       }));
-      assert.deepEqual(layout, { overflow: false, background: "rgb(8, 20, 38)", gold: "rgb(228, 196, 119)" });
+      assert.deepEqual(layout, {
+        overflow: false,
+        background: 'rgb(8, 20, 38)',
+        gold: 'rgb(228, 196, 119)',
+      });
       await page.reload();
-      await page.getByText("Last good retained during outage").waitFor();
+      await page.getByText('Last good retained during outage').waitFor();
       await context.close();
-      const reopened = await browser.newContext({ viewport: { width, height: 900 } });
+      const reopened = await browser.newContext({
+        viewport: { width, height: 900 },
+      });
       const reopenedPage = await reopened.newPage();
       await reopenedPage.goto(`http://127.0.0.1:${address.port}/`);
-      await reopenedPage.getByText("Last good retained during outage").waitFor();
-      assert.equal(await reopenedPage.locator("article").count(), 1);
+      await reopenedPage
+        .getByText('Last good retained during outage')
+        .waitFor();
+      assert.equal(await reopenedPage.locator('article').count(), 1);
       await reopened.close();
     }
   } finally {
-    await browser.close();
-    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await browser?.close();
+    await closeServer(server);
   }
 });
