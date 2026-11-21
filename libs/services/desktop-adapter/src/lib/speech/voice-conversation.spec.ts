@@ -2227,6 +2227,39 @@ describe('voice conversation ownership', () => {
     expect(refinePrompt).toHaveBeenCalledTimes(1);
     expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith('clean draft', id);
   });
+  it('sends the retained draft once even when background cleanup never settles', async () => {
+    const cleanup = deferred<string>();
+    const collect = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 1, utterance_id: id, text: 'sentence' })
+      .mockResolvedValueOnce({
+        version: 1,
+        utterance_id: id,
+        text: 'Send prompt.',
+      });
+    const refinePrompt = vi.fn<NonNullable<VoicePorts['refinePrompt']>>(
+      () => cleanup.promise,
+    );
+    const f = fixture({ collect, refinePrompt });
+    f.controller.setDraft('seed');
+    f.utterance();
+    await vi.waitFor(() => expect(refinePrompt).toHaveBeenCalledOnce());
+    f.utterance();
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledExactlyOnceWith(
+      'seed\nsentence',
+      id,
+    );
+    expect(refinePrompt.mock.calls[0][1].aborted).toBe(true);
+    cleanup.resolve('a late cleanup');
+    await flush();
+    expect(f.ports.submit).toHaveBeenCalledOnce();
+    expect(f.composition()).toMatchObject({
+      status: 'idle',
+      raw: '',
+      lastSubmittedRaw: 'seed\nsentence',
+    });
+  });
   it('admits a leading wake in the first capped chunk even when its preview missed it', async () => {
     const collect = vi.fn(async (pcm: Int16Array, utterance_id: string) => ({
       version: 1,
@@ -3715,7 +3748,9 @@ describe('spoken prompt composition', () => {
           refined: 'cleaned',
           status: 'error',
         });
-        expect(state.error).toContain('presentation');
+        expect(state.error).toContain(
+          'Check Desktop faults or enlarge the window',
+        );
         if (fail === 'timeout') expect(signal.aborted).toBe(true);
         done.resolve();
         await flush();

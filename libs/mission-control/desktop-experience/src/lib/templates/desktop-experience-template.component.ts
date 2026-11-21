@@ -169,11 +169,23 @@ export class DesktopExperienceTemplate {
   readonly promptRefinementRevision = input(0);
   readonly promptRefined = input<string | null>(null);
   readonly promptStatus = input<PromptComposerStatus>('idle');
+  readonly promptError = input('');
+  readonly promptProgress = computed(() => {
+    switch (this.promptStatus()) {
+      case 'refining':
+        return 'Preparing prompt…';
+      case 'finalizing':
+        return 'Finishing prompt preview…';
+      case 'submitting':
+        return 'Sending to Ivy…';
+      default:
+        return '';
+    }
+  });
   readonly composing = computed(
     () =>
       this.solActive() &&
       !this.faultActive() &&
-      !this.faultVisible() &&
       ['composing', 'refining', 'finalizing', 'error'].includes(
         this.promptStatus(),
       ) &&

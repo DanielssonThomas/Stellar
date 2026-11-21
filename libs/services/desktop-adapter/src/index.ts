@@ -95,6 +95,7 @@ export type {
   FinalizedPrompt,
   PromptPresentation,
 } from './lib/speech/prompt-presentation';
+export { PromptPresentationBlockedError } from './lib/speech/prompt-presentation';
 export {
   MusicVisualizerService,
   MUSIC_TRANSPORT,

@@ -18,11 +18,14 @@ export type PromptCleanupResult = Readonly<{
 export function createPromptCleanup(
   provider?: PromptCleanupProvider,
   timeoutMs = 5000,
-): (raw: string, signal: AbortSignal) => Promise<PromptCleanupResult> {
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
-    throw new RangeError('Cleanup timeout must be positive and finite');
-
-  return async (raw, signal) => {
+): (
+  raw: string,
+  signal: AbortSignal,
+  deadlineMs?: number,
+) => Promise<PromptCleanupResult> {
+  validateTimeout(timeoutMs);
+  return async (raw, signal, deadlineMs = timeoutMs) => {
+    validateTimeout(deadlineMs);
     const fallback: PromptCleanupResult = {
       raw,
       text: raw,
@@ -46,7 +49,7 @@ export function createPromptCleanup(
         timer = setTimeout(() => {
           controller.abort();
           reject(new Error('Cleanup timed out'));
-        }, timeoutMs);
+        }, deadlineMs);
       });
       const output = await Promise.race([
         Promise.resolve().then(() => {
@@ -103,4 +106,9 @@ export function createPromptCleanup(
       if (onAbort) signal.removeEventListener('abort', onAbort);
     }
   };
+}
+
+function validateTimeout(timeoutMs: number) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
+    throw new RangeError('Cleanup timeout must be positive and finite');
 }

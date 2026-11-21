@@ -19,6 +19,7 @@ import {
 } from './voice-composition';
 import {
   awaitPromptPresentation,
+  PromptPresentationBlockedError,
   type PromptPresentation,
 } from './prompt-presentation';
 import { DraftRecognition } from './draft-recognition';
@@ -48,6 +49,7 @@ import type { ReflexOutcome } from '../reflex/reflex-controller';
 
 const preparing = (status: VoiceComposition['status']) =>
   ['refining', 'finalizing', 'submitting'].includes(status);
+const FINAL_CLEANUP_TIMEOUT_MS = 5_000;
 
 export interface VoiceContext {
   readonly audio: AudioActivityState;
@@ -126,7 +128,11 @@ export interface VoicePorts {
   readonly selectSession?: (model: VoiceModel) => Promise<boolean>;
   readonly clearConversation?: () => Promise<boolean>;
   readonly readSession?: () => Promise<VoiceModel>;
-  readonly refinePrompt?: (raw: string, signal: AbortSignal) => Promise<string>;
+  readonly refinePrompt?: (
+    raw: string,
+    signal: AbortSignal,
+    timeoutMs?: number,
+  ) => Promise<string>;
   readonly presentFinalized?: PromptPresentation;
   readonly onComposition?: (state: VoiceComposition) => void;
   readonly onRecognition?: (observation: RecognitionObservation) => void;
@@ -1139,8 +1145,6 @@ export class VoiceConversation {
       try {
         await this.ports.waitForCapturePause?.();
         if (!this.current(generation)) return;
-        await this.draftCleanupPromise;
-        if (!this.current(generation)) return;
         await this.recognize(text, id, generation);
       } catch {
         if (this.current(generation))
@@ -1364,6 +1368,8 @@ export class VoiceConversation {
     ) {
       if (this.composition.status === 'idle' || !this.composition.raw.trim()) {
         this.phase = null;
+        if (this.promptOpen)
+          this.controlNotice = 'Dictate a prompt before sending.';
         this.publish();
         return;
       }
@@ -1666,6 +1672,14 @@ export class VoiceConversation {
       );
       return;
     }
+    if (this.context?.assistant.connection !== 'ready') {
+      this.compositionError(
+        'Ivy is disconnected. Check the connection in Experience controls (M) and try again. Your draft is retained.',
+      );
+      return;
+    }
+    const cleanupPending = !!this.draftCleanupPromise;
+    this.cancelDraftCleanup();
     const binding = this.presentation;
     const activePresentation = binding ? { binding } : undefined;
     this.activePresentation = activePresentation;
@@ -1682,19 +1696,30 @@ export class VoiceConversation {
       // Native routing now owns admission; its intentional model/workspace rotation is permitted.
       this.pendingFallback = undefined;
       const selectSession = this.ports.selectSession;
-      if (model === 'sol' && !selectSession) throw new Error();
       if (
-        selectSession &&
-        !(await this.mutateSession(() => selectSession(model), generation))
-      )
-        throw new Error();
+        (!selectSession && model === 'sol') ||
+        (selectSession &&
+          !(await this.mutateSession(() => selectSession(model), generation)))
+      ) {
+        if (this.current(generation))
+          this.compositionError(
+            this.routeUncertain
+              ? 'Conversation state is uncertain. Refresh it before sending.'
+              : 'Could not select the Ivy conversation. Check Experience controls (M) and try again. Your draft is retained.',
+          );
+        return;
+      }
       if (!this.current(generation)) return;
       controller = new AbortController();
       this.refinement = controller;
       const text =
         prepared ??
-        (this.ports.refinePrompt
-          ? await this.ports.refinePrompt(raw, controller.signal)
+        (!cleanupPending && this.ports.refinePrompt
+          ? await this.ports.refinePrompt(
+              raw,
+              controller.signal,
+              FINAL_CLEANUP_TIMEOUT_MS,
+            )
           : raw);
       if (!this.current(generation)) return;
       if (!text.trim() || !fitsVoicePrompt(text)) throw new Error();
@@ -1728,14 +1753,16 @@ export class VoiceConversation {
       });
       if (!this.current(generation) || controller.signal.aborted) return;
       await this.dispatchDraft(raw, text, model, id, generation);
-    } catch {
+    } catch (error) {
       if (this.current(generation))
         this.compositionError(
           this.dispatchUncertain
             ? 'The previous send may have completed. Check Ivy before editing or clearing this prompt.'
-            : presenting
-              ? 'Prompt presentation did not complete or timed out. Your text is retained.'
-              : 'Prompt could not be prepared. Your text is retained.',
+            : error instanceof PromptPresentationBlockedError
+              ? 'Resolve the Desktop fault before sending. Your draft is retained.'
+              : presenting
+                ? 'Prompt preview could not finish. Check Desktop faults or enlarge the window and try again. Your draft is retained.'
+                : 'Prompt could not be prepared. Your text is retained.',
         );
     } finally {
       if (this.refinement === controller) this.refinement = undefined;
@@ -1772,6 +1799,7 @@ export class VoiceConversation {
       return;
     }
     this.dispatchUncertain = false;
+    if (this.promptOpen && accepted) this.controlNotice = 'Prompt submitted.';
     this.promptOpen = false;
     this.setComposition({
       raw: '',
@@ -2315,24 +2343,22 @@ export class VoiceConversation {
         this.playback.busy(),
       status:
         this.failure ||
+        (this.playback.busy() || this.phase === 'speaking'
+          ? 'Speaking locally'
+          : '') ||
         this.controlNotice ||
         (this.routeUncertain
           ? 'Conversation state is uncertain. Refresh it in the menu before voice resumes.'
           : '') ||
         (this.phase === 'transcribing'
           ? 'Recognizing locally'
-          : this.playback.busy()
-            ? 'Speaking locally'
-            : this.phase === 'waiting'
-              ? 'Waiting for Ivy'
-              : this.phase === 'speaking'
-                ? 'Speaking locally'
-                : context?.audio.status === 'capturing'
-                  ? this.invocation.active() ||
-                    this.composition.status !== 'idle'
-                    ? 'Local voice listening'
-                    : 'Listening for Ivy'
-                  : 'Local voice idle'),
+          : this.phase === 'waiting'
+            ? 'Waiting for Ivy'
+            : context?.audio.status === 'capturing'
+              ? this.invocation.active() || this.composition.status !== 'idle'
+                ? 'Local voice listening'
+                : 'Listening for Ivy'
+              : 'Local voice idle'),
     });
   }
 }

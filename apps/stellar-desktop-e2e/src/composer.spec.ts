@@ -3,6 +3,9 @@ import type { IvySnapshot } from '@stellar/desktop-contracts';
 import { openPane } from './stage-driver';
 
 type ComposerApp = {
+  faults: {
+    observe(source: 'desktop', fault: 'runtime' | null): void;
+  };
   experience: {
     state(): { microphone: { requestId: number | null } };
   };
@@ -36,6 +39,7 @@ type ComposerFixture = {
   cleanups: string[];
   sessions: string[];
   cleanupText?: string;
+  holdCleanup?: boolean;
   panel?: Element;
 };
 const raw = 'Um, Set up the next Stellar sprint.';
@@ -124,6 +128,7 @@ async function install(page: Page, hold = true, autoStart = false) {
               }
               if (command === 'cleanup_refine') {
                 fixture.cleanups.push(String(request['raw']));
+                if (fixture.holdCleanup) return new Promise(() => undefined);
                 return { version: 1, text: fixture.cleanupText ?? refined };
               }
               if (command === 'speech_keywords') {
@@ -516,7 +521,7 @@ async function finalize(page: Page) {
     if (!root) throw Error('Root missing');
     const conversation = debug.ng.getComponent(root).voice.conversation;
     void conversation.recognize(
-      'end prompt',
+      'Send prompt.',
       crypto.randomUUID(),
       conversation.generation,
     );
@@ -533,6 +538,70 @@ const state = (page: Page) =>
       submissions: fixture.submissions,
     };
   });
+
+test('spoken send progresses and dispatches once while native cleanup is stalled', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await install(page, false);
+  const say = await wakeCapture(page);
+  await page.evaluate(() => {
+    const fixture = Reflect.get(window, '__composerFixture') as ComposerFixture;
+    fixture.holdCleanup = true;
+  });
+  await say('prompt', { wake: true });
+  await say(raw);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (Reflect.get(window, '__composerFixture') as ComposerFixture)
+            .cleanups,
+      ),
+    )
+    .toEqual([raw]);
+  await say('Send prompt.');
+  await expect
+    .poll(async () => (await state(page)).submissions)
+    .toEqual([{ text: raw, dissolved: true }]);
+  await expect(
+    page.getByText('Prompt submitted.', { exact: true }),
+  ).toBeVisible();
+});
+
+test('an active Desktop fault explains why send stopped and recovered history permits retry', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await install(page, false);
+  await draft(page);
+  const observe = (fault: 'runtime' | null) =>
+    page.evaluate((fault) => {
+      const debug = window as unknown as {
+        ng: { getComponent(element: Element): ComposerApp };
+      };
+      const root = document.querySelector('stellar-root');
+      if (!root) throw Error('Root missing');
+      debug.ng.getComponent(root).faults.observe('desktop', fault);
+    }, fault);
+  await observe('runtime');
+  await expect(
+    page.getByRole('region', { name: 'Recent errors' }),
+  ).toBeVisible();
+  await finalize(page);
+  await expect(
+    page.getByText(
+      'Resolve the Desktop fault before sending. Your draft is retained.',
+    ),
+  ).toBeVisible();
+  expect((await state(page)).submissions).toEqual([]);
+  await observe(null);
+  await expect(page.locator('.prompt-text')).toHaveText(refined);
+  await finalize(page);
+  await expect
+    .poll(async () => (await state(page)).submissions)
+    .toEqual([{ text: refined, dissolved: true }]);
+});
 
 test('typed submit preserves the form and keeps continuous capture active', async ({
   page,
@@ -715,6 +784,7 @@ test('braces open from center, text edits by character and dispatch waits for re
   await expect(prompt).toHaveClass(/opened/);
   await finalize(page);
   await expect.poll(async () => (await state(page)).animations).toBe(8);
+  await expect(page.getByText('Finishing prompt preview…')).toBeVisible();
   expect((await state(page)).submissions).toEqual([]);
   const edits = await page.evaluate(
     () =>
@@ -870,6 +940,9 @@ test('an impossible text fit retains the draft and refuses submission instead of
     'false',
   );
   await finalize(page);
+  await expect(page.getByRole('alert')).toContainText(
+    'Check Desktop faults or enlarge the window',
+  );
   await expect
     .poll(async () =>
       page.evaluate(() => {
