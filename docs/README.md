@@ -20,6 +20,7 @@
 - [Engineering Intelligence](guides/engineering-intelligence.md): issue budgets, passive local history, recurring failures, skills, and the Ivy Stage presentation.
 - [Stellar Live telemetry](guides/live-telemetry.md): local read-only source map, launch, and observation limits.
 - [Local operations dashboard](guides/operations-dashboard.md): launch, read-only status sources, and current Character Studio data limits.
+- [Herdr live retained overview](guides/herdr-live-overview.md): bounded snapshot contract, additive source mod, and integration boundary.
 - [Development roadmap](implementation/roadmap.md): bootstrap status and links to GitHub work.
 
 Operational guides will be added with the workflows they describe.
