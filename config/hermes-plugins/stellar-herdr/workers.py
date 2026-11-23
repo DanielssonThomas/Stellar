@@ -160,6 +160,9 @@ def operate(profile, args):
         return core.progress(find_worker(core, issue))
     if action == 'launch':
         return submit(root, settings, core, issue, args.get('role'), args.get('session_id'), args.get('task'))
+    if action in ('show', 'focus') and issue is not None:
+        from .retained_view import present_issue
+        return present_issue(root, settings, core, issue)
     if action == 'show':
         core.show()
         view = {'view': 'open'}

@@ -8,6 +8,8 @@ The existing maintained no-agent path is `observer_tick.py`, whose current one-s
 
 Coverage is limited to confirmed receipt-backed Stellar launches. Missing records are not an all-clear. A process exit code, including zero, does not prove tests, independent review, merge or completion. Private tasks, terminal logs and reasoning are excluded. The Herdr app reads the snapshot; it does not read a worker transcript or run commands. Headless rendering cannot establish native desktop focus or foreground acceptance.
 
+With the native mod installed and `overview_snapshot` set to its app-home snapshot file, `stellar_herdr show` and `focus` accept an explicit issue number. They prefer a matching live pane, or a focusable finished pane. When neither is available, they open the existing retained overlay with only the requested issue's confirmed attempts. The tool returns an instance-bound receipt when the mod constructs the requested view. Current visibility and compositor output require their own app readback. The scoped view is a point-in-time snapshot with freshness information and a Close control. Opening the mod normally still shows the combined live snapshot.
+
 The mod is source-only; it is not installed, and no runtime, layout, schedule or app restart was performed.
 
 The isolated headless test resolves the declared `@playwright/test` dependency from this repository's normal Node module resolution. On a host where repository dependencies are not installed, the fixture may be run with `STELLAR_OVERVIEW_PLAYWRIGHT_ROOT` explicitly set to an existing local checkout containing that dependency (for example the read-only issue352 checkout used during development); this is a test-only module-resolution override, not a product dependency or installation step.
