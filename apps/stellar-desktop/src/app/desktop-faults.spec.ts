@@ -129,6 +129,23 @@ describe('desktop fault history', () => {
     ).toBe('active');
   });
 
+  it('dismisses automatic recovery history while preserving explicitly opened history', () => {
+    const faults = new DesktopFaults();
+    faults.observe('desktop', 'runtime');
+    faults.observe('desktop', null);
+    expect(faults.visible()).toBe(true);
+    expect(faults.historyRequested()).toBe(false);
+    faults.dismissRecovered();
+    expect(faults.visible()).toBe(false);
+
+    faults.show();
+    faults.dismissRecovered();
+    expect(faults.historyRequested()).toBe(true);
+    expect(faults.visible()).toBe(true);
+    faults.dismiss();
+    expect(faults.visible()).toBe(false);
+  });
+
   it('bounds history while retaining every unresolved category', () => {
     const faults = new DesktopFaults();
     for (const code of [

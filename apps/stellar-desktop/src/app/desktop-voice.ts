@@ -155,8 +155,8 @@ export class DesktopVoice {
       analyzeExpression
         ? this.speech.collect(pcm, id, true)
         : this.speech.collect(pcm, id),
-    refinePrompt: async (raw, signal) =>
-      (await this.cleanup.refine(raw, signal)).text,
+    refinePrompt: async (raw, signal, timeoutMs) =>
+      (await this.cleanup.refine(raw, signal, timeoutMs)).text,
     submit: (text, id) => this.assistant.submit(text, id, 'voice'),
     submitCaptured: (text, id) =>
       this.assistant.submit(text, id, 'voice', true),

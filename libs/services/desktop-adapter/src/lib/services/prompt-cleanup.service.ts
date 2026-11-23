@@ -14,7 +14,7 @@ export class PromptCleanupService {
     ).__TAURI__?.core.invoke,
   );
 
-  refine(raw: string, signal: AbortSignal) {
-    return this.refinePrompt(raw, signal);
+  refine(raw: string, signal: AbortSignal, timeoutMs?: number) {
+    return this.refinePrompt(raw, signal, timeoutMs);
   }
 }

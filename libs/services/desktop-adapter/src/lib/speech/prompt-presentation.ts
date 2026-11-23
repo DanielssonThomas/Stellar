@@ -1,5 +1,7 @@
 import type { VoiceModel } from './voice-composition';
 
+export class PromptPresentationBlockedError extends Error {}
+
 export interface FinalizedPrompt {
   readonly raw: string;
   readonly refined: string;
