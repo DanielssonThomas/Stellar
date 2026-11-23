@@ -1,0 +1,10 @@
+{
+  "identifier": "probe-main",
+  "description": "Only the probe contract command and its local event listener.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-probe-round-trip",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}
