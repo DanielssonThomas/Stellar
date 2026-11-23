@@ -9,8 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from . import workers
+from . import retained_view, workers
 from .core import Core, Unavailable
+from .retained_view import MOD
 
 
 class WorkersTest(unittest.TestCase):
@@ -130,6 +131,100 @@ class WorkersTest(unittest.TestCase):
             result = workers.operate(self.root, {'action': 'preference', 'mode': 'automatic'})
         self.assertEqual(result['view_preference'], 'automatic')
         self.assertEqual(workers.preference(self.root), 'automatic')
+
+    def test_requested_issue_falls_back_to_confirmed_retained_overview_when_core_is_missing(self):
+        configured = self.root / f'{MOD}.json'
+        selected = self.root / f'{MOD}-request.json'
+        self.settings['overview_snapshot'] = str(configured)
+        configured.write_text('existing complete snapshot', encoding='utf-8')
+        core = Mock()
+        core.terminals.return_value = []
+        visible = []
+
+        def app(*args):
+            if args == ('status',):
+                return {'overlays': list(visible)}
+            self.assertEqual(args, ('do', 'mod.open', '--name', MOD))
+            visible.append(MOD)
+            request = json.loads(selected.read_text(encoding='utf-8'))
+            self.assertEqual(request['issue'], 23)
+            self.assertEqual(request['phase'], 'opening')
+            return {'ok': True}
+
+        def acknowledge(path):
+            request = json.loads(path.read_text(encoding='utf-8'))
+            self.assertEqual(request['phase'], 'ready')
+            rendered = {**request, 'overlay': 'exact-instance', 'loadedAt': request['createdAt']}
+            path.write_text(json.dumps(rendered), encoding='utf-8')
+            return rendered
+
+        core.app_call.side_effect = app
+        data = {'workers': [{'issue': 23, 'process': 'unavailable', 'task': 'private'}],
+                'coverage': 'Confirmed attempts', 'generated_at': 10, 'warnings': []}
+        with (patch.object(workers, 'load', return_value=(self.root, self.settings)),
+              patch.object(workers, 'Core', return_value=core),
+              patch.object(retained_view, '_read_request', side_effect=acknowledge),
+              patch.object(retained_view, 'snapshot', return_value=data) as snapshot):
+            value = workers.operate(self.root, {'action': 'show', 'issue': 23})
+        snapshot.assert_called_once_with(self.root, core, issue=23)
+        self.assertEqual(configured.read_text(encoding='utf-8'), 'existing complete snapshot')
+        record = json.loads(selected.read_text(encoding='utf-8'))
+        self.assertEqual(value, {'view': 'rendered', 'issue': 23, 'worker_view': 'retained-overview',
+                                 'request_id': record['id'], 'overlay_id': 'exact-instance',
+                                 'rendered_at': record['loadedAt'], 'retained_attempts': 1})
+        self.assertEqual(record['snapshot']['workers'], [{'issue': 23, 'process': 'unavailable'}])
+        core.focus.assert_not_called()
+
+    def test_requested_focus_uses_exact_live_issue_before_retained_fallback(self):
+        core = Mock()
+        row = {'issue': 23, 'terminal': 't2', 'state': 'live'}
+        core.terminals.return_value = [{'issue': 99, 'terminal': 't3', 'state': 'live'}, row]
+        core.focus.return_value = 'focused'
+        with (patch.object(workers, 'load', return_value=(self.root, self.settings)),
+              patch.object(workers, 'Core', return_value=core)):
+            result = workers.operate(self.root, {'action': 'focus', 'issue': 23})
+        self.assertEqual(result, {'view': 'open', 'issue': 23, 'worker_view': 'focused'})
+        core.focus.assert_called_once_with(row)
+        core.app_call.assert_not_called()
+
+    def test_focus_uses_existing_layout_terminal_before_attaching_a_tab(self):
+        core = Core(self.settings)
+        worker = {'issue': 23, 'terminal': 't2', 'state': 'live'}
+        with (patch.object(core, 'detail', return_value=worker),
+              patch.object(core, 'app_call', side_effect=[{'spaces': []}, {'ok': True}]) as app):
+            self.assertEqual(core.focus(worker, open_window=False), 'focused')
+        self.assertEqual([call.args for call in app.call_args_list],
+                         [('ls',), ('do', 'pane.focus', '--terminal', 't2')])
+
+    def test_retained_view_refuses_unrelated_overlay_or_missing_confirmation(self):
+        self.settings['overview_snapshot'] = str(self.root / f'{MOD}.json')
+        core = Mock()
+        core.terminals.return_value = []
+        data = {'workers': [{'issue': 23}], 'coverage': 'Confirmed attempts',
+                'generated_at': 10, 'warnings': []}
+        with (patch.object(workers, 'load', return_value=(self.root, self.settings)),
+              patch.object(workers, 'Core', return_value=core),
+              patch.object(retained_view, 'snapshot', return_value=data),
+              patch.object(retained_view.time, 'monotonic', side_effect=[0, 8])):
+            core.app_call.return_value = {'overlays': ['unrelated-dialog']}
+            with self.assertRaisesRegex(Unavailable, 'other Herdr overlay'):
+                workers.operate(self.root, {'action': 'focus', 'issue': 23})
+            self.assertFalse((self.root / f'{MOD}-request.json').exists())
+            core.app_call.side_effect = [
+                {'overlays': []}, {'ok': True}, {'overlays': [MOD]}, {'ok': True},
+            ]
+            with self.assertRaisesRegex(Unavailable, 'did not confirm'):
+                workers.operate(self.root, {'action': 'focus', 'issue': 23})
+            self.assertTrue(all('overlay.close' not in call.args
+                                for call in core.app_call.call_args_list))
+
+    def test_render_receipt_must_match_the_exact_unexpired_request(self):
+        request = {'id': 'exact', 'createdAt': 10, 'expiresAt': 18, 'issue': 23}
+        receipt = {**request, 'overlay': 'view-a', 'loadedAt': 14}
+        self.assertTrue(retained_view._loaded(request, receipt))
+        for change in ({'id': 'another'}, {'issue': 24}, {'loadedAt': 19},
+                       {'loadedAt': 9}, {'overlay': ''}, {'closed': True}):
+            self.assertFalse(retained_view._loaded(request, {**receipt, **change}))
 
 
 if __name__ == '__main__':

@@ -137,6 +137,11 @@ class Core:
                             self.app_call('do', 'pane.focus', '--pane', pane['pane'])
                             return 'focused'
             if not attached:
+                try:
+                    if self.app_call('do', 'pane.focus', '--terminal', terminal).get('ok') is True:
+                        return 'focused'
+                except Unavailable:
+                    pass
                 if detail['state'] != 'live':
                     raise Unavailable('This finished worker has no open pane. Its output is available through progress.')
                 try:

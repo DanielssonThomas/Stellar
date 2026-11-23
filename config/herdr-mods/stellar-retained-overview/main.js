@@ -1,16 +1,45 @@
 import { View, div } from 'gpui-kit';
-import { appHome, readTextFile } from 'herdr';
+import { appHome, closeOverlay, readTextFile, writeTextFile } from 'herdr';
 import {
   RefreshController,
   RetainedSnapshot,
   freshness,
+  requestedIssue,
 } from './snapshot-state.mjs';
 
 export default class StellarRetainedOverview extends View {
-  init(_props, cx) {
+  init(props, cx) {
     this.retained = new RetainedSnapshot();
+    this.issueView = null;
+    this.overlay = props?.overlay;
+    this.ackTask = null;
+    this.ack = null;
+    this.renderedRequestId = null;
     this.refresh = new RefreshController(
       async () => {
+        if (this.overlay) {
+          try {
+            const path = `${appHome()}/stellar-retained-overview-request.json`;
+            const raw = await readTextFile(path);
+            const next = requestedIssue(raw);
+            if (next && this.overlay) {
+              this.issueView = { ...next, raw, path };
+            } else if (
+              this.issueView &&
+              this.ack?.id !== this.issueView.id &&
+              this.issueView.expiresAt <= Date.now() / 1000
+            ) {
+              this.issueView = {
+                ...this.issueView,
+                snapshot: null,
+                phase: 'expired',
+              };
+            }
+          } catch {
+            // A missing, malformed, or superseded request does not change the view.
+          }
+        }
+        if (this.issueView) return;
         try {
           const raw = await readTextFile(
             `${appHome()}/stellar-retained-overview.json`,
@@ -21,17 +50,80 @@ export default class StellarRetainedOverview extends View {
           this.retained.fail(error);
         }
       },
-      (timerCx) => timerCx.notify(),
+      (timerCx) => {
+        timerCx.notify();
+        this.queueAcknowledgment(timerCx);
+      },
       (ms, callback) => cx.timer.after(ms, (timerCx) => callback(timerCx)),
     );
     this.refresh.start();
   }
 
   close() {
+    this.overlay = null;
+    this.ackTask?.cancel();
     this.refresh.close();
+    if (this.ack) void this.invalidate(this.ack);
+  }
+
+  async invalidate({ path, raw }) {
+    try {
+      await writeTextFile(path, JSON.stringify({ closed: true }), raw);
+    } catch {
+      // A newer request already owns the file, or the app is closing.
+    }
+  }
+
+  queueAcknowledgment(cx) {
+    const view = this.issueView;
+    if (
+      this.ackTask ||
+      !this.overlay ||
+      view?.phase !== 'ready' ||
+      this.ack?.id === view.id
+    ) {
+      return;
+    }
+    this.ackTask = cx.timer.after(16, async (timerCx) => {
+      this.ackTask = null;
+      if (!this.overlay || this.issueView !== view) return;
+      const timestamp = Date.now() / 1000;
+      if (timestamp >= view.expiresAt) {
+        this.issueView = { ...view, snapshot: null, phase: 'expired' };
+        timerCx.notify();
+        return;
+      }
+      if (this.renderedRequestId !== view.id) {
+        this.queueAcknowledgment(timerCx);
+        return;
+      }
+      const overlay = this.overlay;
+      const record = {
+        id: view.id,
+        path: view.path,
+        raw: view.confirm(overlay, timestamp),
+      };
+      try {
+        await writeTextFile(view.path, record.raw, view.raw);
+        if (
+          this.overlay === overlay &&
+          this.issueView === view &&
+          Date.now() / 1000 < view.expiresAt
+        ) {
+          this.ack = record;
+        } else {
+          await this.invalidate(record);
+        }
+      } catch {
+        // A superseded request must never receive an acknowledgment.
+      }
+    });
   }
 
   render() {
+    const snapshot = this.issueView
+      ? this.issueView.snapshot
+      : this.retained.snapshot;
     const root = div()
       .id('stellar-retained-overview-root')
       .flex()
@@ -45,21 +137,51 @@ export default class StellarRetainedOverview extends View {
     const text = (value, size = 13, color = '#eef1f6') =>
       div().text_size(size).text_color(color).child(String(value));
     root.child(text('STELLAR / RETAINED WORKERS', 12, '#e4c477'));
-    root.child(text('Confirmed launch history · refreshes automatically', 18));
+    if (this.overlay && this.issueView) {
+      root.child(
+        div()
+          .id('close-retained-issue')
+          .cursor_pointer()
+          .text_color('#e4c477')
+          .on_click(() => closeOverlay(this.overlay))
+          .child('Close'),
+      );
+    }
     root.child(
       text(
-        this.retained.snapshot
-          ? freshness(this.retained.snapshot.generated_at)
+        this.issueView
+          ? `Issue #${this.issueView.issue} · retained attempts`
+          : 'Confirmed launch history · refreshes automatically',
+        18,
+      ),
+    );
+    if (this.issueView) {
+      root.child(
+        text(
+          this.issueView.phase === 'expired'
+            ? 'The requested view could not be confirmed. Close this view and try again.'
+            : this.issueView.phase === 'opening'
+              ? 'Opening the requested retained issue.'
+              : 'These are historical attempts. Core may no longer be able to verify their process state.',
+          12,
+          '#b8c2d1',
+        ),
+      );
+    }
+    root.child(
+      text(
+        snapshot
+          ? freshness(snapshot.generated_at)
           : 'No valid snapshot received',
         12,
         '#b8c2d1',
       ),
     );
-    if (this.retained.snapshot) {
-      root.child(text(this.retained.snapshot.coverage, 12, '#e4c477'));
-      for (const warning of this.retained.snapshot.warnings)
+    if (snapshot) {
+      root.child(text(snapshot.coverage, 12, '#e4c477'));
+      for (const warning of snapshot.warnings)
         root.child(text(`Coverage warning: ${warning}`, 12, '#e4c477'));
-      for (const worker of this.retained.snapshot.workers) {
+      for (const worker of snapshot.workers) {
         const card = div()
           .flex()
           .flex_col()
@@ -103,7 +225,7 @@ export default class StellarRetainedOverview extends View {
         );
         root.child(card);
       }
-      if (this.retained.snapshot.workers.length === 0)
+      if (snapshot.workers.length === 0)
         root.child(
           text(
             'No retained records in this snapshot. Coverage is not an all-clear.',
@@ -112,7 +234,7 @@ export default class StellarRetainedOverview extends View {
           ),
         );
     }
-    if (this.retained.warning)
+    if (!this.issueView && this.retained.warning)
       root.child(text(this.retained.warning, 12, '#e4c477'));
     root.child(
       text(
@@ -121,6 +243,8 @@ export default class StellarRetainedOverview extends View {
         '#b8c2d1',
       ),
     );
+    this.renderedRequestId =
+      snapshot && this.issueView?.phase === 'ready' ? this.issueView.id : null;
     return root;
   }
 }

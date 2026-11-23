@@ -9,6 +9,7 @@ import {
   RefreshController,
   RetainedSnapshot,
   freshness,
+  requestedIssue,
   utf8ByteLength,
 } from './snapshot-state.mjs';
 
@@ -39,6 +40,51 @@ const frame = (generated_at = 10, extras = {}) =>
       },
     ],
   });
+
+test('loads only the exact bounded retained issue request once', () => {
+  const snapshot = JSON.parse(frame(10, { issue: 352 }));
+  const request = {
+    schemaVersion: 1,
+    id: 'a'.repeat(32),
+    issue: 352,
+    createdAt: 10,
+    expiresAt: 18,
+    phase: 'ready',
+    snapshot,
+  };
+  const next = requestedIssue(JSON.stringify(request), 11000);
+  assert.equal(next.issue, 352);
+  assert.deepEqual(
+    next.snapshot.workers.map((worker) => worker.issue),
+    [352],
+  );
+  assert.equal('task' in next.snapshot.workers[0], false);
+  const ack = next.confirm('overlay-123', 11);
+  assert.deepEqual(JSON.parse(ack), {
+    ...request,
+    overlay: 'overlay-123',
+    loadedAt: 11,
+  });
+  assert.equal(requestedIssue(ack, 11000), null);
+  assert.equal(requestedIssue(JSON.stringify(request), 18000), null);
+  const opening = requestedIssue(
+    JSON.stringify({ ...request, phase: 'opening' }),
+    11000,
+  );
+  assert.equal(opening.phase, 'opening');
+  assert.equal(opening.snapshot, null);
+  assert.equal(
+    requestedIssue(JSON.stringify({ ...request, issue: 367 }), 11000),
+    null,
+  );
+  assert.equal(
+    requestedIssue(
+      JSON.stringify({ ...request, snapshot: { ...snapshot, workers: [] } }),
+      11000,
+    ),
+    null,
+  );
+});
 
 test('accepts producer Unix-seconds timestamp and keeps process distinct from verification', () => {
   const state = new RetainedSnapshot();

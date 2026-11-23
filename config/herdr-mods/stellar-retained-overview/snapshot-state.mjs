@@ -163,6 +163,47 @@ export function freshness(timestamp, now = Date.now()) {
     : 'Snapshot current';
 }
 
+export function requestedIssue(raw, now = Date.now()) {
+  if (typeof raw !== 'string' || utf8ByteLength(raw) > MAX_BYTES + 512)
+    return null;
+  const request = JSON.parse(raw);
+  const seconds = now / 1000;
+  if (
+    !request ||
+    request.schemaVersion !== 1 ||
+    Object.keys(request).length !== 7 ||
+    !['opening', 'ready'].includes(request.phase) ||
+    !Number.isFinite(request.createdAt) ||
+    !Number.isFinite(request.expiresAt) ||
+    request.createdAt > seconds ||
+    request.expiresAt <= seconds ||
+    request.expiresAt - request.createdAt > 9 ||
+    typeof request.id !== 'string' ||
+    !/^[a-f0-9]{32}$/.test(request.id) ||
+    !Number.isSafeInteger(request.issue) ||
+    request.issue < 1 ||
+    request.issue > 2147483647
+  ) {
+    return null;
+  }
+  const snapshot = validateSnapshot(request.snapshot);
+  if (
+    snapshot.workers.length === 0 ||
+    snapshot.workers.some((worker) => worker.issue !== request.issue)
+  ) {
+    return null;
+  }
+  return {
+    id: request.id,
+    issue: request.issue,
+    phase: request.phase,
+    expiresAt: request.expiresAt,
+    snapshot: request.phase === 'ready' ? snapshot : null,
+    confirm: (overlay, loadedAt) =>
+      JSON.stringify({ ...request, overlay, loadedAt }),
+  };
+}
+
 export class RetainedSnapshot {
   snapshot = null;
   warning = 'Waiting for retained worker snapshot.';
