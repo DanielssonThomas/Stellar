@@ -132,13 +132,15 @@ class WorkersTest(unittest.TestCase):
         self.assertEqual(result['view_preference'], 'automatic')
         self.assertEqual(workers.preference(self.root), 'automatic')
 
-    def test_requested_issue_falls_back_to_confirmed_retained_overview_when_core_is_missing(self):
+    def test_requested_issue_falls_back_when_the_listed_live_terminal_disappears(self):
         configured = self.root / f'{MOD}.json'
         selected = self.root / f'{MOD}-request.json'
         self.settings['overview_snapshot'] = str(configured)
         configured.write_text('existing complete snapshot', encoding='utf-8')
         core = Mock()
-        core.terminals.return_value = []
+        live = {'issue': 23, 'terminal': 't2', 'state': 'live'}
+        core.terminals.return_value = [live]
+        core.focus.side_effect = Unavailable('The listed terminal has ended.')
         visible = []
 
         def app(*args):
@@ -173,7 +175,7 @@ class WorkersTest(unittest.TestCase):
                                  'request_id': record['id'], 'overlay_id': 'exact-instance',
                                  'rendered_at': record['loadedAt'], 'retained_attempts': 1})
         self.assertEqual(record['snapshot']['workers'], [{'issue': 23, 'process': 'unavailable'}])
-        core.focus.assert_not_called()
+        core.focus.assert_called_once_with(live)
 
     def test_requested_focus_uses_exact_live_issue_before_retained_fallback(self):
         core = Mock()

@@ -77,17 +77,16 @@ def present_issue(root, settings, core, issue):
         current = core.terminals()
     except Unavailable:
         current = []
-    matches = [row for row in current if row['issue'] == issue]
-    live = next((row for row in matches if row['state'] == 'live'), None)
-    if live is not None:
-        return {'view': 'open', 'issue': issue, 'worker_view': core.focus(live)}
+    matches = sorted(
+        (row for row in current if row['issue'] == issue and row['state'] in ('live', 'finished')),
+        key=lambda row: row['state'] != 'live',
+    )
     for worker in matches:
-        if worker['state'] == 'finished':
-            try:
-                view = core.focus(worker)
-            except Unavailable:
-                continue
-            return {'view': 'open', 'issue': issue, 'worker_view': view}
+        try:
+            view = core.focus(worker)
+        except Unavailable:
+            continue
+        return {'view': 'open', 'issue': issue, 'worker_view': view}
 
     path = _request_path(settings)
     data = snapshot(root, core, issue=issue)
