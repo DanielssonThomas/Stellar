@@ -191,6 +191,104 @@ test('native overview root keeps a stable id and vertical scrolling enabled', ()
   assert.doesNotMatch(source, /TextEncoder/);
 });
 
+test('uses the native host overlay to select and acknowledge a rendered issue', async (t) => {
+  t.mock.method(Date, 'now', () => 11000);
+  const requestPath = '/fixture/stellar-retained-overview-request.json';
+  const request = {
+    schemaVersion: 1,
+    id: 'a'.repeat(32),
+    issue: 352,
+    createdAt: 10,
+    expiresAt: 18,
+    phase: 'ready',
+    snapshot: JSON.parse(frame(10, { issue: 352 })),
+  };
+  const moduleURL = (source) =>
+    'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
+  const ui = moduleURL(`
+    export class View {}
+    export function div() {
+      const children = [];
+      const element = new Proxy({children}, {
+        get: (node, key) => key === 'child'
+          ? (child) => { children.push(child); return element; }
+          : Reflect.has(node, key) ? node[key] : () => element,
+      });
+      return element;
+    }
+  `);
+  const bridge = moduleURL(`
+    export const files = new Map();
+    export const context = {};
+    export const appHome = () => '/fixture';
+    export const props = () => context;
+    export const closeOverlay = () => {};
+    export const readTextFile = async (path) => files.get(path) ?? null;
+    export const writeTextFile = async (path, data, expected) => {
+      if (files.get(path) !== expected) throw Error('Superseded request');
+      files.set(path, data);
+    };
+  `);
+  const { files, context } = await import(bridge);
+  files.set(requestPath, JSON.stringify(request));
+  files.set('/fixture/stellar-retained-overview.json', frame(10));
+
+  const source = readFileSync(new URL('./main.js', import.meta.url), 'utf8')
+    .replace("'gpui-kit'", JSON.stringify(ui))
+    .replace("'herdr'", JSON.stringify(bridge))
+    .replace(
+      "'./snapshot-state.mjs'",
+      JSON.stringify(new URL('./snapshot-state.mjs', import.meta.url).href),
+    );
+  const { default: Overview } = await import(moduleURL(source));
+  const text = (node) =>
+    typeof node === 'string' ? node : node.children.map(text).join(' ');
+
+  async function open(initProps) {
+    const view = new Overview();
+    const callbacks = [];
+    const cx = {
+      notify() {},
+      timer: {
+        after(_delay, callback) {
+          callbacks.push(callback);
+          return { cancel() {} };
+        },
+      },
+    };
+    view.init(initProps, cx);
+    await callbacks.shift()(cx);
+    return {
+      view,
+      render: () => text(view.render()),
+      step: () => callbacks.shift()(cx),
+    };
+  }
+
+  context.overlay = 'mod-stellar-retained-overview';
+  const scoped = await open({});
+  assert.deepEqual(JSON.parse(files.get(requestPath)), request);
+  const rendered = scoped.render();
+  assert.match(rendered, /Issue #352 · retained attempts/);
+  assert.doesNotMatch(rendered, /Issue #367/);
+  await scoped.step();
+  assert.deepEqual(JSON.parse(files.get(requestPath)), {
+    ...request,
+    overlay: context.overlay,
+    loadedAt: 11,
+  });
+  scoped.view.close();
+  assert.deepEqual(JSON.parse(files.get(requestPath)), { closed: true });
+
+  delete context.overlay;
+  files.set(requestPath, JSON.stringify(request));
+  const combined = await open({ overlay: 'untrusted-init-prop' });
+  assert.match(combined.render(), /Issue #367/);
+  assert.doesNotMatch(combined.render(), /Issue #352/);
+  assert.deepEqual(JSON.parse(files.get(requestPath)), request);
+  combined.view.close();
+});
+
 test('refreshes do not overlap; disposal cancels scheduling after an in-flight read', async () => {
   const scheduled = [];
   let finish;

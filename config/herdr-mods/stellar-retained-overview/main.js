@@ -1,5 +1,11 @@
 import { View, div } from 'gpui-kit';
-import { appHome, closeOverlay, readTextFile, writeTextFile } from 'herdr';
+import {
+  appHome,
+  closeOverlay,
+  props,
+  readTextFile,
+  writeTextFile,
+} from 'herdr';
 import {
   RefreshController,
   RetainedSnapshot,
@@ -8,10 +14,10 @@ import {
 } from './snapshot-state.mjs';
 
 export default class StellarRetainedOverview extends View {
-  init(props, cx) {
+  init(_props, cx) {
     this.retained = new RetainedSnapshot();
     this.issueView = null;
-    this.overlay = props?.overlay;
+    this.overlay = props()?.overlay;
     this.ackTask = null;
     this.ack = null;
     this.renderedRequestId = null;
